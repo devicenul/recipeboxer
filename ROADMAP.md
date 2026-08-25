@@ -28,6 +28,7 @@ All roadmap items and milestones use standardized status tags:
 | **M8** | **Sample Card Corpus, Provenance & Synthetic Generator** | 23 high-resolution historical card fixtures across 6 modalities, CC0/public domain provenance guide (`tests/fixtures/sample_cards/README.md`), strict Pydantic `manifest.json`, procedural generator tool (`recipeboxer/tools/card_generator.py`), and pytest loader fixtures. | `[x] Completed` |
 | **M9** | **Agent & Prompt Evaluation Harness & Benchmark Suite** | Quantitative metric suite (Pairing F1, Levenshtein CER/WER, Plan To Eat / Schema.org schema conformity), LLM-as-a-Judge semantic rubric evaluator (`recipeboxer/evals/judge.py`), golden dataset benchmark runner CLI (`evals/run_benchmarks.py`), and 65 unit/integration tests. | `[x] Completed` |
 | **M10** | **Adaptive Vision Prompts, Antigravity Skills & CV Tools** | Deterministic CV preprocessing (coarse-to-fine projection deskewing $\pm 1^\circ$, border cropping, CLAHE contrast enhancement, CIE $L^*a^*b^*$ clustering), Antigravity domain skills (`vintage-handwriting-ocr`, `print-clipping-extractor`), modality classifier (95.7% accuracy), and dynamic thinking budget allocation. | `[x] Completed` |
+| **M11** | **Archival Document Generation & Extended Exporters** | Google Docs batch update archival exporter with card scan embedding, offline OpenXML DOCX & printable PDF cookbook generators, Obsidian Markdown with YAML frontmatter, Cooklang (`.cook`), Paprika (`.paprikarecipes`), FastAPI export endpoints, and React frontend export UI integration. | `[x] Completed` |
 
 ---
 
@@ -43,7 +44,7 @@ All roadmap items and milestones use standardized status tags:
 [x] Phase 3: Adaptive Vision Prompts, Antigravity Skills & CV Tools
        │
        ▼
-[ ] Phase 4: Archival Document Generation & Extended Exporters
+[x] Phase 4: Archival Document Generation & Extended Exporters
        │
        ▼
 [ ] Phase 5: Cloud & External Source Providers
@@ -115,18 +116,21 @@ All roadmap items and milestones use standardized status tags:
 ### Phase 4: Archival Document Generation & Extended Exporters
 *Ecosystem expansion: Deliver high-value export formats, including visual family cookbook generation.*
 
-- [ ] **Google Docs Archival Exporter (with Scanned Image Embeds)**:
+- [x] **Google Docs Archival Exporter (with Scanned Image Embeds)**:
   - Export full recipe collections to a structured **Google Doc** via the Google Docs API.
   - Page-break separated layout: each recipe presented with beautifully formatted typography (title, prep/cook/total times, yield, ingredients table, numbered directions, tags, and attribution notes).
-  - High-resolution visual embedding: embeds the original scanned card images (front and back) directly below the formatted recipe, auto-cropped and enhanced for archival printing and family cookbooks.
-- [ ] **Offline DOCX & Printable Archival PDF Exporter**:
-  - Generate standalone `.docx` and styled printable PDF recipe books with the same split layout (transcribed recipe + original scanned cards).
-- [ ] **Markdown / Obsidian Recipe Serializer**:
-  - YAML frontmatter with tags, cook times, and ingredients list formatted for Obsidian Recipe plugins.
-- [ ] **Cooklang (.cook) Serializer**:
-  - Plain-text recipe markup format for the Cooklang ecosystem.
-- [ ] **Paprika Recipe Manager (.paprikarecipes) Export**:
-  - Compressed gzip archive format compatible with Paprika app imports.
+  - High-resolution visual embedding: embeds original scanned card images (front and back) directly below formatted recipe text for archival printing.
+  - Supports downloadable Google Docs JSON/HTML interchange archives.
+- [x] **Offline DOCX & Printable Archival PDF Exporter**:
+  - Generate standalone OpenXML `.docx` and styled printable PDF cookbook documents with heirloom typography, metadata tables, and embedded card scan photos.
+- [x] **Markdown / Obsidian Recipe Serializer**:
+  - YAML frontmatter with tags, cook times, ingredients list, and wikilink card image links formatted for Obsidian Recipe plugins.
+- [x] **Cooklang (.cook) Serializer**:
+  - Plain-text recipe markup format for the Cooklang ecosystem with `@ingredient{qty%unit}`, `#cookware{}`, and `~timer{}` annotations.
+- [x] **Paprika Recipe Manager (.paprikarecipes) Export**:
+  - Compressed gzip archive format compatible with Paprika app imports with base64 embedded card photos.
+- [x] **FastAPI REST Export Endpoints & React 18 UI Integration**:
+  - REST endpoints (`/api/export/docx`, `/api/export/pdf`, `/api/export/markdown`, `/api/export/cooklang`, `/api/export/paprika`, `/api/export/google-docs`) and comprehensive frontend export dialog with live previews.
 
 ---
 

@@ -32,8 +32,19 @@ from recipeboxer.agent.session import (
     get_session_manager,
 )
 from recipeboxer.config import Settings, get_settings
+from recipeboxer.exporter.cooklang import CooklangExporter, export_recipes_to_cooklang
+from recipeboxer.exporter.docx_export import DocxExporter, export_recipes_to_docx
+from recipeboxer.exporter.google_docs import (
+    GoogleDocsExporter,
+    export_recipes_to_google_docs_batch_requests,
+    export_recipes_to_google_docs_html,
+    export_recipes_to_google_docs_json,
+)
 from recipeboxer.exporter.json_export import JsonExporter, export_recipes_to_json
 from recipeboxer.exporter.json_ld import JsonLdExporter, export_recipes_to_json_ld
+from recipeboxer.exporter.markdown_export import MarkdownExporter, export_recipes_to_markdown
+from recipeboxer.exporter.paprika import PaprikaExporter, export_recipes_to_paprika
+from recipeboxer.exporter.pdf_export import PdfExporter, export_recipes_to_pdf
 from recipeboxer.exporter.plan_to_eat import PlanToEatExporter, export_recipes_to_plan_to_eat_csv
 from recipeboxer.ingestion.scanner import ScannedCard, validate_and_load_card
 from recipeboxer.models.domain import VisualFingerprint
@@ -1044,7 +1055,8 @@ async def delete_recipe(
 
 
 # ============================================================================
-# 7. Multi-Format Exporters (Plan To Eat CSV, Schema.org JSON-LD, Raw JSON)
+# 7. Multi-Format Exporters (Plan To Eat CSV, Schema.org JSON-LD, Raw JSON,
+#    DOCX, PDF, Markdown, Cooklang, Paprika, Google Docs)
 # ============================================================================
 
 def _get_export_recipes_for_format(
@@ -1052,29 +1064,44 @@ def _get_export_recipes_for_format(
     manager: SessionManager,
     store: SessionStore,
 ) -> List[RecipeSchema]:
-    """Helper to retrieve recipes for export from active session or database."""
-    session = manager.get_session(session_id)
-    if session:
-        if session.recipes:
-            return session.recipes
-        if session.state != PipelineState.COMPLETED:
+    """Helper to retrieve recipes for export from active session or database with strict session isolation."""
+    if session_id:
+        session = manager.get_session(session_id)
+        if session:
+            if session.recipes:
+                return session.recipes
+            if session.state != PipelineState.COMPLETED:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Export not ready: pipeline has not completed extraction",
+                )
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Export not ready: pipeline has not completed extraction",
+                detail=f"No recipes available for export in session '{session_id}'",
             )
 
-    if session_id:
         detail = store.get_session_detail(session_id)
-        if detail is None and session is None:
+        if detail is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Session not found",
+                detail=f"Session '{session_id}' not found",
             )
         recipes = store.list_recipes(session_id=session_id)
         if recipes:
             return recipes
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"No recipes available for export in session '{session_id}'",
+        )
 
-    # If no session_id provided, check global recipes
+    # If no session_id provided: check active in-memory session first
+    active_sid = manager.get_active_session_id()
+    if active_sid:
+        active_sess = manager.get_session(active_sid)
+        if active_sess and active_sess.recipes:
+            return active_sess.recipes
+
+    # Global database fallback only when session_id is None
     all_recipes = store.list_recipes()
     if all_recipes:
         return all_recipes
@@ -1083,6 +1110,38 @@ def _get_export_recipes_for_format(
         status_code=status.HTTP_400_BAD_REQUEST,
         detail="No recipes available for export",
     )
+
+
+def _get_image_resolver(
+    session_id: Optional[str],
+    manager: SessionManager,
+    store: SessionStore,
+) -> Callable[[str], Optional[Union[str, Path, bytes]]]:
+    """Builds a resolver function mapping card_id to on-disk file path or bytes."""
+    target_sid = session_id or manager.get_active_session_id()
+    session = manager.get_session(target_sid) if target_sid else None
+
+    def resolver(card_id: str) -> Optional[Union[str, Path, bytes]]:
+        if not card_id:
+            return None
+        if session:
+            for card in session.cards:
+                if (card.card_id == card_id or card.filename == card_id or getattr(card.file_path, "name", None) == card_id) and card.file_path and Path(card.file_path).exists():
+                    return str(card.file_path)
+            for p in session.scanned_paths:
+                if (p.name == card_id or str(p) == card_id) and p.is_file():
+                    return str(p)
+            if session.cache:
+                fp = session.cache.get_by_card_id(card_id)
+                if fp and fp.image_path and Path(fp.image_path).is_file():
+                    return str(fp.image_path)
+
+        path = store.get_card_path(card_id, session_id=target_sid)
+        if path and Path(path).exists():
+            return str(path)
+        return None
+
+    return resolver
 
 
 @router.get(
@@ -1198,4 +1257,181 @@ async def export_json(
         media_type="application/json; charset=utf-8",
         headers={"Content-Disposition": 'attachment; filename="recipeboxer_recipes.json"'},
     )
+
+
+@router.get(
+    "/export/docx",
+    status_code=status.HTTP_200_OK,
+    summary="Download Heirloom Cookbook DOCX Document",
+)
+async def export_docx(
+    session_id: Optional[str] = Query(None, description="Optional target session ID"),
+    manager: SessionManager = Depends(get_manager),
+    store: SessionStore = Depends(get_store),
+) -> Response:
+    """Generates and downloads a standalone formatted .docx heirloom family cookbook."""
+    recipes = _get_export_recipes_for_format(session_id, manager, store)
+    resolver = _get_image_resolver(session_id, manager, store)
+    docx_bytes = export_recipes_to_docx(recipes, image_resolver=resolver)
+
+    return Response(
+        content=docx_bytes,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers={"Content-Disposition": 'attachment; filename="recipeboxer_cookbook.docx"'},
+    )
+
+
+@router.get(
+    "/export/pdf",
+    status_code=status.HTTP_200_OK,
+    summary="Download Printable Archival PDF Cookbook",
+)
+async def export_pdf(
+    session_id: Optional[str] = Query(None, description="Optional target session ID"),
+    manager: SessionManager = Depends(get_manager),
+    store: SessionStore = Depends(get_store),
+) -> Response:
+    """Generates and downloads a print-ready PDF cookbook with embedded card scans."""
+    recipes = _get_export_recipes_for_format(session_id, manager, store)
+    resolver = _get_image_resolver(session_id, manager, store)
+    pdf_bytes = export_recipes_to_pdf(recipes, image_resolver=resolver)
+
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": 'attachment; filename="recipeboxer_cookbook.pdf"'},
+    )
+
+
+@router.get(
+    "/export/markdown",
+    status_code=status.HTTP_200_OK,
+    summary="Download Obsidian Markdown with YAML Frontmatter",
+)
+@router.get(
+    "/export/md",
+    status_code=status.HTTP_200_OK,
+    summary="Download Obsidian Markdown (Alias)",
+)
+async def export_markdown(
+    session_id: Optional[str] = Query(None, description="Optional target session ID"),
+    use_wikilinks: bool = Query(True, description="Whether to format card images as Obsidian wikilinks"),
+    manager: SessionManager = Depends(get_manager),
+    store: SessionStore = Depends(get_store),
+) -> Response:
+    """Returns Obsidian-compatible Markdown document with structured YAML frontmatter."""
+    recipes = _get_export_recipes_for_format(session_id, manager, store)
+    resolver = _get_image_resolver(session_id, manager, store)
+    md_content = export_recipes_to_markdown(recipes, use_wikilinks=use_wikilinks, image_resolver=resolver)
+
+    return Response(
+        content=md_content,
+        media_type="text/markdown; charset=utf-8",
+        headers={"Content-Disposition": 'attachment; filename="recipeboxer_recipes.md"'},
+    )
+
+
+@router.get(
+    "/export/cooklang",
+    status_code=status.HTTP_200_OK,
+    summary="Download Cooklang (.cook) Serialized Recipes",
+)
+@router.get(
+    "/export/cook",
+    status_code=status.HTTP_200_OK,
+    summary="Download Cooklang (.cook) Serialized Recipes (Alias)",
+)
+async def export_cooklang(
+    session_id: Optional[str] = Query(None, description="Optional target session ID"),
+    manager: SessionManager = Depends(get_manager),
+    store: SessionStore = Depends(get_store),
+) -> Response:
+    """Returns Cooklang (.cook) markup formatted with ingredients, cookware, and timers."""
+    recipes = _get_export_recipes_for_format(session_id, manager, store)
+    cook_content = export_recipes_to_cooklang(recipes)
+
+    return Response(
+        content=cook_content,
+        media_type="text/plain; charset=utf-8",
+        headers={"Content-Disposition": 'attachment; filename="recipeboxer_recipes.cook"'},
+    )
+
+
+@router.get(
+    "/export/paprika",
+    status_code=status.HTTP_200_OK,
+    summary="Download Paprika (.paprikarecipes) Gzip Archive",
+)
+async def export_paprika(
+    session_id: Optional[str] = Query(None, description="Optional target session ID"),
+    as_zip: bool = Query(False, description="Whether to format multi-recipe archive as ZIP of .paprikarecipe files"),
+    manager: SessionManager = Depends(get_manager),
+    store: SessionStore = Depends(get_store),
+) -> Response:
+    """Returns .paprikarecipes gzip archive containing JSON recipes and base64 card scans."""
+    recipes = _get_export_recipes_for_format(session_id, manager, store)
+    resolver = _get_image_resolver(session_id, manager, store)
+    paprika_bytes = export_recipes_to_paprika(recipes, image_resolver=resolver, as_zip_archive=as_zip)
+
+    return Response(
+        content=paprika_bytes,
+        media_type="application/x-paprikarecipes",
+        headers={"Content-Disposition": 'attachment; filename="recipeboxer_export.paprikarecipes"'},
+    )
+
+
+@router.post(
+    "/export/google-docs",
+    status_code=status.HTTP_200_OK,
+    summary="Generate Google Docs Archival Batch Requests or HTML",
+)
+@router.get(
+    "/export/google-docs",
+    status_code=status.HTTP_200_OK,
+    summary="Generate Google Docs Archival Batch Requests or HTML (GET Alias)",
+)
+async def export_google_docs(
+    request: Request,
+    session_id: Optional[str] = Query(None, description="Optional target session ID"),
+    format: Optional[str] = Query("batch_requests", description="'batch_requests', 'json', or 'html'"),
+    title: Optional[str] = Query("RecipeBoxer Archival Cookbook", description="Cookbook Title"),
+    manager: SessionManager = Depends(get_manager),
+    store: SessionStore = Depends(get_store),
+) -> Any:
+    """Generates structured Google Docs API batchUpdate requests or HTML archive."""
+    # Check if request has JSON body for POST
+    if request.method == "POST":
+        try:
+            body = await request.json()
+            if isinstance(body, dict):
+                session_id = body.get("session_id", session_id)
+                format = body.get("format", format)
+                title = body.get("title", title)
+        except Exception:
+            pass
+
+    recipes = _get_export_recipes_for_format(session_id, manager, store)
+    resolver = _get_image_resolver(session_id, manager, store)
+    exporter = GoogleDocsExporter()
+
+    fmt = (format or "batch_requests").lower().strip()
+    if fmt == "html":
+        html_content = exporter.export_to_html(recipes, title=title or "RecipeBoxer Archival Cookbook", image_resolver=resolver)
+        return Response(
+            content=html_content,
+            media_type="text/html; charset=utf-8",
+            headers={"Content-Disposition": 'attachment; filename="recipeboxer_google_docs.html"'},
+        )
+    elif fmt == "json":
+        json_str = exporter.export_to_json_string(recipes, title=title or "RecipeBoxer Archival Cookbook", image_resolver=resolver)
+        return Response(
+            content=json_str,
+            media_type="application/json; charset=utf-8",
+            headers={"Content-Disposition": 'attachment; filename="recipeboxer_google_docs.json"'},
+        )
+    else:
+        # Default: batch_requests dictionary
+        data = exporter.export_to_json_dict(recipes, title=title or "RecipeBoxer Archival Cookbook", image_resolver=resolver)
+        return data
+
 

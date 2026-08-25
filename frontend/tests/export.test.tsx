@@ -5,6 +5,9 @@ import { ExportDialog } from '../src/components/export/ExportDialog';
 import { generatePlanToEatCsv, escapeCsvField } from '../src/utils/exportPlanToEat';
 import { generateJsonLd, recipeToSchemaOrg } from '../src/utils/exportJsonLd';
 import { generateRawJson } from '../src/utils/exportJson';
+import { generateMarkdown, recipeToMarkdown } from '../src/utils/exportMarkdown';
+import { generateCooklang, recipeToCooklang } from '../src/utils/exportCooklang';
+import { generateGoogleDocsHtml } from '../src/utils/exportGoogleDocs';
 import { RecipeSchema } from '../src/types/recipe';
 
 describe('R5: Multi-Format Recipe Export Subsystem', () => {
@@ -21,6 +24,7 @@ describe('R5: Multi-Format Recipe Export Subsystem', () => {
       directions: ['1. Mix apples and spices.', '2. Fill crust and bake at 375F.'],
       tags: ['Dessert', 'Baking', 'Family Tradition'],
       source_notes: "Grandma's recipe box",
+      card_ids: ['card_front_001', 'card_back_001'],
     },
   ];
 
@@ -85,8 +89,46 @@ describe('R5: Multi-Format Recipe Export Subsystem', () => {
     });
   });
 
+  describe('Obsidian Markdown Serializer (R3)', () => {
+    it('generates YAML frontmatter and markdown sections with wikilinks', () => {
+      const md = generateMarkdown(sampleRecipes, true);
+      expect(md).toContain('---');
+      expect(md).toContain('title: "Grandma\'s \\"Secret\\" Apple Pie"');
+      expect(md).toContain('tags:');
+      expect(md).toContain('  - Dessert');
+      expect(md).toContain('# Grandma\'s "Secret" Apple Pie');
+      expect(md).toContain('## Ingredients');
+      expect(md).toContain('- 6 cups sliced apples');
+      expect(md).toContain('## Directions');
+      expect(md).toContain('![[card_front_001.jpg]]');
+    });
+  });
+
+  describe('Cooklang Serializer (R3)', () => {
+    it('formats recipe with metadata and ingredient/cookware step annotations', () => {
+      const cook = generateCooklang(sampleRecipes);
+      expect(cook).toContain('>> title: Grandma\'s "Secret" Apple Pie');
+      expect(cook).toContain('>> prep time: 20 mins');
+      expect(cook).toContain('-- Ingredients:');
+      expect(cook).toContain('@sliced apples{6%cups}');
+      expect(cook).toContain('@sugar{3/4%cup}');
+      expect(cook).toContain('@cinnamon{1%tbsp}');
+    });
+  });
+
+  describe('Google Docs HTML Archive Serializer (R1)', () => {
+    it('generates rich styled HTML document for Google Docs interchange', () => {
+      const html = generateGoogleDocsHtml(sampleRecipes, 'My Heirloom Cookbook');
+      expect(html).toContain('<!DOCTYPE html>');
+      expect(html).toContain('My Heirloom Cookbook');
+      expect(html).toContain('Grandma&#39;s &quot;Secret&quot; Apple Pie');
+      expect(html).toContain('meta-table');
+      expect(html).toContain('Ingredients');
+    });
+  });
+
   describe('ExportDialog UI Component', () => {
-    it('switches between CSV, JSON-LD, and Raw JSON tabs', () => {
+    it('switches between all 9 export format tabs cleanly', () => {
       render(<ExportDialog recipes={sampleRecipes} sessionId="sess_export_test" />);
 
       expect(screen.getByText(/Plan To Eat RFC 4180 CSV/i)).toBeInTheDocument();
@@ -100,6 +142,36 @@ describe('R5: Multi-Format Recipe Export Subsystem', () => {
       const rawJsonTab = screen.getByRole('button', { name: /Standard Raw JSON/i });
       fireEvent.click(rawJsonTab);
       expect(screen.getByText(/Raw RecipeSchema JSON Array/i)).toBeInTheDocument();
+
+      // Click Obsidian Markdown Tab
+      const mdTab = screen.getByRole('button', { name: /Obsidian Markdown/i });
+      fireEvent.click(mdTab);
+      expect(screen.getByText(/Obsidian Markdown with YAML Frontmatter/i)).toBeInTheDocument();
+
+      // Click Cooklang Tab
+      const cookTab = screen.getByRole('button', { name: /Cooklang \(\.cook\)/i });
+      fireEvent.click(cookTab);
+      expect(screen.getByText(/Cooklang \(\.cook\) Serialized Format/i)).toBeInTheDocument();
+
+      // Click Paprika Tab
+      const paprikaTab = screen.getByRole('button', { name: /Paprika \(\.paprikarecipes\)/i });
+      fireEvent.click(paprikaTab);
+      expect(screen.getByText(/Paprika Recipe Manager/i)).toBeInTheDocument();
+
+      // Click Google Docs Tab
+      const gdocsTab = screen.getByRole('button', { name: /Google Docs Archival/i });
+      fireEvent.click(gdocsTab);
+      expect(screen.getByText(/Google Docs Interchange Archive/i)).toBeInTheDocument();
+
+      // Click Heirloom DOCX Tab
+      const docxTab = screen.getByRole('button', { name: /Heirloom DOCX/i });
+      fireEvent.click(docxTab);
+      expect(screen.getByText(/Heirloom Cookbook DOCX/i)).toBeInTheDocument();
+
+      // Click Printable PDF Tab
+      const pdfTab = screen.getByRole('button', { name: /Printable PDF/i });
+      fireEvent.click(pdfTab);
+      expect(screen.getByText(/Printable Archival PDF Cookbook/i)).toBeInTheDocument();
     });
   });
 });
