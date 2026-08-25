@@ -173,3 +173,27 @@ The Schema.org JSON-LD exporter (`recipeboxer/exporter/json_ld.py` and `frontend
      ```
 3. **Duration Parser**:
    - Natural language duration strings must be converted to standard ISO 8601 duration notation via `human_duration_to_iso8601` (e.g. `"25 mins"` $\rightarrow$ `"PT25M"`, `"1 hr 30 mins"` $\rightarrow$ `"PT1H30M"`).
+
+---
+
+## 8. Invariant 8: Open Source License Compatibility & Dependency Vetting
+
+### Rule
+All third-party libraries, runtime packages, build tools, and dependencies added to RecipeBoxer **MUST** be licensed under GPLv3-compatible licenses (e.g., MIT, BSD-2-Clause, BSD-3-Clause, Apache-2.0, ISC, PSF-2.0, or Public Domain). Incorporating libraries with restrictive, incompatible copyleft, or proprietary non-redistributable terms is strictly prohibited.
+
+### Technical Specifications
+1. **Permitted Dependency Licenses**:
+   - `MIT`, `MIT-CMU`, `MIT-0`
+   - `BSD-2-Clause`, `BSD-3-Clause`
+   - `Apache-2.0`
+   - `ISC`
+   - `PSF-2.0` (Python Software Foundation License)
+   - `Public Domain` / `Unlicense` / `CC0-1.0`
+   - `MPL-2.0` (for standalone/dynamically linked components)
+   - `GPLv3` / `GPL-compatible`
+2. **Prohibited Dependency Licenses**:
+   - Proprietary / Commercial-only licenses with anti-redistribution clauses.
+   - Restrictive Commons Clause, SSPL, or non-commercial (NC) licenses that conflict with open source distribution.
+3. **Agent & Contributor Verification Protocol**:
+   - Before introducing any new Python dependency (`requirements.txt`, `pyproject.toml`) or npm package (`frontend/package.json`), the implementing agent must verify the package's license metadata against the approved list above.
+

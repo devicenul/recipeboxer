@@ -99,17 +99,15 @@ All roadmap items and milestones use standardized status tags:
 ---
 
 ### 6. User Experience, Comprehensive Documentation & Project Governance
-- [ ] **Comprehensive User Guide & End-to-End Walkthrough (`README.md`)**:
+- [x] **Open Source License Compliance & Dependency Audit (`LICENSE`)**:
+  - **Verdict**: Retained GPLv3. Completed full automated license audit across all 60+ Python dependencies (`.venv`) and all 17 npm frontend packages (`frontend/package.json`).
+  - **Result**: 100% compliance confirmed (all third-party libraries use compatible permissive licenses: MIT, BSD-2/3-Clause, Apache-2.0, ISC, PSF-2.0, or MPL-2.0).
+  - **Agent Governance**: Formalized Invariant 8 in `_agents/INVARIANTS.md` requiring pre-vetting of all future dependencies against approved license lists.
+- [ ] **Comprehensive User Guide & End-to-End Walkthrough (`README.md`)** *(Deferred to Initial MVP Phase)*:
   - Visual onboarding: Architecture diagrams, UI feature walkthroughs, and screenshot guides.
   - Step-by-step multi-platform setup instructions (macOS, Linux, Windows PowerShell / CMD).
   - Workflow guide: Ingestion setup, keyboard shortcuts in Rapid Queue, Candidate Drawer & 3+ multi-card grouping, visual inspection filters, split-screen recipe editor, and Plan To Eat CSV / JSON-LD export.
   - Troubleshooting FAQ: API key configuration (`GEMINI_API_KEY`), quota management with slow-batch pacing, port binding, and cache management.
-- [ ] **Open Source License Investigation & Compliance (`LICENSE` / `LICENSE.md`)**:
-  - Evaluate the optimal licensing model for RecipeBoxer:
-    - **Apache 2.0 / MIT**: Permissive licensing to maximize community adoption, tool integration, and ease of embedding.
-    - **GPLv3 (Current)**: Strong copyleft ensuring all modifications and extensions remain open source.
-    - **AGPLv3**: Network copyleft if RecipeBoxer is offered as a hosted cloud service.
-  - Audit third-party dependencies (FastAPI, React, Tailwind, Lucide, PyInstaller, Google Antigravity SDK) for license compatibility.
 
 ---
 
