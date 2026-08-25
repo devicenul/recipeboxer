@@ -57,7 +57,13 @@ This document maintains the running backlog of future features, experimental inv
     - `MIXED_MEDIA` (handwritten notes on a printed clipping)
 - [ ] **Specialized Extraction Prompt Branches**:
   - **Cursive Branch**: Emphasizes deciphering historical letterforms, abbreviations (e.g., "T" vs "t" for Tbsp/tsp, "oleo" for margarine, "saleratus" for baking soda), and cursive flourishes.
-  - **Clipping/Magazine Branch**: Handles multi-column layouts, advertisements/sidebars, fine print, and coupon text exclusion.
-  - **Index Card Branch**: Optimizes for standard ruled card boundaries, top margin titles, and card flip cues.
-- [ ] **Thinking Budget Allocation**:
-  - Dynamically allocate higher thinking budgets to difficult cursive scans or low-contrast pencil handwriting while keeping printed cards on standard zero-overhead inference.
+---
+
+## 5. Developer & Agent Guidelines Repository (`agents/` / `AGENTS.md`)
+
+- [ ] **Dedicated `agents/` Context & Architecture Directory**:
+  - `agents/ARCHITECTURE.md`: High-level system overview, module dependencies, and state machine diagrams.
+  - `agents/INVARIANTS.md`: Critical architectural non-negotiables (SQLite WAL concurrency patterns, Plan To Eat RFC 4180 CSV escaping, Vite SPA static bundle paths, HITL async barrier semantics).
+  - `agents/TESTING_GUIDELINES.md`: Standards for 4-tier acceptance testing, mock isolation, and adversarial test writing.
+  - `agents/EXTENDING_RECIPEBOXER.md`: Step-by-step developer guides for adding new source providers, implementing custom prompt branches, and creating new export format serializers.
+
