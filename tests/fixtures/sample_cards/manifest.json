@@ -1,0 +1,1749 @@
+{
+  "version": "1.0.0",
+  "dataset_name": "RecipeBoxer Curated Historical Recipe Card Corpus",
+  "description": "Curated ground-truth benchmark dataset covering historical handwritten cursive, typewriter, magazine clipping, and multi-part recipe card scans.",
+  "total_cards": 23,
+  "total_recipes": 12,
+  "cards": [
+    {
+      "card_id": "rec_vhc_apple_crisp_1948_front.jpg",
+      "filename": "rec_vhc_apple_crisp_1948_front.jpg",
+      "sha256_hash": "a5faba578b357b916d22566af07c30f94bcd4f6266ea980a5bd098a3593829fc",
+      "modality": "HANDWRITTEN_CURSIVE",
+      "role": "FRONT_ONLY",
+      "recipe_cluster": {
+        "recipe_id": "rec_vhc_apple_crisp_1948",
+        "sequence_position": 0,
+        "cluster_role": "card1_front",
+        "total_cards": 2,
+        "continuation_cue": "(over ->)"
+      },
+      "physical_characteristics": {
+        "paper_tone": "RULED_INDEX",
+        "ruling_type": "STANDARD_RULED_BLUE",
+        "ink_type": "BLUE_BALLPOINT",
+        "artifacts": [
+          {
+            "artifact_type": "OIL_GREASE_STAIN",
+            "quadrant": "TOP_RIGHT",
+            "severity": "MODERATE",
+            "description": "Grease stain near upper right edge"
+          },
+          {
+            "artifact_type": "COFFEE_TEA_RING",
+            "quadrant": "TOP_RIGHT",
+            "severity": "MODERATE",
+            "description": "Coffee cup stain ring"
+          },
+          {
+            "artifact_type": "TEAR_EDGE",
+            "quadrant": "EDGE_RIGHT",
+            "severity": "MODERATE"
+          }
+        ]
+      },
+      "ground_truth_recipe": {
+        "recipe_id": "rec_vhc_apple_crisp_1948",
+        "title": "Grandma's 1948 Old-Fashioned Apple Crisp",
+        "description": "Vintage handwritten family recipe on aged yellowed index card.",
+        "yield_servings": "6 servings",
+        "prep_time": "20 mins",
+        "cook_time": "35 mins",
+        "total_time": "55 mins",
+        "ingredients": [
+          "5 medium baking apples, peeled & sliced",
+          "1 tbsp lemon juice",
+          "1/2 cup granulated sugar",
+          "1 tsp ground cinnamon",
+          "3/4 cup all-purpose flour",
+          "1/2 cup rolled oats",
+          "1/2 cup brown sugar, packed",
+          "1/3 cup cold butter, cubed",
+          "1/4 tsp salt"
+        ],
+        "directions": [
+          "1. Preheat oven to 375\u00b0F and grease an 8-inch square dish.",
+          "2. Toss apples with lemon juice, sugar, and cinnamon.",
+          "3. Combine flour, oats, brown sugar, and salt in bowl.",
+          "4. Cut in butter until mixture resembles coarse crumbs.",
+          "5. Spread topping over apples and bake 35 mins until golden.",
+          "6. Serve warm with fresh cream or vanilla ice cream."
+        ],
+        "tags": [
+          "Dessert",
+          "Baking",
+          "Vintage",
+          "Fall"
+        ],
+        "source_notes": "Handwritten 1948 Index Card",
+        "card_ids": [
+          "rec_vhc_apple_crisp_1948_front.jpg",
+          "rec_vhc_apple_crisp_1948_back.jpg"
+        ],
+        "image_urls": [],
+        "created_at": null,
+        "updated_at": null
+      }
+    },
+    {
+      "card_id": "rec_vhc_apple_crisp_1948_back.jpg",
+      "filename": "rec_vhc_apple_crisp_1948_back.jpg",
+      "sha256_hash": "c0375d0fd43d3698e263989b474987091129713dd85375abc4f2752742a754a5",
+      "modality": "HANDWRITTEN_CURSIVE",
+      "role": "BACK_ONLY",
+      "recipe_cluster": {
+        "recipe_id": "rec_vhc_apple_crisp_1948",
+        "sequence_position": 1,
+        "cluster_role": "card1_back",
+        "total_cards": 2,
+        "continuation_cue": null
+      },
+      "physical_characteristics": {
+        "paper_tone": "RULED_INDEX",
+        "ruling_type": "STANDARD_RULED_BLUE",
+        "ink_type": "BLUE_BALLPOINT",
+        "artifacts": [
+          {
+            "artifact_type": "OIL_GREASE_STAIN",
+            "quadrant": "TOP_LEFT",
+            "severity": "MILD",
+            "description": "Mirrored grease bleed-through from front"
+          },
+          {
+            "artifact_type": "COFFEE_TEA_RING",
+            "quadrant": "TOP_LEFT",
+            "severity": "MILD",
+            "description": "Mirrored coffee ring bleed-through"
+          },
+          {
+            "artifact_type": "TEAR_EDGE",
+            "quadrant": "EDGE_LEFT",
+            "severity": "MODERATE"
+          }
+        ]
+      },
+      "ground_truth_recipe": {
+        "recipe_id": "rec_vhc_apple_crisp_1948",
+        "title": "Grandma's 1948 Old-Fashioned Apple Crisp",
+        "description": "Vintage handwritten family recipe on aged yellowed index card.",
+        "yield_servings": "6 servings",
+        "prep_time": "20 mins",
+        "cook_time": "35 mins",
+        "total_time": "55 mins",
+        "ingredients": [
+          "5 medium baking apples, peeled & sliced",
+          "1 tbsp lemon juice",
+          "1/2 cup granulated sugar",
+          "1 tsp ground cinnamon",
+          "3/4 cup all-purpose flour",
+          "1/2 cup rolled oats",
+          "1/2 cup brown sugar, packed",
+          "1/3 cup cold butter, cubed",
+          "1/4 tsp salt"
+        ],
+        "directions": [
+          "1. Preheat oven to 375\u00b0F and grease an 8-inch square dish.",
+          "2. Toss apples with lemon juice, sugar, and cinnamon.",
+          "3. Combine flour, oats, brown sugar, and salt in bowl.",
+          "4. Cut in butter until mixture resembles coarse crumbs.",
+          "5. Spread topping over apples and bake 35 mins until golden.",
+          "6. Serve warm with fresh cream or vanilla ice cream."
+        ],
+        "tags": [
+          "Dessert",
+          "Baking",
+          "Vintage",
+          "Fall"
+        ],
+        "source_notes": "Handwritten 1948 Index Card",
+        "card_ids": [
+          "rec_vhc_apple_crisp_1948_front.jpg",
+          "rec_vhc_apple_crisp_1948_back.jpg"
+        ],
+        "image_urls": [],
+        "created_at": null,
+        "updated_at": null
+      }
+    },
+    {
+      "card_id": "rec_vhc_rhubarb_pie_1965_front.jpg",
+      "filename": "rec_vhc_rhubarb_pie_1965_front.jpg",
+      "sha256_hash": "167f3fcbc55d1cd2a9cf85a3386f0284b41d1c507d15a4b4db74d0698fba02a5",
+      "modality": "HANDWRITTEN_CURSIVE",
+      "role": "FRONT_ONLY",
+      "recipe_cluster": {
+        "recipe_id": "rec_vhc_rhubarb_pie_1965",
+        "sequence_position": 0,
+        "cluster_role": "card1_front",
+        "total_cards": 2,
+        "continuation_cue": "(over ->)"
+      },
+      "physical_characteristics": {
+        "paper_tone": "RULED_INDEX",
+        "ruling_type": "STANDARD_RULED_BLUE",
+        "ink_type": "BLACK_BALLPOINT",
+        "artifacts": [
+          {
+            "artifact_type": "OIL_GREASE_STAIN",
+            "quadrant": "TOP_RIGHT",
+            "severity": "MODERATE",
+            "description": "Grease stain near upper right edge"
+          },
+          {
+            "artifact_type": "COFFEE_TEA_RING",
+            "quadrant": "TOP_RIGHT",
+            "severity": "MODERATE",
+            "description": "Coffee cup stain ring"
+          },
+          {
+            "artifact_type": "TEAR_EDGE",
+            "quadrant": "EDGE_RIGHT",
+            "severity": "MODERATE"
+          }
+        ]
+      },
+      "ground_truth_recipe": {
+        "recipe_id": "rec_vhc_rhubarb_pie_1965",
+        "title": "Aunt Clara's 1965 Rhubarb Custard Pie",
+        "description": "Vintage handwritten fountain pen script on aged cream card.",
+        "yield_servings": "8 slices",
+        "prep_time": "25 mins",
+        "cook_time": "50 mins",
+        "total_time": "1 hr 15 mins",
+        "ingredients": [
+          "1 unbaked 9-inch pie shell",
+          "3 cups fresh rhubarb, chopped into 1/2-inch pieces",
+          "2 large eggs, beaten",
+          "1 cup granulated sugar",
+          "3 tbsp all-purpose flour",
+          "1/4 tsp ground nutmeg",
+          "1 tbsp melted butter"
+        ],
+        "directions": [
+          "1. Preheat oven to 400\u00b0F.",
+          "2. Arrange chopped rhubarb evenly in unbaked pie shell.",
+          "3. Whisk eggs, sugar, flour, nutmeg, and melted butter until smooth.",
+          "4. Pour custard mixture over rhubarb.",
+          "5. Bake at 400\u00b0F for 15 minutes, then reduce heat to 350\u00b0F and bake 35 minutes longer until set.",
+          "6. Cool completely on wire rack before serving."
+        ],
+        "tags": [
+          "Dessert",
+          "Pie",
+          "Rhubarb",
+          "Vintage"
+        ],
+        "source_notes": "Handwritten 1965 Index Card (Blue Fountain Pen)",
+        "card_ids": [
+          "rec_vhc_rhubarb_pie_1965_front.jpg",
+          "rec_vhc_rhubarb_pie_1965_back.jpg"
+        ],
+        "image_urls": [],
+        "created_at": null,
+        "updated_at": null
+      }
+    },
+    {
+      "card_id": "rec_vhc_rhubarb_pie_1965_back.jpg",
+      "filename": "rec_vhc_rhubarb_pie_1965_back.jpg",
+      "sha256_hash": "6a7ad66c2c7d42ba3e7d17e584776f2639f216d619beaf315b559e4ff72c1c12",
+      "modality": "HANDWRITTEN_CURSIVE",
+      "role": "BACK_ONLY",
+      "recipe_cluster": {
+        "recipe_id": "rec_vhc_rhubarb_pie_1965",
+        "sequence_position": 1,
+        "cluster_role": "card1_back",
+        "total_cards": 2,
+        "continuation_cue": null
+      },
+      "physical_characteristics": {
+        "paper_tone": "RULED_INDEX",
+        "ruling_type": "STANDARD_RULED_BLUE",
+        "ink_type": "BLACK_BALLPOINT",
+        "artifacts": [
+          {
+            "artifact_type": "OIL_GREASE_STAIN",
+            "quadrant": "TOP_LEFT",
+            "severity": "MILD",
+            "description": "Mirrored grease bleed-through from front"
+          },
+          {
+            "artifact_type": "COFFEE_TEA_RING",
+            "quadrant": "TOP_LEFT",
+            "severity": "MILD",
+            "description": "Mirrored coffee ring bleed-through"
+          },
+          {
+            "artifact_type": "TEAR_EDGE",
+            "quadrant": "EDGE_LEFT",
+            "severity": "MODERATE"
+          }
+        ]
+      },
+      "ground_truth_recipe": {
+        "recipe_id": "rec_vhc_rhubarb_pie_1965",
+        "title": "Aunt Clara's 1965 Rhubarb Custard Pie",
+        "description": "Vintage handwritten fountain pen script on aged cream card.",
+        "yield_servings": "8 slices",
+        "prep_time": "25 mins",
+        "cook_time": "50 mins",
+        "total_time": "1 hr 15 mins",
+        "ingredients": [
+          "1 unbaked 9-inch pie shell",
+          "3 cups fresh rhubarb, chopped into 1/2-inch pieces",
+          "2 large eggs, beaten",
+          "1 cup granulated sugar",
+          "3 tbsp all-purpose flour",
+          "1/4 tsp ground nutmeg",
+          "1 tbsp melted butter"
+        ],
+        "directions": [
+          "1. Preheat oven to 400\u00b0F.",
+          "2. Arrange chopped rhubarb evenly in unbaked pie shell.",
+          "3. Whisk eggs, sugar, flour, nutmeg, and melted butter until smooth.",
+          "4. Pour custard mixture over rhubarb.",
+          "5. Bake at 400\u00b0F for 15 minutes, then reduce heat to 350\u00b0F and bake 35 minutes longer until set.",
+          "6. Cool completely on wire rack before serving."
+        ],
+        "tags": [
+          "Dessert",
+          "Pie",
+          "Rhubarb",
+          "Vintage"
+        ],
+        "source_notes": "Handwritten 1965 Index Card (Blue Fountain Pen)",
+        "card_ids": [
+          "rec_vhc_rhubarb_pie_1965_front.jpg",
+          "rec_vhc_rhubarb_pie_1965_back.jpg"
+        ],
+        "image_urls": [],
+        "created_at": null,
+        "updated_at": null
+      }
+    },
+    {
+      "card_id": "rec_typ_beef_stroganoff_1956_front.jpg",
+      "filename": "rec_typ_beef_stroganoff_1956_front.jpg",
+      "sha256_hash": "c52fef7bbd6b44fdef6299eef64173d4cdc0be4ca3e24de4e5c7c98eff42a4ec",
+      "modality": "TYPEWRITTEN",
+      "role": "FRONT_ONLY",
+      "recipe_cluster": {
+        "recipe_id": "rec_typ_beef_stroganoff_1956",
+        "sequence_position": 0,
+        "cluster_role": "card1_front",
+        "total_cards": 2,
+        "continuation_cue": "PTO >>>"
+      },
+      "physical_characteristics": {
+        "paper_tone": "AGED_YELLOW",
+        "ruling_type": "STANDARD_RULED_BLUE",
+        "ink_type": "TYPEWRITER_RIBBON",
+        "artifacts": [
+          {
+            "artifact_type": "OIL_GREASE_STAIN",
+            "quadrant": "TOP_RIGHT",
+            "severity": "MODERATE",
+            "description": "Grease stain near upper right edge"
+          },
+          {
+            "artifact_type": "COFFEE_TEA_RING",
+            "quadrant": "TOP_RIGHT",
+            "severity": "MODERATE",
+            "description": "Coffee cup stain ring"
+          },
+          {
+            "artifact_type": "CORNER_DOG_EAR_FOLD",
+            "quadrant": "TOP_RIGHT",
+            "severity": "MILD"
+          }
+        ]
+      },
+      "ground_truth_recipe": {
+        "recipe_id": "rec_typ_beef_stroganoff_1956",
+        "title": "1956 Classic Beef Stroganoff",
+        "description": "Manual typewritten card from vintage community recipe club collection.",
+        "yield_servings": "4 servings",
+        "prep_time": "15 mins",
+        "cook_time": "25 mins",
+        "total_time": "40 mins",
+        "ingredients": [
+          "1 1/2 lbs beef sirloin, cut into thin strips",
+          "1/2 cup butter",
+          "1 medium yellow onion, thinly sliced",
+          "1/2 lb fresh button mushrooms, sliced",
+          "2 tbsp all-purpose flour",
+          "1 1/2 cups beef broth",
+          "1 tbsp tomato paste",
+          "1 tsp Dijon mustard",
+          "3/4 cup sour cream",
+          "12 oz egg noodles, cooked and buttered"
+        ],
+        "directions": [
+          "1. Melt 2 tbsp butter in heavy skillet over high heat.",
+          "2. Sear beef strips quickly 2-3 mins until browned; remove.",
+          "3. Saut\u00e9 onions and mushrooms in remaining butter until tender.",
+          "4. Stir in flour, then gradually whisk in beef broth.",
+          "5. Simmer 5 mins until sauce thickens; blend in mustard and tomato paste.",
+          "6. Reduce heat to low, fold in sour cream and returned beef.",
+          "7. Heat gently without boiling; serve over hot buttered egg noodles."
+        ],
+        "tags": [
+          "Dinner",
+          "Beef",
+          "Vintage",
+          "Classic"
+        ],
+        "source_notes": "Typewritten Card (July 1956 Recipe Club Stamp)",
+        "card_ids": [
+          "rec_typ_beef_stroganoff_1956_front.jpg",
+          "rec_typ_beef_stroganoff_1956_back.jpg"
+        ],
+        "image_urls": [],
+        "created_at": null,
+        "updated_at": null
+      }
+    },
+    {
+      "card_id": "rec_typ_beef_stroganoff_1956_back.jpg",
+      "filename": "rec_typ_beef_stroganoff_1956_back.jpg",
+      "sha256_hash": "b5872a160bc2730dd568ba7e2be25f746a7a5c30f5d016d60698de78eefa475d",
+      "modality": "TYPEWRITTEN",
+      "role": "BACK_ONLY",
+      "recipe_cluster": {
+        "recipe_id": "rec_typ_beef_stroganoff_1956",
+        "sequence_position": 1,
+        "cluster_role": "card1_back",
+        "total_cards": 2,
+        "continuation_cue": null
+      },
+      "physical_characteristics": {
+        "paper_tone": "AGED_YELLOW",
+        "ruling_type": "STANDARD_RULED_BLUE",
+        "ink_type": "TYPEWRITER_RIBBON",
+        "artifacts": [
+          {
+            "artifact_type": "OIL_GREASE_STAIN",
+            "quadrant": "TOP_LEFT",
+            "severity": "MILD",
+            "description": "Mirrored grease bleed-through from front"
+          },
+          {
+            "artifact_type": "COFFEE_TEA_RING",
+            "quadrant": "TOP_LEFT",
+            "severity": "MILD",
+            "description": "Mirrored coffee ring bleed-through"
+          },
+          {
+            "artifact_type": "CORNER_DOG_EAR_FOLD",
+            "quadrant": "TOP_LEFT",
+            "severity": "MILD"
+          }
+        ]
+      },
+      "ground_truth_recipe": {
+        "recipe_id": "rec_typ_beef_stroganoff_1956",
+        "title": "1956 Classic Beef Stroganoff",
+        "description": "Manual typewritten card from vintage community recipe club collection.",
+        "yield_servings": "4 servings",
+        "prep_time": "15 mins",
+        "cook_time": "25 mins",
+        "total_time": "40 mins",
+        "ingredients": [
+          "1 1/2 lbs beef sirloin, cut into thin strips",
+          "1/2 cup butter",
+          "1 medium yellow onion, thinly sliced",
+          "1/2 lb fresh button mushrooms, sliced",
+          "2 tbsp all-purpose flour",
+          "1 1/2 cups beef broth",
+          "1 tbsp tomato paste",
+          "1 tsp Dijon mustard",
+          "3/4 cup sour cream",
+          "12 oz egg noodles, cooked and buttered"
+        ],
+        "directions": [
+          "1. Melt 2 tbsp butter in heavy skillet over high heat.",
+          "2. Sear beef strips quickly 2-3 mins until browned; remove.",
+          "3. Saut\u00e9 onions and mushrooms in remaining butter until tender.",
+          "4. Stir in flour, then gradually whisk in beef broth.",
+          "5. Simmer 5 mins until sauce thickens; blend in mustard and tomato paste.",
+          "6. Reduce heat to low, fold in sour cream and returned beef.",
+          "7. Heat gently without boiling; serve over hot buttered egg noodles."
+        ],
+        "tags": [
+          "Dinner",
+          "Beef",
+          "Vintage",
+          "Classic"
+        ],
+        "source_notes": "Typewritten Card (July 1956 Recipe Club Stamp)",
+        "card_ids": [
+          "rec_typ_beef_stroganoff_1956_front.jpg",
+          "rec_typ_beef_stroganoff_1956_back.jpg"
+        ],
+        "image_urls": [],
+        "created_at": null,
+        "updated_at": null
+      }
+    },
+    {
+      "card_id": "rec_typ_tomato_soup_cake_1952_front.jpg",
+      "filename": "rec_typ_tomato_soup_cake_1952_front.jpg",
+      "sha256_hash": "24d5eb5f4cae65934330d3abfe29b3706f6db893ec6ec22fa48bf077e3cf2b14",
+      "modality": "TYPEWRITTEN",
+      "role": "FRONT_ONLY",
+      "recipe_cluster": {
+        "recipe_id": "rec_typ_tomato_soup_cake_1952",
+        "sequence_position": 0,
+        "cluster_role": "card1_front",
+        "total_cards": 2,
+        "continuation_cue": "PTO >>>"
+      },
+      "physical_characteristics": {
+        "paper_tone": "AGED_YELLOW",
+        "ruling_type": "STANDARD_RULED_BLUE",
+        "ink_type": "TYPEWRITER_RIBBON",
+        "artifacts": [
+          {
+            "artifact_type": "OIL_GREASE_STAIN",
+            "quadrant": "TOP_RIGHT",
+            "severity": "MODERATE",
+            "description": "Grease stain near upper right edge"
+          },
+          {
+            "artifact_type": "COFFEE_TEA_RING",
+            "quadrant": "TOP_RIGHT",
+            "severity": "MODERATE",
+            "description": "Coffee cup stain ring"
+          },
+          {
+            "artifact_type": "CORNER_DOG_EAR_FOLD",
+            "quadrant": "TOP_RIGHT",
+            "severity": "MILD"
+          },
+          {
+            "artifact_type": "TEAR_EDGE",
+            "quadrant": "EDGE_RIGHT",
+            "severity": "MODERATE"
+          }
+        ]
+      },
+      "ground_truth_recipe": {
+        "recipe_id": "rec_typ_tomato_soup_cake_1952",
+        "title": "1952 Tomato Soup Mystery Spice Cake",
+        "description": "Post-war vintage pantry mystery cake recipe on typewritten card.",
+        "yield_servings": "12 servings",
+        "prep_time": "20 mins",
+        "cook_time": "35 mins",
+        "total_time": "55 mins",
+        "ingredients": [
+          "2 cups sifted all-purpose flour",
+          "1 1/3 cups granulated sugar",
+          "4 tsp baking powder",
+          "1 tsp baking soda",
+          "1 1/2 tsp ground cinnamon",
+          "1/2 tsp ground cloves & nutmeg",
+          "1 can (10 3/4 oz) condensed tomato soup",
+          "1/2 cup shortening",
+          "2 large eggs",
+          "1/4 cup water",
+          "1 cup raisins or chopped walnuts"
+        ],
+        "directions": [
+          "1. Preheat oven to 350\u00b0F; grease and flour two 8-inch round cake pans.",
+          "2. Sift flour, sugar, baking powder, baking soda, and spices into large bowl.",
+          "3. Add tomato soup, shortening, eggs, and water; beat on medium speed 2 mins.",
+          "4. Fold in raisins and walnuts.",
+          "5. Pour into prepared pans and bake at 350\u00b0F for 30-35 mins.",
+          "6. Cool and frost with cream cheese frosting."
+        ],
+        "tags": [
+          "Baking",
+          "Cake",
+          "Vintage",
+          "Pantry"
+        ],
+        "source_notes": "Typewritten Pantry Card (1952)",
+        "card_ids": [
+          "rec_typ_tomato_soup_cake_1952_front.jpg",
+          "rec_typ_tomato_soup_cake_1952_back.jpg"
+        ],
+        "image_urls": [],
+        "created_at": null,
+        "updated_at": null
+      }
+    },
+    {
+      "card_id": "rec_typ_tomato_soup_cake_1952_back.jpg",
+      "filename": "rec_typ_tomato_soup_cake_1952_back.jpg",
+      "sha256_hash": "016ec713c1d253d7b432497b4e43f8526c04a40b3c74dd031a175fafd5b79a9d",
+      "modality": "TYPEWRITTEN",
+      "role": "BACK_ONLY",
+      "recipe_cluster": {
+        "recipe_id": "rec_typ_tomato_soup_cake_1952",
+        "sequence_position": 1,
+        "cluster_role": "card1_back",
+        "total_cards": 2,
+        "continuation_cue": null
+      },
+      "physical_characteristics": {
+        "paper_tone": "AGED_YELLOW",
+        "ruling_type": "STANDARD_RULED_BLUE",
+        "ink_type": "TYPEWRITER_RIBBON",
+        "artifacts": [
+          {
+            "artifact_type": "OIL_GREASE_STAIN",
+            "quadrant": "TOP_LEFT",
+            "severity": "MILD",
+            "description": "Mirrored grease bleed-through from front"
+          },
+          {
+            "artifact_type": "COFFEE_TEA_RING",
+            "quadrant": "TOP_LEFT",
+            "severity": "MILD",
+            "description": "Mirrored coffee ring bleed-through"
+          },
+          {
+            "artifact_type": "CORNER_DOG_EAR_FOLD",
+            "quadrant": "TOP_LEFT",
+            "severity": "MILD"
+          },
+          {
+            "artifact_type": "TEAR_EDGE",
+            "quadrant": "EDGE_LEFT",
+            "severity": "MODERATE"
+          }
+        ]
+      },
+      "ground_truth_recipe": {
+        "recipe_id": "rec_typ_tomato_soup_cake_1952",
+        "title": "1952 Tomato Soup Mystery Spice Cake",
+        "description": "Post-war vintage pantry mystery cake recipe on typewritten card.",
+        "yield_servings": "12 servings",
+        "prep_time": "20 mins",
+        "cook_time": "35 mins",
+        "total_time": "55 mins",
+        "ingredients": [
+          "2 cups sifted all-purpose flour",
+          "1 1/3 cups granulated sugar",
+          "4 tsp baking powder",
+          "1 tsp baking soda",
+          "1 1/2 tsp ground cinnamon",
+          "1/2 tsp ground cloves & nutmeg",
+          "1 can (10 3/4 oz) condensed tomato soup",
+          "1/2 cup shortening",
+          "2 large eggs",
+          "1/4 cup water",
+          "1 cup raisins or chopped walnuts"
+        ],
+        "directions": [
+          "1. Preheat oven to 350\u00b0F; grease and flour two 8-inch round cake pans.",
+          "2. Sift flour, sugar, baking powder, baking soda, and spices into large bowl.",
+          "3. Add tomato soup, shortening, eggs, and water; beat on medium speed 2 mins.",
+          "4. Fold in raisins and walnuts.",
+          "5. Pour into prepared pans and bake at 350\u00b0F for 30-35 mins.",
+          "6. Cool and frost with cream cheese frosting."
+        ],
+        "tags": [
+          "Baking",
+          "Cake",
+          "Vintage",
+          "Pantry"
+        ],
+        "source_notes": "Typewritten Pantry Card (1952)",
+        "card_ids": [
+          "rec_typ_tomato_soup_cake_1952_front.jpg",
+          "rec_typ_tomato_soup_cake_1952_back.jpg"
+        ],
+        "image_urls": [],
+        "created_at": null,
+        "updated_at": null
+      }
+    },
+    {
+      "card_id": "rec_clp_crisco_fried_chicken_front.jpg",
+      "filename": "rec_clp_crisco_fried_chicken_front.jpg",
+      "sha256_hash": "245bb4d222a64d0d28c341c1c31a4ab59f587a9333d895cf32edf63c3293bd15",
+      "modality": "PRINTED_CLIPPING",
+      "role": "FRONT_ONLY",
+      "recipe_cluster": {
+        "recipe_id": "rec_clp_crisco_fried_chicken",
+        "sequence_position": 0,
+        "cluster_role": "card1_front",
+        "total_cards": 2,
+        "continuation_cue": "PTO >>>"
+      },
+      "physical_characteristics": {
+        "paper_tone": "WHITE_LINEN",
+        "ruling_type": "UNRULED_BLANK",
+        "ink_type": "PRINTED_TYPESET",
+        "artifacts": [
+          {
+            "artifact_type": "OIL_GREASE_STAIN",
+            "quadrant": "TOP_RIGHT",
+            "severity": "MODERATE",
+            "description": "Grease stain near upper right edge"
+          },
+          {
+            "artifact_type": "CORNER_DOG_EAR_FOLD",
+            "quadrant": "TOP_RIGHT",
+            "severity": "MILD"
+          }
+        ]
+      },
+      "ground_truth_recipe": {
+        "recipe_id": "rec_clp_crisco_fried_chicken",
+        "title": "Crisco Golden Southern Fried Chicken",
+        "description": "1960s magazine clipping pasted onto index card with visible glue borders.",
+        "yield_servings": "4-6 servings",
+        "prep_time": "20 mins",
+        "cook_time": "30 mins",
+        "total_time": "50 mins",
+        "ingredients": [
+          "1 whole chicken (3 lbs), cut into pieces",
+          "1 cup buttermilk",
+          "2 cups all-purpose flour",
+          "2 tsp paprika",
+          "1 tsp garlic powder",
+          "1 1/2 tsp salt",
+          "1 tsp black pepper",
+          "Crisco shortening for deep skillet frying"
+        ],
+        "directions": [
+          "1. Soak chicken pieces in buttermilk for at least 15 minutes.",
+          "2. In paper bag or bowl, combine flour, paprika, garlic powder, salt, and pepper.",
+          "3. Heat 1/2 inch Crisco in cast iron skillet to 365\u00b0F.",
+          "4. Shake chicken in seasoned flour to coat thoroughly.",
+          "5. Fry chicken pieces 12-15 mins per side until golden brown and crisp.",
+          "6. Drain on brown paper bags before serving."
+        ],
+        "tags": [
+          "Dinner",
+          "Chicken",
+          "Southern",
+          "Magazine Clipping"
+        ],
+        "source_notes": "1962 Magazine Advertisement Cutout",
+        "card_ids": [
+          "rec_clp_crisco_fried_chicken_front.jpg",
+          "rec_clp_crisco_fried_chicken_back.jpg"
+        ],
+        "image_urls": [],
+        "created_at": null,
+        "updated_at": null
+      }
+    },
+    {
+      "card_id": "rec_clp_crisco_fried_chicken_back.jpg",
+      "filename": "rec_clp_crisco_fried_chicken_back.jpg",
+      "sha256_hash": "8a6e52be644886626925e8d410e82bb405fd270289b5e025aaa390550d0a3350",
+      "modality": "PRINTED_CLIPPING",
+      "role": "BACK_ONLY",
+      "recipe_cluster": {
+        "recipe_id": "rec_clp_crisco_fried_chicken",
+        "sequence_position": 1,
+        "cluster_role": "card1_back",
+        "total_cards": 2,
+        "continuation_cue": null
+      },
+      "physical_characteristics": {
+        "paper_tone": "WHITE_LINEN",
+        "ruling_type": "UNRULED_BLANK",
+        "ink_type": "PRINTED_TYPESET",
+        "artifacts": [
+          {
+            "artifact_type": "OIL_GREASE_STAIN",
+            "quadrant": "TOP_LEFT",
+            "severity": "MILD",
+            "description": "Mirrored grease bleed-through from front"
+          },
+          {
+            "artifact_type": "CORNER_DOG_EAR_FOLD",
+            "quadrant": "TOP_LEFT",
+            "severity": "MILD"
+          }
+        ]
+      },
+      "ground_truth_recipe": {
+        "recipe_id": "rec_clp_crisco_fried_chicken",
+        "title": "Crisco Golden Southern Fried Chicken",
+        "description": "1960s magazine clipping pasted onto index card with visible glue borders.",
+        "yield_servings": "4-6 servings",
+        "prep_time": "20 mins",
+        "cook_time": "30 mins",
+        "total_time": "50 mins",
+        "ingredients": [
+          "1 whole chicken (3 lbs), cut into pieces",
+          "1 cup buttermilk",
+          "2 cups all-purpose flour",
+          "2 tsp paprika",
+          "1 tsp garlic powder",
+          "1 1/2 tsp salt",
+          "1 tsp black pepper",
+          "Crisco shortening for deep skillet frying"
+        ],
+        "directions": [
+          "1. Soak chicken pieces in buttermilk for at least 15 minutes.",
+          "2. In paper bag or bowl, combine flour, paprika, garlic powder, salt, and pepper.",
+          "3. Heat 1/2 inch Crisco in cast iron skillet to 365\u00b0F.",
+          "4. Shake chicken in seasoned flour to coat thoroughly.",
+          "5. Fry chicken pieces 12-15 mins per side until golden brown and crisp.",
+          "6. Drain on brown paper bags before serving."
+        ],
+        "tags": [
+          "Dinner",
+          "Chicken",
+          "Southern",
+          "Magazine Clipping"
+        ],
+        "source_notes": "1962 Magazine Advertisement Cutout",
+        "card_ids": [
+          "rec_clp_crisco_fried_chicken_front.jpg",
+          "rec_clp_crisco_fried_chicken_back.jpg"
+        ],
+        "image_urls": [],
+        "created_at": null,
+        "updated_at": null
+      }
+    },
+    {
+      "card_id": "rec_clp_condensed_milk_pie_1962_standalone.jpg",
+      "filename": "rec_clp_condensed_milk_pie_1962_standalone.jpg",
+      "sha256_hash": "0395f5e8c951371d010e803af771323116be45c341cc0b8b549b02d53c51a28a",
+      "modality": "PRINTED_CLIPPING",
+      "role": "STANDALONE",
+      "recipe_cluster": {
+        "recipe_id": "rec_clp_condensed_milk_pie_1962",
+        "sequence_position": 0,
+        "cluster_role": "standalone",
+        "total_cards": 1,
+        "continuation_cue": null
+      },
+      "physical_characteristics": {
+        "paper_tone": "WHITE_LINEN",
+        "ruling_type": "UNRULED_BLANK",
+        "ink_type": "PRINTED_TYPESET",
+        "artifacts": [
+          {
+            "artifact_type": "OIL_GREASE_STAIN",
+            "quadrant": "TOP_RIGHT",
+            "severity": "MILD"
+          },
+          {
+            "artifact_type": "COFFEE_TEA_RING",
+            "quadrant": "BOTTOM_LEFT",
+            "severity": "MODERATE"
+          },
+          {
+            "artifact_type": "CORNER_DOG_EAR_FOLD",
+            "quadrant": "BOTTOM_RIGHT",
+            "severity": "MILD"
+          },
+          {
+            "artifact_type": "TEAR_EDGE",
+            "quadrant": "EDGE_RIGHT",
+            "severity": "MILD"
+          }
+        ]
+      },
+      "ground_truth_recipe": {
+        "recipe_id": "rec_clp_condensed_milk_pie_1962",
+        "title": "1962 Borden's Eagle Brand Magic Chocolate Pie",
+        "description": "Vintage condensed milk can label package recipe clipping.",
+        "yield_servings": "8 servings",
+        "prep_time": "15 mins",
+        "cook_time": "0 mins",
+        "total_time": "3 hrs 15 mins",
+        "ingredients": [
+          "1 can (14 oz) Borden Eagle Brand Sweetened Condensed Milk",
+          "1 1/2 cups semi-sweet chocolate morsels",
+          "1/2 cup hot water",
+          "1 tsp vanilla extract",
+          "1 pre-baked 9-inch graham cracker crust",
+          "1 cup heavy whipping cream, whipped"
+        ],
+        "directions": [
+          "1. In top of double boiler, melt chocolate morsels with sweetened condensed milk, stirring until smooth.",
+          "2. Gradually blend in hot water and vanilla extract.",
+          "3. Remove from heat; cool to room temperature.",
+          "4. Pour into prepared graham cracker crust.",
+          "5. Chill in refrigerator at least 3 hours until set.",
+          "6. Garnish with fresh whipped cream and chocolate curls."
+        ],
+        "tags": [
+          "Dessert",
+          "Chocolate",
+          "Pie",
+          "Package Clipping"
+        ],
+        "source_notes": "1962 Eagle Brand Can Label Clipping",
+        "card_ids": [
+          "rec_clp_condensed_milk_pie_1962_standalone.jpg"
+        ],
+        "image_urls": [],
+        "created_at": null,
+        "updated_at": null
+      }
+    },
+    {
+      "card_id": "rec_dmg_moms_lasagna_1971_front.jpg",
+      "filename": "rec_dmg_moms_lasagna_1971_front.jpg",
+      "sha256_hash": "52e18f2a52ec17c319d7eff3faa45821a32aa0913e6af44cdc4d391148a89ed6",
+      "modality": "MIXED_MEDIA",
+      "role": "FRONT_ONLY",
+      "recipe_cluster": {
+        "recipe_id": "rec_dmg_moms_lasagna_1971",
+        "sequence_position": 0,
+        "cluster_role": "card1_front",
+        "total_cards": 2,
+        "continuation_cue": "PTO >>>"
+      },
+      "physical_characteristics": {
+        "paper_tone": "RULED_INDEX",
+        "ruling_type": "STANDARD_RULED_BLUE",
+        "ink_type": "PRINTED_TYPESET",
+        "artifacts": [
+          {
+            "artifact_type": "OIL_GREASE_STAIN",
+            "quadrant": "TOP_RIGHT",
+            "severity": "MODERATE",
+            "description": "Grease stain near upper right edge"
+          },
+          {
+            "artifact_type": "COFFEE_TEA_RING",
+            "quadrant": "TOP_RIGHT",
+            "severity": "MODERATE",
+            "description": "Coffee cup stain ring"
+          },
+          {
+            "artifact_type": "CORNER_DOG_EAR_FOLD",
+            "quadrant": "TOP_RIGHT",
+            "severity": "MILD"
+          }
+        ]
+      },
+      "ground_truth_recipe": {
+        "recipe_id": "rec_dmg_moms_lasagna_1971",
+        "title": "Mom's Sunday Homemade Lasagna",
+        "description": "Heavily stained recipe card with oil spots and coffee ring bleed-through.",
+        "yield_servings": "8 servings",
+        "prep_time": "30 mins",
+        "cook_time": "50 mins",
+        "total_time": "1 hr 20 mins",
+        "ingredients": [
+          "1 lb ground Italian sweet sausage",
+          "1 lb lean ground beef",
+          "1 large onion, minced",
+          "3 cloves garlic, minced",
+          "2 cans (28 oz each) crushed tomatoes",
+          "2 tbsp tomato paste",
+          "1 tbsp dried oregano & basil",
+          "15 oz whole milk ricotta cheese",
+          "1 large egg, beaten",
+          "16 oz mozzarella cheese, shredded",
+          "1 cup freshly grated parmesan",
+          "12 lasagna noodles, boiled al dente"
+        ],
+        "directions": [
+          "1. Brown sausage and ground beef with onion and garlic; drain excess fat.",
+          "2. Stir in crushed tomatoes, tomato paste, oregano, and basil; simmer 30 mins.",
+          "3. Combine ricotta, beaten egg, and 1/2 cup parmesan in bowl.",
+          "4. Spread 1 cup meat sauce in bottom of 9x13 inch baking pan.",
+          "5. Layer 4 noodles, 1/3 ricotta mixture, mozzarella, and meat sauce.",
+          "6. Repeat layers twice, finishing with mozzarella and parmesan.",
+          "7. Cover loosely with foil; bake at 375\u00b0F for 35 mins.",
+          "8. Remove foil and bake 15 mins more until bubbling and golden."
+        ],
+        "tags": [
+          "Dinner",
+          "Italian",
+          "Pasta",
+          "Family Favorite"
+        ],
+        "source_notes": "Stained & Dog-Eared 1971 Ruled Card",
+        "card_ids": [
+          "rec_dmg_moms_lasagna_1971_front.jpg",
+          "rec_dmg_moms_lasagna_1971_back.jpg"
+        ],
+        "image_urls": [],
+        "created_at": null,
+        "updated_at": null
+      }
+    },
+    {
+      "card_id": "rec_dmg_moms_lasagna_1971_back.jpg",
+      "filename": "rec_dmg_moms_lasagna_1971_back.jpg",
+      "sha256_hash": "f3f6c3a769ca0e044b2624c294097e449f5a2e22be40388520c6d804695a66c2",
+      "modality": "MIXED_MEDIA",
+      "role": "BACK_ONLY",
+      "recipe_cluster": {
+        "recipe_id": "rec_dmg_moms_lasagna_1971",
+        "sequence_position": 1,
+        "cluster_role": "card1_back",
+        "total_cards": 2,
+        "continuation_cue": null
+      },
+      "physical_characteristics": {
+        "paper_tone": "RULED_INDEX",
+        "ruling_type": "STANDARD_RULED_BLUE",
+        "ink_type": "PRINTED_TYPESET",
+        "artifacts": [
+          {
+            "artifact_type": "OIL_GREASE_STAIN",
+            "quadrant": "TOP_LEFT",
+            "severity": "MILD",
+            "description": "Mirrored grease bleed-through from front"
+          },
+          {
+            "artifact_type": "COFFEE_TEA_RING",
+            "quadrant": "TOP_LEFT",
+            "severity": "MILD",
+            "description": "Mirrored coffee ring bleed-through"
+          },
+          {
+            "artifact_type": "CORNER_DOG_EAR_FOLD",
+            "quadrant": "TOP_LEFT",
+            "severity": "MILD"
+          }
+        ]
+      },
+      "ground_truth_recipe": {
+        "recipe_id": "rec_dmg_moms_lasagna_1971",
+        "title": "Mom's Sunday Homemade Lasagna",
+        "description": "Heavily stained recipe card with oil spots and coffee ring bleed-through.",
+        "yield_servings": "8 servings",
+        "prep_time": "30 mins",
+        "cook_time": "50 mins",
+        "total_time": "1 hr 20 mins",
+        "ingredients": [
+          "1 lb ground Italian sweet sausage",
+          "1 lb lean ground beef",
+          "1 large onion, minced",
+          "3 cloves garlic, minced",
+          "2 cans (28 oz each) crushed tomatoes",
+          "2 tbsp tomato paste",
+          "1 tbsp dried oregano & basil",
+          "15 oz whole milk ricotta cheese",
+          "1 large egg, beaten",
+          "16 oz mozzarella cheese, shredded",
+          "1 cup freshly grated parmesan",
+          "12 lasagna noodles, boiled al dente"
+        ],
+        "directions": [
+          "1. Brown sausage and ground beef with onion and garlic; drain excess fat.",
+          "2. Stir in crushed tomatoes, tomato paste, oregano, and basil; simmer 30 mins.",
+          "3. Combine ricotta, beaten egg, and 1/2 cup parmesan in bowl.",
+          "4. Spread 1 cup meat sauce in bottom of 9x13 inch baking pan.",
+          "5. Layer 4 noodles, 1/3 ricotta mixture, mozzarella, and meat sauce.",
+          "6. Repeat layers twice, finishing with mozzarella and parmesan.",
+          "7. Cover loosely with foil; bake at 375\u00b0F for 35 mins.",
+          "8. Remove foil and bake 15 mins more until bubbling and golden."
+        ],
+        "tags": [
+          "Dinner",
+          "Italian",
+          "Pasta",
+          "Family Favorite"
+        ],
+        "source_notes": "Stained & Dog-Eared 1971 Ruled Card",
+        "card_ids": [
+          "rec_dmg_moms_lasagna_1971_front.jpg",
+          "rec_dmg_moms_lasagna_1971_back.jpg"
+        ],
+        "image_urls": [],
+        "created_at": null,
+        "updated_at": null
+      }
+    },
+    {
+      "card_id": "rec_dmg_butter_shortbread_standalone.jpg",
+      "filename": "rec_dmg_butter_shortbread_standalone.jpg",
+      "sha256_hash": "9578c9072e315f5824a56991bccaec1e4f861558e47ff39a22612da3cafa1b9e",
+      "modality": "MIXED_MEDIA",
+      "role": "STANDALONE",
+      "recipe_cluster": {
+        "recipe_id": "rec_dmg_butter_shortbread",
+        "sequence_position": 0,
+        "cluster_role": "standalone",
+        "total_cards": 1,
+        "continuation_cue": null
+      },
+      "physical_characteristics": {
+        "paper_tone": "WHITE_LINEN",
+        "ruling_type": "UNRULED_BLANK",
+        "ink_type": "PRINTED_TYPESET",
+        "artifacts": [
+          {
+            "artifact_type": "OIL_GREASE_STAIN",
+            "quadrant": "TOP_RIGHT",
+            "severity": "MILD"
+          },
+          {
+            "artifact_type": "CORNER_DOG_EAR_FOLD",
+            "quadrant": "BOTTOM_RIGHT",
+            "severity": "MILD"
+          }
+        ]
+      },
+      "ground_truth_recipe": {
+        "recipe_id": "rec_dmg_butter_shortbread",
+        "title": "Traditional Scottish Butter Shortbread",
+        "description": "Edge-worn, butter-stained handwritten card from 1958.",
+        "yield_servings": "16 triangles",
+        "prep_time": "15 mins",
+        "cook_time": "30 mins",
+        "total_time": "45 mins",
+        "ingredients": [
+          "1 cup (2 sticks) salted butter, softened",
+          "1/2 cup superfine caster sugar",
+          "2 cups all-purpose flour",
+          "1/4 cup cornstarch",
+          "1/4 tsp pure almond extract",
+          "Granulated sugar for sprinkling"
+        ],
+        "directions": [
+          "1. Preheat oven to 325\u00b0F (165\u00b0C).",
+          "2. Cream softened butter and caster sugar together until pale and fluffy.",
+          "3. Sift flour and cornstarch together; fold into butter mixture with almond extract until dough comes together.",
+          "4. Press dough evenly into ungreased 9-inch round shortbread pan or cake tin.",
+          "5. Prick surface all over with tines of a fork in decorative pattern.",
+          "6. Bake at 325\u00b0F for 30-35 minutes until pale golden.",
+          "7. Cut into 16 wedges while still warm; sprinkle lightly with sugar."
+        ],
+        "tags": [
+          "Baking",
+          "Cookies",
+          "Scottish",
+          "Damaged Card"
+        ],
+        "source_notes": "1958 Butter-Stained Index Card with Edge Tear",
+        "card_ids": [
+          "rec_dmg_butter_shortbread_standalone.jpg"
+        ],
+        "image_urls": [],
+        "created_at": null,
+        "updated_at": null
+      }
+    },
+    {
+      "card_id": "rec_mcs_turkey_stuffing_feast_card1_front.jpg",
+      "filename": "rec_mcs_turkey_stuffing_feast_card1_front.jpg",
+      "sha256_hash": "b67ef0d52525605896ba4d94703ef66c6aef483682c55e7b2398a5de3a9c098f",
+      "modality": "HANDWRITTEN_CURSIVE",
+      "role": "FRONT_ONLY",
+      "recipe_cluster": {
+        "recipe_id": "rec_mcs_turkey_stuffing_feast",
+        "sequence_position": 0,
+        "cluster_role": "card1_front",
+        "total_cards": 3,
+        "continuation_cue": "(over to Card 1 Back ->)"
+      },
+      "physical_characteristics": {
+        "paper_tone": "RULED_INDEX",
+        "ruling_type": "STANDARD_RULED_BLUE",
+        "ink_type": "FOUNTAIN_PEN",
+        "artifacts": []
+      },
+      "ground_truth_recipe": {
+        "recipe_id": "rec_mcs_turkey_stuffing_feast",
+        "title": "Grandma's Thanksgiving Roast Turkey & Sage Stuffing",
+        "description": "3-card multi-part archival holiday feast preparation.",
+        "yield_servings": "10-12 servings",
+        "prep_time": "45 mins",
+        "cook_time": "3 hrs 30 mins",
+        "total_time": "4 hrs 15 mins",
+        "ingredients": [
+          "1 whole turkey (12-14 lbs), thawed and giblets removed",
+          "1/2 cup unsalted butter, softened",
+          "1 tbsp fresh rosemary, minced",
+          "1 tbsp fresh thyme, minced",
+          "1 loaf day-old white bread, cubed (8 cups)",
+          "1 cup celery, diced",
+          "1 large yellow onion, diced",
+          "2 tbsp rubbed sage",
+          "1 1/2 cups turkey or chicken broth",
+          "1/4 cup pan drippings for gravy",
+          "3 tbsp flour for gravy",
+          "2 cups hot turkey stock for gravy"
+        ],
+        "directions": [
+          "1. Rinse turkey and pat dry inside and out with paper towels.",
+          "2. Saut\u00e9 onion and celery in butter until tender; toss with bread cubes, sage, and broth.",
+          "3. Stuff turkey cavity loosely with prepared bread stuffing.",
+          "4. Rub softened butter, minced rosemary, and thyme under turkey skin and over breast.",
+          "5. Truss legs with kitchen twine; place breast-side up on roasting rack in roasting pan.",
+          "6. Roast at 325\u00b0F for 3 1/2 to 4 hours (basting every 30 mins) until thermometer reads 165\u00b0F in thigh.",
+          "7. Transfer turkey to carving board; let rest 25 mins before carving.",
+          "8. Pan Gravy: Pour pan drippings into skillet, whisk in flour over medium heat 2 mins, slowly whisk in hot stock until rich and smooth."
+        ],
+        "tags": [
+          "Holiday",
+          "Turkey",
+          "Thanksgiving",
+          "Multi-Card"
+        ],
+        "source_notes": "Multi-Card 3-Part Handwritten Holiday Set",
+        "card_ids": [
+          "rec_mcs_turkey_stuffing_feast_card1_front.jpg",
+          "rec_mcs_turkey_stuffing_feast_card1_back.jpg",
+          "rec_mcs_turkey_stuffing_feast_card2_front.jpg"
+        ],
+        "image_urls": [],
+        "created_at": null,
+        "updated_at": null
+      }
+    },
+    {
+      "card_id": "rec_mcs_turkey_stuffing_feast_card1_back.jpg",
+      "filename": "rec_mcs_turkey_stuffing_feast_card1_back.jpg",
+      "sha256_hash": "76df9d46156f063ed4bb64a96b3138168e0eed76172a28aa6fe09102dbb16981",
+      "modality": "HANDWRITTEN_CURSIVE",
+      "role": "BACK_ONLY",
+      "recipe_cluster": {
+        "recipe_id": "rec_mcs_turkey_stuffing_feast",
+        "sequence_position": 1,
+        "cluster_role": "card1_back",
+        "total_cards": 3,
+        "continuation_cue": "(See Card 2 Front ->)"
+      },
+      "physical_characteristics": {
+        "paper_tone": "RULED_INDEX",
+        "ruling_type": "STANDARD_RULED_BLUE",
+        "ink_type": "FOUNTAIN_PEN",
+        "artifacts": []
+      },
+      "ground_truth_recipe": {
+        "recipe_id": "rec_mcs_turkey_stuffing_feast",
+        "title": "Grandma's Thanksgiving Roast Turkey & Sage Stuffing",
+        "description": "3-card multi-part archival holiday feast preparation.",
+        "yield_servings": "10-12 servings",
+        "prep_time": "45 mins",
+        "cook_time": "3 hrs 30 mins",
+        "total_time": "4 hrs 15 mins",
+        "ingredients": [
+          "1 whole turkey (12-14 lbs), thawed and giblets removed",
+          "1/2 cup unsalted butter, softened",
+          "1 tbsp fresh rosemary, minced",
+          "1 tbsp fresh thyme, minced",
+          "1 loaf day-old white bread, cubed (8 cups)",
+          "1 cup celery, diced",
+          "1 large yellow onion, diced",
+          "2 tbsp rubbed sage",
+          "1 1/2 cups turkey or chicken broth",
+          "1/4 cup pan drippings for gravy",
+          "3 tbsp flour for gravy",
+          "2 cups hot turkey stock for gravy"
+        ],
+        "directions": [
+          "1. Rinse turkey and pat dry inside and out with paper towels.",
+          "2. Saut\u00e9 onion and celery in butter until tender; toss with bread cubes, sage, and broth.",
+          "3. Stuff turkey cavity loosely with prepared bread stuffing.",
+          "4. Rub softened butter, minced rosemary, and thyme under turkey skin and over breast.",
+          "5. Truss legs with kitchen twine; place breast-side up on roasting rack in roasting pan.",
+          "6. Roast at 325\u00b0F for 3 1/2 to 4 hours (basting every 30 mins) until thermometer reads 165\u00b0F in thigh.",
+          "7. Transfer turkey to carving board; let rest 25 mins before carving.",
+          "8. Pan Gravy: Pour pan drippings into skillet, whisk in flour over medium heat 2 mins, slowly whisk in hot stock until rich and smooth."
+        ],
+        "tags": [
+          "Holiday",
+          "Turkey",
+          "Thanksgiving",
+          "Multi-Card"
+        ],
+        "source_notes": "Multi-Card 3-Part Handwritten Holiday Set",
+        "card_ids": [
+          "rec_mcs_turkey_stuffing_feast_card1_front.jpg",
+          "rec_mcs_turkey_stuffing_feast_card1_back.jpg",
+          "rec_mcs_turkey_stuffing_feast_card2_front.jpg"
+        ],
+        "image_urls": [],
+        "created_at": null,
+        "updated_at": null
+      }
+    },
+    {
+      "card_id": "rec_mcs_turkey_stuffing_feast_card2_front.jpg",
+      "filename": "rec_mcs_turkey_stuffing_feast_card2_front.jpg",
+      "sha256_hash": "f1f359ebfa543dc9475e4b6e646fd3621de8263ce999034a01b41a40a7ecdf67",
+      "modality": "HANDWRITTEN_CURSIVE",
+      "role": "FRONT_ONLY",
+      "recipe_cluster": {
+        "recipe_id": "rec_mcs_turkey_stuffing_feast",
+        "sequence_position": 2,
+        "cluster_role": "card2_front",
+        "total_cards": 3,
+        "continuation_cue": null
+      },
+      "physical_characteristics": {
+        "paper_tone": "RULED_INDEX",
+        "ruling_type": "STANDARD_RULED_BLUE",
+        "ink_type": "FOUNTAIN_PEN",
+        "artifacts": []
+      },
+      "ground_truth_recipe": {
+        "recipe_id": "rec_mcs_turkey_stuffing_feast",
+        "title": "Grandma's Thanksgiving Roast Turkey & Sage Stuffing",
+        "description": "3-card multi-part archival holiday feast preparation.",
+        "yield_servings": "10-12 servings",
+        "prep_time": "45 mins",
+        "cook_time": "3 hrs 30 mins",
+        "total_time": "4 hrs 15 mins",
+        "ingredients": [
+          "1 whole turkey (12-14 lbs), thawed and giblets removed",
+          "1/2 cup unsalted butter, softened",
+          "1 tbsp fresh rosemary, minced",
+          "1 tbsp fresh thyme, minced",
+          "1 loaf day-old white bread, cubed (8 cups)",
+          "1 cup celery, diced",
+          "1 large yellow onion, diced",
+          "2 tbsp rubbed sage",
+          "1 1/2 cups turkey or chicken broth",
+          "1/4 cup pan drippings for gravy",
+          "3 tbsp flour for gravy",
+          "2 cups hot turkey stock for gravy"
+        ],
+        "directions": [
+          "1. Rinse turkey and pat dry inside and out with paper towels.",
+          "2. Saut\u00e9 onion and celery in butter until tender; toss with bread cubes, sage, and broth.",
+          "3. Stuff turkey cavity loosely with prepared bread stuffing.",
+          "4. Rub softened butter, minced rosemary, and thyme under turkey skin and over breast.",
+          "5. Truss legs with kitchen twine; place breast-side up on roasting rack in roasting pan.",
+          "6. Roast at 325\u00b0F for 3 1/2 to 4 hours (basting every 30 mins) until thermometer reads 165\u00b0F in thigh.",
+          "7. Transfer turkey to carving board; let rest 25 mins before carving.",
+          "8. Pan Gravy: Pour pan drippings into skillet, whisk in flour over medium heat 2 mins, slowly whisk in hot stock until rich and smooth."
+        ],
+        "tags": [
+          "Holiday",
+          "Turkey",
+          "Thanksgiving",
+          "Multi-Card"
+        ],
+        "source_notes": "Multi-Card 3-Part Handwritten Holiday Set",
+        "card_ids": [
+          "rec_mcs_turkey_stuffing_feast_card1_front.jpg",
+          "rec_mcs_turkey_stuffing_feast_card1_back.jpg",
+          "rec_mcs_turkey_stuffing_feast_card2_front.jpg"
+        ],
+        "image_urls": [],
+        "created_at": null,
+        "updated_at": null
+      }
+    },
+    {
+      "card_id": "rec_mcs_wedding_fruitcake_1942_card1_front.jpg",
+      "filename": "rec_mcs_wedding_fruitcake_1942_card1_front.jpg",
+      "sha256_hash": "68c189ecc22b6b5bcab7df3c77bc5055e4a23d168410931fdd6060c78abdb5b6",
+      "modality": "HANDWRITTEN_CURSIVE",
+      "role": "FRONT_ONLY",
+      "recipe_cluster": {
+        "recipe_id": "rec_mcs_wedding_fruitcake_1942",
+        "sequence_position": 0,
+        "cluster_role": "card1_front",
+        "total_cards": 4,
+        "continuation_cue": "(over to Card 1 Back ->)"
+      },
+      "physical_characteristics": {
+        "paper_tone": "AGED_YELLOW",
+        "ruling_type": "UNRULED_BLANK",
+        "ink_type": "FOUNTAIN_PEN",
+        "artifacts": []
+      },
+      "ground_truth_recipe": {
+        "recipe_id": "rec_mcs_wedding_fruitcake_1942",
+        "title": "1942 Heirloom Dark Holiday Wedding Fruitcake",
+        "description": "4-card comprehensive heirloom fruitcake preparation and aging procedure.",
+        "yield_servings": "24 servings",
+        "prep_time": "1 hr",
+        "cook_time": "3 hrs",
+        "total_time": "4 hrs",
+        "ingredients": [
+          "2 cups dark seedless raisins",
+          "2 cups golden sultanas",
+          "1 cup candied orange peel, diced",
+          "1 cup glac\u00e9 cherries, halved",
+          "1/2 cup dark rum or brandy for maceration",
+          "1 cup unsalted butter, softened",
+          "1 cup dark muscovado sugar",
+          "4 large eggs",
+          "2 1/4 cups all-purpose flour",
+          "1 tsp ground allspice & nutmeg",
+          "1/2 cup dark molasses",
+          "Cheesecloth and brandy for weekly curing"
+        ],
+        "directions": [
+          "1. Combine raisins, sultanas, orange peel, and cherries in bowl with rum; soak overnight covered.",
+          "2. Preheat oven to 300\u00b0F (150\u00b0C); double line 9-inch springform pan with buttered parchment paper.",
+          "3. Cream softened butter with dark muscovado sugar until fluffy; beat in eggs one at a time.",
+          "4. Sift flour with allspice and nutmeg; fold half into creamed mixture.",
+          "5. Toss soaked fruits with remaining flour, then gently fold into batter with dark molasses.",
+          "6. Spoon into prepared pan, smoothing top with wet spatula.",
+          "7. Bake at 300\u00b0F for 2 1/2 to 3 hours until skewer inserted in center comes out clean.",
+          "8. Cool cake in tin for 24 hours. Wrap in brandy-soaked cheesecloth and foil; store in cool tin for 6 weeks."
+        ],
+        "tags": [
+          "Baking",
+          "Fruitcake",
+          "Heirloom",
+          "Multi-Card"
+        ],
+        "source_notes": "4-Card Heirloom 1942 Handwritten Wedding Recipe",
+        "card_ids": [
+          "rec_mcs_wedding_fruitcake_1942_card1_front.jpg",
+          "rec_mcs_wedding_fruitcake_1942_card1_back.jpg",
+          "rec_mcs_wedding_fruitcake_1942_card2_front.jpg",
+          "rec_mcs_wedding_fruitcake_1942_card2_back.jpg"
+        ],
+        "image_urls": [],
+        "created_at": null,
+        "updated_at": null
+      }
+    },
+    {
+      "card_id": "rec_mcs_wedding_fruitcake_1942_card1_back.jpg",
+      "filename": "rec_mcs_wedding_fruitcake_1942_card1_back.jpg",
+      "sha256_hash": "7a10e93fe07c16dc322928edaa99854f0c92f7b80b754e8a617452d68b062439",
+      "modality": "HANDWRITTEN_CURSIVE",
+      "role": "BACK_ONLY",
+      "recipe_cluster": {
+        "recipe_id": "rec_mcs_wedding_fruitcake_1942",
+        "sequence_position": 1,
+        "cluster_role": "card1_back",
+        "total_cards": 4,
+        "continuation_cue": "(See Card 2 Front ->)"
+      },
+      "physical_characteristics": {
+        "paper_tone": "AGED_YELLOW",
+        "ruling_type": "UNRULED_BLANK",
+        "ink_type": "FOUNTAIN_PEN",
+        "artifacts": []
+      },
+      "ground_truth_recipe": {
+        "recipe_id": "rec_mcs_wedding_fruitcake_1942",
+        "title": "1942 Heirloom Dark Holiday Wedding Fruitcake",
+        "description": "4-card comprehensive heirloom fruitcake preparation and aging procedure.",
+        "yield_servings": "24 servings",
+        "prep_time": "1 hr",
+        "cook_time": "3 hrs",
+        "total_time": "4 hrs",
+        "ingredients": [
+          "2 cups dark seedless raisins",
+          "2 cups golden sultanas",
+          "1 cup candied orange peel, diced",
+          "1 cup glac\u00e9 cherries, halved",
+          "1/2 cup dark rum or brandy for maceration",
+          "1 cup unsalted butter, softened",
+          "1 cup dark muscovado sugar",
+          "4 large eggs",
+          "2 1/4 cups all-purpose flour",
+          "1 tsp ground allspice & nutmeg",
+          "1/2 cup dark molasses",
+          "Cheesecloth and brandy for weekly curing"
+        ],
+        "directions": [
+          "1. Combine raisins, sultanas, orange peel, and cherries in bowl with rum; soak overnight covered.",
+          "2. Preheat oven to 300\u00b0F (150\u00b0C); double line 9-inch springform pan with buttered parchment paper.",
+          "3. Cream softened butter with dark muscovado sugar until fluffy; beat in eggs one at a time.",
+          "4. Sift flour with allspice and nutmeg; fold half into creamed mixture.",
+          "5. Toss soaked fruits with remaining flour, then gently fold into batter with dark molasses.",
+          "6. Spoon into prepared pan, smoothing top with wet spatula.",
+          "7. Bake at 300\u00b0F for 2 1/2 to 3 hours until skewer inserted in center comes out clean.",
+          "8. Cool cake in tin for 24 hours. Wrap in brandy-soaked cheesecloth and foil; store in cool tin for 6 weeks."
+        ],
+        "tags": [
+          "Baking",
+          "Fruitcake",
+          "Heirloom",
+          "Multi-Card"
+        ],
+        "source_notes": "4-Card Heirloom 1942 Handwritten Wedding Recipe",
+        "card_ids": [
+          "rec_mcs_wedding_fruitcake_1942_card1_front.jpg",
+          "rec_mcs_wedding_fruitcake_1942_card1_back.jpg",
+          "rec_mcs_wedding_fruitcake_1942_card2_front.jpg",
+          "rec_mcs_wedding_fruitcake_1942_card2_back.jpg"
+        ],
+        "image_urls": [],
+        "created_at": null,
+        "updated_at": null
+      }
+    },
+    {
+      "card_id": "rec_mcs_wedding_fruitcake_1942_card2_front.jpg",
+      "filename": "rec_mcs_wedding_fruitcake_1942_card2_front.jpg",
+      "sha256_hash": "b0c5008cdefd9d761e1b09492a53b281b56707fcc0cfc52ec887805f74d56b9f",
+      "modality": "HANDWRITTEN_CURSIVE",
+      "role": "FRONT_ONLY",
+      "recipe_cluster": {
+        "recipe_id": "rec_mcs_wedding_fruitcake_1942",
+        "sequence_position": 2,
+        "cluster_role": "card2_front",
+        "total_cards": 4,
+        "continuation_cue": "(over to Card 2 Back ->)"
+      },
+      "physical_characteristics": {
+        "paper_tone": "AGED_YELLOW",
+        "ruling_type": "UNRULED_BLANK",
+        "ink_type": "FOUNTAIN_PEN",
+        "artifacts": []
+      },
+      "ground_truth_recipe": {
+        "recipe_id": "rec_mcs_wedding_fruitcake_1942",
+        "title": "1942 Heirloom Dark Holiday Wedding Fruitcake",
+        "description": "4-card comprehensive heirloom fruitcake preparation and aging procedure.",
+        "yield_servings": "24 servings",
+        "prep_time": "1 hr",
+        "cook_time": "3 hrs",
+        "total_time": "4 hrs",
+        "ingredients": [
+          "2 cups dark seedless raisins",
+          "2 cups golden sultanas",
+          "1 cup candied orange peel, diced",
+          "1 cup glac\u00e9 cherries, halved",
+          "1/2 cup dark rum or brandy for maceration",
+          "1 cup unsalted butter, softened",
+          "1 cup dark muscovado sugar",
+          "4 large eggs",
+          "2 1/4 cups all-purpose flour",
+          "1 tsp ground allspice & nutmeg",
+          "1/2 cup dark molasses",
+          "Cheesecloth and brandy for weekly curing"
+        ],
+        "directions": [
+          "1. Combine raisins, sultanas, orange peel, and cherries in bowl with rum; soak overnight covered.",
+          "2. Preheat oven to 300\u00b0F (150\u00b0C); double line 9-inch springform pan with buttered parchment paper.",
+          "3. Cream softened butter with dark muscovado sugar until fluffy; beat in eggs one at a time.",
+          "4. Sift flour with allspice and nutmeg; fold half into creamed mixture.",
+          "5. Toss soaked fruits with remaining flour, then gently fold into batter with dark molasses.",
+          "6. Spoon into prepared pan, smoothing top with wet spatula.",
+          "7. Bake at 300\u00b0F for 2 1/2 to 3 hours until skewer inserted in center comes out clean.",
+          "8. Cool cake in tin for 24 hours. Wrap in brandy-soaked cheesecloth and foil; store in cool tin for 6 weeks."
+        ],
+        "tags": [
+          "Baking",
+          "Fruitcake",
+          "Heirloom",
+          "Multi-Card"
+        ],
+        "source_notes": "4-Card Heirloom 1942 Handwritten Wedding Recipe",
+        "card_ids": [
+          "rec_mcs_wedding_fruitcake_1942_card1_front.jpg",
+          "rec_mcs_wedding_fruitcake_1942_card1_back.jpg",
+          "rec_mcs_wedding_fruitcake_1942_card2_front.jpg",
+          "rec_mcs_wedding_fruitcake_1942_card2_back.jpg"
+        ],
+        "image_urls": [],
+        "created_at": null,
+        "updated_at": null
+      }
+    },
+    {
+      "card_id": "rec_mcs_wedding_fruitcake_1942_card2_back.jpg",
+      "filename": "rec_mcs_wedding_fruitcake_1942_card2_back.jpg",
+      "sha256_hash": "a8d977052bf7664052417fcba8a8ed7ceb8f348047d4c9db42b34af1ce724007",
+      "modality": "HANDWRITTEN_CURSIVE",
+      "role": "BACK_ONLY",
+      "recipe_cluster": {
+        "recipe_id": "rec_mcs_wedding_fruitcake_1942",
+        "sequence_position": 3,
+        "cluster_role": "card2_back",
+        "total_cards": 4,
+        "continuation_cue": null
+      },
+      "physical_characteristics": {
+        "paper_tone": "AGED_YELLOW",
+        "ruling_type": "UNRULED_BLANK",
+        "ink_type": "FOUNTAIN_PEN",
+        "artifacts": []
+      },
+      "ground_truth_recipe": {
+        "recipe_id": "rec_mcs_wedding_fruitcake_1942",
+        "title": "1942 Heirloom Dark Holiday Wedding Fruitcake",
+        "description": "4-card comprehensive heirloom fruitcake preparation and aging procedure.",
+        "yield_servings": "24 servings",
+        "prep_time": "1 hr",
+        "cook_time": "3 hrs",
+        "total_time": "4 hrs",
+        "ingredients": [
+          "2 cups dark seedless raisins",
+          "2 cups golden sultanas",
+          "1 cup candied orange peel, diced",
+          "1 cup glac\u00e9 cherries, halved",
+          "1/2 cup dark rum or brandy for maceration",
+          "1 cup unsalted butter, softened",
+          "1 cup dark muscovado sugar",
+          "4 large eggs",
+          "2 1/4 cups all-purpose flour",
+          "1 tsp ground allspice & nutmeg",
+          "1/2 cup dark molasses",
+          "Cheesecloth and brandy for weekly curing"
+        ],
+        "directions": [
+          "1. Combine raisins, sultanas, orange peel, and cherries in bowl with rum; soak overnight covered.",
+          "2. Preheat oven to 300\u00b0F (150\u00b0C); double line 9-inch springform pan with buttered parchment paper.",
+          "3. Cream softened butter with dark muscovado sugar until fluffy; beat in eggs one at a time.",
+          "4. Sift flour with allspice and nutmeg; fold half into creamed mixture.",
+          "5. Toss soaked fruits with remaining flour, then gently fold into batter with dark molasses.",
+          "6. Spoon into prepared pan, smoothing top with wet spatula.",
+          "7. Bake at 300\u00b0F for 2 1/2 to 3 hours until skewer inserted in center comes out clean.",
+          "8. Cool cake in tin for 24 hours. Wrap in brandy-soaked cheesecloth and foil; store in cool tin for 6 weeks."
+        ],
+        "tags": [
+          "Baking",
+          "Fruitcake",
+          "Heirloom",
+          "Multi-Card"
+        ],
+        "source_notes": "4-Card Heirloom 1942 Handwritten Wedding Recipe",
+        "card_ids": [
+          "rec_mcs_wedding_fruitcake_1942_card1_front.jpg",
+          "rec_mcs_wedding_fruitcake_1942_card1_back.jpg",
+          "rec_mcs_wedding_fruitcake_1942_card2_front.jpg",
+          "rec_mcs_wedding_fruitcake_1942_card2_back.jpg"
+        ],
+        "image_urls": [],
+        "created_at": null,
+        "updated_at": null
+      }
+    },
+    {
+      "card_id": "rec_sta_quick_chocolate_fudge_standalone.jpg",
+      "filename": "rec_sta_quick_chocolate_fudge_standalone.jpg",
+      "sha256_hash": "06b8464f345e99cb90924576676a4103ac7847d8918e76c975ab308037c85f62",
+      "modality": "HANDWRITTEN_CURSIVE",
+      "role": "STANDALONE",
+      "recipe_cluster": {
+        "recipe_id": "rec_sta_quick_chocolate_fudge",
+        "sequence_position": 0,
+        "cluster_role": "standalone",
+        "total_cards": 1,
+        "continuation_cue": null
+      },
+      "physical_characteristics": {
+        "paper_tone": "RULED_INDEX",
+        "ruling_type": "STANDARD_RULED_BLUE",
+        "ink_type": "BLACK_BALLPOINT",
+        "artifacts": [
+          {
+            "artifact_type": "OIL_GREASE_STAIN",
+            "quadrant": "TOP_RIGHT",
+            "severity": "MILD"
+          },
+          {
+            "artifact_type": "COFFEE_TEA_RING",
+            "quadrant": "BOTTOM_LEFT",
+            "severity": "MODERATE"
+          },
+          {
+            "artifact_type": "CORNER_DOG_EAR_FOLD",
+            "quadrant": "BOTTOM_RIGHT",
+            "severity": "MILD"
+          }
+        ]
+      },
+      "ground_truth_recipe": {
+        "recipe_id": "rec_sta_quick_chocolate_fudge",
+        "title": "10-Minute Quick Chocolate Fudge",
+        "description": "Standalone single-sided vintage chocolate candy recipe.",
+        "yield_servings": "36 squares",
+        "prep_time": "10 mins",
+        "cook_time": "5 mins",
+        "total_time": "2 hrs 15 mins",
+        "ingredients": [
+          "3 cups semi-sweet chocolate chips",
+          "1 can (14 oz) sweetened condensed milk",
+          "1 tsp pure vanilla extract",
+          "Pinch of sea salt",
+          "1/2 cup chopped walnuts (optional)"
+        ],
+        "directions": [
+          "1. Line an 8x8 inch baking pan with aluminum foil and lightly butter.",
+          "2. Combine chocolate chips and sweetened condensed milk in heavy saucepan over low heat.",
+          "3. Stir constantly until chocolate is completely melted and smooth.",
+          "4. Remove from heat; stir in vanilla, salt, and optional walnuts.",
+          "5. Spread evenly into prepared pan; chill in refrigerator 2 hours until firm."
+        ],
+        "tags": [
+          "Candy",
+          "Chocolate",
+          "Quick",
+          "Standalone"
+        ],
+        "source_notes": "Standalone Index Card",
+        "card_ids": [
+          "rec_sta_quick_chocolate_fudge_standalone.jpg"
+        ],
+        "image_urls": [],
+        "created_at": null,
+        "updated_at": null
+      }
+    },
+    {
+      "card_id": "rec_sta_southern_pecan_pie_standalone.jpg",
+      "filename": "rec_sta_southern_pecan_pie_standalone.jpg",
+      "sha256_hash": "436c098dbef6db6a9770092d4cff64f80f087bb7453dc45ff4546f11bb3912cc",
+      "modality": "HANDWRITTEN_CURSIVE",
+      "role": "STANDALONE",
+      "recipe_cluster": {
+        "recipe_id": "rec_sta_southern_pecan_pie",
+        "sequence_position": 0,
+        "cluster_role": "standalone",
+        "total_cards": 1,
+        "continuation_cue": null
+      },
+      "physical_characteristics": {
+        "paper_tone": "KRAFT_BROWN",
+        "ruling_type": "UNRULED_BLANK",
+        "ink_type": "BLACK_BALLPOINT",
+        "artifacts": [
+          {
+            "artifact_type": "OIL_GREASE_STAIN",
+            "quadrant": "TOP_RIGHT",
+            "severity": "MILD"
+          },
+          {
+            "artifact_type": "TEAR_EDGE",
+            "quadrant": "EDGE_RIGHT",
+            "severity": "MILD"
+          }
+        ]
+      },
+      "ground_truth_recipe": {
+        "recipe_id": "rec_sta_southern_pecan_pie",
+        "title": "Southern Pecan Pie",
+        "description": "Classic single-sided kraft substrate southern pie recipe.",
+        "yield_servings": "8 servings",
+        "prep_time": "15 mins",
+        "cook_time": "60 mins",
+        "total_time": "1 hr 15 mins",
+        "ingredients": [
+          "1 unbaked 9-inch deep-dish pie crust",
+          "3 large eggs",
+          "1 cup dark corn syrup",
+          "1 cup granulated sugar",
+          "2 tbsp unsalted butter, melted",
+          "1 tsp pure vanilla extract",
+          "1 1/2 cups pecan halves"
+        ],
+        "directions": [
+          "1. Preheat oven to 350\u00b0F.",
+          "2. In mixing bowl, beat eggs, dark corn syrup, sugar, melted butter, and vanilla until smooth.",
+          "3. Fold in pecan halves and pour filling into unbaked pie crust.",
+          "4. Bake at 350\u00b0F for 55-60 minutes until center is slightly set with gentle jiggle.",
+          "5. Cool completely on wire rack 2 hours before slicing."
+        ],
+        "tags": [
+          "Dessert",
+          "Pie",
+          "Southern",
+          "Standalone"
+        ],
+        "source_notes": "Standalone Kraft Paper Card",
+        "card_ids": [
+          "rec_sta_southern_pecan_pie_standalone.jpg"
+        ],
+        "image_urls": [],
+        "created_at": null,
+        "updated_at": null
+      }
+    }
+  ]
+}

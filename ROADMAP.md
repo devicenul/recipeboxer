@@ -25,28 +25,29 @@ All roadmap items and milestones use standardized status tags:
 | **M5** | **React 18+ TypeScript SPA & Static Embedding** | React 18 SPA with Vite, Tailwind CSS, Lucide icons, custom hooks (`useSSE`, `useKeyboard`, `useImageViewer`, `useRecipeForm`, `useTheme`), interactive pan/zoom/filter card viewer, Vite build contract directly into `recipeboxer/api/static`, SPA catch-all fallback with `/api` 404 guard. | `[x] Completed` |
 | **M6** | **Agent Guidance, Invariants & Repository Structure** | Complete `_agents/` documentation directory (`README.md`, `ARCHITECTURE.md`, `INVARIANTS.md`, `TESTING_GUIDELINES.md`, `EXTENDING_RECIPEBOXER.md`), 4-tier testing guide, extension playbooks, and standardized roadmap persistence conventions. | `[x] Completed` |
 | **M7** | **License Compliance & Dependency Vetting Audit** | Full automated audit of 60+ Python and 17+ npm dependencies confirming 100% GPLv3 compatibility; formalized Invariant 8 in `_agents/INVARIANTS.md`. | `[x] Completed` |
+| **M8** | **Sample Card Corpus, Provenance & Synthetic Generator** | 23 high-resolution historical card fixtures across 6 modalities, CC0/public domain provenance guide (`tests/fixtures/sample_cards/README.md`), strict Pydantic `manifest.json`, procedural generator tool (`recipeboxer/tools/card_generator.py`), and pytest loader fixtures. | `[x] Completed` |
 
 ---
 
 ## Prioritized Strategic Path Forward
 
 ```
-Phase 1: Curated Test Datasets & Benchmarks
-   │
-   ▼
-Phase 2: Agent & Prompt Evaluation Harness (evals/)
-   │
-   ▼
-Phase 3: Adaptive Vision Prompts, Antigravity Skills & CV Tools
-   │
-   ▼
-Phase 4: Archival Document Generation & Extended Exporters
-   │
-   ▼
-Phase 5: Cloud & External Source Providers
-   │
-   ▼
-Phase 6: Comprehensive User Guide, Guided UI Tutorial & MVP Release
+[x] Phase 1: Curated Test Datasets & Benchmarks
+       │
+       ▼
+[ ] Phase 2: Agent & Prompt Evaluation Harness (evals/)
+       │
+       ▼
+[ ] Phase 3: Adaptive Vision Prompts, Antigravity Skills & CV Tools
+       │
+       ▼
+[ ] Phase 4: Archival Document Generation & Extended Exporters
+       │
+       ▼
+[ ] Phase 5: Cloud & External Source Providers
+       │
+       ▼
+[ ] Phase 6: Comprehensive User Guide, Guided UI Tutorial & MVP Release
 ```
 
 ---
@@ -54,16 +55,23 @@ Phase 6: Comprehensive User Guide, Guided UI Tutorial & MVP Release
 ### Phase 1: Curated Test Datasets & Benchmarks
 *Foundation priority: Establish a rich, diverse corpus of recipe card scans to ground all subsequent evaluation, prompt tuning, and regression testing.*
 
-- [ ] **Curate Public Domain Historical Recipe Scans**:
-  - Source and curate high-resolution public domain card scans from archival collections (Library of Congress, open historical society archives, and open vintage recipe collections) representing authentic mid-20th century culinary artifacts.
-- [ ] **Representative Sample Scans Repository (`tests/fixtures/sample_cards/`)**:
-  - **Vintage Handwritten Cursive**: 1940s–1970s index cards with aged paper, fountain pen ink bleed, and faded pencil.
-  - **Typewritten & Stamped**: Cards produced on manual typewriters with ink ribbon wear.
-  - **Magazine Clippings & Package Labels**: Glued-on newspaper recipes, clipped product box backs, and multi-column magazine layouts.
-  - **Stained / Damaged / Edge-Folded Cards**: Real-world kitchen artifacts (oil spots, grease stains spanning card boundaries, coffee rings, torn edges).
-  - **Multi-Card Recipe Sets (3–4 Cards)**: Extended canning, holiday baking, and multi-step confectionery recipes.
-- [ ] **Synthetic Card Generator**:
-  - Python tool to procedurally generate synthetic card front/back pairs with controllable paper grain, font variations, ruling lines, stain bleed-through, and narrative continuations for CI test automation.
+- [x] **Curate Public Domain Historical Recipe Scans**:
+  - Sourced and curated high-resolution card scans from historical public domain collections (Library of Congress, MSU Feeding America) and synthetic cleanroom generator covering 12 culinary recipes.
+- [x] **Representative Sample Scans Repository (`tests/fixtures/sample_cards/`)**:
+  - **Vintage Handwritten Cursive**: 1948 Apple Crisp, 1965 Rhubarb Custard Pie (aged paper, fountain pen bleed, faded pencil).
+  - **Typewritten & Stamped**: 1956 Beef Stroganoff with club stamp, 1952 Mystery Spice Cake.
+  - **Magazine Clippings & Package Labels**: Crisco Fried Chicken cutout, 1962 Borden's Eagle Brand Chocolate Pie.
+  - **Stained / Damaged / Edge-Folded Cards**: Mom's Lasagna (coffee cup rings, oil stains), Shortbread with ragged tears.
+  - **Multi-Card Recipe Sets (3–4 Cards)**: Grandma's Thanksgiving Turkey (3 cards), 1942 Dark Wedding Fruitcake (4 cards).
+  - **Standalone Single-Sided Cards**: Quick Chocolate Fudge, Kraft paper Pecan Pie.
+- [x] **Dataset Provenance & Public Domain Licensing Guide (`tests/fixtures/sample_cards/README.md`)**:
+  - Full archive provenance documentation and Creative Commons CC0 1.0 Universal / MIT terms.
+- [x] **Ground-Truth Metadata Manifest (`tests/fixtures/sample_cards/manifest.json`)**:
+  - Strict Pydantic-validated JSON mapping 100% of images to physical features, cluster roles, and ground-truth `RecipeSchema` objects.
+- [x] **Procedural Synthetic Card Generator (`recipeboxer/tools/card_generator.py`)**:
+  - Reusable CLI/Python generator with 6 paper substrates, 4 rendering modes, realistic stains/bleed/tears, and deterministic seeding.
+- [x] **Dataset Loader & Pytest Fixture Utilities (`tests/fixtures/loader.py`)**:
+  - Query APIs and pytest fixtures (`sample_card_corpus`, `sample_card_pairs`) with 975 passing tests across the repo.
 
 ---
 

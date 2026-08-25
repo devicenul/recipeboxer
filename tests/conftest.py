@@ -31,6 +31,15 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+# Register sample card fixtures
+from tests.fixtures.loader import (  # noqa: E402
+    ground_truth_manifest,
+    sample_card_corpus,
+    sample_card_multi_sets,
+    sample_card_pairs,
+    sample_card_standalones,
+)
+
 
 # ============================================================================
 # 1. DOMAIN MODELS & SCHEMAS (Authoritative Interface Contracts)
