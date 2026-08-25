@@ -40,7 +40,7 @@ The platform combines:
 ├── setup.sh / setup.ps1 / .bat # Cross-platform environment bootstrap scripts
 ├── run.sh / run.ps1 / .bat     # Cross-platform application launch scripts
 ├── build.sh / build.ps1        # Cross-platform production build and packaging scripts
-├── test.sh / test.ps1          # Cross-platform automated test runners (836+ Python tests)
+├── test.sh / test.ps1          # Cross-platform automated test runners (1,130+ Python tests)
 ├── README.md                   # User-facing project overview and quick start
 ├── ROADMAP.md                  # Canonical project milestone and enhancement roadmap
 ├── SCRIPTS.md                  # Comprehensive script usage and troubleshooting guide
@@ -72,8 +72,8 @@ The platform combines:
 │   │   ├── hooks/              # Custom hooks (useSSE, useKeyboard, useImageViewer, etc.)
 │   │   ├── utils/              # API fetch client and client-side formatters/exporters
 │   │   └── types/              # TypeScript interfaces mirroring backend domain models
-│   └── tests/                  # Vitest frontend unit and component test suites (74 tests)
-└── tests/                      # Python pytest test suites (836 tests across 28 modules)
+│   └── tests/                  # Vitest frontend unit and component test suites (102 tests)
+└── tests/                      # Python pytest test suites (1,130 tests across 29 modules)
     ├── conftest.py             # Test harness, fixtures, mock Gemini client, synthetic decks
     ├── test_e2e_4tier_suite.py # 165 comprehensive tests covering all 15 project features
     ├── test_tier5_adversarial_coverage.py # Adversarial stress, concurrency, and fuzzing tests
@@ -93,12 +93,12 @@ The platform combines:
 .\setup.ps1
 ```
 
-### 2. Running Automated Tests (910 Passing Tests)
+### 2. Running Automated Tests (1,232 Passing Tests)
 ```bash
-# Run all Python backend tests (836 tests)
+# Run all Python backend tests (1,130 tests)
 ./test.sh
 
-# Run all Frontend Vitest tests (74 tests)
+# Run all Frontend Vitest tests (102 tests)
 cd frontend && npm test -- --run
 
 # Run both in sequence
@@ -132,7 +132,7 @@ When operating in this codebase as an autonomous AI agent or contributor, you mu
    - Offline tests must use dedicated fixtures from `tests/conftest.py` (such as `MockGeminiClient` or `synthetic_card_deck`), never hardcoded bypasses in `recipeboxer/`.
 
 2. **Regression Gate — 100% Pass Rate**:
-   - The repository maintains **910 passing tests** (836 Python pytest tests + 74 Frontend Vitest tests).
+   - The repository maintains **1,232 passing tests** (1,130 Python pytest tests + 102 Frontend Vitest tests).
    - Zero test failures or regressions are permitted. After every code modification, run `./test.sh` and `cd frontend && npm test -- --run` to confirm all tests pass.
 
 3. **Respect System Invariants**:

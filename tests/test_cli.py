@@ -92,6 +92,15 @@ class TestCLIParser:
         output = captured.out or captured.err
         assert f"RecipeBoxer {__version__}" in output
 
+    def test_custom_concurrency(self):
+        """Verifies parsing custom --concurrency and -c arguments."""
+        parser = create_parser()
+        args = parser.parse_args(["--concurrency", "8"])
+        assert args.concurrency == 8
+
+        args_short = parser.parse_args(["-c", "12"])
+        assert args_short.concurrency == 12
+
     @pytest.mark.parametrize("flag", ["-h", "--help"])
     def test_help_flag_output(self, flag: str, capsys: pytest.CaptureFixture):
         """Verifies -h and --help print usage instructions and exit with code 0."""
@@ -103,6 +112,7 @@ class TestCLIParser:
         assert "RecipeBoxer" in captured.out
         assert "--host" in captured.out
         assert "--port" in captured.out
+        assert "--concurrency" in captured.out
         assert "--reload" in captured.out
 
 

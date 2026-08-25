@@ -1,5 +1,5 @@
 import React from 'react';
-import { ChefHat, Radio, Wifi, WifiOff } from 'lucide-react';
+import { ChefHat, Radio, Wifi, WifiOff, HelpCircle } from 'lucide-react';
 import { ThemeToggle } from '../common/ThemeToggle';
 import { Navigation, NavTab } from './Navigation';
 import { Badge } from '../common/Badge';
@@ -13,6 +13,7 @@ export interface HeaderProps {
   isConnected?: boolean;
   pendingHitlCount?: number;
   extractedRecipeCount?: number;
+  onOpenTutorial?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -23,6 +24,7 @@ export const Header: React.FC<HeaderProps> = ({
   isConnected = false,
   pendingHitlCount = 0,
   extractedRecipeCount = 0,
+  onOpenTutorial,
 }) => {
   const getStatusBadge = () => {
     switch (pipelineState) {
@@ -92,8 +94,20 @@ export const Header: React.FC<HeaderProps> = ({
             />
           </div>
 
-          {/* Right Controls: SSE Connection + Theme Toggle */}
-          <div className="flex items-center gap-3">
+          {/* Right Controls: SSE Connection + Tour Help + Theme Toggle */}
+          <div className="flex items-center gap-2 sm:gap-3">
+            <button
+              type="button"
+              onClick={onOpenTutorial}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-200 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
+              title="Interactive UI Walkthrough & Tutorial"
+              aria-label="Interactive UI Walkthrough & Tutorial"
+              data-testid="tour-restart-button"
+            >
+              <HelpCircle className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+              <span className="hidden sm:inline">Tour</span>
+            </button>
+
             <div
               className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400"
               title={isConnected ? 'Connected to live events stream' : 'Disconnected from event stream'}

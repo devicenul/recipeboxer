@@ -15,7 +15,7 @@ The RecipeBoxer quality assurance framework is built upon four core principles:
 3. **100% Offline Testability**:
    All test suites run completely offline without an active internet connection or live `GEMINI_API_KEY`, using high-fidelity offline simulators (`MockGeminiClient` in `tests/conftest.py` and mock API handlers in `frontend/src/utils/api.ts`).
 4. **Zero Regression Policy**:
-   The repository maintains **910 passing automated tests** (836 Python pytest tests + 74 Frontend Vitest tests). Every code change must preserve 100% pass rates across all test suites.
+   The repository maintains **1,232 passing automated tests** (1,130 Python pytest tests + 102 Frontend Vitest tests). Every code change must preserve 100% pass rates across all test suites.
 
 ---
 
@@ -74,10 +74,9 @@ The RecipeBoxer quality assurance framework is built upon four core principles:
 Pytest is configured with `asyncio_mode = "auto"` to seamlessly execute async test functions:
 ```toml
 [tool.pytest.ini_options]
-minversion = "8.0"
-testpaths = ["tests"]
 asyncio_mode = "auto"
-asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+addopts = "-v --tb=short"
 filterwarnings = [
     "ignore::DeprecationWarning",
     "ignore::pytest.PytestCollectionWarning",
@@ -86,13 +85,14 @@ filterwarnings = [
 
 ### 3.2 Core Fixtures (`tests/conftest.py`)
 
-| Fixture Name | Type | Description |
+| Fixture Name | Type / Return | Description |
 |---|---|---|
+| `mock_gemini_client` | `MockGeminiClient` | High-fidelity offline simulator for Google Gemini 3.7 / 2.5 multimodal API calls. |
 | `synthetic_card_deck` | `List[ScannedCard]` | Provides a standard synthetic test card collection (two-sided pairs, bleed-through stains, standalones, dividers). |
-| `create_synthetic_card_image` | Helper Function | Pillow-based generator producing synthetic image buffers with custom ruling lines, stains, and ink colors. |
-| `MockGeminiClient` | Class Instance | High-fidelity offline emulator for Gemini 2.5 Flash / Pro with realistic token counters and predictable mock responses. |
+| `sample_card_corpus` | `List[ScannedCard]` | Sourced from `tests/fixtures/sample_cards/`, providing historical public domain recipe cards. |
+| `sample_card_pairs` | `List[Tuple]` | Ground-truth front/back pairs verified against `manifest.json`. |
 | `SQLiteFingerprintCache` / `test_cache` | `FingerprintCache` | Isolated, temporary SQLite WAL cache database created per test session. |
-| `isolated_session_store` | `SessionStore` | Isolated SQLite session storage instance. |
+| `session_store` | `SessionStore` | Isolated SQLite WAL relational store for session state, proposals, and recipes. |
 | `create_test_fastapi_app` | Helper Function | Factory producing an isolated FastAPI ASGI application instance with mocked background task runners. |
 | `async_client` | `httpx.AsyncClient` | ASGI test client for executing asynchronous HTTP and SSE requests. |
 
@@ -185,10 +185,10 @@ describe('RapidQueueCard Component', () => {
 
 ### 5.1 Full Test Suite Execution
 ```bash
-# 1. Run all 836 Python backend tests
+# 1. Run all 1,130 Python backend tests
 ./test.sh
 
-# 2. Run all 74 Frontend Vitest tests
+# 2. Run all 102 Frontend Vitest tests
 cd frontend && npm test -- --run
 
 # 3. Combined execution string
@@ -220,6 +220,9 @@ pytest tests/test_fastapi_routes.py
 ```bash
 # Run specific frontend test suites
 cd frontend
+npx vitest run tests/tutorial.test.tsx
+npx vitest run tests/sources.test.tsx
+npx vitest run tests/ingestion.test.tsx
 npx vitest run tests/app_routing.test.tsx
 npx vitest run tests/hitl_queue.test.tsx
 npx vitest run tests/image_viewer.test.tsx
@@ -236,8 +239,8 @@ npx vitest run tests/tier5_adversarial_frontend.test.tsx
 
 Before committing code or submitting a handoff report, verify:
 
-- [ ] `./test.sh` passes with **836 passing tests** (0 failures, 0 errors).
-- [ ] `cd frontend && npm test -- --run` passes with **74 passing tests** across 10 test files.
+- [ ] `./test.sh` passes with **1,130 passing tests** (0 failures, 0 errors).
+- [ ] `cd frontend && npm test -- --run` passes with **102 passing tests** across 12 test files.
 - [ ] No hardcoded bypasses or artificial mock logic were added to production source files.
 - [ ] Any newly created feature is covered by corresponding Tier 1 and Tier 2 tests.
 - [ ] All modified files conform to formatting standards.

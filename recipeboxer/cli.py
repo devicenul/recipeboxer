@@ -45,6 +45,13 @@ def create_parser() -> argparse.ArgumentParser:
         help="Port to bind the FastAPI server",
     )
     parser.add_argument(
+        "-c",
+        "--concurrency",
+        type=int,
+        default=int(os.environ.get("RECIPEBOXER_MAX_CONCURRENCY", settings.max_concurrency)),
+        help="Default maximum concurrent ingestion tasks",
+    )
+    parser.add_argument(
         "--log-level",
         type=str,
         choices=["critical", "error", "warning", "info", "debug", "trace"],
@@ -67,6 +74,9 @@ def main(args: Optional[List[str]] = None) -> int:
 
     parser = create_parser()
     parsed_args = parser.parse_args(args=args)
+
+    if parsed_args.concurrency is not None:
+        os.environ["RECIPEBOXER_MAX_CONCURRENCY"] = str(parsed_args.concurrency)
 
     # Configure logging
     log_level = getattr(logging, parsed_args.log_level.upper(), logging.INFO)

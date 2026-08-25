@@ -30,6 +30,7 @@ All roadmap items and milestones use standardized status tags:
 | **M10** | **Adaptive Vision Prompts, Antigravity Skills & CV Tools** | Deterministic CV preprocessing (coarse-to-fine projection deskewing $\pm 1^\circ$, border cropping, CLAHE contrast enhancement, CIE $L^*a^*b^*$ clustering), Antigravity domain skills (`vintage-handwriting-ocr`, `print-clipping-extractor`), modality classifier (95.7% accuracy), and dynamic thinking budget allocation. | `[x] Completed` |
 | **M11** | **Archival Document Generation & Extended Exporters** | Google Docs batch update archival exporter with card scan embedding, offline OpenXML DOCX & printable PDF cookbook generators, Obsidian Markdown with YAML frontmatter, Cooklang (`.cook`), Paprika (`.paprikarecipes`), FastAPI export endpoints, and React frontend export UI integration. | `[x] Completed` |
 | **M12** | **Cloud & External Source Providers** | Unified `BaseSourceProvider` abstraction, Google Photos Library API connector with OAuth2 auto-refresh & album filtering, Google Drive folder selector, S3/GCS bucket connectors, REST source management endpoints, and React album picker UI. | `[x] Completed` |
+| **M13** | **Interactive UI Guided Tour, User Guide & MVP Packaging** | Accessible 6-step interactive onboarding tutorial overlay (`frontend/src/components/tutorial/`), complete multi-platform documentation and architecture walkthrough (`README.md`), CLI option verification (`--concurrency`), and standalone PyInstaller packaging verification. | `[x] Completed` |
 
 ---
 
@@ -51,7 +52,7 @@ All roadmap items and milestones use standardized status tags:
 [x] Phase 5: Cloud & External Source Providers
        │
        ▼
-[ ] Phase 6: Comprehensive User Guide, Guided UI Tutorial & MVP Release
+[x] Phase 6: Comprehensive User Guide, Guided UI Tutorial & MVP Release
 ```
 
 ---
@@ -154,13 +155,13 @@ All roadmap items and milestones use standardized status tags:
 ### Phase 6: User Guide, Guided UI Tutorial & Initial MVP Release
 *Polish & onboarding: Deliver comprehensive documentation, interactive user onboarding, and production distribution.*
 
-- [ ] **"First Run" Interactive Guided UI Tutorial**:
+- [x] **"First Run" Interactive Guided UI Tutorial**:
   - Built-in interactive walkthrough in the frontend introducing new users to the complete workflow: launching an ingestion job, using Rapid Queue keyboard shortcuts (`Space`, `S`, `B`, `X`, `Tab`), exploring the Candidate Drawer & 3+ card grouping, toggling image inspection filters, editing in the split-screen recipe editor, and exporting.
-- [ ] **Comprehensive User Guide & End-to-End Walkthrough (`README.md`)**:
+- [x] **Comprehensive User Guide & End-to-End Walkthrough (`README.md`)**:
   - Visual onboarding: Architecture diagrams, UI feature walkthroughs, and screenshot guides.
   - Step-by-step multi-platform setup instructions (macOS, Linux, Windows PowerShell / CMD).
   - Troubleshooting FAQ: API key configuration (`GEMINI_API_KEY`), quota management with slow-batch pacing, port binding, and cache management.
-- [ ] **Initial MVP Release & Pre-Built Binary Packaging**:
+- [x] **Initial MVP Release & Pre-Built Binary Packaging**:
   - Tag initial MVP release and publish cross-platform standalone binaries (`macOS`, `Linux`, `Windows`).
 
 ---
@@ -173,7 +174,7 @@ When contributing to RecipeBoxer or updating this roadmap:
    - Change the item's tag from `[ ] Planned` to `[~] In Progress`.
    - Ensure the feature is tracked in the active sprint or dispatch briefing.
 2. **Completing an Item**:
-   - Ensure all associated unit, boundary, pairwise, and integration tests pass (preserving the 100% test pass rate across all 910+ tests).
+   - Ensure all associated unit, boundary, pairwise, and integration tests pass (preserving the 100% test pass rate across all 1,232+ tests).
    - Change the item's tag from `[~] In Progress` to `[x] Completed`.
 3. **Adding New Proposals**:
    - Add new proposals under the appropriate backlog section using the `[ ] Planned` tag.

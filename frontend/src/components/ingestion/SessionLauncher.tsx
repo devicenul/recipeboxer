@@ -141,7 +141,7 @@ export const SessionLauncher: React.FC<SessionLauncherProps> = ({
   };
 
   return (
-    <form onSubmit={handleLaunch} className="flex flex-col gap-6">
+    <form onSubmit={handleLaunch} className="flex flex-col gap-6" data-tour="ingestion-sources">
       {/* Pluggable Source Selector */}
       <SourceSelector
         sourceType={sourceType}

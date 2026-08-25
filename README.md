@@ -1,30 +1,48 @@
 # RecipeBoxer
 
-Intelligent recipe card digitization and HITL (Human-in-the-Loop) correlation engine for converting vintage, handwritten, and multi-sided recipe card collections into structured digital recipes and Plan To Eat CSV exports.
+**Intelligent recipe card digitization, visual AI pairing engine, and HITL (Human-in-the-Loop) correlation platform for vintage, handwritten, and multi-sided recipe collections.**
 
 ---
 
-## Key Features
+## Overview & Key Features
 
-- **Multi-Modal Visual Fingerprinting**: Captures physical card features (paper hue via CIELAB $\Delta E$, ruling lines, card stock, ink color, stain bleed-through) using Gemini 2.5 Flash.
-- **Two-Stage Card Correlation**: Combines color Delta-E and physical heuristic screening with deep semantic continuity reasoning and greedy bipartite assignment to pair two-sided cards.
-- **Asynchronous HITL Review**: Pauses on low-confidence pairings for human operator inspection, candidate replacement via slide-out drawer, 3+ card multi-part grouping, or card rejection.
-- **Structured Recipe Extraction & RFC 4180 CSV Export**: Extracts ingredients, directions, prep/cook times, yields, and tags into structured JSON, Schema.org Recipe JSON-LD, and standard Plan To Eat CSV format.
-- **Embedded React 18+ TypeScript SPA**: Single Page Application built with Vite and Tailwind CSS, featuring an interactive pan/zoom/filter card canvas and real-time Server-Sent Events (SSE) telemetry.
-- **Cross-Platform Tooling**: Native bootstrap, execution, packaging, and testing scripts for macOS, Linux, and Windows.
+RecipeBoxer transforms disorganized shoe boxes, albums, and binders of vintage handwritten, typewritten, and clipping recipe cards into structured digital recipes, heirloom family cookbooks, and culinary manager formats.
+
+### Core Capabilities
+
+- **Multi-Modal Substrate Fingerprinting**: Extracts paper color centroids in CIELAB space ($\Delta E$), paper stock texture, ruled lines, ink characteristics, and horizontally mirrored stain bleed-through using Gemini 3.7 / 2.5 multimodal models.
+- **Two-Stage Card Correlation Engine**:
+  - *Stage 1 (Visual & Physical Screening)*: High-speed heuristic pruning based on CIELAB $\Delta E$, scan proximity decay, paper ruling, and stain symmetry.
+  - *Stage 2 (Deep Semantic Reasoning & Assignment)*: Continuity reasoning evaluating narrative recipe flow across card faces combined with a global greedy bipartite matching optimizer.
+- **Asynchronous HITL (Human-in-the-Loop) Review**: Real-time Server-Sent Events (SSE) telemetry paired with a keyboard-driven Rapid Review Queue (`Space`, `S`, `B`, `X`, `Tab`), slide-out alternate candidate ranking drawer, and 3+ card multi-part recipe grouping trays.
+- **Split-Screen Recipe Editor & Image Inspection**: Side-by-side verification with 50/50 split-screen layout, synchronized pan and zoom (up to 400%), 90° lossless rotation, and adaptive image enhancement filters (brightness, contrast, negative inversion) for faded pencil and aged cursive.
+- **Pluggable Ingestion Sources**: Ingest from local filesystem folders, drag-and-drop multipart uploads, Google Photos albums with OAuth2 auto-refresh, and Cloud Drive / Object Storage (Google Drive, AWS S3, Google Cloud Storage).
+- **9-Format Recipe Export Matrix**:
+  1. **Plan To Eat CSV**: RFC 4180 compliant 9-column format with strict CRLF line terminators.
+  2. **Schema.org Recipe JSON-LD**: Web standard structured recipe metadata (`@graph`, `HowToStep`, ISO 8601 durations).
+  3. **Google Docs Archival Exporter**: Structured Google Docs API batch updates and downloadable HTML archives with embedded card scans.
+  4. **Heirloom DOCX**: Formatted Microsoft Word cookbook document with title pages, metadata tables, and embedded scan photos.
+  5. **Printable PDF**: High-resolution print-ready cookbook with custom typography, headers, and footer page numbering.
+  6. **Obsidian Markdown**: YAML frontmatter and wikilink image embeds formatted for Obsidian Recipe View plugins.
+  7. **Cooklang (`.cook`)**: Plain-text culinary markup with `@ingredient{}`, `#cookware{}`, and `~timer{}` step annotations.
+  8. **Paprika (`.paprikarecipes`)**: Compressed gzip archives containing recipe JSON and base64-encoded card photos for 1-click Paprika app import.
+  9. **Raw JSON**: Complete lossless `RecipeSchema` JSON array backup.
+- **"First Run" Interactive UI Guided Tour**: Accessible 6-step onboarding walkthrough overlay built directly into the React frontend with keyboard controls and localStorage persistence.
+- **Cross-Platform Tooling & Standalone Distribution**: Native bootstrap, execution, testing, and PyInstaller packaging scripts for macOS, Linux, and Windows.
 
 ---
 
-## Developer & Agent Documentation
+## Developer & Agent Context Hub
 
-For comprehensive system documentation, architecture specifications, non-negotiable invariants, and developer extension guides, visit the **`_agents/`** context hub:
+For in-depth architectural specifications, non-negotiable invariants, testing guidelines, and extension playbooks, refer to the **`_agents/`** documentation suite:
 
-- [**`_agents/README.md`**](_agents/README.md): Fast-orientation index and onboarding guide for AI agents and human contributors.
-- [**`_agents/ARCHITECTURE.md`**](_agents/ARCHITECTURE.md): Comprehensive breakdown of the Python backend (Antigravity SDK orchestrator, SQLite WAL persistence, 2-stage correlation engine, FastAPI/SSE) and React 18+ SPA.
+- [**`_agents/README.md`**](_agents/README.md): Fast-orientation index and onboarding guide for AI agents and human developers.
+- [**`_agents/ARCHITECTURE.md`**](_agents/ARCHITECTURE.md): Comprehensive breakdown of the Python backend (Google Antigravity SDK orchestrator, SQLite WAL persistence, two-stage correlation engine, FastAPI/SSE) and React 18+ SPA.
 - [**`_agents/INVARIANTS.md`**](_agents/INVARIANTS.md): Non-negotiable architectural guardrails (SQLite WAL concurrency, Plan To Eat RFC 4180 CSV escaping, HITL async barrier semantics, Vite SPA static bundle contracts).
 - [**`_agents/TESTING_GUIDELINES.md`**](_agents/TESTING_GUIDELINES.md): Testing philosophy, 4-tier test pyramid, pytest & Vitest testing guides, fixtures, and regression checklists.
 - [**`_agents/EXTENDING_RECIPEBOXER.md`**](_agents/EXTENDING_RECIPEBOXER.md): Step-by-step developer extension guides with code examples for adding source providers, custom prompt branches, and export format serializers.
-- [**`ROADMAP.md`**](ROADMAP.md): Canonical project roadmap tracking milestones M1 to M6 and future feature backlog.
+- [**`ROADMAP.md`**](ROADMAP.md): Canonical project roadmap tracking completed milestones M1–M6 and future backlog items.
+- [**`SCRIPTS.md`**](SCRIPTS.md): Comprehensive script usage and troubleshooting guide for all POSIX and Windows scripts.
 
 ---
 
@@ -32,11 +50,11 @@ For comprehensive system documentation, architecture specifications, non-negotia
 
 - **Python 3.10+** (Python 3.10, 3.11, 3.12, 3.13, 3.14 supported).
 - **Node.js 18+** & **npm** (for building and testing the React frontend).
-- *(Optional)* **Google Gemini API Key** for live multimodal AI processing (`GEMINI_API_KEY`). All tests and offline operations run with simulated mock fixtures when no key is supplied.
+- *(Optional)* **Google Gemini API Key** for live multimodal AI processing (`GEMINI_API_KEY`). All test suites, synthetic card generators, and offline modes operate hermetically with mock fixtures when no key is supplied.
 
 ---
 
-## Quick Start
+## Multi-Platform Quickstart
 
 ### macOS & Linux (POSIX)
 
@@ -44,59 +62,108 @@ For comprehensive system documentation, architecture specifications, non-negotia
 # 1. Bootstrap environment and install backend + frontend dependencies
 ./setup.sh
 
-# 2. Run the full test suite (910 passing tests: 836 Python + 74 Frontend)
-./test.sh && cd frontend && npm test -- --run
+# 2. Run the automated test suites (1,232+ tests: 1,130 Python pytest + 102 Frontend Vitest)
+./test.sh
+cd frontend && npm test -- --run && cd ..
 
-# 3. Start the RecipeBoxer API server and embedded SPA
+# 3. Start the RecipeBoxer API server and embedded React SPA
 ./run.sh
 
-# 4. (Optional) Build standalone binary and wheel packages
+# 4. (Optional) Build standalone executable binary and wheel packages
 ./build.sh --all
 ```
 
 ### Windows (PowerShell)
 
 ```powershell
-# 1. Bootstrap environment and install dependencies
+# 1. Bootstrap environment and install backend + frontend dependencies
 .\setup.ps1
 
-# 2. Run the full test suite
+# 2. Run the automated test suites
 .\test.ps1
+cd frontend; npm test -- --run; cd ..
 
-# 3. Start the RecipeBoxer API server
+# 3. Start the RecipeBoxer API server and embedded React SPA
 .\run.ps1
 
-# 4. (Optional) Build standalone executable and wheels
+# 4. (Optional) Build standalone executable and distribution packages
 .\build.ps1 -All
 ```
 
 ### Windows (Command Prompt)
 
 ```cmd
-# Bootstrap environment
+:: 1. Bootstrap environment
 setup.bat
 
-# Start API server
+:: 2. Start API server and launch application
 run.bat
 ```
 
-For complete documentation on all scripts, flags, and platform-specific configurations, see [SCRIPTS.md](SCRIPTS.md).
+Once started, open your web browser to **`http://127.0.0.1:8000`** to access the RecipeBoxer interface.
+
+---
+
+## End-to-End Workflow Guide
+
+RecipeBoxer provides an intuitive 4-stage pipeline for digitizing physical card collections:
+
+```
+┌─────────────────┐     ┌──────────────────┐     ┌──────────────────────┐     ┌─────────────────────┐
+│  1. Ingestion   │ ──► │  2. HITL Queue   │ ──► │   3. Recipe Editor   │ ──► │      4. Export      │
+│  (Multi-Source) │     │ (Rapid Keyboard) │     │ (Split-Screen & CV)  │     │ (9 Formats / Print) │
+└─────────────────┘     └──────────────────┘     └──────────────────────┘     └─────────────────────┘
+```
+
+### 1. Ingestion Setup & Throttling
+- **Select Source**: Choose between **Local Folder / Uploads**, **Google Photos**, **Google Drive**, or **Cloud Storage (S3 / GCS)**.
+- **Configure Throttling**:
+  - **Parallel Mode**: High-throughput parallel processing with configurable concurrency (`max_concurrency: 5`).
+  - **Slow-Batch Mode**: Paces API calls in small batches (e.g., 2–4 cards per batch with 2.0s delays) to prevent API rate limits on free-tier quotas.
+- **Dynamic Thinking Budget**: Enable extended reasoning tokens (1,024–4,096 tokens) for degraded cursive and faint pencil cards.
+
+### 2. Rapid HITL Queue & Hotkey Review
+When two-sided card pairings have ambiguous visual or semantic confidence scores, the pipeline pauses for human review:
+- **`Space`**: **Approve Pair** — confirms the front/back card assignment and advances the queue.
+- **`S`**: **Standalone Card** — marks the card as a single-sided standalone recipe.
+- **`B`**: **Reverse Pair** — swaps front and back card roles.
+- **`X`**: **Reject Scan** — discards non-recipe cards, blank backs, or blurry scans.
+- **`Tab`**: **Candidate Drawer** — opens the ranked candidate drawer to select alternate back matches.
+- **3+ Multi-Card Sets**: Attach additional cards to create 3-card or 4-card recipe groups with custom sequence reordering.
+
+### 3. Split-Screen Recipe Editor & Image Inspection
+- **Side-by-Side Verification**: 50/50 view displaying the original card scan carousel on the left and the editable recipe form on the right.
+- **Image Inspection Tools**:
+  - Synchronized zoom & pan up to 400%.
+  - 90° Clockwise and Counter-Clockwise rotation.
+  - Image Enhancement: Brightness, Contrast adjustment, and Negative Color Inversion for faint pencil text.
+- **Structured Fields**: Verify and adjust recipe title, yield, prep/cook times, structured ingredients with fractions (`1/8`, `1/4`, `1/2`, `3/4`), step-by-step directions, and categorization tags with automatic SQLite WAL persistence.
+
+### 4. Multi-Format Recipe Export
+- Click **Export** to access the 9-format publishing dialog.
+- Switch tabs to inspect live syntax previews for Plan To Eat CSV, Schema.org JSON-LD, Obsidian Markdown, Cooklang, and Google Docs HTML.
+- Download individual files, heirloom `.docx` Word cookbooks, printable styled PDF documents, or `.paprikarecipes` archives.
+
+### 5. "First Run" Interactive UI Guided Tutorial
+First-time visitors are automatically greeted with an interactive 6-step guided walkthrough overlay. Returning users can restart the tour at any time by clicking the persistent **Tour** button in the header navigation.
+- Use `ArrowRight` / `ArrowLeft` or on-screen buttons to step through the walkthrough.
+- Press `Escape` or click **Skip Tour** to close the walkthrough and save state to `localStorage`.
 
 ---
 
 ## Command Line Interface
 
-Once installed or running via `run.sh` / `run.ps1`:
+RecipeBoxer provides a comprehensive CLI runner:
 
 ```bash
-# Display version
+# Display version information
 recipeboxer --version
 
-# Display help and options
+# Display help and usage instructions
 recipeboxer --help
 
-# Start server on custom host and port
-recipeboxer --host 0.0.0.0 --port 8080 --log-level info
+# Start server on custom host, port, and default concurrency
+recipeboxer --host 0.0.0.0 --port 8080 --concurrency 8 --log-level info
 
 # Enable auto-reload in development
 recipeboxer --reload
@@ -104,82 +171,94 @@ recipeboxer --reload
 
 ---
 
-## Environment Variables
+## Configuration & Environment Variables
 
 | Variable | Default | Description |
 |---|---|---|
-| `RECIPEBOXER_API_HOST` | `127.0.0.1` | Server bind host address |
-| `RECIPEBOXER_API_PORT` | `8000` | Server bind port |
-| `RECIPEBOXER_DEBUG` | `false` | Enable debug logging |
-| `RECIPEBOXER_CACHE_DIR` | `.cache/recipeboxer` | SQLite cache & thumbnail storage directory |
-| `RECIPEBOXER_EXPORT_DIR` | `exports` | Destination directory for exported CSV files |
 | `GEMINI_API_KEY` | *(optional)* | Google Gemini API key for live multimodal processing |
-| `RECIPEBOXER_MODEL_FAST` | `gemini-2.5-flash` | Fast model for screening and visual fingerprinting |
-| `RECIPEBOXER_MODEL_REASONING` | `gemini-2.5-pro` | Reasoning model for semantic pairing and extraction |
+| `RECIPEBOXER_API_HOST` | `127.0.0.1` | FastAPI server bind address |
+| `RECIPEBOXER_API_PORT` | `8000` | FastAPI server bind port |
+| `RECIPEBOXER_MAX_CONCURRENCY` | `5` | Maximum concurrent asynchronous ingestion tasks |
+| `RECIPEBOXER_CACHE_DIR` | `.cache/recipeboxer` | Persistent SQLite cache and thumbnail storage directory |
+| `RECIPEBOXER_EXPORT_DIR` | `exports` | Default destination directory for exported recipe archives |
+| `RECIPEBOXER_DEBUG` | `false` | Enable verbose debug logging and traceback output |
+| `RECIPEBOXER_MODEL_FAST` | `gemini-3.7-flash` | Model identifier for visual fingerprinting and screening |
+| `RECIPEBOXER_MODEL_REASONING` | `gemini-3.7-pro` | Model identifier for semantic correlation and extraction |
 
 ---
 
-## Testing
+## Configuration & Troubleshooting FAQ
 
-RecipeBoxer maintains **910 automated tests** (836 Python pytest tests + 74 Frontend Vitest tests) with a 100% pass rate:
+### 1. Pacing API Quotas with Slow-Batch Mode
+**Problem**: Running large collections of recipe cards triggers Google Gemini API rate limits (`429 RESOURCE_EXHAUSTED`).  
+**Solution**: Enable **Slow-Batch Mode** in the Ingestion configuration panel or pass `slow_batch_size: 2` and `slow_batch_interval_seconds: 2.0`. This paces API requests into manageable chunks with pauses between batches.
+
+### 2. Custom Port Binding & Network Access
+**Problem**: Port 8000 is occupied by another service, or you want to access RecipeBoxer from other devices on your local network.  
+**Solution**: Start RecipeBoxer with custom `--host` and `--port` arguments:
+```bash
+./run.sh --host 0.0.0.0 --port 8888
+# Or via CLI directly:
+recipeboxer --host 0.0.0.0 --port 8888
+```
+
+### 3. Resetting SQLite Cache & Session Database
+**Problem**: You want to clear previously cached card scans and session history for a clean run.  
+**Solution**: Remove the `.cache/recipeboxer` directory:
+```bash
+rm -rf .cache/recipeboxer/fingerprints.db*
+# Or on Windows PowerShell:
+Remove-Item -Recurse -Force .cache\recipeboxer\fingerprints.db*
+```
+
+### 4. Windows PowerShell Script Execution Policy
+**Problem**: PowerShell blocks running `./setup.ps1` or `./run.ps1` with an execution policy error.  
+**Solution**: Set execution policy for the current process:
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+.\setup.ps1
+```
+
+---
+
+## Automated Testing & Quality Assurance
+
+RecipeBoxer maintains a comprehensive multi-tier test pyramid:
 
 ```bash
-# Run Python backend test suite (836 tests)
+# Run full backend pytest suite (1,130 tests across 29 modules)
 ./test.sh
 
-# Run Frontend Vitest test suite (74 tests)
-cd frontend && npm test -- --run
+# Run frontend Vitest suite (102 tests across 12 test suites)
+cd frontend && npm test -- --run && cd ..
 
-# Run 4-Tier E2E Integration Suite directly
+# Run end-to-end 4-tier integration test suite
 pytest tests/test_e2e_4tier_suite.py -v
 
-# Run Tier 5 Adversarial Hardening Suite directly
+# Run Tier 5 adversarial hardening and concurrency tests
 pytest tests/test_tier5_adversarial_coverage.py -v
+
+# Run standalone script cross-platform verification tests
+pytest tests/test_scripts.py -v
 ```
 
-For detailed instructions on testing tiers, mock isolation, and authoring new tests, see [**`_agents/TESTING_GUIDELINES.md`**](_agents/TESTING_GUIDELINES.md).
+For complete documentation on testing conventions, mock harnesses, and writing new tests, see [**`_agents/TESTING_GUIDELINES.md`**](_agents/TESTING_GUIDELINES.md).
 
 ---
 
-## Project Structure
+## Standalone Binary Packaging
 
+RecipeBoxer packages into self-contained standalone binaries using PyInstaller:
+
+```bash
+# Build standalone binary on macOS / Linux
+./build.sh --binary
+
+# Build standalone executable on Windows
+.\build.ps1 -Binary
 ```
-.
-├── pyproject.toml              # PEP 517/621 package metadata & build config
-├── recipeboxer.spec            # PyInstaller standalone binary specification
-├── setup.sh / setup.ps1 / .bat # Cross-platform environment bootstrap scripts
-├── run.sh / run.ps1 / .bat     # Cross-platform application execution scripts
-├── build.sh / build.ps1        # Cross-platform packaging & binary build scripts
-├── test.sh / test.ps1          # Cross-platform test execution scripts
-├── README.md                   # Project overview and quick start
-├── ROADMAP.md                  # Milestone tracking and enhancement backlog
-├── SCRIPTS.md                  # Comprehensive script usage and troubleshooting guide
-├── _agents/                    # Developer & AI agent guidance repository
-│   ├── README.md               # Onboarding hub & directory index
-│   ├── ARCHITECTURE.md         # System architecture & technical specification
-│   ├── INVARIANTS.md           # Non-negotiable architectural guardrails
-│   ├── TESTING_GUIDELINES.md   # Multi-tier testing guide & QA checklist
-│   └── EXTENDING_RECIPEBOXER.md# Developer extension playbooks
-├── recipeboxer/                # Core Python backend package
-│   ├── cli.py                  # CLI entry point
-│   ├── api/                    # FastAPI routers, SSE, and static SPA hosting
-│   │   └── static/             # Vite production build distribution (index.html, assets/)
-│   ├── agent/                  # Google Antigravity SDK orchestrator & session manager
-│   ├── extraction/             # Multimodal recipe extraction
-│   ├── correlation/            # Visual & semantic card correlation and optimizer
-│   ├── ingestion/              # Parallel & batch card image ingestion
-│   ├── exporter/               # Plan To Eat CSV, Schema.org JSON-LD, JSON exporters
-│   ├── models/                 # Pydantic data schemas
-│   ├── storage/                # SQLite WAL cache & session store
-│   └── vision/                 # Visual fingerprinting, heuristics, and CIELAB color math
-├── frontend/                   # React 18+ TypeScript Single Page Application
-│   ├── src/                    # Components, custom hooks, pages, and utilities
-│   └── tests/                  # Vitest component and unit test suites (74 tests)
-└── tests/                      # Python pytest test suites (836 tests across 28 modules)
-    ├── conftest.py             # Shared fixtures, MockGeminiClient, synthetic card decks
-    ├── test_e2e_4tier_suite.py # 165 4-tier E2E feature tests
-    └── test_tier5_adversarial_coverage.py # Adversarial hardening and concurrency tests
-```
+
+The compiled executable is placed in `dist/recipeboxer` (or `dist\recipeboxer.exe`), bundling all backend dependencies, schemas, and pre-compiled React SPA static assets for zero-dependency execution.
 
 ---
 

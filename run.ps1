@@ -30,6 +30,10 @@ param(
     [Parameter(Mandatory = $false)]
     [Nullable[int]]$Port,
 
+    [Alias("c")]
+    [Parameter(Mandatory = $false)]
+    [Nullable[int]]$Concurrency,
+
     [Parameter(Mandatory = $false)]
     [ValidateSet("critical", "error", "warning", "info", "debug", "trace")]
     [string]$LogLevel,
@@ -92,6 +96,9 @@ if ($HostAddress) {
 }
 if ($Port) {
     $pyArgs += @("--port", "$Port")
+}
+if ($Concurrency) {
+    $pyArgs += @("--concurrency", "$Concurrency")
 }
 if ($LogLevel) {
     $pyArgs += @("--log-level", $LogLevel)

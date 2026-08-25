@@ -49,7 +49,7 @@ export const VisualToolbar: React.FC<VisualToolbarProps> = ({
   const [showFilters, setShowFilters] = useState(false);
 
   return (
-    <div className="relative flex items-center justify-between gap-2 p-2 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm text-xs select-none">
+    <div className="relative flex items-center justify-between gap-2 p-2 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm text-xs select-none" data-tour="image-tools">
       {/* Zoom Controls */}
       <div className="flex items-center gap-1">
         <button

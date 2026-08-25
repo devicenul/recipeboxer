@@ -43,7 +43,7 @@ export const RecipeEditorView: React.FC<RecipeEditorViewProps> = ({
   const activeImageUrl = activeCardId ? api.getCardImageUrl(activeCardId, sessionId) : null;
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4" data-tour="recipe-editor">
       {/* Recipe Navigation Bar */}
       <div className="flex flex-wrap items-center justify-between gap-3 p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs">
         <div className="flex items-center gap-3">

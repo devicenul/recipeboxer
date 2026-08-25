@@ -6,11 +6,19 @@ import { IngestionPage } from './pages/IngestionPage';
 import { HitlReviewPage } from './pages/HitlReviewPage';
 import { RecipeReviewPage } from './pages/RecipeReviewPage';
 import { ExportPage } from './pages/ExportPage';
+import { TutorialOverlay, TUTORIAL_STEPS, TUTORIAL_STORAGE_KEY } from './components/tutorial';
 import { PipelineStatus, PipelineState, IngestionMode } from './types/pipeline';
 import { RecipeSchema } from './types/recipe';
 import { useSSE } from './hooks/useSSE';
 import { api } from './utils/api';
 import { ThemeProvider } from './context/ThemeContext';
+
+// Module-level fallback for environments where localStorage is blocked (e.g., sandbox iframes)
+let inMemoryTutorialCompleted = false;
+
+export function resetTutorialSessionState(): void {
+  inMemoryTutorialCompleted = false;
+}
 
 export const AppContent: React.FC = () => {
   const [activeTab, setActiveTab] = useState<NavTab>('ingest');
@@ -25,6 +33,22 @@ export const AppContent: React.FC = () => {
     }
     return null;
   });
+
+  const [isTutorialOpen, setIsTutorialOpen] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const completed = localStorage.getItem(TUTORIAL_STORAGE_KEY);
+        if (completed !== null) {
+          return completed !== 'true';
+        }
+        return !inMemoryTutorialCompleted;
+      } catch {
+        return !inMemoryTutorialCompleted;
+      }
+    }
+    return false;
+  });
+  const [currentTutorialStep, setCurrentTutorialStep] = useState<number>(0);
 
   const [currentStatus, setCurrentStatus] = useState<PipelineStatus>({
     session_id: sessionId || 'none',
@@ -135,6 +159,32 @@ export const AppContent: React.FC = () => {
     );
   };
 
+  const handleOpenTutorial = () => {
+    setCurrentTutorialStep(0);
+    setIsTutorialOpen(true);
+    setActiveTab(TUTORIAL_STEPS[0].targetTab);
+  };
+
+  const handleCloseTutorial = () => {
+    setIsTutorialOpen(false);
+    inMemoryTutorialCompleted = true;
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(TUTORIAL_STORAGE_KEY, 'true');
+      } catch {
+        // Fallback to in-memory session persistence
+      }
+    }
+  };
+
+  const handleTutorialStepChange = (newIndex: number) => {
+    setCurrentTutorialStep(newIndex);
+    const step = TUTORIAL_STEPS[newIndex];
+    if (step && step.targetTab) {
+      setActiveTab(step.targetTab);
+    }
+  };
+
   return (
     <div className="flex flex-col min-h-screen bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-50 transition-colors duration-150">
       {/* Header */}
@@ -146,6 +196,7 @@ export const AppContent: React.FC = () => {
         isConnected={isConnected}
         pendingHitlCount={pendingHitlCount}
         extractedRecipeCount={recipes.length}
+        onOpenTutorial={handleOpenTutorial}
       />
 
       {/* Main Content Area */}
@@ -194,6 +245,14 @@ export const AppContent: React.FC = () => {
         tokenUsage={currentStatus.token_usage}
         showHotkeys={activeTab === 'hitl'}
       />
+
+      {/* Interactive Guided UI Tutorial Overlay */}
+      <TutorialOverlay
+        isOpen={isTutorialOpen}
+        currentStepIndex={currentTutorialStep}
+        onStepChange={handleTutorialStepChange}
+        onClose={handleCloseTutorial}
+      />
     </div>
   );
 };
@@ -205,3 +264,4 @@ export default function App() {
     </ThemeProvider>
   );
 }
+

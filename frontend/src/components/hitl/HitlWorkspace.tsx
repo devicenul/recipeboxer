@@ -284,7 +284,7 @@ export const HitlWorkspace: React.FC<HitlWorkspaceProps> = ({
   const currentGroup = currentProposal ? multiCardGroups[currentProposal.front_card_id] || [] : [];
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-6" data-tour="rapid-queue">
       {/* Workspace View */}
       {!isQueueComplete && currentProposal ? (
         <RapidQueueCard

@@ -109,7 +109,7 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({ recipes, sessionId }
   };
 
   return (
-    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-6 shadow-xs flex flex-col gap-6">
+    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-6 shadow-xs flex flex-col gap-6" data-tour="export-matrix">
       {/* Top Header */}
       <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-200 dark:border-slate-800">
         <div>
