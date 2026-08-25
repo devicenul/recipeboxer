@@ -26,6 +26,7 @@ All roadmap items and milestones use standardized status tags:
 | **M6** | **Agent Guidance, Invariants & Repository Structure** | Complete `_agents/` documentation directory (`README.md`, `ARCHITECTURE.md`, `INVARIANTS.md`, `TESTING_GUIDELINES.md`, `EXTENDING_RECIPEBOXER.md`), 4-tier testing guide, extension playbooks, and standardized roadmap persistence conventions. | `[x] Completed` |
 | **M7** | **License Compliance & Dependency Vetting Audit** | Full automated audit of 60+ Python and 17+ npm dependencies confirming 100% GPLv3 compatibility; formalized Invariant 8 in `_agents/INVARIANTS.md`. | `[x] Completed` |
 | **M8** | **Sample Card Corpus, Provenance & Synthetic Generator** | 23 high-resolution historical card fixtures across 6 modalities, CC0/public domain provenance guide (`tests/fixtures/sample_cards/README.md`), strict Pydantic `manifest.json`, procedural generator tool (`recipeboxer/tools/card_generator.py`), and pytest loader fixtures. | `[x] Completed` |
+| **M9** | **Agent & Prompt Evaluation Harness & Benchmark Suite** | Quantitative metric suite (Pairing F1, Levenshtein CER/WER, Plan To Eat / Schema.org schema conformity), LLM-as-a-Judge semantic rubric evaluator (`recipeboxer/evals/judge.py`), golden dataset benchmark runner CLI (`evals/run_benchmarks.py`), and 65 unit/integration tests. | `[x] Completed` |
 
 ---
 
@@ -35,7 +36,7 @@ All roadmap items and milestones use standardized status tags:
 [x] Phase 1: Curated Test Datasets & Benchmarks
        │
        ▼
-[ ] Phase 2: Agent & Prompt Evaluation Harness (evals/)
+[x] Phase 2: Agent & Prompt Evaluation Harness (evals/)
        │
        ▼
 [ ] Phase 3: Adaptive Vision Prompts, Antigravity Skills & CV Tools
@@ -78,14 +79,16 @@ All roadmap items and milestones use standardized status tags:
 ### Phase 2: Agent & Prompt Evaluation Harness (`evals/`)
 *Objective measurement: Implement reproducible evaluation pipelines to benchmark transcription accuracy, pairing precision, and schema conformity.*
 
-- [ ] **Quantitative Metric Suite for Gemini Vision**:
-  - **Pairing Accuracy (F1 / Precision / Recall)**: Benchmark front/back correlation proposals against ground-truth labeled datasets.
-  - **Transcription Accuracy (CER / WER)**: Character Error Rate (CER) and Word Error Rate (WER) on ingredient names, numeric quantities, fractions (`1/8`, `1/4`, `1/2`), and cooking temperatures.
-  - **Schema Conformity Score**: Automated validation rate for strict Plan To Eat and Schema.org RFC adherence.
-- [ ] **LLM-as-a-Judge Evaluation Pipeline**:
-  - Independent judge prompt evaluating semantic fidelity, preservation of vintage cooking headnotes, ingredient-direction cross-consistency, and step sequence ordering.
-- [ ] **Golden Dataset Continuous Regression Runner**:
-  - Automated CI benchmark runner tracking accuracy across model updates (e.g. `gemini-3.7-flash` vs `gemini-3.7-pro` with thinking mode).
+- [x] **Quantitative Metric Suite for Gemini Vision (`recipeboxer/evals/metrics.py`)**:
+  - **Pairing Metrics (Precision / Recall / F1)**: Benchmarks front/back correlation proposals and multi-card groupings against ground-truth manifest clusters.
+  - **Transcription Error Rates (CER / WER)**: Dynamic programming Levenshtein distance calculating Character Error Rate (CER) and Word Error Rate (WER) across full recipe text, ingredients, fractions (`1/8`, `1/4`, `1/2`, `3/4`), numbered directions, and cooking temperatures.
+  - **Schema Conformity & Completeness**: Strict validator verifying Plan To Eat 9-column RFC 4180 rules, Schema.org Recipe structure, non-empty ingredients/directions, and ISO 8601 durations (`PT25M`).
+- [x] **LLM-as-a-Judge Semantic Evaluation Pipeline (`recipeboxer/evals/judge.py`)**:
+  - Independent Gemini evaluation rubric assessing 4 qualitative dimensions (Semantic Fidelity, Preservation of Marginalia, Cross-Consistency, Step Ordering Logic) with structured `JudgeEvaluationResult` output and hermetic offline mock mode.
+- [x] **Golden Dataset Continuous Regression Runner (`recipeboxer/evals/runner.py`, `evals/run_benchmarks.py`)**:
+  - Standalone CLI runner with model selection (`--models`), stage filtering (`--stage`), modality filtering (`--modalities`), and structured Markdown and JSON benchmark report generation.
+- [x] **Automated Benchmark Test Suite (`tests/test_eval_metrics.py`, `tests/test_eval_runner.py`)**:
+  - 65 new automated tests verifying metric calculation accuracy, unicode fraction handling, mock judge parsing, and runner CLI execution.
 
 ---
 

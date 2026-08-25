@@ -186,6 +186,8 @@ cython_debug/
 .recipeboxer_cache/
 exports/*
 !exports/.gitkeep
+evals/reports/*
+!evals/reports/.gitkeep
 *.db
 *.db-wal
 *.db-shm
