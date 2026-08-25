@@ -54,6 +54,22 @@ class RecipeSchema(BaseModel):
         default="",
         description="Attribution, handwritten notes, cookbook page or card source",
     )
+    card_ids: List[str] = Field(
+        default_factory=list,
+        description="List of source scanned card IDs associated with this recipe",
+    )
+    image_urls: List[str] = Field(
+        default_factory=list,
+        description="Optional list of image preview URLs for the associated cards",
+    )
+    created_at: Optional[str] = Field(
+        default=None,
+        description="ISO 8601 timestamp of recipe creation",
+    )
+    updated_at: Optional[str] = Field(
+        default=None,
+        description="ISO 8601 timestamp of last recipe update",
+    )
 
     @field_validator("title")
     @classmethod

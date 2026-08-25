@@ -439,6 +439,24 @@ class SessionManager:
                     self._active_session_id = None
         return len(to_remove)
 
+    def remove_session(self, session_id: str) -> bool:
+        """Removes a session by ID from memory and cancels if running."""
+        with self._lock:
+            if session_id in self._sessions:
+                s = self._sessions.pop(session_id)
+                try:
+                    s.cancel()
+                except Exception:
+                    pass
+                if self._active_session_id == session_id:
+                    self._active_session_id = next(iter(self._sessions), None)
+                return True
+            return False
+
+    def delete_session(self, session_id: str) -> bool:
+        """Alias for remove_session()."""
+        return self.remove_session(session_id)
+
     def clear(self) -> None:
         """Clears all registered sessions."""
         with self._lock:

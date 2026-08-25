@@ -22,7 +22,10 @@ from recipeboxer.models.domain import (
 )
 from recipeboxer.models.hitl import (
     ApprovalPayload,
+    CandidateListResponse,
+    CandidateScoreBreakdown,
     CardPairApproval,
+    CorrelationCandidate,
     HITLDecision,
 )
 from recipeboxer.models.pipeline import (
@@ -36,6 +39,11 @@ from recipeboxer.models.pipeline import (
 )
 from recipeboxer.models.recipe import (
     RecipeSchema,
+)
+from recipeboxer.models.session import (
+    IngestionConfig,
+    SessionDetail,
+    SessionSummary,
 )
 
 __all__ = [
@@ -61,6 +69,9 @@ __all__ = [
     "HITLDecision",
     "CardPairApproval",
     "ApprovalPayload",
+    "CandidateScoreBreakdown",
+    "CorrelationCandidate",
+    "CandidateListResponse",
     # Recipe
     "RecipeSchema",
     # Pipeline
@@ -71,4 +82,8 @@ __all__ = [
     "PipelineStatus",
     "PipelineStartRequest",
     "PipelineStartResponse",
+    # Session
+    "SessionSummary",
+    "SessionDetail",
+    "IngestionConfig",
 ]

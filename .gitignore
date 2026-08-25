@@ -192,6 +192,20 @@ exports/*
 *.sqlite3-wal
 *.sqlite3-shm
 
+# Node / Frontend build artifacts & caches
+node_modules/
+frontend/node_modules/
+frontend/dist/
+.vite/
+frontend/.vite/
+.vitest/
+frontend/.vitest/
+coverage/
+frontend/coverage/
+*.tsbuildinfo
+.eslintcache
+.stylelintcache
+
 # OS files
 .DS_Store
 .DS_Store?
