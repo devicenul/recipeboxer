@@ -1,6 +1,6 @@
-# RecipeBoxer Milestone Tracking & Future Enhancement Roadmap
+# RecipeBoxer Milestone Tracking & Strategic Roadmap
 
-This document serves as the canonical shared roadmap and backlog for **RecipeBoxer**. It tracks completed milestones, active work, and future architectural enhancements.
+This document serves as the canonical shared roadmap and prioritized backlog for **RecipeBoxer**. It tracks completed milestones, active work, and the strategic path forward.
 
 ---
 
@@ -14,78 +14,94 @@ All roadmap items and milestones use standardized status tags:
 
 ---
 
-## Milestone Overview & Tracking
+## Completed Milestones Overview
 
 | Milestone | Title | Key Deliverables | Status |
 |:---:|---|---|:---:|
-| **M1** | **Backend Architecture & Core Domain Engine** | Python package structure, Pydantic V2 models (`VisualFingerprint`, `RecipeSchema`), Gemini 2.5 Flash visual substrate analysis, CIELAB $\Delta E$ color math, scan proximity decay, horizontally mirrored stain bleed-through, ruling/ink heuristics, greedy bipartite matching optimizer. | `[x] Completed` |
+| **M1** | **Backend Architecture & Core Domain Engine** | Python package structure, Pydantic V2 models (`VisualFingerprint`, `RecipeSchema`), Gemini 3.7/2.5 visual substrate analysis, CIELAB $\Delta E$ color math, scan proximity decay, horizontally mirrored stain bleed-through, ruling/ink heuristics, greedy bipartite matching optimizer. | `[x] Completed` |
 | **M2** | **FastAPI REST & SQLite WAL Persistence** | FastAPI ASGI application, thread-safe `FingerprintCache` (content-addressed SHA-256 cache), relational `SessionStore` (sessions, cards, proposals, recipes), secure card image streaming, multipart uploads, CLI runner. | `[x] Completed` |
 | **M3** | **Real-Time SSE & HITL Review Pipeline** | Server-Sent Events stream (`/api/events`), cooperative async barrier (`approval_event` & `cancellation_event`), Rapid Review Queue, Candidate Drawer ranking, 3+ card multi-part recipe grouping trays, global hotkey shortcuts. | `[x] Completed` |
 | **M4** | **Multi-Format Exporters & Schema.org JSON-LD** | Plan To Eat RFC 4180 9-column CSV serializer with CRLF terminators, Schema.org Recipe JSON-LD exporter (`HowToStep`, `@graph`, ISO 8601 duration parser), standard JSON serializer, and download endpoints. | `[x] Completed` |
 | **M5** | **React 18+ TypeScript SPA & Static Embedding** | React 18 SPA with Vite, Tailwind CSS, Lucide icons, custom hooks (`useSSE`, `useKeyboard`, `useImageViewer`, `useRecipeForm`, `useTheme`), interactive pan/zoom/filter card viewer, Vite build contract directly into `recipeboxer/api/static`, SPA catch-all fallback with `/api` 404 guard. | `[x] Completed` |
 | **M6** | **Agent Guidance, Invariants & Repository Structure** | Complete `_agents/` documentation directory (`README.md`, `ARCHITECTURE.md`, `INVARIANTS.md`, `TESTING_GUIDELINES.md`, `EXTENDING_RECIPEBOXER.md`), 4-tier testing guide, extension playbooks, and standardized roadmap persistence conventions. | `[x] Completed` |
+| **M7** | **License Compliance & Dependency Vetting Audit** | Full automated audit of 60+ Python and 17+ npm dependencies confirming 100% GPLv3 compatibility; formalized Invariant 8 in `_agents/INVARIANTS.md`. | `[x] Completed` |
 
 ---
 
-## Future Enhancement Backlog
+## Prioritized Strategic Path Forward
 
-### 1. Cloud & External Source Providers
-- [ ] **Unified `SourceProvider` Abstraction**:
-  - Define an abstract base class `BaseSourceProvider` (`list_images()`, `fetch_thumbnail()`, `download_image()`, `get_metadata()`).
-  - Standardize source pagination, credential management, and rate limiting.
-- [ ] **Google Photos Integration**:
-  - Implement Google Photos Library API connector with OAuth2 authentication.
-  - Allow users to select specific Google Photos albums, date ranges, or search filters (e.g., "recipe", "food", "document").
-  - Support automatic caching of remote photo assets into local SQLite WAL cache.
-- [ ] **Cloud Drive Connectors**:
-  - Google Drive folder selector.
-  - Apple iCloud Drive / Dropbox / OneDrive folder connectors.
-  - S3 / GCS bucket source connectors for batch archival jobs.
+```
+Phase 1: Curated Test Datasets & Benchmarks
+   │
+   ▼
+Phase 2: Agent & Prompt Evaluation Harness (evals/)
+   │
+   ▼
+Phase 3: Adaptive Vision Prompts, Antigravity Skills & CV Tools
+   │
+   ▼
+Phase 4: Archival Document Generation & Extended Exporters
+   │
+   ▼
+Phase 5: Cloud & External Source Providers
+   │
+   ▼
+Phase 6: Comprehensive User Guide, Guided UI Tutorial & MVP Release
+```
 
 ---
 
-### 2. Curated Sample Test Datasets & Benchmarks
+### Phase 1: Curated Test Datasets & Benchmarks
+*Foundation priority: Establish a rich, diverse corpus of recipe card scans to ground all subsequent evaluation, prompt tuning, and regression testing.*
+
+- [ ] **Curate Public Domain Historical Recipe Scans**:
+  - Source and curate high-resolution public domain card scans from archival collections (Library of Congress, open historical society archives, and open vintage recipe collections) representing authentic mid-20th century culinary artifacts.
 - [ ] **Representative Sample Scans Repository (`tests/fixtures/sample_cards/`)**:
-  - **Vintage Handwritten Cursive**: 1940s–1970s index cards with aged paper, fountain pen bleed, and cursive handwriting.
+  - **Vintage Handwritten Cursive**: 1940s–1970s index cards with aged paper, fountain pen ink bleed, and faded pencil.
   - **Typewritten & Stamped**: Cards produced on manual typewriters with ink ribbon wear.
   - **Magazine Clippings & Package Labels**: Glued-on newspaper recipes, clipped product box backs, and multi-column magazine layouts.
   - **Stained / Damaged / Edge-Folded Cards**: Real-world kitchen artifacts (oil spots, grease stains spanning card boundaries, coffee rings, torn edges).
-  - **Multi-Card Recipes (3–4 Cards)**: Extended canning, holiday baking, and multi-step confectionery recipes.
-- [ ] **Synthetic Test Generator**:
-  - Script to generate synthetic card front/back pairs with known physical textures, fonts, and procedural continuations for regression testing.
+  - **Multi-Card Recipe Sets (3–4 Cards)**: Extended canning, holiday baking, and multi-step confectionery recipes.
+- [ ] **Synthetic Card Generator**:
+  - Python tool to procedurally generate synthetic card front/back pairs with controllable paper grain, font variations, ruling lines, stain bleed-through, and narrative continuations for CI test automation.
 
 ---
 
-### 3. Agent, Skill & Prompt Evaluation Harness (`evals/`)
+### Phase 2: Agent & Prompt Evaluation Harness (`evals/`)
+*Objective measurement: Implement reproducible evaluation pipelines to benchmark transcription accuracy, pairing precision, and schema conformity.*
+
 - [ ] **Quantitative Metric Suite for Gemini Vision**:
-  - **Pairing Accuracy (F1 Score)**: Precision and recall of front/back correlation proposals against ground-truth labeled datasets.
-  - **Transcription Accuracy (CER / WER)**: Character Error Rate (CER) and Word Error Rate (WER) on ingredient names, numeric quantities, and fractions (e.g., `1/4` vs `1/2`).
-  - **Schema Conformity Score**: Automated validation rate for strict Plan To Eat schema adherence.
+  - **Pairing Accuracy (F1 / Precision / Recall)**: Benchmark front/back correlation proposals against ground-truth labeled datasets.
+  - **Transcription Accuracy (CER / WER)**: Character Error Rate (CER) and Word Error Rate (WER) on ingredient names, numeric quantities, fractions (`1/8`, `1/4`, `1/2`), and cooking temperatures.
+  - **Schema Conformity Score**: Automated validation rate for strict Plan To Eat and Schema.org RFC adherence.
 - [ ] **LLM-as-a-Judge Evaluation Pipeline**:
-  - Independent judge prompt to evaluate semantic fidelity, preservation of vintage cooking notes, and step order accuracy.
-- [ ] **Golden Dataset Regression Runner**:
-  - Automated CI test running eval benchmarks against model updates (e.g., comparing `gemini-2.5-flash` vs `gemini-2.5-pro` vs future model versions).
+  - Independent judge prompt evaluating semantic fidelity, preservation of vintage cooking headnotes, ingredient-direction cross-consistency, and step sequence ordering.
+- [ ] **Golden Dataset Continuous Regression Runner**:
+  - Automated CI benchmark runner tracking accuracy across model updates (e.g. `gemini-3.7-flash` vs `gemini-3.7-pro` with thinking mode).
 
 ---
 
-### 4. Adaptive Vision Prompts, Antigravity Skills & Deterministic Tools
-- [ ] **Prompt Engineering & Systematic Tuning Lifecycle**:
-  - Dedicated prompt tuning pipeline with versioned prompt templates and regression tracking.
+### Phase 3: Adaptive Vision Prompts, Antigravity Skills & Deterministic Tools
+*Model optimization: Leverage Phase 1 datasets and Phase 2 metrics to engineer specialized skills, prompt branches, and deterministic preprocessing.*
+
 - [ ] **Deterministic Computer Vision Preprocessing Tools**:
-  - Integrate deterministic tools (e.g. OpenCV deskewing, card border auto-cropping, white-balance normalization, and color histogram clustering) as Antigravity tool extensions before passing images to Gemini.
+  - Integrate deterministic tools (OpenCV deskewing, card border auto-cropping, white-balance normalization, and color histogram clustering) as Antigravity tool extensions before passing images to Gemini.
 - [ ] **Specialized Antigravity Analysis Skills**:
-  - Package domain logic into reusable Antigravity Skills:
-    - `vintage-handwriting-ocr`: Domain skill specialized in historical cursive letterforms, fraction parsing (`1/8`, `1/4`, `1/2`), and vintage abbreviations ("T" vs "t", "oleo", "saleratus").
-    - `print-clipping-extractor`: Domain skill specialized in multi-column newspaper layouts, package labels, and advertisement exclusion.
+  - `vintage-handwriting-ocr`: Domain skill specialized in historical cursive letterforms, fraction parsing (`1/8`, `1/4`, `1/2`), and vintage abbreviations ("T" vs "t", "oleo", "saleratus").
+  - `print-clipping-extractor`: Domain skill specialized in multi-column newspaper layouts, package labels, and advertisement/coupon exclusion.
 - [ ] **Document Class Detection & Dynamic Prompt Routing**:
   - Lightweight classification pass routing cards to specialized prompt branches based on visual substrate cues (`HANDWRITTEN_CURSIVE`, `HANDWRITTEN_PRINT`, `TYPEWRITTEN`, `PRINTED_CLIPPING_OR_LABEL`, `MIXED_MEDIA`).
+- [ ] **Dynamic Thinking Budget Allocation**:
+  - Dynamically allocate deeper reasoning tokens to degraded cursive scans or low-contrast pencil cards while keeping clean typed cards on fast zero-overhead inference.
 
 ---
 
-### 5. Extended Multi-Format Exporters & Archival Document Generation
+### Phase 4: Archival Document Generation & Extended Exporters
+*Ecosystem expansion: Deliver high-value export formats, including visual family cookbook generation.*
+
 - [ ] **Google Docs Archival Exporter (with Scanned Image Embeds)**:
   - Export full recipe collections to a structured **Google Doc** via the Google Docs API.
-  - Page-break separated layout: each recipe presented with beautifully formatted typography (title, prep/cook/total times, yield, ingredients list, numbered directions, tags, and attribution notes).
+  - Page-break separated layout: each recipe presented with beautifully formatted typography (title, prep/cook/total times, yield, ingredients table, numbered directions, tags, and attribution notes).
   - High-resolution visual embedding: embeds the original scanned card images (front and back) directly below the formatted recipe, auto-cropped and enhanced for archival printing and family cookbooks.
 - [ ] **Offline DOCX & Printable Archival PDF Exporter**:
   - Generate standalone `.docx` and styled printable PDF recipe books with the same split layout (transcribed recipe + original scanned cards).
@@ -98,16 +114,34 @@ All roadmap items and milestones use standardized status tags:
 
 ---
 
-### 6. User Experience, Comprehensive Documentation & Project Governance
-- [x] **Open Source License Compliance & Dependency Audit (`LICENSE`)**:
-  - **Verdict**: Retained GPLv3. Completed full automated license audit across all 60+ Python dependencies (`.venv`) and all 17 npm frontend packages (`frontend/package.json`).
-  - **Result**: 100% compliance confirmed (all third-party libraries use compatible permissive licenses: MIT, BSD-2/3-Clause, Apache-2.0, ISC, PSF-2.0, or MPL-2.0).
-  - **Agent Governance**: Formalized Invariant 8 in `_agents/INVARIANTS.md` requiring pre-vetting of all future dependencies against approved license lists.
-- [ ] **Comprehensive User Guide & End-to-End Walkthrough (`README.md`)** *(Deferred to Initial MVP Phase)*:
+### Phase 5: Cloud & External Source Providers
+*Ingestion flexibility: Extend source ingestion beyond local folders to cloud storage and photo libraries.*
+
+- [ ] **Unified `SourceProvider` Abstraction**:
+  - Define an abstract base class `BaseSourceProvider` (`list_images()`, `fetch_thumbnail()`, `download_image()`, `get_metadata()`).
+  - Standardize source pagination, credential management, rate limiting, and local SQLite caching.
+- [ ] **Google Photos Integration**:
+  - Implement Google Photos Library API connector with OAuth2 authentication.
+  - Allow users to select specific Google Photos albums, date ranges, or search filters (e.g. "recipe", "food", "document").
+  - Support automatic caching of remote photo assets into local SQLite WAL cache.
+- [ ] **Cloud Drive Connectors**:
+  - Google Drive folder selector.
+  - Apple iCloud Drive / Dropbox / OneDrive folder connectors.
+  - S3 / GCS bucket source connectors for batch archival jobs.
+
+---
+
+### Phase 6: User Guide, Guided UI Tutorial & Initial MVP Release
+*Polish & onboarding: Deliver comprehensive documentation, interactive user onboarding, and production distribution.*
+
+- [ ] **"First Run" Interactive Guided UI Tutorial**:
+  - Built-in interactive walkthrough in the frontend introducing new users to the complete workflow: launching an ingestion job, using Rapid Queue keyboard shortcuts (`Space`, `S`, `B`, `X`, `Tab`), exploring the Candidate Drawer & 3+ card grouping, toggling image inspection filters, editing in the split-screen recipe editor, and exporting.
+- [ ] **Comprehensive User Guide & End-to-End Walkthrough (`README.md`)**:
   - Visual onboarding: Architecture diagrams, UI feature walkthroughs, and screenshot guides.
   - Step-by-step multi-platform setup instructions (macOS, Linux, Windows PowerShell / CMD).
-  - Workflow guide: Ingestion setup, keyboard shortcuts in Rapid Queue, Candidate Drawer & 3+ multi-card grouping, visual inspection filters, split-screen recipe editor, and Plan To Eat CSV / JSON-LD export.
   - Troubleshooting FAQ: API key configuration (`GEMINI_API_KEY`), quota management with slow-batch pacing, port binding, and cache management.
+- [ ] **Initial MVP Release & Pre-Built Binary Packaging**:
+  - Tag initial MVP release and publish cross-platform standalone binaries (`macOS`, `Linux`, `Windows`).
 
 ---
 
