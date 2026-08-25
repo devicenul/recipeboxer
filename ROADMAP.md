@@ -68,25 +68,31 @@ All roadmap items and milestones use standardized status tags:
 
 ---
 
-### 4. Adaptive & Branching Vision Prompts
-- [ ] **Document Class Detection & Prompt Routing**:
-  - Add a lightweight pre-classification pass or fingerprint cue to classify card modality:
-    - `HANDWRITTEN_CURSIVE`
-    - `HANDWRITTEN_PRINT`
-    - `TYPEWRITTEN`
-    - `PRINTED_CLIPPING_OR_LABEL`
-    - `MIXED_MEDIA` (handwritten notes on a printed clipping)
-- [ ] **Specialized Extraction Prompt Branches**:
-  - **Cursive Branch**: Emphasizes deciphering historical letterforms, archaic abbreviations (e.g., "T" vs "t" for Tbsp/tsp, "oleo" for margarine, "saleratus" for baking soda), and cursive flourishes.
-  - **Clipping Branch**: Multi-column text extraction, OCR error correction for newsprint degradation.
+### 4. Adaptive Vision Prompts, Antigravity Skills & Deterministic Tools
+- [ ] **Prompt Engineering & Systematic Tuning Lifecycle**:
+  - Dedicated prompt tuning pipeline with versioned prompt templates and regression tracking.
+- [ ] **Deterministic Computer Vision Preprocessing Tools**:
+  - Integrate deterministic tools (e.g. OpenCV deskewing, card border auto-cropping, white-balance normalization, and color histogram clustering) as Antigravity tool extensions before passing images to Gemini.
+- [ ] **Specialized Antigravity Analysis Skills**:
+  - Package domain logic into reusable Antigravity Skills:
+    - `vintage-handwriting-ocr`: Domain skill specialized in historical cursive letterforms, fraction parsing (`1/8`, `1/4`, `1/2`), and vintage abbreviations ("T" vs "t", "oleo", "saleratus").
+    - `print-clipping-extractor`: Domain skill specialized in multi-column newspaper layouts, package labels, and advertisement exclusion.
+- [ ] **Document Class Detection & Dynamic Prompt Routing**:
+  - Lightweight classification pass routing cards to specialized prompt branches based on visual substrate cues (`HANDWRITTEN_CURSIVE`, `HANDWRITTEN_PRINT`, `TYPEWRITTEN`, `PRINTED_CLIPPING_OR_LABEL`, `MIXED_MEDIA`).
 
 ---
 
-### 5. Extended Multi-Format Exporters
+### 5. Extended Multi-Format Exporters & Archival Document Generation
+- [ ] **Google Docs Archival Exporter (with Scanned Image Embeds)**:
+  - Export full recipe collections to a structured **Google Doc** via the Google Docs API.
+  - Page-break separated layout: each recipe presented with beautifully formatted typography (title, prep/cook/total times, yield, ingredients list, numbered directions, tags, and attribution notes).
+  - High-resolution visual embedding: embeds the original scanned card images (front and back) directly below the formatted recipe, auto-cropped and enhanced for archival printing and family cookbooks.
+- [ ] **Offline DOCX & Printable Archival PDF Exporter**:
+  - Generate standalone `.docx` and styled printable PDF recipe books with the same split layout (transcribed recipe + original scanned cards).
 - [ ] **Markdown / Obsidian Recipe Serializer**:
   - YAML frontmatter with tags, cook times, and ingredients list formatted for Obsidian Recipe plugins.
 - [ ] **Cooklang (.cook) Serializer**:
-  - Plain-text recipe markup format for Cooklang ecosystem.
+  - Plain-text recipe markup format for the Cooklang ecosystem.
 - [ ] **Paprika Recipe Manager (.paprikarecipes) Export**:
   - Compressed gzip archive format compatible with Paprika app imports.
 
