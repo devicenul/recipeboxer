@@ -13,6 +13,12 @@ import {
   ApprovalResponse,
 } from '../types/hitl';
 import { RecipeSchema } from '../types/recipe';
+import {
+  SourceConnectionStatus,
+  SourceProviderConfig,
+  ListContainersResponse,
+  ListItemsResponse,
+} from '../types/sources';
 
 const BASE_URL = '';
 
@@ -166,4 +172,53 @@ export const api = {
       { method: 'DELETE' }
     );
   },
+
+  // 6. Source Providers & External Cloud Ingestion
+  async listSourceProviders(): Promise<SourceConnectionStatus[]> {
+    return fetchJson<SourceConnectionStatus[]>('/api/sources/providers');
+  },
+
+  async connectSourceProvider(providerId: string, config: SourceProviderConfig): Promise<SourceConnectionStatus> {
+    return fetchJson<SourceConnectionStatus>(`/api/sources/${encodeURIComponent(providerId)}/connect`, {
+      method: 'POST',
+      body: JSON.stringify(config),
+    });
+  },
+
+  async listSourceContainers(
+    providerId: string,
+    params?: { pageSize?: number; pageToken?: string; parentId?: string }
+  ): Promise<ListContainersResponse> {
+    const queryParts: string[] = [];
+    if (params?.pageSize) queryParts.push(`page_size=${encodeURIComponent(params.pageSize)}`);
+    if (params?.pageToken) queryParts.push(`page_token=${encodeURIComponent(params.pageToken)}`);
+    if (params?.parentId) queryParts.push(`parent_id=${encodeURIComponent(params.parentId)}`);
+    const q = queryParts.length > 0 ? `?${queryParts.join('&')}` : '';
+    return fetchJson<ListContainersResponse>(`/api/sources/${encodeURIComponent(providerId)}/containers${q}`);
+  },
+
+  async listSourceItems(
+    providerId: string,
+    params?: {
+      containerId?: string;
+      query?: string;
+      category?: string;
+      pageSize?: number;
+      pageToken?: string;
+    }
+  ): Promise<ListItemsResponse> {
+    const queryParts: string[] = [];
+    if (params?.containerId) queryParts.push(`container_id=${encodeURIComponent(params.containerId)}`);
+    if (params?.query) queryParts.push(`query=${encodeURIComponent(params.query)}`);
+    if (params?.category) queryParts.push(`category=${encodeURIComponent(params.category)}`);
+    if (params?.pageSize) queryParts.push(`page_size=${encodeURIComponent(params.pageSize)}`);
+    if (params?.pageToken) queryParts.push(`page_token=${encodeURIComponent(params.pageToken)}`);
+    const q = queryParts.length > 0 ? `?${queryParts.join('&')}` : '';
+    return fetchJson<ListItemsResponse>(`/api/sources/${encodeURIComponent(providerId)}/items${q}`);
+  },
+
+  getSourceThumbnailUrl(providerId: string, itemId: string, maxSize: number = 256): string {
+    return `/api/sources/${encodeURIComponent(providerId)}/thumbnail/${encodeURIComponent(itemId)}?max_size=${maxSize}`;
+  },
 };
+

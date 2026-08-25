@@ -319,3 +319,53 @@ class IngestionRunner:
             elapsed_seconds=time.monotonic() - start_time,
             status=status,
         )
+
+    async def ingest_from_provider(
+        self,
+        provider: Any,
+        container_id: Optional[str] = None,
+        item_ids: Optional[List[str]] = None,
+        target_dir: Optional[Union[str, Any]] = None,
+        asset_cache: Optional[Any] = None,
+        progress_callback: Optional[ProgressCallback] = None,
+        cancellation_token: Optional[IngestionCancellationToken] = None,
+    ) -> IngestionResult:
+        """Download remote assets from a SourceProvider, cache locally, and run visual fingerprinting."""
+        from pathlib import Path
+
+        # 1. Resolve item IDs if not provided
+        target_item_ids = list(item_ids) if item_ids else []
+        if not target_item_ids:
+            list_resp = await provider.list_items(container_id=container_id, page_size=100)
+            target_item_ids = [item.id for item in list_resp.items]
+
+        if not target_item_ids:
+            return IngestionResult(
+                fingerprints=[],
+                failed_cards=[],
+                total_cards=0,
+                cache_hits=0,
+                newly_extracted=0,
+                failed_count=0,
+                elapsed_seconds=0.0,
+                status=IngestionStatus.COMPLETED,
+            )
+
+        # 2. Download items to target staging directory
+        staging_dir = Path(target_dir) if target_dir else Path(".cache/recipeboxer/staging")
+        staging_dir.mkdir(parents=True, exist_ok=True)
+
+        cards = await provider.stream_download_items(
+            item_ids=target_item_ids,
+            target_dir=staging_dir,
+            concurrency=self.config.max_concurrency,
+            asset_cache=asset_cache,
+        )
+
+        # 3. Execute standard ingestion workflow over downloaded ScannedCards
+        return await self.run(
+            cards=cards,
+            progress_callback=progress_callback,
+            cancellation_token=cancellation_token,
+        )
+

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Any, Optional
+from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
 
@@ -62,6 +62,10 @@ class PipelineStartRequest(BaseModel):
     """Request schema for POST /api/pipeline/start."""
     scans_dir: Optional[str] = Field(default=None, description="Filesystem directory containing recipe card scans")
     directory_path: Optional[str] = Field(default=None, description="Alias for scans_dir")
+    source_provider: Optional[str] = Field(default=None, description="External source provider ID (e.g. google_photos, google_drive, s3, gcs, local)")
+    source_container_id: Optional[str] = Field(default=None, description="Selected container / album / folder ID")
+    source_item_ids: Optional[List[str]] = Field(default=None, description="Specific item IDs to ingest from provider")
+    source_config: Optional[Dict[str, Any]] = Field(default=None, description="Credentials or configuration for source provider")
     mode: IngestionMode = Field(default=IngestionMode.PARALLEL, description="Ingestion mode: parallel or slow_batch")
     max_concurrency: Optional[int] = Field(default=None, ge=1, le=50, description="Override for max concurrent tasks")
     slow_batch_size: Optional[int] = Field(default=None, ge=1, le=20, description="Override for slow batch chunk size")
@@ -73,12 +77,30 @@ class PipelineStartRequest(BaseModel):
     thinking_budget_tokens: Optional[int] = Field(default=None)
 
     def model_post_init(self, __context: Any) -> None:
-        if not self.scans_dir and self.directory_path:
-            self.scans_dir = self.directory_path
-        elif not self.scans_dir and not self.directory_path:
-            raise ValueError("scans_dir or directory_path must be provided")
-        if not self.directory_path and self.scans_dir:
-            self.directory_path = self.scans_dir
+        is_remote_provider = self.source_provider and self.source_provider.lower() not in ("local", "")
+        if is_remote_provider:
+            if not self.scans_dir and not self.directory_path:
+                self.scans_dir = f"source://{self.source_provider}"
+                self.directory_path = self.scans_dir
+            elif not self.scans_dir and self.directory_path:
+                self.scans_dir = self.directory_path
+            elif not self.directory_path and self.scans_dir:
+                self.directory_path = self.scans_dir
+        else:
+            local_path = (
+                (self.source_config.get("local_path") or self.source_config.get("path"))
+                if isinstance(self.source_config, dict)
+                else None
+            )
+            if not self.scans_dir and not self.directory_path and local_path:
+                self.scans_dir = str(local_path)
+                self.directory_path = str(local_path)
+            elif not self.scans_dir and self.directory_path:
+                self.scans_dir = self.directory_path
+            elif not self.scans_dir and not self.directory_path:
+                raise ValueError("scans_dir or directory_path must be provided")
+            if not self.directory_path and self.scans_dir:
+                self.directory_path = self.scans_dir
 
 
 class PipelineStartResponse(BaseModel):

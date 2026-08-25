@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { FolderOpen, Play, Upload, AlertCircle } from 'lucide-react';
+import { Play, AlertCircle } from 'lucide-react';
 import { Button } from '../common/Button';
-import { Dropzone } from '../common/Dropzone';
 import { ConfigPanel } from './ConfigPanel';
+import { SourceSelector, IngestionSourceType } from './SourceSelector';
 import { PipelineStartRequest, IngestionMode } from '../../types/pipeline';
+import { SourceContainer } from '../../types/sources';
 import { api } from '../../utils/api';
 
 export interface SessionLauncherProps {
@@ -15,9 +16,14 @@ export const SessionLauncher: React.FC<SessionLauncherProps> = ({
   onSessionStarted,
   isStarting = false,
 }) => {
-  const [inputMethod, setInputMethod] = useState<'folder' | 'files'>('folder');
+  const [sourceType, setSourceType] = useState<IngestionSourceType>('local');
+  const [localMethod, setLocalMethod] = useState<'folder' | 'files'>('folder');
   const [folderPath, setFolderPath] = useState<string>('');
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
+  const [selectedContainer, setSelectedContainer] = useState<SourceContainer | null>(null);
+  const [categoryFilter, setCategoryFilter] = useState<string>('FOOD');
+  const [bucketName, setBucketName] = useState<string>('');
+  const [prefix, setPrefix] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
 
@@ -35,47 +41,99 @@ export const SessionLauncher: React.FC<SessionLauncherProps> = ({
     e.preventDefault();
     setError(null);
 
-    if (inputMethod === 'folder') {
-      if (!folderPath.trim()) {
-        setError('Please enter a valid scans folder path.');
-        return;
-      }
+    if (sourceType === 'local') {
+      if (localMethod === 'folder') {
+        if (!folderPath.trim()) {
+          setError('Please enter a valid scans folder path.');
+          return;
+        }
 
+        setLoading(true);
+        try {
+          const payload: PipelineStartRequest = {
+            ...config,
+            scans_dir: folderPath.trim(),
+            directory_path: folderPath.trim(),
+          };
+          const res = await api.startPipeline(payload);
+          onSessionStarted(res.session_id);
+        } catch (err: any) {
+          setError(err.message || 'Failed to start pipeline with directory');
+        } finally {
+          setLoading(false);
+        }
+      } else {
+        if (uploadedFiles.length === 0) {
+          setError('Please select or drop at least one card image.');
+          return;
+        }
+
+        setLoading(true);
+        try {
+          const formData = new FormData();
+          uploadedFiles.forEach((file) => formData.append('files', file));
+          formData.append('mode', typeof config.mode === 'string' ? config.mode : 'parallel');
+          formData.append('max_concurrency', String(config.max_concurrency ?? 5));
+          formData.append('slow_batch_size', String(config.slow_batch_size ?? 4));
+          formData.append('slow_batch_interval_seconds', String(config.slow_batch_interval_seconds ?? 2.0));
+          formData.append('model', config.model || 'gemini-3.7-flash');
+          formData.append('auto_start', 'true');
+
+          const uploadRes = await api.uploadCards(formData);
+          onSessionStarted(uploadRes.session_id);
+        } catch (err: any) {
+          setError(err.message || 'Failed to upload cards and start session');
+        } finally {
+          setLoading(false);
+        }
+      }
+    } else if (sourceType === 'google_photos') {
       setLoading(true);
       try {
         const payload: PipelineStartRequest = {
           ...config,
-          scans_dir: folderPath.trim(),
-          directory_path: folderPath.trim(),
+          source_provider: 'google_photos',
+          source_container_id: selectedContainer?.id,
+          source_config: { category_filter: categoryFilter },
         };
         const res = await api.startPipeline(payload);
         onSessionStarted(res.session_id);
       } catch (err: any) {
-        setError(err.message || 'Failed to start pipeline with directory');
+        setError(err.message || 'Failed to launch ingestion from Google Photos');
       } finally {
         setLoading(false);
       }
-    } else {
-      if (uploadedFiles.length === 0) {
-        setError('Please select or drop at least one card image.');
-        return;
-      }
-
+    } else if (sourceType === 'google_drive') {
       setLoading(true);
       try {
-        const formData = new FormData();
-        uploadedFiles.forEach((file) => formData.append('files', file));
-        formData.append('mode', typeof config.mode === 'string' ? config.mode : 'parallel');
-        formData.append('max_concurrency', String(config.max_concurrency ?? 5));
-        formData.append('slow_batch_size', String(config.slow_batch_size ?? 4));
-        formData.append('slow_batch_interval_seconds', String(config.slow_batch_interval_seconds ?? 2.0));
-        formData.append('model', config.model || 'gemini-3.7-flash');
-        formData.append('auto_start', 'true');
-
-        const uploadRes = await api.uploadCards(formData);
-        onSessionStarted(uploadRes.session_id);
+        const payload: PipelineStartRequest = {
+          ...config,
+          source_provider: 'google_drive',
+          source_container_id: selectedContainer?.id,
+        };
+        const res = await api.startPipeline(payload);
+        onSessionStarted(res.session_id);
       } catch (err: any) {
-        setError(err.message || 'Failed to upload cards and start session');
+        setError(err.message || 'Failed to launch ingestion from Google Drive');
+      } finally {
+        setLoading(false);
+      }
+    } else if (sourceType === 's3' || sourceType === 'gcs') {
+      setLoading(true);
+      try {
+        const payload: PipelineStartRequest = {
+          ...config,
+          source_provider: sourceType,
+          source_container_id: prefix.trim() || undefined,
+          source_config: {
+            bucket_name: bucketName.trim() || undefined,
+            prefix: prefix.trim() || undefined,
+          },
+        };
+        const res = await api.startPipeline(payload);
+        onSessionStarted(res.session_id);
+      } catch (err: any) {
+        setError(err.message || `Failed to launch ingestion from ${sourceType.toUpperCase()}`);
       } finally {
         setLoading(false);
       }
@@ -84,71 +142,28 @@ export const SessionLauncher: React.FC<SessionLauncherProps> = ({
 
   return (
     <form onSubmit={handleLaunch} className="flex flex-col gap-6">
-      {/* Method Switcher */}
-      <div className="flex border-b border-slate-200 dark:border-slate-800">
-        <button
-          type="button"
-          onClick={() => {
-            setInputMethod('folder');
-            setError(null);
-          }}
-          className={`flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 transition-all cursor-pointer ${
-            inputMethod === 'folder'
-              ? 'border-blue-600 text-blue-600 dark:text-blue-400'
-              : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
-          }`}
-        >
-          <FolderOpen className="w-4 h-4" />
-          Scans Folder Path
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            setInputMethod('files');
-            setError(null);
-          }}
-          className={`flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 transition-all cursor-pointer ${
-            inputMethod === 'files'
-              ? 'border-blue-600 text-blue-600 dark:text-blue-400'
-              : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
-          }`}
-        >
-          <Upload className="w-4 h-4" />
-          Direct File Upload
-        </button>
-      </div>
+      {/* Pluggable Source Selector */}
+      <SourceSelector
+        sourceType={sourceType}
+        onSourceTypeChange={setSourceType}
+        localMethod={localMethod}
+        onLocalMethodChange={setLocalMethod}
+        folderPath={folderPath}
+        onFolderPathChange={setFolderPath}
+        uploadedFiles={uploadedFiles}
+        onUploadedFilesChange={setUploadedFiles}
+        selectedContainer={selectedContainer}
+        onSelectContainer={setSelectedContainer}
+        categoryFilter={categoryFilter}
+        onCategoryFilterChange={setCategoryFilter}
+        bucketName={bucketName}
+        onBucketNameChange={setBucketName}
+        prefix={prefix}
+        onPrefixChange={setPrefix}
+        disabled={loading || isStarting}
+      />
 
-      {/* Input Selection Area */}
-      {inputMethod === 'folder' ? (
-        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-5 shadow-xs flex flex-col gap-3">
-          <label className="text-sm font-semibold text-slate-800 dark:text-slate-200">
-            Local Scans Directory Path
-          </label>
-          <div className="flex gap-2">
-            <input
-              type="text"
-              placeholder="/path/to/recipe/scans"
-              value={folderPath}
-              onChange={(e) => setFolderPath(e.target.value)}
-              disabled={loading || isStarting}
-              className="flex-1 px-3.5 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
-            />
-          </div>
-          <p className="text-xs text-slate-500 dark:text-slate-400">
-            Path to a local folder containing high-resolution scanned recipe card images (.jpg, .png, .webp, .tiff).
-          </p>
-        </div>
-      ) : (
-        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-5 shadow-xs">
-          <Dropzone
-            files={uploadedFiles}
-            onFilesChange={setUploadedFiles}
-            disabled={loading || isStarting}
-          />
-        </div>
-      )}
-
-      {/* Config Panel */}
+      {/* Pipeline Ingestion Throttling & Reasoning Config */}
       <ConfigPanel
         config={config}
         onChange={setConfig}

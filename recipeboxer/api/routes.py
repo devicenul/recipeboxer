@@ -46,7 +46,7 @@ from recipeboxer.exporter.markdown_export import MarkdownExporter, export_recipe
 from recipeboxer.exporter.paprika import PaprikaExporter, export_recipes_to_paprika
 from recipeboxer.exporter.pdf_export import PdfExporter, export_recipes_to_pdf
 from recipeboxer.exporter.plan_to_eat import PlanToEatExporter, export_recipes_to_plan_to_eat_csv
-from recipeboxer.ingestion.scanner import ScannedCard, validate_and_load_card
+from recipeboxer.ingestion.scanner import VALID_IMAGE_EXTENSIONS, ScannedCard, get_image_mime_type, validate_and_load_card
 from recipeboxer.models.domain import VisualFingerprint
 from recipeboxer.models.hitl import (
     ApprovalPayload,
@@ -65,6 +65,16 @@ from recipeboxer.models.pipeline import (
 )
 from recipeboxer.models.recipe import RecipeSchema
 from recipeboxer.models.session import SessionDetail, SessionSummary
+from recipeboxer.sources import (
+    ListContainersResponse,
+    ListItemsResponse,
+    SourceConnectionStatus,
+    SourceContainer,
+    SourceItem,
+    SourceProviderConfig,
+    get_source_provider,
+    list_available_providers,
+)
 from recipeboxer.storage.session_store import SessionStore, get_session_store
 from recipeboxer.vision.heuristics import (
     calculate_color_similarity,
@@ -110,8 +120,68 @@ async def start_pipeline(
     manager: SessionManager = Depends(get_manager),
     store: SessionStore = Depends(get_store),
 ) -> PipelineStartResponse:
-    """Validates scans directory, initializes a new session, and launches background processing."""
-    scans_dir = payload.scans_dir or payload.directory_path
+    """Validates scans directory or remote source provider, initializes session, and launches processing."""
+    is_remote = bool(payload.source_provider and payload.source_provider.lower() not in ("local", ""))
+
+    if is_remote:
+        provider_name = payload.source_provider or "unknown"
+        try:
+            cfg_obj = None
+            if payload.source_config:
+                cfg_obj = SourceProviderConfig(**payload.source_config)
+            provider = get_source_provider(provider_name, config=cfg_obj)
+
+            is_connected = await provider.test_connection()
+            if not is_connected and provider.capabilities.requires_auth:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Source provider '{provider_name}' connection failed or unauthorized",
+                )
+
+            card_count = 0
+            if payload.source_item_ids:
+                card_count = len(payload.source_item_ids)
+            else:
+                items_res = await provider.list_items(container_id=payload.source_container_id)
+                card_count = len(items_res.items)
+
+            if card_count == 0:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"No valid card scans found in source container '{payload.source_container_id or 'all'}'",
+                )
+
+            session = manager.create_session(config=payload)
+            store.save_session(
+                session_id=session.session_id,
+                state=session.state,
+                mode=payload.mode.value if hasattr(payload.mode, "value") else str(payload.mode),
+                folder_path=f"source://{provider_name}/{payload.source_container_id or ''}",
+                config=payload.model_dump(),
+                card_count=card_count,
+                recipe_count=0,
+            )
+
+            session.pipeline_task = asyncio.create_task(session.run())
+            await asyncio.sleep(0.01)
+
+            return PipelineStartResponse(
+                session_id=session.session_id,
+                status=session.state,
+                total_scans_found=card_count,
+                mode=payload.mode,
+                message="Pipeline initiated successfully from remote source",
+            )
+        except HTTPException:
+            raise
+        except Exception as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Failed to start pipeline from source provider '{provider_name}': {exc}",
+            )
+
+    local_cfg_path = payload.source_config.get("local_path") if payload.source_config else None
+    scans_dir = payload.scans_dir or payload.directory_path or local_cfg_path
     if not scans_dir:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -125,9 +195,8 @@ async def start_pipeline(
             detail="Invalid scans directory path: directory does not exist",
         )
 
-    valid_exts = {".jpg", ".jpeg", ".png", ".webp", ".tiff", ".tif"}
     matching_files = [
-        f for f in scans_path.iterdir() if f.is_file() and f.suffix.lower() in valid_exts
+        f for f in scans_path.iterdir() if f.is_file() and f.suffix.lower() in VALID_IMAGE_EXTENSIONS
     ]
     if not matching_files:
         raise HTTPException(
@@ -162,6 +231,150 @@ async def start_pipeline(
         mode=payload.mode,
         message="Pipeline initiated successfully",
     )
+
+
+# ============================================================================
+# 1b. Cloud & External Source Providers
+# ============================================================================
+
+@router.get(
+    "/sources/providers",
+    response_model=List[SourceConnectionStatus],
+    status_code=status.HTTP_200_OK,
+    summary="List Source Providers and Connection Statuses",
+)
+async def list_sources() -> List[SourceConnectionStatus]:
+    """Retrieve all registered source providers (Local, Google Photos, Google Drive, S3, GCS) and connectivity."""
+    return await list_available_providers()
+
+
+@router.post(
+    "/sources/{provider_id}/connect",
+    response_model=SourceConnectionStatus,
+    status_code=status.HTTP_200_OK,
+    summary="Authenticate and Connect Source Provider",
+)
+async def connect_source(
+    provider_id: str,
+    payload: Optional[Dict[str, Any]] = None,
+) -> SourceConnectionStatus:
+    """Validate credentials and establish active connection to a source provider."""
+    try:
+        config_data = payload or {}
+        config_data["provider_id"] = provider_id
+        config = SourceProviderConfig(**config_data)
+        provider = get_source_provider(provider_id, config=config)
+        _ = await provider.test_connection()
+        return await provider.get_connection_status()
+    except KeyError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Source provider '{provider_id}' not found",
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Failed connecting to provider '{provider_id}': {exc}",
+        )
+
+
+@router.get(
+    "/sources/{provider_id}/containers",
+    response_model=ListContainersResponse,
+    status_code=status.HTTP_200_OK,
+    summary="List Source Containers (Albums / Folders / Buckets)",
+)
+async def list_source_containers(
+    provider_id: str,
+    page_size: int = Query(50, ge=1, le=100),
+    page_token: Optional[str] = Query(None),
+    parent_id: Optional[str] = Query(None),
+) -> ListContainersResponse:
+    """Browse albums, directories, or prefixes for a source provider."""
+    try:
+        provider = get_source_provider(provider_id)
+        return await provider.list_containers(
+            page_size=page_size, page_token=page_token, parent_id=parent_id
+        )
+    except KeyError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Source provider '{provider_id}' not found",
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Failed listing containers for '{provider_id}': {exc}",
+        )
+
+
+@router.get(
+    "/sources/{provider_id}/items",
+    response_model=ListItemsResponse,
+    status_code=status.HTTP_200_OK,
+    summary="List Source Items with Pagination and Filtering",
+)
+async def list_source_items(
+    provider_id: str,
+    container_id: Optional[str] = Query(None),
+    query: Optional[str] = Query(None),
+    category: Optional[str] = Query(None),
+    page_size: int = Query(50, ge=1, le=100),
+    page_token: Optional[str] = Query(None),
+) -> ListItemsResponse:
+    """Preview or search media items within a remote source provider or container."""
+    try:
+        provider = get_source_provider(provider_id)
+        return await provider.list_items(
+            container_id=container_id,
+            query=query,
+            category=category,
+            page_size=page_size,
+            page_token=page_token,
+        )
+    except KeyError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Source provider '{provider_id}' not found",
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Failed listing items for '{provider_id}': {exc}",
+        )
+
+
+@router.get(
+    "/sources/{provider_id}/thumbnail/{item_id:path}",
+    summary="Fetch Source Item Thumbnail Preview",
+)
+async def get_source_thumbnail(
+    provider_id: str,
+    item_id: str,
+    max_size: int = Query(256, ge=32, le=1024),
+) -> Response:
+    """Retrieve image thumbnail bytes for preview in source picker dialog."""
+    try:
+        provider = get_source_provider(provider_id)
+        thumb_bytes = await provider.fetch_thumbnail(item_id, max_size=max_size)
+        if not thumb_bytes:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Thumbnail not available for item '{item_id}'",
+            )
+        return Response(content=thumb_bytes, media_type="image/jpeg")
+    except KeyError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Source provider '{provider_id}' not found",
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Failed retrieving thumbnail for '{item_id}': {exc}",
+        )
 
 
 @router.post(
@@ -300,9 +513,6 @@ async def get_pipeline_status(
         status=PipelineState.IDLE,
         error=None,
     )
-
-
-VALID_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".tif", ".tiff", ".bmp", ".gif"}
 
 
 @router.get(

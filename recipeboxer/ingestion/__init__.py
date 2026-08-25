@@ -18,6 +18,7 @@ from recipeboxer.ingestion.scanner import (
     ScanResult,
     ScannedCard,
     compute_file_sha256,
+    get_image_mime_type,
     natural_sort_key,
     scan_directory,
     validate_and_load_card,
@@ -26,6 +27,7 @@ from recipeboxer.ingestion.scanner import (
 __all__ = [
     # Scanner
     "VALID_IMAGE_EXTENSIONS",
+    "get_image_mime_type",
     "CorruptImageError",
     "ScannedCard",
     "ScanResult",

@@ -29,6 +29,7 @@ All roadmap items and milestones use standardized status tags:
 | **M9** | **Agent & Prompt Evaluation Harness & Benchmark Suite** | Quantitative metric suite (Pairing F1, Levenshtein CER/WER, Plan To Eat / Schema.org schema conformity), LLM-as-a-Judge semantic rubric evaluator (`recipeboxer/evals/judge.py`), golden dataset benchmark runner CLI (`evals/run_benchmarks.py`), and 65 unit/integration tests. | `[x] Completed` |
 | **M10** | **Adaptive Vision Prompts, Antigravity Skills & CV Tools** | Deterministic CV preprocessing (coarse-to-fine projection deskewing $\pm 1^\circ$, border cropping, CLAHE contrast enhancement, CIE $L^*a^*b^*$ clustering), Antigravity domain skills (`vintage-handwriting-ocr`, `print-clipping-extractor`), modality classifier (95.7% accuracy), and dynamic thinking budget allocation. | `[x] Completed` |
 | **M11** | **Archival Document Generation & Extended Exporters** | Google Docs batch update archival exporter with card scan embedding, offline OpenXML DOCX & printable PDF cookbook generators, Obsidian Markdown with YAML frontmatter, Cooklang (`.cook`), Paprika (`.paprikarecipes`), FastAPI export endpoints, and React frontend export UI integration. | `[x] Completed` |
+| **M12** | **Cloud & External Source Providers** | Unified `BaseSourceProvider` abstraction, Google Photos Library API connector with OAuth2 auto-refresh & album filtering, Google Drive folder selector, S3/GCS bucket connectors, REST source management endpoints, and React album picker UI. | `[x] Completed` |
 
 ---
 
@@ -47,7 +48,7 @@ All roadmap items and milestones use standardized status tags:
 [x] Phase 4: Archival Document Generation & Extended Exporters
        │
        ▼
-[ ] Phase 5: Cloud & External Source Providers
+[x] Phase 5: Cloud & External Source Providers
        │
        ▼
 [ ] Phase 6: Comprehensive User Guide, Guided UI Tutorial & MVP Release
@@ -137,17 +138,16 @@ All roadmap items and milestones use standardized status tags:
 ### Phase 5: Cloud & External Source Providers
 *Ingestion flexibility: Extend source ingestion beyond local folders to cloud storage and photo libraries.*
 
-- [ ] **Unified `SourceProvider` Abstraction**:
-  - Define an abstract base class `BaseSourceProvider` (`list_images()`, `fetch_thumbnail()`, `download_image()`, `get_metadata()`).
-  - Standardize source pagination, credential management, rate limiting, and local SQLite caching.
-- [ ] **Google Photos Integration**:
-  - Implement Google Photos Library API connector with OAuth2 authentication.
-  - Allow users to select specific Google Photos albums, date ranges, or search filters (e.g. "recipe", "food", "document").
-  - Support automatic caching of remote photo assets into local SQLite WAL cache.
-- [ ] **Cloud Drive Connectors**:
-  - Google Drive folder selector.
-  - Apple iCloud Drive / Dropbox / OneDrive folder connectors.
-  - S3 / GCS bucket source connectors for batch archival jobs.
+- [x] **Unified `SourceProvider` Abstraction (`recipeboxer/sources/base.py`)**:
+  - Async provider interface declaring `list_items()`, `list_containers()`, `fetch_thumbnail()`, `download_image()`, `get_metadata()`, and `test_connection()`.
+  - Pydantic models: `SourceItem`, `SourceContainer`, `SourceProviderConfig`, and `SourceCapabilities`.
+  - High-performance SQLite WAL content-addressed cache (`RemoteAssetCache`) with SHA-256 validation.
+- [x] **Google Photos Integration (`recipeboxer/sources/google_photos.py`)**:
+  - OAuth2 connector with auto-refresh, category filters (`FOOD`, `DOCUMENTS`, date ranges), and resilient rate-limit backoff.
+- [x] **Cloud Drive & Object Storage Connectors (`recipeboxer/sources/cloud_drive.py`, `recipeboxer/sources/s3_gcs.py`)**:
+  - Google Drive folder browser and pure-Python AWS SigV4 / GCS XML object storage connectors.
+- [x] **FastAPI Source Endpoints & React Ingestion UI**:
+  - Source routes under `/api/sources/*` and interactive tabbed `SourceSelector` with modal `AlbumPickerModal`.
 
 ---
 

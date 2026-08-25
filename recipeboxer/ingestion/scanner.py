@@ -16,7 +16,39 @@ VALID_IMAGE_EXTENSIONS: Set[str] = {
     ".webp",
     ".tiff",
     ".tif",
+    ".bmp",
+    ".heic",
+    ".heif",
+    ".gif",
 }
+
+
+def get_image_mime_type(suffix_or_path: Union[str, Path]) -> str:
+    """Return standard MIME type for given image extension, filename, or path."""
+    if isinstance(suffix_or_path, Path):
+        ext = suffix_or_path.suffix.lower()
+    else:
+        s = str(suffix_or_path).lower().strip()
+        if s.startswith("."):
+            ext = s
+        elif "." in s:
+            ext = Path(s).suffix.lower()
+        else:
+            ext = f".{s}"
+
+    mapping = {
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".png": "image/png",
+        ".webp": "image/webp",
+        ".tiff": "image/tiff",
+        ".tif": "image/tiff",
+        ".bmp": "image/bmp",
+        ".heic": "image/heic",
+        ".heif": "image/heif",
+        ".gif": "image/gif",
+    }
+    return mapping.get(ext, "image/jpeg")
 
 
 class CorruptImageError(Exception):

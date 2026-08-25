@@ -82,19 +82,64 @@ class RecipeBoxerAgent:
             # Stage 1: Ingestion & Scanning
             # -------------------------------------------------------------
             session.state = PipelineState.INGESTING
-            scans_dir = self._resolve_scans_dir(session.config)
-            scans_path = Path(scans_dir)
 
-            if not scans_path.exists() or not scans_path.is_dir():
-                raise FileNotFoundError(f"Scans directory does not exist: '{scans_dir}'")
-
-            cards = scan_card_directory(
-                scans_path,
-                supported_extensions=self.settings.supported_image_extensions,
-            )
-
+            cards = session.cards
             if not cards:
-                raise ValueError(f"No supported recipe card image scans found in '{scans_dir}'")
+                # Check for remote source provider
+                src_provider = getattr(session.config, "source_provider", None)
+                if isinstance(session.config, dict) and not src_provider:
+                    src_provider = session.config.get("source_provider")
+
+                if src_provider and src_provider.lower() not in ("local", ""):
+                    from recipeboxer.sources.base import SourceProviderConfig
+                    from recipeboxer.sources.registry import get_source_provider
+                    from recipeboxer.storage.cache import RemoteAssetCache
+
+                    src_container = getattr(session.config, "source_container_id", None)
+                    src_items = getattr(session.config, "source_item_ids", None)
+                    src_cfg = getattr(session.config, "source_config", None)
+                    if isinstance(session.config, dict):
+                        src_container = src_container or session.config.get("source_container_id")
+                        src_items = src_items or session.config.get("source_item_ids")
+                        src_cfg = src_cfg or session.config.get("source_config")
+
+                    cfg_obj = None
+                    if isinstance(src_cfg, dict):
+                        cfg_obj = SourceProviderConfig(**src_cfg)
+                    elif isinstance(src_cfg, SourceProviderConfig):
+                        cfg_obj = src_cfg
+
+                    provider = get_source_provider(src_provider, config=cfg_obj)
+                    staging_dir = self.settings.cache_dir / "sessions" / session.session_id / "scans"
+                    staging_dir.mkdir(parents=True, exist_ok=True)
+
+                    if not src_items:
+                        list_res = await provider.list_items(container_id=src_container)
+                        src_items = [it.id for it in list_res.items]
+
+                    asset_cache = RemoteAssetCache(self.settings.cache_db_path)
+                    cards = await provider.stream_download_items(
+                        item_ids=src_items,
+                        target_dir=staging_dir,
+                        concurrency=self.settings.max_concurrency,
+                        asset_cache=asset_cache,
+                    )
+                    if not cards:
+                        raise ValueError(f"No recipe card scans could be retrieved from source provider '{src_provider}'")
+                else:
+                    scans_dir = self._resolve_scans_dir(session.config)
+                    scans_path = Path(scans_dir)
+
+                    if not scans_path.exists() or not scans_path.is_dir():
+                        raise FileNotFoundError(f"Scans directory does not exist: '{scans_dir}'")
+
+                    cards = scan_card_directory(
+                        scans_path,
+                        supported_extensions=self.settings.supported_image_extensions,
+                    )
+
+                    if not cards:
+                        raise ValueError(f"No supported recipe card image scans found in '{scans_dir}'")
 
             session.cards = cards
             session.scanned_paths = [Path(c.file_path) for c in cards]
@@ -280,11 +325,23 @@ class RecipeBoxerAgent:
             return str(config.scans_dir)
         if hasattr(config, "directory_path") and config.directory_path:
             return str(config.directory_path)
+        if hasattr(config, "local_path") and config.local_path:
+            return str(config.local_path)
+        if hasattr(config, "source_config") and config.source_config:
+            if isinstance(config.source_config, dict) and config.source_config.get("local_path"):
+                return str(config.source_config["local_path"])
+            if hasattr(config.source_config, "local_path") and config.source_config.local_path:
+                return str(config.source_config.local_path)
         if isinstance(config, dict):
             if "scans_dir" in config and config["scans_dir"]:
                 return str(config["scans_dir"])
             if "directory_path" in config and config["directory_path"]:
                 return str(config["directory_path"])
+            if "local_path" in config and config["local_path"]:
+                return str(config["local_path"])
+            if "source_config" in config and isinstance(config["source_config"], dict):
+                if config["source_config"].get("local_path"):
+                    return str(config["source_config"]["local_path"])
         raise ValueError("Configuration missing required 'scans_dir' parameter.")
 
     def _resolve_ingestion_config(self, config: Any) -> IngestionConfig:
