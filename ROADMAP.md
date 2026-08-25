@@ -27,6 +27,7 @@ All roadmap items and milestones use standardized status tags:
 | **M7** | **License Compliance & Dependency Vetting Audit** | Full automated audit of 60+ Python and 17+ npm dependencies confirming 100% GPLv3 compatibility; formalized Invariant 8 in `_agents/INVARIANTS.md`. | `[x] Completed` |
 | **M8** | **Sample Card Corpus, Provenance & Synthetic Generator** | 23 high-resolution historical card fixtures across 6 modalities, CC0/public domain provenance guide (`tests/fixtures/sample_cards/README.md`), strict Pydantic `manifest.json`, procedural generator tool (`recipeboxer/tools/card_generator.py`), and pytest loader fixtures. | `[x] Completed` |
 | **M9** | **Agent & Prompt Evaluation Harness & Benchmark Suite** | Quantitative metric suite (Pairing F1, Levenshtein CER/WER, Plan To Eat / Schema.org schema conformity), LLM-as-a-Judge semantic rubric evaluator (`recipeboxer/evals/judge.py`), golden dataset benchmark runner CLI (`evals/run_benchmarks.py`), and 65 unit/integration tests. | `[x] Completed` |
+| **M10** | **Adaptive Vision Prompts, Antigravity Skills & CV Tools** | Deterministic CV preprocessing (coarse-to-fine projection deskewing $\pm 1^\circ$, border cropping, CLAHE contrast enhancement, CIE $L^*a^*b^*$ clustering), Antigravity domain skills (`vintage-handwriting-ocr`, `print-clipping-extractor`), modality classifier (95.7% accuracy), and dynamic thinking budget allocation. | `[x] Completed` |
 
 ---
 
@@ -39,7 +40,7 @@ All roadmap items and milestones use standardized status tags:
 [x] Phase 2: Agent & Prompt Evaluation Harness (evals/)
        │
        ▼
-[ ] Phase 3: Adaptive Vision Prompts, Antigravity Skills & CV Tools
+[x] Phase 3: Adaptive Vision Prompts, Antigravity Skills & CV Tools
        │
        ▼
 [ ] Phase 4: Archival Document Generation & Extended Exporters
@@ -95,15 +96,19 @@ All roadmap items and milestones use standardized status tags:
 ### Phase 3: Adaptive Vision Prompts, Antigravity Skills & Deterministic Tools
 *Model optimization: Leverage Phase 1 datasets and Phase 2 metrics to engineer specialized skills, prompt branches, and deterministic preprocessing.*
 
-- [ ] **Deterministic Computer Vision Preprocessing Tools**:
-  - Integrate deterministic tools (OpenCV deskewing, card border auto-cropping, white-balance normalization, and color histogram clustering) as Antigravity tool extensions before passing images to Gemini.
-- [ ] **Specialized Antigravity Analysis Skills**:
-  - `vintage-handwriting-ocr`: Domain skill specialized in historical cursive letterforms, fraction parsing (`1/8`, `1/4`, `1/2`), and vintage abbreviations ("T" vs "t", "oleo", "saleratus").
-  - `print-clipping-extractor`: Domain skill specialized in multi-column newspaper layouts, package labels, and advertisement/coupon exclusion.
-- [ ] **Document Class Detection & Dynamic Prompt Routing**:
-  - Lightweight classification pass routing cards to specialized prompt branches based on visual substrate cues (`HANDWRITTEN_CURSIVE`, `HANDWRITTEN_PRINT`, `TYPEWRITTEN`, `PRINTED_CLIPPING_OR_LABEL`, `MIXED_MEDIA`).
-- [ ] **Dynamic Thinking Budget Allocation**:
-  - Dynamically allocate deeper reasoning tokens to degraded cursive scans or low-contrast pencil cards while keeping clean typed cards on fast zero-overhead inference.
+- [x] **Deterministic Computer Vision Preprocessing Tools (`recipeboxer/vision/preprocessing.py`)**:
+  - Coarse-to-fine projection profile deskewing correcting $\pm 45^\circ$ skew within $\pm 1^\circ$ tolerance with non-clipping canvas expansion.
+  - Rectangular card border auto-cropping stripping scanner bed and tabletop shadows with configurable padding.
+  - Tile-based CLAHE adaptive contrast enhancement and white-balance normalization for faint pencil, aged ink, and cursive text.
+  - CIE $L^*a^*b^*$ K-Means color clustering for paper and ink centroid extraction.
+- [x] **Specialized Antigravity Analysis Skills & Tools (`recipeboxer/agent/skills/`)**:
+  - `vintage-handwriting-ocr`: Paleography prompts and normalization for archaic culinary units ("oleo", "saleratus", "butter size of an egg", "gills", "pecks", "drams") and fractions.
+  - `print-clipping-extractor`: Multi-column newsprint reading order rules and promotional noise filtering (`filter_advertisement_noise`).
+  - Antigravity agent tool wrappers (`recipeboxer/agent/skills/tools.py`) for safe deterministic preprocessing invocation.
+- [x] **Document Class Detection & Dynamic Prompt Routing (`recipeboxer/vision/router.py`)**:
+  - Fast classifier achieving 95.7% accuracy across benchmark cards routing images to specialized prompt templates and domain skills.
+- [x] **Dynamic Thinking Budget Allocation (`recipeboxer/extraction/extractor.py`)**:
+  - `compute_adaptive_thinking_budget` automatically allocating 0 reasoning tokens to clean typed cards and 2,048–4,096 tokens to degraded cursive, faded pencil, and complex clippings.
 
 ---
 

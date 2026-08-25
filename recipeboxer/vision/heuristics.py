@@ -68,7 +68,7 @@ def rgb_to_lab(r: int, g: int, b: int) -> Tuple[float, float, float]:
     # 2. Gamma linearization
     r_lin = r_lin / 12.92 if r_lin <= 0.04045 else ((r_lin + 0.055) / 1.055) ** 2.4
     g_lin = g_lin / 12.92 if g_lin <= 0.04045 else ((g_lin + 0.055) / 1.055) ** 2.4
-    b_lin = b_lin / 12.92 if b_lin <= 0.04045 else ((g_lin + 0.055) / 1.055) ** 2.4
+    b_lin = b_lin / 12.92 if b_lin <= 0.04045 else ((b_lin + 0.055) / 1.055) ** 2.4
 
     # 3. Convert to CIE XYZ (D65 standard observer)
     x = r_lin * 0.4124564 + g_lin * 0.3575761 + b_lin * 0.1804375

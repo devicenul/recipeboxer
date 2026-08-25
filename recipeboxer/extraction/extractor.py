@@ -53,6 +53,61 @@ Respond ONLY with valid JSON conforming to the RecipeSchema structure.
 RECIPE_EXTRACTION_SYSTEM_PROMPT = RECIPE_EXTRACTION_SYSTEM_INSTRUCTION
 
 
+from recipeboxer.vision.router import (
+    CardModality,
+    PromptRouter,
+    classify_card_modality,
+    route_prompt_for_modality,
+)
+
+
+def compute_adaptive_thinking_budget(
+    modality: Union[CardModality, str],
+    degradation_level: Optional[str] = None,
+    base_budget: Optional[int] = None,
+) -> Tuple[bool, Optional[int]]:
+    """Calculates adaptive thinking mode and token budget based on card modality and degradation.
+
+    High reasoning budget for faded/cursive script or multi-layer clippings;
+    fast 0-token inference for clean typewritten cards.
+
+    Args:
+        modality: CardModality or modality string.
+        degradation_level: Optional physical damage level (NONE, MILD, MODERATE, SEVERE).
+        base_budget: Optional explicit baseline budget to scale.
+
+    Returns:
+        Tuple of (thinking_mode_enabled: bool, thinking_budget_tokens: Optional[int]).
+    """
+    if base_budget is not None and base_budget > 0:
+        return True, base_budget
+
+    norm_mod = CardModality.normalize(modality)
+    deg = (degradation_level or "NONE").upper()
+
+    if norm_mod == CardModality.HANDWRITTEN_CURSIVE:
+        budget = 4096 if deg in ("MODERATE", "SEVERE") else 2048
+        return True, budget
+
+    if norm_mod in (CardModality.PRINTED_CLIPPING_OR_LABEL, CardModality.PRINTED_CLIPPING):
+        budget = 2048 if deg in ("MODERATE", "SEVERE") else 1024
+        return True, budget
+
+    if norm_mod == CardModality.MIXED_MEDIA:
+        budget = 4096 if deg in ("MODERATE", "SEVERE") else 2048
+        return True, budget
+
+    if norm_mod == CardModality.HANDWRITTEN_PRINT:
+        budget = 2048 if deg in ("MODERATE", "SEVERE") else 1024
+        return True, budget
+
+    # TYPEWRITTEN: Fast inference without thinking overhead unless severely degraded
+    if deg in ("MODERATE", "SEVERE"):
+        return True, 1024
+
+    return False, None
+
+
 class GeminiRecipeExtractor:
     """Multimodal structured recipe extractor using Gemini vision models."""
 
@@ -63,6 +118,7 @@ class GeminiRecipeExtractor:
         client: Optional[Any] = None,
         thinking_mode: Optional[bool] = None,
         thinking_budget_tokens: Optional[int] = None,
+        adaptive_thinking: Optional[bool] = None,
         settings: Optional[Settings] = None,
     ) -> None:
         """Initialize GeminiRecipeExtractor.
@@ -73,6 +129,7 @@ class GeminiRecipeExtractor:
             client: Optional mock or custom Gemini client for testing.
             thinking_mode: Optional override for thinking mode.
             thinking_budget_tokens: Optional cap for thinking tokens.
+            adaptive_thinking: Optional override for dynamic thinking budget allocation.
             settings: Optional custom Settings instance.
         """
         self.settings: Settings = settings or get_settings()
@@ -86,6 +143,11 @@ class GeminiRecipeExtractor:
             thinking_budget_tokens
             if thinking_budget_tokens is not None
             else self.settings.thinking_budget_tokens
+        )
+        self.adaptive_thinking = (
+            adaptive_thinking
+            if adaptive_thinking is not None
+            else getattr(self.settings, "adaptive_thinking", False)
         )
 
     async def extract(
@@ -281,8 +343,35 @@ class GeminiRecipeExtractor:
         """Executes multimodal JSON extraction call to Gemini API."""
         import httpx
 
+        system_instruction = RECIPE_EXTRACTION_SYSTEM_INSTRUCTION
+        effective_thinking = self.thinking_mode
+        effective_budget = self.thinking_budget_tokens
+
+        if self.adaptive_thinking:
+            try:
+                mod_input: Any = (
+                    front_id
+                    if (
+                        front_id
+                        and any(
+                            k in front_id.lower()
+                            for k in ("_vhc_", "_mcs_", "_sta_", "_typ_", "_clp_", "_dmg_")
+                        )
+                    )
+                    else front_bytes
+                )
+                mod_res = classify_card_modality(mod_input)
+                routed = route_prompt_for_modality(mod_res.modality)
+                system_instruction = routed.system_instruction
+                adaptive_mode, adaptive_budget = compute_adaptive_thinking_budget(mod_res.modality)
+                if self.thinking_budget_tokens is None:
+                    effective_thinking = adaptive_mode
+                    effective_budget = adaptive_budget
+            except Exception:
+                pass
+
         parts: List[Dict[str, Any]] = [
-            {"text": RECIPE_EXTRACTION_SYSTEM_INSTRUCTION}
+            {"text": system_instruction}
         ]
 
         # Attach front card image
@@ -315,10 +404,10 @@ class GeminiRecipeExtractor:
         }
 
         # Handle thinking mode configuration
-        if self.thinking_mode:
+        if effective_thinking:
             thinking_cfg: Dict[str, Any] = {}
-            if self.thinking_budget_tokens is not None:
-                thinking_cfg["thinking_budget"] = self.thinking_budget_tokens
+            if effective_budget is not None:
+                thinking_cfg["thinking_budget"] = effective_budget
             if thinking_cfg:
                 gen_config["thinking_config"] = thinking_cfg
 

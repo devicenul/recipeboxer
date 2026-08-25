@@ -1,4 +1,4 @@
-"""Vision and physical fingerprinting package for RecipeBoxer."""
+"""Vision, physical fingerprinting, deterministic preprocessing, and prompt routing package for RecipeBoxer."""
 
 from recipeboxer.vision.fingerprint import GeminiVisualExtractor
 from recipeboxer.vision.heuristics import (
@@ -14,6 +14,25 @@ from recipeboxer.vision.heuristics import (
     rgb_to_lab,
     screen_candidate_pairs,
 )
+from recipeboxer.vision.preprocessing import (
+    apply_clahe,
+    crop_card_borders,
+    deskew_card_image,
+    detect_skew_angle,
+    enhance_card_readability,
+    extract_paper_color_palette,
+    lab_to_rgb,
+    normalize_white_balance,
+)
+from recipeboxer.vision.router import (
+    CardModality,
+    ModalityClassificationResult,
+    ModalityClassifier,
+    PromptRouter,
+    RoutedPromptConfig,
+    classify_card_modality,
+    route_prompt_for_modality,
+)
 
 __all__ = [
     "GeminiVisualExtractor",
@@ -28,4 +47,19 @@ __all__ = [
     "screen_candidate_pairs",
     "rgb_to_lab",
     "hex_to_lab",
+    "lab_to_rgb",
+    "deskew_card_image",
+    "detect_skew_angle",
+    "crop_card_borders",
+    "apply_clahe",
+    "normalize_white_balance",
+    "enhance_card_readability",
+    "extract_paper_color_palette",
+    "CardModality",
+    "ModalityClassificationResult",
+    "ModalityClassifier",
+    "RoutedPromptConfig",
+    "PromptRouter",
+    "classify_card_modality",
+    "route_prompt_for_modality",
 ]

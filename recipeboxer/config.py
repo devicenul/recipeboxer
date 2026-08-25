@@ -36,6 +36,10 @@ class Settings(BaseSettings):
         ge=0,
         description="Maximum budget cap for thinking tokens when thinking_mode is active",
     )
+    adaptive_thinking: bool = Field(
+        default=False,
+        description="Whether to dynamically allocate thinking budget tokens based on card modality",
+    )
 
     # --- Ingestion & Throttling Settings ---
     max_concurrency: int = Field(
