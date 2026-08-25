@@ -98,6 +98,21 @@ All roadmap items and milestones use standardized status tags:
 
 ---
 
+### 6. User Experience, Comprehensive Documentation & Project Governance
+- [ ] **Comprehensive User Guide & End-to-End Walkthrough (`README.md`)**:
+  - Visual onboarding: Architecture diagrams, UI feature walkthroughs, and screenshot guides.
+  - Step-by-step multi-platform setup instructions (macOS, Linux, Windows PowerShell / CMD).
+  - Workflow guide: Ingestion setup, keyboard shortcuts in Rapid Queue, Candidate Drawer & 3+ multi-card grouping, visual inspection filters, split-screen recipe editor, and Plan To Eat CSV / JSON-LD export.
+  - Troubleshooting FAQ: API key configuration (`GEMINI_API_KEY`), quota management with slow-batch pacing, port binding, and cache management.
+- [ ] **Open Source License Investigation & Compliance (`LICENSE` / `LICENSE.md`)**:
+  - Evaluate the optimal licensing model for RecipeBoxer:
+    - **Apache 2.0 / MIT**: Permissive licensing to maximize community adoption, tool integration, and ease of embedding.
+    - **GPLv3 (Current)**: Strong copyleft ensuring all modifications and extensions remain open source.
+    - **AGPLv3**: Network copyleft if RecipeBoxer is offered as a hosted cloud service.
+  - Audit third-party dependencies (FastAPI, React, Tailwind, Lucide, PyInstaller, Google Antigravity SDK) for license compatibility.
+
+---
+
 ## Contribution Guidelines & Roadmap Updates
 
 When contributing to RecipeBoxer or updating this roadmap:
