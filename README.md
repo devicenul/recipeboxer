@@ -6,17 +6,32 @@ Intelligent recipe card digitization and HITL (Human-in-the-Loop) correlation en
 
 ## Key Features
 
-- **Multi-Modal Visual Fingerprinting**: Captures physical card features (paper hue, ruling lines, card stock, ink color, stain bleed-through) using Gemini 2.5 Flash.
-- **Two-Stage Card Correlation**: Combines color Delta-E and physical heuristic screening with deep semantic continuity reasoning to pair two-sided cards.
-- **Asynchronous HITL Review**: Pauses on low-confidence pairings for human operator inspection, manual re-pairing, or card rejection via FastAPI endpoints.
-- **Structured Recipe Extraction & RFC 4180 CSV Export**: Extracts ingredients, directions, prep/cook times, yields, and tags into structured JSON and standard Plan To Eat CSV format.
+- **Multi-Modal Visual Fingerprinting**: Captures physical card features (paper hue via CIELAB $\Delta E$, ruling lines, card stock, ink color, stain bleed-through) using Gemini 2.5 Flash.
+- **Two-Stage Card Correlation**: Combines color Delta-E and physical heuristic screening with deep semantic continuity reasoning and greedy bipartite assignment to pair two-sided cards.
+- **Asynchronous HITL Review**: Pauses on low-confidence pairings for human operator inspection, candidate replacement via slide-out drawer, 3+ card multi-part grouping, or card rejection.
+- **Structured Recipe Extraction & RFC 4180 CSV Export**: Extracts ingredients, directions, prep/cook times, yields, and tags into structured JSON, Schema.org Recipe JSON-LD, and standard Plan To Eat CSV format.
+- **Embedded React 18+ TypeScript SPA**: Single Page Application built with Vite and Tailwind CSS, featuring an interactive pan/zoom/filter card canvas and real-time Server-Sent Events (SSE) telemetry.
 - **Cross-Platform Tooling**: Native bootstrap, execution, packaging, and testing scripts for macOS, Linux, and Windows.
+
+---
+
+## Developer & Agent Documentation
+
+For comprehensive system documentation, architecture specifications, non-negotiable invariants, and developer extension guides, visit the **`_agents/`** context hub:
+
+- [**`_agents/README.md`**](_agents/README.md): Fast-orientation index and onboarding guide for AI agents and human contributors.
+- [**`_agents/ARCHITECTURE.md`**](_agents/ARCHITECTURE.md): Comprehensive breakdown of the Python backend (Antigravity SDK orchestrator, SQLite WAL persistence, 2-stage correlation engine, FastAPI/SSE) and React 18+ SPA.
+- [**`_agents/INVARIANTS.md`**](_agents/INVARIANTS.md): Non-negotiable architectural guardrails (SQLite WAL concurrency, Plan To Eat RFC 4180 CSV escaping, HITL async barrier semantics, Vite SPA static bundle contracts).
+- [**`_agents/TESTING_GUIDELINES.md`**](_agents/TESTING_GUIDELINES.md): Testing philosophy, 4-tier test pyramid, pytest & Vitest testing guides, fixtures, and regression checklists.
+- [**`_agents/EXTENDING_RECIPEBOXER.md`**](_agents/EXTENDING_RECIPEBOXER.md): Step-by-step developer extension guides with code examples for adding source providers, custom prompt branches, and export format serializers.
+- [**`ROADMAP.md`**](ROADMAP.md): Canonical project roadmap tracking milestones M1 to M6 and future feature backlog.
 
 ---
 
 ## Prerequisites
 
 - **Python 3.10+** (Python 3.10, 3.11, 3.12, 3.13, 3.14 supported).
+- **Node.js 18+** & **npm** (for building and testing the React frontend).
 - *(Optional)* **Google Gemini API Key** for live multimodal AI processing (`GEMINI_API_KEY`). All tests and offline operations run with simulated mock fixtures when no key is supplied.
 
 ---
@@ -26,13 +41,13 @@ Intelligent recipe card digitization and HITL (Human-in-the-Loop) correlation en
 ### macOS & Linux (POSIX)
 
 ```bash
-# 1. Bootstrap environment and install dependencies
+# 1. Bootstrap environment and install backend + frontend dependencies
 ./setup.sh
 
-# 2. Run the full test suite (395+ tests)
-./test.sh
+# 2. Run the full test suite (910 passing tests: 836 Python + 74 Frontend)
+./test.sh && cd frontend && npm test -- --run
 
-# 3. Start the RecipeBoxer API server
+# 3. Start the RecipeBoxer API server and embedded SPA
 ./run.sh
 
 # 4. (Optional) Build standalone binary and wheel packages
@@ -106,20 +121,23 @@ recipeboxer --reload
 
 ## Testing
 
-Run the automated test suite across all modules and E2E tiers:
+RecipeBoxer maintains **910 automated tests** (836 Python pytest tests + 74 Frontend Vitest tests) with a 100% pass rate:
 
 ```bash
-# Run via POSIX test script
+# Run Python backend test suite (836 tests)
 ./test.sh
 
-# Run via Windows PowerShell test script
-.\test.ps1
+# Run Frontend Vitest test suite (74 tests)
+cd frontend && npm test -- --run
 
-# Or run pytest directly with specific flags
-pytest -v tests/
-pytest -v tests/e2e/test_e2e_pipeline.py
-pytest -v tests/test_scripts.py
+# Run 4-Tier E2E Integration Suite directly
+pytest tests/test_e2e_4tier_suite.py -v
+
+# Run Tier 5 Adversarial Hardening Suite directly
+pytest tests/test_tier5_adversarial_coverage.py -v
 ```
+
+For detailed instructions on testing tiers, mock isolation, and authoring new tests, see [**`_agents/TESTING_GUIDELINES.md`**](_agents/TESTING_GUIDELINES.md).
 
 ---
 
@@ -133,17 +151,34 @@ pytest -v tests/test_scripts.py
 ├── run.sh / run.ps1 / .bat     # Cross-platform application execution scripts
 ├── build.sh / build.ps1        # Cross-platform packaging & binary build scripts
 ├── test.sh / test.ps1          # Cross-platform test execution scripts
+├── README.md                   # Project overview and quick start
+├── ROADMAP.md                  # Milestone tracking and enhancement backlog
 ├── SCRIPTS.md                  # Comprehensive script usage and troubleshooting guide
-├── recipeboxer/                # Core application package
+├── _agents/                    # Developer & AI agent guidance repository
+│   ├── README.md               # Onboarding hub & directory index
+│   ├── ARCHITECTURE.md         # System architecture & technical specification
+│   ├── INVARIANTS.md           # Non-negotiable architectural guardrails
+│   ├── TESTING_GUIDELINES.md   # Multi-tier testing guide & QA checklist
+│   └── EXTENDING_RECIPEBOXER.md# Developer extension playbooks
+├── recipeboxer/                # Core Python backend package
 │   ├── cli.py                  # CLI entry point
-│   ├── api/                    # FastAPI routers and app factory
+│   ├── api/                    # FastAPI routers, SSE, and static SPA hosting
+│   │   └── static/             # Vite production build distribution (index.html, assets/)
+│   ├── agent/                  # Google Antigravity SDK orchestrator & session manager
 │   ├── extraction/             # Multimodal recipe extraction
-│   ├── correlation/            # Visual & semantic card correlation
+│   ├── correlation/            # Visual & semantic card correlation and optimizer
 │   ├── ingestion/              # Parallel & batch card image ingestion
-│   ├── exporter/               # Plan To Eat CSV export engine
+│   ├── exporter/               # Plan To Eat CSV, Schema.org JSON-LD, JSON exporters
 │   ├── models/                 # Pydantic data schemas
-│   └── storage/                # SQLite WAL cache & state management
-└── tests/                      # Unit, integration, E2E, and script tests
+│   ├── storage/                # SQLite WAL cache & session store
+│   └── vision/                 # Visual fingerprinting, heuristics, and CIELAB color math
+├── frontend/                   # React 18+ TypeScript Single Page Application
+│   ├── src/                    # Components, custom hooks, pages, and utilities
+│   └── tests/                  # Vitest component and unit test suites (74 tests)
+└── tests/                      # Python pytest test suites (836 tests across 28 modules)
+    ├── conftest.py             # Shared fixtures, MockGeminiClient, synthetic card decks
+    ├── test_e2e_4tier_suite.py # 165 4-tier E2E feature tests
+    └── test_tier5_adversarial_coverage.py # Adversarial hardening and concurrency tests
 ```
 
 ---

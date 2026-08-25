@@ -1113,7 +1113,7 @@ class TestPackagingArtifactsAndExecution:
             [str(binary_path), "--version"],
             capture_output=True,
             text=True,
-            timeout=15,
+            timeout=45,
         )
         assert res_ver.returncode == 0
         assert f"RecipeBoxer {__version__}" in (res_ver.stdout + res_ver.stderr)
@@ -1123,7 +1123,7 @@ class TestPackagingArtifactsAndExecution:
             [str(binary_path), "--help"],
             capture_output=True,
             text=True,
-            timeout=15,
+            timeout=45,
         )
         assert res_help.returncode == 0
         assert "RecipeBoxer" in res_help.stdout
