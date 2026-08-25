@@ -1,0 +1,68 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel>=0.40.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "recipeboxer"
+version = "0.1.0"
+description = "Intelligent recipe card digitization and HITL correlation engine"
+readme = "README.md"
+license = { text = "GPL-3.0" }
+requires-python = ">=3.10"
+authors = [
+    { name = "RecipeBoxer Team" }
+]
+keywords = ["recipe", "ocr", "gemini", "antigravity", "fastapi", "hitl", "plan-to-eat"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: End Users/Desktop",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Scientific/Engineering :: Image Recognition",
+]
+dependencies = [
+    "pydantic>=2.10.0",
+    "pydantic-settings>=2.8.0",
+    "google-antigravity>=0.1.14",
+    "google-genai>=2.19.0",
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.30.0",
+    "pillow>=11.0.0",
+    "python-dotenv>=1.0.0",
+    "python-multipart>=0.0.20",
+    "httpx>=0.27.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "build>=1.0.0",
+    "wheel>=0.40.0",
+    "pyinstaller>=6.0.0",
+]
+
+[project.scripts]
+recipeboxer = "recipeboxer.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["recipeboxer*"]
+
+[tool.setuptools.package-data]
+recipeboxer = ["py.typed", "**/*.json", "**/*.yaml", "**/*.txt", "**/*.csv"]
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::pytest.PytestCollectionWarning",
+]
+
