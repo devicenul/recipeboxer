@@ -334,3 +334,58 @@ class TestSessionManager:
                 f.result()
 
         assert len(manager.list_sessions()) == 50
+
+
+@pytest.mark.asyncio
+async def test_multi_card_hitl_approval_sequence_preservation(
+    synthetic_card_deck: SyntheticDeckInfo,
+    mock_gemini_client: MockGeminiClient,
+    test_cache: SQLiteFingerprintCache,
+):
+    """F2.3: Tests that multi-card approvals (3+ cards) preserve user-specified card ordering during extraction."""
+    session = PipelineSession(
+        session_id="sess_multi_card_order",
+        config=PipelineStartRequest(
+            scans_dir=str(synthetic_card_deck.directory),
+            mode=IngestionMode.PARALLEL,
+            max_concurrency=4,
+        ),
+        cache=test_cache,
+        extractor=mock_gemini_client,
+        mock_client=mock_gemini_client,
+    )
+
+    task = asyncio.create_task(session.run())
+
+    # Wait until HITL_PENDING
+    for _ in range(100):
+        if session.state == PipelineState.HITL_PENDING:
+            break
+        await asyncio.sleep(0.02)
+
+    assert session.state == PipelineState.HITL_PENDING
+    assert len(session.fingerprints) >= 3
+
+    fp_keys = list(session.fingerprints.keys())[:3]
+    custom_order = [fp_keys[2], fp_keys[0], fp_keys[1]]
+
+    # Submit 3-card approval with custom sequence
+    approval = CardPairApproval(
+        proposal_id="prop_custom_sequence",
+        front_card_id=custom_order[0],
+        back_card_id=custom_order[1],
+        card_ids=custom_order,
+        decision=HITLDecision.APPROVE,
+    )
+    session.submit_approval([approval])
+
+    await task
+    assert session.state == PipelineState.COMPLETED
+    assert len(session.recipes) == 1
+    extracted = session.recipes[0]
+    assert extracted.card_ids == custom_order
+    assert len(extracted.image_urls) == 3
+    assert extracted.image_urls[0] == f"/api/cards/{custom_order[0]}/image?session_id=sess_multi_card_order"
+    assert extracted.image_urls[1] == f"/api/cards/{custom_order[1]}/image?session_id=sess_multi_card_order"
+    assert extracted.image_urls[2] == f"/api/cards/{custom_order[2]}/image?session_id=sess_multi_card_order"
+

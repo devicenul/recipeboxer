@@ -48,6 +48,7 @@ export interface PipelineStartRequest {
   scans_dir?: string;
   directory_path?: string;
   folder_path?: string;
+  default_tags?: string[];
   source_provider?: string;
   source_container_id?: string;
   source_item_ids?: string[];

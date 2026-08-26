@@ -28,24 +28,31 @@ from recipeboxer.models.recipe import RecipeSchema
 logger = logging.getLogger(__name__)
 
 RECIPE_EXTRACTION_SYSTEM_INSTRUCTION = """You are an expert culinary archivist and document transcription specialist.
-You are transcribing physical recipe cards (which may include front side and reverse back side) into a structured recipe JSON.
+You are transcribing physical recipe cards (which may include front side, reverse back side, and multi-card continuation cards) into a structured recipe JSON.
+
+TITLE INFERENCE & GUESSING:
+- If the card has a clearly stated title, extract it cleanly without modification.
+- If the recipe has NO explicitly stated title, or if the title is missing, torn, illegible, or inferred/guessed from ingredients or context: infer the most descriptive title (e.g. 'Old-Fashioned Apple Crisp') and ALWAYS append the suffix ' [GUESS]' (e.g. 'Old-Fashioned Apple Crisp [GUESS]') to clearly flag it for user verification.
+
+ANECDOTE, STORY & METADATA PRESERVATION:
+- Extract family stories, handwritten marginalia (e.g., 'Aunt Clara\\'s wedding cake 1942', 'Good for Sunday suppers'), vintage dates, occasion notes, and personal memories into the 'description' field.
+- Extract author attribution, vintage dates, handwritten signatures, and cookbook or card provenance into 'source_notes'.
+- STRICT ISOLATION: NEVER place family stories, personal anecdotes, handwritten marginalia, or attribution notes into the 'ingredients' list or 'directions' steps — keep ingredients and directions strictly confined to culinary measurements, ingredients, and sequential preparation/cooking steps.
 
 Carefully extract and format the following fields:
-1. Title: The clean, primary recipe title. Strip decorative quotation marks, card numbering, or trailing punctuation.
-2. Description: Headnotes, background story, special remarks, or general preparation notes (e.g. pan sizing, preheating).
+1. Title: The clean, primary recipe title. Strip decorative quotation marks, card numbering, or trailing punctuation. Append ' [GUESS]' if inferred or untitled.
+2. Description: Headnotes, background story, family anecdotes, marginalia, or general preparation notes (e.g. pan sizing, preheating).
 3. Yield/Servings: Quantity or batch size (e.g. '24 cookies', '6 servings', '1 9-inch pie').
 4. Prep Time: Active prep duration string (e.g. '15 mins', '30 minutes').
 5. Cook Time: Active cook/bake duration string (e.g. '25 mins', '1 hr 15 mins').
 6. Total Time: Overall time including resting/chilling (e.g. '2 hrs 15 mins').
-7. Ingredients: An array of ingredient strings. Each string must be a single ingredient with quantity, unit, ingredient name, and prep notes (e.g. '2 cups all-purpose flour', '1/3 cup unsalted butter, softened'). If sub-recipe headers exist, include them formatted cleanly (e.g. 'For the Frosting:'). Strip leading bullets, asterisks, or dashes.
-8. Directions: An array of sequential preparation and cooking steps. Each step must be clearly articulated. Numbers like '1. ', '2. ' will be automatically standardized, but preserve the natural sequential ordering.
+7. Ingredients: An array of ingredient strings. Each string must be a single ingredient with quantity, unit, ingredient name, and prep notes (e.g. '2 cups all-purpose flour', '1/3 cup unsalted butter, softened'). If sub-recipe headers exist, include them formatted cleanly (e.g. 'For the Frosting:'). Strip leading bullets, asterisks, or dashes. STRICTLY EXCLUDE personal stories, marginalia, and notes.
+8. Directions: An array of sequential preparation and cooking steps. Each step must be clearly articulated. Numbers like '1. ', '2. ' will be automatically standardized, but preserve the natural sequential ordering. STRICTLY EXCLUDE personal anecdotes and marginalia.
 9. Tags: Categorical tags (e.g. ['Dessert', 'Baking', 'Cookies', 'Vintage']).
-10. Source Notes: Attribution, card author, date, or cookbook reference (e.g. 'Grandma Rose (1958) Recipe Box').
+10. Source Notes: Attribution, card author, vintage dates, handwritten provenance, or cookbook reference (e.g. 'Grandma Rose (1958) Recipe Box').
 
-When two images are provided (Front and Back):
-- Image A is the FRONT card (title, ingredients, initial steps).
-- Image B is the BACK card (continued directions, baking temperatures, cooling instructions).
-- Merge both sides seamlessly into a single complete recipe.
+When multiple images are provided (Front, Back, Continuation cards):
+- Merge all sides seamlessly into a single complete recipe in sequential order without duplication.
 
 Respond ONLY with valid JSON conforming to the RecipeSchema structure.
 """
@@ -150,65 +157,95 @@ class GeminiRecipeExtractor:
             else getattr(self.settings, "adaptive_thinking", False)
         )
 
-    async def extract(
+    async def extract_cards(
         self,
-        front_input: Union[VisualFingerprint, ScannedCard, Path, str, bytes, Image.Image],
-        back_input: Optional[Union[VisualFingerprint, ScannedCard, Path, str, bytes, Image.Image]] = None,
+        cards: List[Union[VisualFingerprint, ScannedCard, Path, str, bytes, Image.Image]],
     ) -> RecipeSchema:
-        """Extracts structured RecipeSchema from front and optional back card scans.
+        """Extracts structured RecipeSchema from an ordered list of card scans (3+ cards).
 
         Args:
-            front_input: Front card fingerprint, ScannedCard, path, bytes, or Image.
-            back_input: Optional back card fingerprint, ScannedCard, path, bytes, or Image.
+            cards: Ordered list of card fingerprints, ScannedCards, paths, bytes, or Images.
+
+        Returns:
+            Validated RecipeSchema instance merging content in sequential order.
+        """
+        return await self.extract(front_input=cards)
+
+    async def extract(
+        self,
+        front_input: Union[
+            VisualFingerprint,
+            ScannedCard,
+            Path,
+            str,
+            bytes,
+            Image.Image,
+            List[Union[VisualFingerprint, ScannedCard, Path, str, bytes, Image.Image]],
+            Tuple[Any, ...],
+        ],
+        back_input: Optional[Union[VisualFingerprint, ScannedCard, Path, str, bytes, Image.Image]] = None,
+    ) -> RecipeSchema:
+        """Extracts structured RecipeSchema from front and optional back card scans or an ordered sequence.
+
+        Args:
+            front_input: Front card or sequence of cards.
+            back_input: Optional back card scan.
 
         Returns:
             Validated RecipeSchema instance.
         """
-        # Resolve inputs to bytes and metadata
-        front_bytes, front_path, front_id = self._resolve_input(front_input)
+        # Normalize input to list of items
+        if isinstance(front_input, (list, tuple)):
+            cards_list = list(front_input)
+            if back_input is not None:
+                cards_list.append(back_input)
+        else:
+            cards_list = [front_input]
+            if back_input is not None:
+                cards_list.append(back_input)
+
+        if not cards_list:
+            raise ValueError("No card inputs provided for extraction.")
+
+        resolved_cards = [self._resolve_input(item) for item in cards_list]
+        ordered_card_ids = [c[2] for c in resolved_cards if c[2]]
+
+        primary_front = cards_list[0]
+        primary_back = cards_list[1] if len(cards_list) > 1 else None
+
+        front_bytes, front_path, front_id = resolved_cards[0]
         back_bytes, back_path, back_id = (
-            self._resolve_input(back_input) if back_input is not None else (None, None, None)
+            resolved_cards[1] if len(resolved_cards) > 1 else (None, None, None)
         )
 
         # 1. Custom or injected client (e.g. MockGeminiClient in test suite)
         if self.client is not None:
             res = None
-            for method_name in ("extract_recipe", "extract", "transcribe_recipe"):
-                if hasattr(self.client, method_name):
-                    method = getattr(self.client, method_name)
-                    # Try calling with original inputs first
-                    try:
-                        potential_res = method(front_input, back_input)
-                        if inspect.isawaitable(potential_res):
-                            potential_res = await potential_res
-                        if potential_res is not None and not type(potential_res).__name__.endswith("Mock"):
-                            res = potential_res
-                            break
-                        elif potential_res is not None and res is None:
-                            res = potential_res
-                    except (TypeError, AttributeError):
-                        pass
+            # Check for extract_cards if multi-card
+            if len(cards_list) > 2 and hasattr(self.client, "extract_cards"):
+                try:
+                    potential_res = self.client.extract_cards(cards_list)
+                    if inspect.isawaitable(potential_res):
+                        potential_res = await potential_res
+                    if potential_res is not None and not type(potential_res).__name__.endswith("Mock"):
+                        res = potential_res
+                except (TypeError, AttributeError):
+                    pass
 
-                    # If not resolved and front_input isn't VisualFingerprint, adapt to mock fingerprint
-                    if res is None and not isinstance(front_input, VisualFingerprint):
+            if res is None:
+                for method_name in ("extract_recipe", "extract", "transcribe_recipe"):
+                    if hasattr(self.client, method_name):
+                        method = getattr(self.client, method_name)
+                        # Try calling with original inputs first
                         try:
-                            adapted_front = VisualFingerprint(
-                                card_id=front_id or "card_front",
-                                image_path=front_path or "/memory/card_front.jpg",
-                                sha256_hash=hashlib.sha256(front_bytes or b"").hexdigest(),
-                                role=CardRole.FRONT_ONLY if back_input else CardRole.STANDALONE,
-                            )
-                            adapted_back = (
-                                VisualFingerprint(
-                                    card_id=back_id or "card_back",
-                                    image_path=back_path or "/memory/card_back.jpg",
-                                    sha256_hash=hashlib.sha256(back_bytes or b"").hexdigest(),
-                                    role=CardRole.BACK_ONLY,
-                                )
-                                if back_input is not None
-                                else None
-                            )
-                            potential_res = method(adapted_front, adapted_back)
+                            if len(cards_list) > 2:
+                                try:
+                                    potential_res = method(cards_list)
+                                except TypeError:
+                                    potential_res = method(primary_front, primary_back)
+                            else:
+                                potential_res = method(primary_front, primary_back)
+
                             if inspect.isawaitable(potential_res):
                                 potential_res = await potential_res
                             if potential_res is not None and not type(potential_res).__name__.endswith("Mock"):
@@ -219,48 +256,102 @@ class GeminiRecipeExtractor:
                         except (TypeError, AttributeError):
                             pass
 
+                        # If not resolved and front_input isn't VisualFingerprint, adapt to mock fingerprint
+                        if res is None and not isinstance(primary_front, VisualFingerprint):
+                            try:
+                                adapted_front = VisualFingerprint(
+                                    card_id=front_id or "card_front",
+                                    image_path=front_path or "/memory/card_front.jpg",
+                                    sha256_hash=hashlib.sha256(front_bytes or b"").hexdigest(),
+                                    role=CardRole.FRONT_ONLY if len(cards_list) > 1 else CardRole.STANDALONE,
+                                )
+                                adapted_back = (
+                                    VisualFingerprint(
+                                        card_id=back_id or "card_back",
+                                        image_path=back_path or "/memory/card_back.jpg",
+                                        sha256_hash=hashlib.sha256(back_bytes or b"").hexdigest(),
+                                        role=CardRole.BACK_ONLY,
+                                    )
+                                    if len(cards_list) > 1
+                                    else None
+                                )
+                                potential_res = method(adapted_front, adapted_back)
+                                if inspect.isawaitable(potential_res):
+                                    potential_res = await potential_res
+                                if potential_res is not None and not type(potential_res).__name__.endswith("Mock"):
+                                    res = potential_res
+                                    break
+                                elif potential_res is not None and res is None:
+                                    res = potential_res
+                            except (TypeError, AttributeError):
+                                pass
+
             if (res is None or type(res).__name__.endswith("Mock")) and callable(self.client):
                 try:
-                    potential_res = self.client(front_input, back_input)
+                    potential_res = self.client(cards_list) if len(cards_list) > 2 else self.client(primary_front, primary_back)
                     if inspect.isawaitable(potential_res):
                         potential_res = await potential_res
                     if potential_res is not None and not type(potential_res).__name__.endswith("Mock"):
                         res = potential_res
                 except TypeError:
                     try:
-                        potential_res = self.client(front_input)
+                        potential_res = self.client(primary_front, primary_back)
                         if inspect.isawaitable(potential_res):
                             potential_res = await potential_res
                         if potential_res is not None and not type(potential_res).__name__.endswith("Mock"):
                             res = potential_res
                     except TypeError:
-                        pass
+                        try:
+                            potential_res = self.client(primary_front)
+                            if inspect.isawaitable(potential_res):
+                                potential_res = await potential_res
+                            if potential_res is not None and not type(potential_res).__name__.endswith("Mock"):
+                                res = potential_res
+                        except TypeError:
+                            pass
 
             if res is not None:
+                final_recipe: Optional[RecipeSchema] = None
                 if isinstance(res, RecipeSchema):
-                    return res
-                if hasattr(res, "model_dump") and not type(res).__name__.endswith("Mock"):
-                    return RecipeSchema.model_validate(res.model_dump())
-                if isinstance(res, dict):
-                    return RecipeSchema.model_validate(res)
+                    final_recipe = res
+                elif hasattr(res, "model_dump") and not type(res).__name__.endswith("Mock"):
+                    final_recipe = RecipeSchema.model_validate(res.model_dump())
+                elif isinstance(res, dict):
+                    final_recipe = RecipeSchema.model_validate(res)
+
+                if final_recipe is not None:
+                    if ordered_card_ids and not final_recipe.card_ids:
+                        final_recipe.card_ids = ordered_card_ids
+                    return final_recipe
                 return res
 
         # 2. Real Gemini API call if valid API key is present
         if self.api_key and not self.api_key.startswith("mock"):
             try:
-                return await self._call_gemini_extraction_api(
-                    front_bytes or b"",
-                    front_id or "card_front",
-                    back_bytes,
-                    back_id,
+                recipe = await self._call_gemini_extraction_api(
+                    front_bytes=front_bytes,
+                    front_id=front_id or "card_front",
+                    back_bytes=back_bytes,
+                    back_id=back_id,
+                    resolved_cards=resolved_cards,
                 )
+                if ordered_card_ids and not recipe.card_ids:
+                    recipe.card_ids = ordered_card_ids
+                return recipe
             except Exception as exc:
                 logger.warning(
                     f"Gemini API recipe extraction call failed: {exc}. Falling back to offline extraction."
                 )
 
         # 3. Deterministic offline recipe extraction fallback
-        return self._extract_offline_recipe(front_input, back_input)
+        recipe = self._extract_offline_recipe(
+            front_input=primary_front,
+            back_input=primary_back,
+            resolved_cards=resolved_cards,
+        )
+        if ordered_card_ids and not recipe.card_ids:
+            recipe.card_ids = ordered_card_ids
+        return recipe
 
     # Alias for method name compatibility
     extract_recipe = extract
@@ -335,30 +426,41 @@ class GeminiRecipeExtractor:
 
     async def _call_gemini_extraction_api(
         self,
-        front_bytes: bytes,
-        front_id: str,
+        front_bytes: Optional[bytes] = None,
+        front_id: Optional[str] = None,
         back_bytes: Optional[bytes] = None,
         back_id: Optional[str] = None,
+        resolved_cards: Optional[List[Tuple[Optional[bytes], Optional[str], Optional[str]]]] = None,
     ) -> RecipeSchema:
         """Executes multimodal JSON extraction call to Gemini API."""
         import httpx
+
+        if resolved_cards is None:
+            resolved_cards = []
+            if front_bytes or front_id:
+                resolved_cards.append((front_bytes, None, front_id or "card_front"))
+            if back_bytes or back_id:
+                resolved_cards.append((back_bytes, None, back_id or "card_back"))
 
         system_instruction = RECIPE_EXTRACTION_SYSTEM_INSTRUCTION
         effective_thinking = self.thinking_mode
         effective_budget = self.thinking_budget_tokens
 
+        first_id = resolved_cards[0][2] if resolved_cards else front_id
+        first_bytes = resolved_cards[0][0] if resolved_cards else front_bytes
+
         if self.adaptive_thinking:
             try:
                 mod_input: Any = (
-                    front_id
+                    first_id
                     if (
-                        front_id
+                        first_id
                         and any(
-                            k in front_id.lower()
+                            k in first_id.lower()
                             for k in ("_vhc_", "_mcs_", "_sta_", "_typ_", "_clp_", "_dmg_")
                         )
                     )
-                    else front_bytes
+                    else first_bytes
                 )
                 mod_res = classify_card_modality(mod_input)
                 routed = route_prompt_for_modality(mod_res.modality)
@@ -374,27 +476,61 @@ class GeminiRecipeExtractor:
             {"text": system_instruction}
         ]
 
-        # Attach front card image
-        if front_bytes:
-            b64_front = base64.b64encode(front_bytes).decode("utf-8")
+        if len(resolved_cards) > 2:
             parts.append({
-                "inline_data": {
-                    "mime_type": "image/jpeg",
-                    "data": b64_front,
-                }
+                "text": (
+                    f"You are transcribing a physical multi-card recipe spanning {len(resolved_cards)} card faces "
+                    f"in exact sequential order (Image 1 = Front, Image 2 = Continuation 1, Image 3 = Continuation 2...). "
+                    f"Seamlessly merge all ingredient items and numbered preparation steps in order across all card faces without duplication."
+                )
             })
-            parts.append({"text": f"Image A (Front Card): {front_id}"})
 
-        # Attach back card image if provided
-        if back_bytes:
-            b64_back = base64.b64encode(back_bytes).decode("utf-8")
-            parts.append({
-                "inline_data": {
-                    "mime_type": "image/jpeg",
-                    "data": b64_back,
-                }
-            })
-            parts.append({"text": f"Image B (Back Card): {back_id}"})
+            for idx, (c_bytes, c_path, c_id) in enumerate(resolved_cards):
+                role_label = "Front (Page 1)" if idx == 0 else f"Continuation {idx} (Page {idx + 1})"
+                if c_bytes:
+                    b64_c = base64.b64encode(c_bytes).decode("utf-8")
+                    parts.append({
+                        "inline_data": {
+                            "mime_type": "image/jpeg",
+                            "data": b64_c,
+                        }
+                    })
+                parts.append({"text": f"Image {idx + 1}: {role_label}: {c_id or f'card_{idx + 1}'}"})
+        elif len(resolved_cards) == 2:
+            # Front card
+            c1_bytes, _, c1_id = resolved_cards[0]
+            if c1_bytes:
+                b64_front = base64.b64encode(c1_bytes).decode("utf-8")
+                parts.append({
+                    "inline_data": {
+                        "mime_type": "image/jpeg",
+                        "data": b64_front,
+                    }
+                })
+            parts.append({"text": f"Image A (Front Card): {c1_id or 'card_front'}"})
+
+            # Back card
+            c2_bytes, _, c2_id = resolved_cards[1]
+            if c2_bytes:
+                b64_back = base64.b64encode(c2_bytes).decode("utf-8")
+                parts.append({
+                    "inline_data": {
+                        "mime_type": "image/jpeg",
+                        "data": b64_back,
+                    }
+                })
+            parts.append({"text": f"Image B (Back Card): {c2_id or 'card_back'}"})
+        elif len(resolved_cards) == 1:
+            c1_bytes, _, c1_id = resolved_cards[0]
+            if c1_bytes:
+                b64_front = base64.b64encode(c1_bytes).decode("utf-8")
+                parts.append({
+                    "inline_data": {
+                        "mime_type": "image/jpeg",
+                        "data": b64_front,
+                    }
+                })
+            parts.append({"text": f"Image 1 (Front Card): {c1_id or 'card_front'}"})
 
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model_name}:generateContent?key={self.api_key}"
 
@@ -427,21 +563,29 @@ class GeminiRecipeExtractor:
             cleaned_text = re.sub(r"\s*```$", "", cleaned_text.strip()).strip()
 
             parsed_json = json.loads(cleaned_text)
-            return RecipeSchema.model_validate(parsed_json)
+            recipe = RecipeSchema.model_validate(parsed_json)
+            recipe.card_ids = [cid for _, _, cid in resolved_cards if cid]
+            recipe.image_urls = [f"/api/cards/{cid}/image" for cid in recipe.card_ids]
+            return recipe
 
     def _extract_offline_recipe(
         self,
-        front_input: Any,
+        front_input: Any = None,
         back_input: Optional[Any] = None,
+        resolved_cards: Optional[List[Tuple[Optional[bytes], Optional[str], Optional[str]]]] = None,
     ) -> RecipeSchema:
         """Deterministic offline extraction matching synthetic cards and heuristics."""
-        _, _, front_id = self._resolve_input(front_input)
-        _, _, back_id = (
-            self._resolve_input(back_input) if back_input is not None else (None, None, None)
-        )
+        if resolved_cards is None:
+            resolved_cards = []
+            if front_input is not None:
+                resolved_cards.append(self._resolve_input(front_input))
+            if back_input is not None:
+                resolved_cards.append(self._resolve_input(back_input))
 
-        f_name = (front_id or "").lower()
-        b_name = (back_id or "").lower()
+        card_ids = [c[2] for c in resolved_cards if c[2]]
+        all_names = " ".join((c[2] or "").lower() for c in resolved_cards)
+
+        front_id = resolved_cards[0][2] if resolved_cards else (front_input or "card_front")
 
         # Check boundary text if front_input is VisualFingerprint
         boundary_first = ""
@@ -451,7 +595,7 @@ class GeminiRecipeExtractor:
             boundary_last = front_input.boundary_text.last_line
 
         # Match Synthetic Deck Recipes
-        if "cinnamon" in f_name or "rolls" in f_name or "cinnamon" in b_name:
+        if "cinnamon" in all_names or "rolls" in all_names:
             return RecipeSchema(
                 recipe_id=f"rec_{uuid.uuid4().hex[:8]}",
                 title="Grandma's Cinnamon Rolls",
@@ -489,9 +633,11 @@ class GeminiRecipeExtractor:
                 ],
                 tags=["Dessert", "Baking", "Breakfast"],
                 source_notes="Grandma's Recipe Box (Ruled Card)",
+                card_ids=card_ids,
+                image_urls=[f"/api/cards/{cid}/image" for cid in card_ids],
             )
 
-        if "lemon" in f_name or "lemon" in b_name or "bars" in f_name:
+        if "lemon" in all_names or "bars" in all_names:
             return RecipeSchema(
                 recipe_id=f"rec_{uuid.uuid4().hex[:8]}",
                 title="Luscious Lemon Glaze Bars",
@@ -519,9 +665,11 @@ class GeminiRecipeExtractor:
                 ],
                 tags=["Dessert", "Baking", "Lemon"],
                 source_notes="Handwritten Card",
+                card_ids=card_ids,
+                image_urls=[f"/api/cards/{cid}/image" for cid in card_ids],
             )
 
-        if "fudge" in f_name or "chocolate" in f_name:
+        if "fudge" in all_names or "chocolate" in all_names:
             return RecipeSchema(
                 recipe_id=f"rec_{uuid.uuid4().hex[:8]}",
                 title="10-Minute Quick Chocolate Fudge",
@@ -543,9 +691,11 @@ class GeminiRecipeExtractor:
                 ],
                 tags=["Candy", "Chocolate", "Quick"],
                 source_notes="Standalone Card",
+                card_ids=card_ids,
+                image_urls=[f"/api/cards/{cid}/image" for cid in card_ids],
             )
 
-        if "pecan" in f_name or "pie" in f_name:
+        if "pecan" in all_names or "pie" in all_names:
             return RecipeSchema(
                 recipe_id=f"rec_{uuid.uuid4().hex[:8]}",
                 title="Southern Pecan Pie",
@@ -571,6 +721,37 @@ class GeminiRecipeExtractor:
                 ],
                 tags=["Dessert", "Pie", "Southern"],
                 source_notes="Kraft Card",
+                card_ids=card_ids,
+                image_urls=[f"/api/cards/{cid}/image" for cid in card_ids],
+            )
+
+        # Multi-card generic or synthetic sequence
+        if len(resolved_cards) > 2:
+            directions = []
+            for idx, (_, _, cid) in enumerate(resolved_cards):
+                step_num = idx + 1
+                role = "Front preparation" if idx == 0 else f"Step {step_num} continuation from card {cid or step_num}"
+                directions.append(f"{step_num}. {role}: proceed sequentially through cooking directions.")
+
+            return RecipeSchema(
+                recipe_id=f"rec_{uuid.uuid4().hex[:8]}",
+                title=f"Multi-Card Recipe ({len(resolved_cards)} Cards)",
+                description=f"Transcribed multi-card physical recipe spanning {len(resolved_cards)} card faces.",
+                yield_servings="6 servings",
+                prep_time="20 mins",
+                cook_time="40 mins",
+                total_time="1 hr",
+                ingredients=[
+                    "2 cups main ingredient",
+                    "1 cup secondary ingredient",
+                    "2 tbsp seasoning or butter",
+                    "1/2 tsp salt and pepper",
+                ],
+                directions=directions,
+                tags=["Multi-Card", "Vintage"],
+                source_notes=f"Multi-Card Deck: {', '.join(card_ids)}",
+                card_ids=card_ids,
+                image_urls=[f"/api/cards/{cid}/image" for cid in card_ids],
             )
 
         # Generic card fallback
@@ -583,6 +764,11 @@ class GeminiRecipeExtractor:
         title_candidate = re.sub(r"^[\d\.\-\:\(\)\s]+", "", title_candidate).strip()
         if not title_candidate:
             title_candidate = "Vintage Recipe"
+
+        # Check if title was inferred or if card is untitled/unknown
+        if any(w in (front_id or "").lower() for w in ("untitled", "guess", "inferred", "unknown_recipe", "mystery")):
+            if not title_candidate.endswith(" [GUESS]"):
+                title_candidate = f"{title_candidate} [GUESS]"
 
         return RecipeSchema(
             recipe_id=f"rec_{uuid.uuid4().hex[:8]}",
@@ -604,6 +790,8 @@ class GeminiRecipeExtractor:
             ],
             tags=["General", "Vintage"],
             source_notes=f"Card Scan: {front_id}",
+            card_ids=card_ids,
+            image_urls=[f"/api/cards/{cid}/image" for cid in card_ids],
         )
 
 

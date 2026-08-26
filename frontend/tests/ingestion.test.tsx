@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import React from 'react';
+import { SourceSelector, isDirectoryPickerSupported } from '../src/components/ingestion/SourceSelector';
 import { ConfigPanel } from '../src/components/ingestion/ConfigPanel';
 import { SessionLauncher } from '../src/components/ingestion/SessionLauncher';
 import { ProgressDashboard } from '../src/components/ingestion/ProgressDashboard';
@@ -114,10 +115,139 @@ describe('R2: Ingestion Controller & Session Manager', () => {
 
       expect(screen.getByRole('slider', { name: /Thinking Token Budget/i })).toBeInTheDocument();
     });
+
+    it('manages batch default tags adding and removing tags cleanly', () => {
+      const onChange = vi.fn();
+      render(
+        <ConfigPanel
+          config={{
+            mode: IngestionMode.PARALLEL,
+            default_tags: ['Vintage', 'Dessert'],
+          }}
+          onChange={onChange}
+        />
+      );
+
+      expect(screen.getByText('Vintage')).toBeInTheDocument();
+      expect(screen.getByText('Dessert')).toBeInTheDocument();
+
+      // Add a new tag
+      const tagInput = screen.getByPlaceholderText('+ Add tag (press Enter)');
+      fireEvent.change(tagInput, { target: { value: 'Baking' } });
+      fireEvent.keyDown(tagInput, { key: 'Enter' });
+
+      expect(onChange).toHaveBeenCalledWith(
+        expect.objectContaining({ default_tags: ['Vintage', 'Dessert', 'Baking'] })
+      );
+
+      // Remove a tag
+      const removeBtn = screen.getByTitle('Remove tag Vintage');
+      fireEvent.click(removeBtn);
+      expect(onChange).toHaveBeenCalledWith(
+        expect.objectContaining({ default_tags: ['Dessert'] })
+      );
+    });
+  });
+
+  describe('SourceSelector Directory Picker', () => {
+    it('uses window.showDirectoryPicker to select folder and files without manual typing', async () => {
+      const onFolderPathChange = vi.fn();
+      const onUploadedFilesChange = vi.fn();
+
+      const mockFile = new File(['mock scan'], 'card_001.jpg', { type: 'image/jpeg' });
+      const mockDirHandle = {
+        name: 'Grandmas_Recipe_Box',
+        values: async function* () {
+          yield {
+            kind: 'file',
+            name: 'card_001.jpg',
+            getFile: async () => mockFile,
+          };
+        },
+      };
+
+      (window as any).showDirectoryPicker = vi.fn().mockResolvedValue(mockDirHandle);
+
+      render(
+        <SourceSelector
+          sourceType="local"
+          onSourceTypeChange={vi.fn()}
+          localMethod="folder"
+          onLocalMethodChange={vi.fn()}
+          folderPath=""
+          onFolderPathChange={onFolderPathChange}
+          uploadedFiles={[]}
+          onUploadedFilesChange={onUploadedFilesChange}
+          selectedContainer={null}
+          onSelectContainer={vi.fn()}
+          categoryFilter="FOOD"
+          onCategoryFilterChange={vi.fn()}
+          bucketName=""
+          onBucketNameChange={vi.fn()}
+          prefix=""
+          onPrefixChange={vi.fn()}
+        />
+      );
+
+      const browseBtn = screen.getByRole('button', { name: /Browse Folder\.\.\./i });
+      fireEvent.click(browseBtn);
+
+      await waitFor(() => {
+        expect((window as any).showDirectoryPicker).toHaveBeenCalledWith({ mode: 'read' });
+        expect(onFolderPathChange).toHaveBeenCalledWith('Grandmas_Recipe_Box');
+        expect(onUploadedFilesChange).toHaveBeenCalledWith([mockFile]);
+      });
+
+      delete (window as any).showDirectoryPicker;
+    });
+
+    it('falls back to hidden input when showDirectoryPicker is not supported', () => {
+      delete (window as any).showDirectoryPicker;
+      expect(isDirectoryPickerSupported()).toBe(false);
+
+      const onFolderPathChange = vi.fn();
+      const onUploadedFilesChange = vi.fn();
+
+      const { container } = render(
+        <SourceSelector
+          sourceType="local"
+          onSourceTypeChange={vi.fn()}
+          localMethod="folder"
+          onLocalMethodChange={vi.fn()}
+          folderPath=""
+          onFolderPathChange={onFolderPathChange}
+          uploadedFiles={[]}
+          onUploadedFilesChange={onUploadedFilesChange}
+          selectedContainer={null}
+          onSelectContainer={vi.fn()}
+          categoryFilter="FOOD"
+          onCategoryFilterChange={vi.fn()}
+          bucketName=""
+          onBucketNameChange={vi.fn()}
+          prefix=""
+          onPrefixChange={vi.fn()}
+        />
+      );
+
+      const hiddenInput = container.querySelector('input[webkitdirectory]') as HTMLInputElement;
+      expect(hiddenInput).toBeInTheDocument();
+
+      const testFile = new File(['content'], 'card_002.png', { type: 'image/png' });
+      Object.defineProperty(testFile, 'webkitRelativePath', {
+        value: 'Family_Box/card_002.png',
+      });
+
+      fireEvent.change(hiddenInput, {
+        target: { files: [testFile] },
+      });
+
+      expect(onFolderPathChange).toHaveBeenCalledWith('Family_Box');
+      expect(onUploadedFilesChange).toHaveBeenCalledWith([testFile]);
+    });
   });
 
   describe('SessionLauncher', () => {
-    it('validates folder path input and calls api.startPipeline', async () => {
+    it('validates folder path input and calls api.startPipeline with default_tags', async () => {
       const onStarted = vi.fn();
       vi.mocked(api.startPipeline).mockResolvedValueOnce({
         session_id: 'sess_abc123',
@@ -132,14 +262,59 @@ describe('R2: Ingestion Controller & Session Manager', () => {
       const input = screen.getByPlaceholderText('/path/to/recipe/scans');
       fireEvent.change(input, { target: { value: '/valid/scans/folder' } });
 
+      // Add a default tag
+      const tagInput = screen.getByPlaceholderText('+ Add tag (press Enter)');
+      fireEvent.change(tagInput, { target: { value: 'Vintage Box' } });
+      fireEvent.keyDown(tagInput, { key: 'Enter' });
+
       const launchBtn = screen.getByRole('button', { name: /Launch Digitization Pipeline/i });
       fireEvent.click(launchBtn);
 
       await waitFor(() => {
         expect(api.startPipeline).toHaveBeenCalledWith(
-          expect.objectContaining({ scans_dir: '/valid/scans/folder' })
+          expect.objectContaining({
+            scans_dir: '/valid/scans/folder',
+            default_tags: ['Vintage Box'],
+          })
         );
         expect(onStarted).toHaveBeenCalledWith('sess_abc123');
+      });
+    });
+
+    it('passes default_tags in formData when uploading files directly', async () => {
+      const onStarted = vi.fn();
+      vi.mocked(api.uploadCards).mockResolvedValueOnce({
+        session_id: 'sess_upload_tags_123',
+        card_ids: ['card_1'],
+        count: 1,
+      });
+
+      render(<SessionLauncher onSessionStarted={onStarted} />);
+
+      // Switch to Direct File Upload
+      const uploadTab = screen.getByRole('button', { name: /Direct File Upload/i });
+      fireEvent.click(uploadTab);
+
+      // Add a default tag
+      const tagInput = screen.getByPlaceholderText('+ Add tag (press Enter)');
+      fireEvent.change(tagInput, { target: { value: 'Baking 1950s' } });
+      fireEvent.keyDown(tagInput, { key: 'Enter' });
+
+      // Simulate dropping a file into dropzone
+      const file = new File(['fake image'], 'pie.jpg', { type: 'image/jpeg' });
+      const dropzoneInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+      if (dropzoneInput) {
+        fireEvent.change(dropzoneInput, { target: { files: [file] } });
+      }
+
+      const launchBtn = screen.getByRole('button', { name: /Launch Digitization Pipeline/i });
+      fireEvent.click(launchBtn);
+
+      await waitFor(() => {
+        expect(api.uploadCards).toHaveBeenCalled();
+        const formDataArg = vi.mocked(api.uploadCards).mock.calls[0][0] as FormData;
+        expect(formDataArg.get('default_tags')).toBe(JSON.stringify(['Baking 1950s']));
+        expect(onStarted).toHaveBeenCalledWith('sess_upload_tags_123');
       });
     });
 

@@ -2,6 +2,7 @@
 
 import json
 from pathlib import Path
+import httpx
 import pytest
 
 from recipeboxer.exporter.google_docs import (
@@ -214,3 +215,72 @@ class TestGoogleDocsExporter:
 
         html_out = export_recipes_to_google_docs_html(sample_recipes)
         assert "<!DOCTYPE html>" in html_out
+
+    def test_create_google_document_success(self, sample_recipes: list[RecipeSchema], tmp_path: Path):
+        """GAP-01: Verify authentic Google Docs creation and Drive image upload flow."""
+        img_path = tmp_path / "card_front_01.jpg"
+        img_path.write_bytes(b"\xff\xd8\xff\xe0" + b"\x00" * 50)  # fake JPEG header
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            url_str = str(request.url)
+            # 1. Drive search folder
+            if "drive/v3/files" in url_str and request.method == "GET":
+                return httpx.Response(200, json={"files": [{"id": "folder_123", "name": "RecipeBoxer Scans"}]})
+            # 2. Drive upload file
+            if "upload/drive/v3/files" in url_str and request.method == "POST":
+                return httpx.Response(200, json={"id": "file_scan_001", "webContentLink": "https://drive.google.com/uc?id=file_scan_001"})
+            # 3. Drive permission
+            if "permissions" in url_str and request.method == "POST":
+                return httpx.Response(200, json={"id": "perm_001"})
+            # 4. Docs create document
+            if "docs.googleapis.com/v1/documents" in url_str and request.method == "POST" and not url_str.endswith(":batchUpdate"):
+                return httpx.Response(200, json={"documentId": "doc_recipeboxer_999"})
+            # 5. Docs batch update
+            if ":batchUpdate" in url_str and request.method == "POST":
+                return httpx.Response(200, json={"replies": []})
+
+            return httpx.Response(404, json={"error": "not found"})
+
+        transport = httpx.MockTransport(handler)
+        client = httpx.Client(transport=transport)
+
+        exporter = GoogleDocsExporter()
+        result = exporter.create_google_document(
+            access_token="ya29.mock_valid_token_12345",
+            recipes=sample_recipes,
+            title="Grandma's Heirloom Cookbook",
+            image_resolver=lambda cid: img_path,
+            http_client=client,
+        )
+
+        assert result["document_id"] == "doc_recipeboxer_999"
+        assert result["url"] == "https://docs.google.com/document/d/doc_recipeboxer_999/edit"
+        assert result["title"] == "Grandma's Heirloom Cookbook"
+        assert result["recipe_count"] == 2
+
+    def test_create_google_document_unauthorized_token_401(self, sample_recipes: list[RecipeSchema]):
+        """Verify 401 unauthorized token raises clear ValueError."""
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(401, json={"error": {"code": 401, "message": "Invalid Credentials"}})
+
+        transport = httpx.MockTransport(handler)
+        client = httpx.Client(transport=transport)
+
+        exporter = GoogleDocsExporter()
+        with pytest.raises(ValueError) as exc_info:
+            exporter.create_google_document(
+                access_token="ya29.expired_token",
+                recipes=sample_recipes,
+                http_client=client,
+            )
+        assert "401" in str(exc_info.value) or "unauthorized" in str(exc_info.value).lower() or "invalid" in str(exc_info.value).lower()
+
+    def test_create_google_document_validation(self, sample_recipes: list[RecipeSchema]):
+        """Verify missing token or empty recipe list raises ValueError."""
+        exporter = GoogleDocsExporter()
+        with pytest.raises(ValueError, match="access token is required"):
+            exporter.create_google_document(access_token="", recipes=sample_recipes)
+
+        with pytest.raises(ValueError, match="No recipes provided"):
+            exporter.create_google_document(access_token="valid_token", recipes=[])
+

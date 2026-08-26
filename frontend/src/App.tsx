@@ -229,6 +229,7 @@ export const AppContent: React.FC = () => {
             sessionId={sessionId}
             onRecipeUpdated={handleRecipeUpdated}
             onNavigateToIngest={() => setActiveTab('ingest')}
+            onNavigateToExport={() => setActiveTab('export')}
           />
         )}
 

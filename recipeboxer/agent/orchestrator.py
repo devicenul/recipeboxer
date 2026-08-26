@@ -241,33 +241,85 @@ class RecipeBoxerAgent:
                     session.end_time = time.monotonic()
                     return
 
-                if approval.decision == HITLDecision.REJECT:
+                if approval.decision == HITLDecision.REJECT or getattr(approval, "is_rejected", False):
                     logger.info(f"[{session.session_id}] Skipping rejected proposal {approval.proposal_id}")
                     continue
 
-                front_fp = session.fingerprints.get(approval.front_card_id)
-                back_fp = (
-                    session.fingerprints.get(approval.back_card_id)
-                    if approval.back_card_id
-                    else None
-                )
+                # Resolve authoritative ordered card sequence
+                ordered_card_ids: List[str] = []
+                if approval.card_ids:
+                    ordered_card_ids = list(approval.card_ids)
+                else:
+                    if getattr(approval, "reverse_roles", False) and approval.back_card_id:
+                        ordered_card_ids = [approval.back_card_id, approval.front_card_id]
+                    else:
+                        ordered_card_ids = [approval.front_card_id]
+                        if approval.back_card_id:
+                            ordered_card_ids.append(approval.back_card_id)
+                    if getattr(approval, "additional_card_ids", None):
+                        for cid in approval.additional_card_ids:
+                            if cid not in ordered_card_ids:
+                                ordered_card_ids.append(cid)
 
-                if not front_fp:
+                ordered_fps = [
+                    session.fingerprints[cid]
+                    for cid in ordered_card_ids
+                    if cid in session.fingerprints
+                ]
+
+                if not ordered_fps:
+                    front_fp = session.fingerprints.get(approval.front_card_id)
+                    if front_fp:
+                        ordered_fps = [front_fp]
+                        if approval.back_card_id and approval.back_card_id in session.fingerprints:
+                            ordered_fps.append(session.fingerprints[approval.back_card_id])
+
+                if not ordered_fps:
                     logger.warning(
-                        f"[{session.session_id}] Missing front card '{approval.front_card_id}' in fingerprints."
+                        f"[{session.session_id}] Missing cards for approval '{approval.proposal_id}' in fingerprints."
                     )
                     continue
 
                 try:
-                    recipe = await self._extract_single_recipe(session, front_fp, back_fp)
+                    recipe = await self._extract_single_recipe(
+                        session,
+                        front_fp=ordered_fps[0] if ordered_fps else None,
+                        back_fp=ordered_fps[1] if len(ordered_fps) > 1 else None,
+                        ordered_fps=ordered_fps,
+                    )
                     if recipe:
+                        # Set authoritative card_ids and image_urls
+                        recipe.card_ids = ordered_card_ids if ordered_card_ids else [fp.card_id for fp in ordered_fps]
+                        recipe.image_urls = [
+                            f"/api/cards/{cid}/image?session_id={session.session_id}"
+                            for cid in recipe.card_ids
+                        ]
+
+                        # Propagate session-level batch default tags into extracted recipe tags
+                        session_tags: List[str] = []
+                        cfg = session.config
+                        if hasattr(cfg, "default_tags") and cfg.default_tags:
+                            session_tags = list(cfg.default_tags)
+                        elif isinstance(cfg, dict) and cfg.get("default_tags"):
+                            dt = cfg["default_tags"]
+                            if isinstance(dt, list):
+                                session_tags = [str(t).strip() for t in dt if str(t).strip()]
+                            elif isinstance(dt, str):
+                                session_tags = [t.strip() for t in dt.split(",") if t.strip()]
+                        elif hasattr(session, "ingestion_config") and session.ingestion_config and session.ingestion_config.default_tags:
+                            session_tags = list(session.ingestion_config.default_tags)
+
+                        if session_tags:
+                            combined_tags = list(session_tags) + list(recipe.tags or [])
+                            recipe.tags = RecipeSchema.clean_and_deduplicate_tags(combined_tags)
+
                         recipes.append(recipe)
                         session.progress_metrics.extracted += 1
                 except Exception as exc:
                     logger.error(
-                        f"[{session.session_id}] Recipe extraction failed for {front_fp.card_id}: {exc}"
+                        f"[{session.session_id}] Recipe extraction failed for {ordered_card_ids}: {exc}"
                     )
-                    session.errors.append(f"Extraction failed for {front_fp.card_id}: {str(exc)}")
+                    session.errors.append(f"Extraction failed for {ordered_card_ids}: {str(exc)}")
 
             session.recipes = recipes
 
@@ -377,11 +429,19 @@ class RecipeBoxerAgent:
             and config.slow_batch_interval_seconds is not None
         ):
             slow_batch_interval_seconds = config.slow_batch_interval_seconds
-        elif isinstance(config, dict) and config.get("slow_batch_interval_seconds") is not None:
-            slow_batch_interval_seconds = config["slow_batch_interval_seconds"]
+        default_tags = []
+        if hasattr(config, "default_tags") and config.default_tags:
+            default_tags = list(config.default_tags)
+        elif isinstance(config, dict) and config.get("default_tags"):
+            dt = config["default_tags"]
+            if isinstance(dt, list):
+                default_tags = [str(t).strip() for t in dt if str(t).strip()]
+            elif isinstance(dt, str):
+                default_tags = [t.strip() for t in dt.split(",") if t.strip()]
 
         return IngestionConfig(
             mode=mode,
+            default_tags=default_tags,
             max_concurrency=max_concurrency,
             slow_batch_size=slow_batch_size,
             slow_batch_interval_seconds=slow_batch_interval_seconds,
@@ -456,20 +516,59 @@ class RecipeBoxerAgent:
     async def _extract_single_recipe(
         self,
         session: PipelineSession,
-        front_fp: VisualFingerprint,
+        front_fp: Optional[VisualFingerprint] = None,
         back_fp: Optional[VisualFingerprint] = None,
+        ordered_fps: Optional[List[VisualFingerprint]] = None,
     ) -> Optional[RecipeSchema]:
         """Extracts a structured recipe schema using session extractor, mock, or default."""
+        import inspect
+
+        if ordered_fps is None:
+            ordered_fps = []
+            if front_fp is not None:
+                ordered_fps.append(front_fp)
+            if back_fp is not None:
+                ordered_fps.append(back_fp)
+
+        primary_front = ordered_fps[0] if ordered_fps else front_fp
+        primary_back = ordered_fps[1] if len(ordered_fps) > 1 else back_fp
+
         recipe = None
         if session.recipe_extractor_fn:
-            res = session.recipe_extractor_fn(front_fp, back_fp)
+            try:
+                sig = inspect.signature(session.recipe_extractor_fn)
+                if len(sig.parameters) == 1 and len(ordered_fps) > 2:
+                    res = session.recipe_extractor_fn(ordered_fps)
+                else:
+                    res = session.recipe_extractor_fn(primary_front, primary_back)
+            except Exception:
+                res = session.recipe_extractor_fn(primary_front, primary_back)
             recipe = await res if asyncio.iscoroutine(res) else res
+        elif session.mock_client and hasattr(session.mock_client, "extract_cards") and len(ordered_fps) > 2:
+            recipe = await session.mock_client.extract_cards(ordered_fps)
         elif session.mock_client and hasattr(session.mock_client, "extract_recipe"):
-            recipe = await session.mock_client.extract_recipe(front_fp, back_fp)
+            try:
+                recipe = await session.mock_client.extract_recipe(primary_front, primary_back)
+            except Exception:
+                recipe = await session.mock_client.extract_recipe(ordered_fps)
+        elif hasattr(self.recipe_extractor, "extract_cards") and len(ordered_fps) > 2:
+            recipe = await self.recipe_extractor.extract_cards(ordered_fps)
+        elif hasattr(self.recipe_extractor, "extract"):
+            if len(ordered_fps) > 2:
+                recipe = await self.recipe_extractor.extract(ordered_fps)
+            else:
+                recipe = await self.recipe_extractor.extract(primary_front, primary_back)
         elif hasattr(self.recipe_extractor, "extract_recipe"):
-            recipe = await self.recipe_extractor.extract_recipe(front_fp, back_fp)
+            recipe = await self.recipe_extractor.extract_recipe(primary_front, primary_back)
         elif callable(self.recipe_extractor):
-            res = self.recipe_extractor(front_fp, back_fp)
+            try:
+                res = (
+                    self.recipe_extractor(ordered_fps)
+                    if len(ordered_fps) > 2
+                    else self.recipe_extractor(primary_front, primary_back)
+                )
+            except TypeError:
+                res = self.recipe_extractor(primary_front, primary_back)
             recipe = await res if asyncio.iscoroutine(res) else res
 
         if recipe is not None and not isinstance(recipe, RecipeSchema) and hasattr(recipe, "model_dump"):

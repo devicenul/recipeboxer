@@ -173,5 +173,102 @@ describe('R5: Multi-Format Recipe Export Subsystem', () => {
       fireEvent.click(pdfTab);
       expect(screen.getByText(/Printable Archival PDF Cookbook/i)).toBeInTheDocument();
     });
+
+    it('GAP-04: allows editing filename and updates extension when switching format tabs', () => {
+      render(<ExportDialog recipes={sampleRecipes} sessionId="sess_test_123456" />);
+
+      const filenameInput = screen.getByLabelText(/Export Filename:/i) as HTMLInputElement;
+      expect(filenameInput).toBeInTheDocument();
+      expect(filenameInput.value).toContain('.csv');
+
+      // Edit filename stem
+      fireEvent.change(filenameInput, { target: { value: 'grandma_secret_pie_2026.csv' } });
+      expect(filenameInput.value).toBe('grandma_secret_pie_2026.csv');
+
+      // Switch to PDF tab -> extension should change to .pdf while preserving custom stem
+      const pdfTab = screen.getByRole('button', { name: /Printable PDF/i });
+      fireEvent.click(pdfTab);
+
+      expect(filenameInput.value).toBe('grandma_secret_pie_2026.pdf');
+
+      // Switch to Cooklang tab -> extension should change to .cook
+      const cookTab = screen.getByRole('button', { name: /Cooklang \(\.cook\)/i });
+      fireEvent.click(cookTab);
+
+      expect(filenameInput.value).toBe('grandma_secret_pie_2026.cook');
+    });
+
+    it('opens customize filename modal and applies new filename', () => {
+      render(<ExportDialog recipes={sampleRecipes} sessionId="sess_test_123456" />);
+
+      const moreOptionsBtn = screen.getByRole('button', { name: /More Options/i });
+      fireEvent.click(moreOptionsBtn);
+
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+      expect(screen.getByText(/Customize Export Filename/i)).toBeInTheDocument();
+
+      const modalInput = screen.getByLabelText(/Filename for/i) as HTMLInputElement;
+      fireEvent.change(modalInput, { target: { value: 'custom_holiday_deck.csv' } });
+
+      const applyBtn = screen.getByRole('button', { name: /Apply/i });
+      fireEvent.click(applyBtn);
+
+      // Verify modal is closed and input field updated
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      const mainInput = screen.getByLabelText(/Export Filename:/i) as HTMLInputElement;
+      expect(mainInput.value).toBe('custom_holiday_deck.csv');
+    });
+  });
+
+  describe('Google Docs Direct Publishing & OAuth Flow', () => {
+    it('handles direct doc creation with token and displays success link', async () => {
+      // Mock global fetch for create-document
+      const originalFetch = global.fetch;
+      global.fetch = vi.fn().mockImplementation((url, init) => {
+        if (typeof url === 'string' && url.includes('/api/export/google-docs/create-document')) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: () =>
+              Promise.resolve({
+                document_id: 'doc_mock_live_123',
+                url: 'https://docs.google.com/document/d/doc_mock_live_123/edit',
+                title: "RecipeBoxer - Grandma's \"Secret\" Apple Pie",
+                recipe_count: 1,
+              }),
+          } as Response);
+        }
+        return originalFetch(url, init);
+      });
+
+      render(<ExportDialog recipes={sampleRecipes} sessionId="sess_gdocs_oauth" />);
+
+      // Switch to Google Docs tab
+      const gdocsTab = screen.getByRole('button', { name: /Google Docs Archival/i });
+      fireEvent.click(gdocsTab);
+
+      expect(screen.getByText(/Direct Google Docs & Drive API Publishing/i)).toBeInTheDocument();
+
+      // Open token drawer
+      const tokenBtn = screen.getByRole('button', { name: /Token/i });
+      fireEvent.click(tokenBtn);
+
+      const tokenInput = screen.getByPlaceholderText(/ya29\./i);
+      fireEvent.change(tokenInput, { target: { value: 'ya29.a0Ac_test_token' } });
+
+      const createDocBtn = screen.getByRole('button', { name: /Create Doc/i });
+      fireEvent.click(createDocBtn);
+
+      // Wait for success alert and open link
+      const successLink = await screen.findByRole('link', { name: /Open in Google Docs/i });
+      expect(successLink).toBeInTheDocument();
+      expect(successLink).toHaveAttribute(
+        'href',
+        'https://docs.google.com/document/d/doc_mock_live_123/edit'
+      );
+
+      global.fetch = originalFetch;
+    });
   });
 });
+

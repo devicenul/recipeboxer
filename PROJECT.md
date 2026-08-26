@@ -1,121 +1,134 @@
-# Project: RecipeBoxer Embedded React SPA & FastAPI Integration
+# Project: RecipeBoxer Platform Enhancement
 
 ## Architecture
-RecipeBoxer integrates a modern React 18+ TypeScript Single-Page Application (SPA) directly into a FastAPI backend.
-- **Frontend**: React 18+, TypeScript, Vite, Tailwind CSS located in `frontend/`. Compiled into static assets located at `recipeboxer/api/static/`.
-- **Backend API**: FastAPI application in `recipeboxer/api/app.py` mounting static assets at `/assets` and providing an SPA fallback route for all non-API GET requests to `index.html`.
-- **Real-Time Telemetry**: Server-Sent Events (`/api/events`) broadcasting pipeline status, card ingestion counts, correlation updates, and extraction completion.
-- **Session & Storage**: SQLite-backed session persistence in `recipeboxer/storage/` supporting historical session listings and resumption.
-- **HITL Correlation**: Rapid Queue keyboard shortcuts (`Space`/`Enter`, `S`, `B`, `X`, `M`/`Tab`), slide-out Candidate Drawer with ranked alternatives, Multi-Card Grouping (3+ cards), and Visual Inspection Toolbar (pan, zoom, 90° rotation, brightness/contrast/invert filters).
-- **Recipe Management & Export**: Split-screen transcription review and editor (`recipeboxer/models/recipe.py`, `recipeboxer/api/routes.py`), with multi-format exports (Plan To Eat CSV, Schema.org Recipe JSON-LD, standard JSON).
+RecipeBoxer is a full-stack platform for digitizing, transcribing, correlating, editing, and exporting vintage physical recipe cards:
+- **Frontend SPA**: React 18.3, TypeScript 5.7, Vite 6, Tailwind CSS, Vitest.
+  - Ingestion Controller (`frontend/src/components/ingestion/`)
+  - HITL Correlation Workspace (`frontend/src/components/hitl/`)
+  - Recipe Editor & Review Inspector (`frontend/src/components/recipe/`, `frontend/src/components/viewer/`)
+  - Export Center & Format Modals (`frontend/src/components/export/`)
+  - SSE State Synchronization (`frontend/src/hooks/useSSE.ts`)
+- **Backend API & Processing**: FastAPI, Pydantic v2 domain schemas, SQLite WAL storage, Google Antigravity multi-agent orchestration, Gemini multimodal extraction, ReportLab/PDF 1.4, OpenXML DOCX, Plan To Eat CSV, Google Docs/Drive API.
+  - REST & SSE Routes (`src/recipeboxer/api/routes.py`)
+  - Orchestration Agent (`src/recipeboxer/agent/orchestrator.py`)
+  - Extraction & Prompt Routing (`src/recipeboxer/extraction/extractor.py`, `src/recipeboxer/vision/router.py`)
+  - Correlation Engine (`src/recipeboxer/correlator/`)
+  - Exporters (`src/recipeboxer/exporter/`)
+  - Domain & Schema Models (`src/recipeboxer/models/`)
+
+---
 
 ## Feature Inventory
+
 | # | Feature | Description | Milestone | Source |
 |---|---------|-------------|-----------|--------|
-| 1 | SPA Static Hosting & Catch-All Routing | FastAPI static file mounting at `/assets` and SPA HTML5 history catch-all route returning `index.html` | M1, M2 | ORIGINAL_REQUEST §R1 |
-| 2 | Theme Subsystem (Light/Dark Mode) | Persistent theme toggle with localStorage persistence and system theme detection | M2 | ORIGINAL_REQUEST §R1 |
-| 3 | SSE Real-Time Telemetry | Server-Sent Events endpoint `/api/events` broadcasting ingestion, pairing, and extraction progress | M1, M2 | ORIGINAL_REQUEST §R1 |
-| 4 | Session Manager & Resumption | SQLite session persistence, listing historical sessions, and resumption API | M1, M2 | ORIGINAL_REQUEST §R2 |
-| 5 | Ingestion Controller & Throttling | Folder path selection, drag-and-drop dropzone, concurrency throttle, slow-batch controls, model selector | M1, M2 | ORIGINAL_REQUEST §R2 |
-| 6 | Card Image Streaming Service | `/api/cards/{card_id}/image` endpoint serving scanned card image files securely | M1 | ORIGINAL_REQUEST §R3 |
-| 7 | Rapid Queue Keyboard Shortcuts | High-speed keyboard navigation (`Space`/`Enter`, `S`, `B`, `X`, `M`/`Tab`) with input focus trapping | M2 | ORIGINAL_REQUEST §R3 |
-| 8 | Candidate Drawer & Multi-Card Grouping | Slide-out candidate drawer with ranked scores/snippets and 3+ card grouping tray | M1, M2 | ORIGINAL_REQUEST §R3 |
-| 9 | Visual Inspection Toolbar | Synchronized & independent pan/zoom, 90° rotation, brightness/contrast/invert CSS filters | M2 | ORIGINAL_REQUEST §R3 |
-| 10 | Post-Extraction Split-Screen Editor | Side-by-side card viewing (left) and rich editable recipe form (right) | M2 | ORIGINAL_REQUEST §R4 |
-| 11 | Inline Recipe CRUD & Validation | Real-time schema validation and saving recipe edits directly to SQLite via `/api/recipes` | M1, M2 | ORIGINAL_REQUEST §R4 |
-| 12 | Plan To Eat RFC 4180 CSV Export | 9-column CSV export with CRLF line terminators and double-quote escaping | M1, M2 | ORIGINAL_REQUEST §R5 |
-| 13 | Schema.org Recipe JSON-LD Export | Valid JSON-LD Schema.org recipe export with `HowToStep` instructions and ISO 8601 durations | M1, M2 | ORIGINAL_REQUEST §R5 |
-| 14 | Standard Recipe JSON Export | Direct raw RecipeSchema JSON export download | M1, M2 | ORIGINAL_REQUEST §R5 |
-| 15 | Full-Stack 4-Tier Test Suite | Comprehensive automated unit, component, API, and E2E test suites (Tiers 1-4) | M3, M4 | ORIGINAL_REQUEST Acceptance Criteria |
+| F1.1 | Directory Picker (Modern API) | Add interactive folder browser button using `showDirectoryPicker()` with `<input webkitdirectory>` fallback in `SourceSelector.tsx`. | M1 | ORIGINAL_REQUEST §R1 |
+| F1.2 | SSE Stability & Debounce | Fix SSE reconnection churn and eliminate rapid `/api/recipes` and `/api/events` polling loop using ref-stabilized callbacks and backoff. | M1 | ORIGINAL_REQUEST §R1 |
+| F1.3 | Batch Default Tags | Accept session-level batch default tags in Ingestion Controller, store in session metadata, and merge into extracted recipes. | M1 | ORIGINAL_REQUEST §R1 |
+| F2.1 | Multi-Card Full-Size Modal | Provide full-size modal & split canvas view for multi-card sets (3+ cards) during HITL correlation review. | M2 | ORIGINAL_REQUEST §R2 |
+| F2.2 | Positional Drag/Reorder Controls | Support drag/reorder of 3+ cards with explicit positional indices (Front, Back, Continuation 1..N). | M2 | ORIGINAL_REQUEST §R2 |
+| F2.3 | Multi-Card Sequence Preservation | Backend preserves reordered card sequences and merges them in user-specified order during multimodal extraction. | M2 | ORIGINAL_REQUEST §R2 |
+| F3.1 | Card Images in Review Pane | Ensure valid card image rendering (`/api/cards/{card_id}/image`) with fallback loading states in Recipe Editor. | M3 | ORIGINAL_REQUEST §R3 |
+| F3.2 | Workflow Navigation Dialog | Clicking "Next" on the last recipe triggers `"Go to export? [Yes] [Cancel]"` confirmation dialog routing to Export tab. | M3 | ORIGINAL_REQUEST §R3 |
+| F3.3 | Inline Tag Editing & State Sync | Support inline tag addition, removal, keyboard triggers (Enter/comma/semicolon), and state synchronization in Recipe Editor. | M3 | ORIGINAL_REQUEST §R3 |
+| F4.1 | Recipe Title Guessing Flag | Infer titles when not explicitly stated/low confidence and append ` [GUESS]` suffix to flag for verification. | M3 | ORIGINAL_REQUEST §R4 |
+| F4.2 | Anecdote & Story Preservation | Extract family stories, marginalia, vintage dates into `description`/`source_notes` without polluting `ingredients`/`directions`. | M3 | ORIGINAL_REQUEST §R4 |
+| F5.1 | Google Docs OAuth & Doc Creation | Implement Google OAuth 2.0 Web flow and Google Docs/Drive API creation with embedded scan images and formatted typography. | M4 | ORIGINAL_REQUEST §R5 |
+| F5.2 | Embedded Images in PDF & DOCX | Embed high-resolution scanned card images alongside transcribed recipe content with proportional aspect scaling. | M4 | ORIGINAL_REQUEST §R5 |
+| F5.3 | Customizable Export Filenames | Present editable suggested filename modal before initiating download across all 9 export formats. | M4 | ORIGINAL_REQUEST §R5 |
+| F5.4 | Tag Serialization Across Formats | Enforce tag serialization compliance in Plan To Eat CSV (Col 8), Schema.org keywords, Markdown/Cooklang frontmatter, Paprika. | M4 | ORIGINAL_REQUEST §R5 |
+| F6.1 | Full Automated Verification | Pass 100% pytest (`./test.sh`) and frontend vitest (`npm test -- --run`) across all new and existing features. | M5 | ORIGINAL_REQUEST §Acceptance Criteria |
+
+---
 
 ## Milestones
+
 | # | Name | Scope | Dependencies | Status |
 |---|------|-------|-------------|--------|
-| M1 | Backend API & Storage Extensions | Static mounting & catch-all routing, session persistence, card image streaming, multipart upload, candidate drawer endpoints, multi-card approval schemas, recipe CRUD, JSON-LD and raw JSON exporters, SSE streaming | none | DONE |
-| M2 | React + TypeScript SPA Frontend | Vite setup, Tailwind styling, Theme toggle, Ingestion Controller, Rapid Queue, Candidate Drawer, Multi-Card Grouping tray, Pan/Zoom/Filter viewer, Recipe Editor, Export modal, SSE integration, build pipeline to `recipeboxer/api/static/` | M1 | DONE |
-| M3 | E2E Testing Track Suite (Tiers 1-4) | Pytest API & SSE suite, Vitest component suite, Playwright / E2E integration test suite covering 75+ Tier 1, 75+ Tier 2, 10 Tier 3, and 5 Tier 4 test cases, publishing TEST_READY.md | M1, M2 | DONE |
-| M4 | Final Integration & Adversarial Hardening | Verify 100% pass on all test tiers, run Tier 5 adversarial testing with Challenger, Forensic Integrity Audit, and final verification | M1, M2, M3 | DONE |
+| M1 | Ingestion & Connection Stability | Directory picker with `showDirectoryPicker()` & fallback, SSE reconnection debounce/backoff & fix rapid polling loop, Batch Default Tags. | none | DONE |
+| M2 | Multi-Card (>2 Cards) HITL Workflow & Ordering | Full-size modal / split canvas view for 3+ cards, drag/reorder positional sequence controls, backend sequence preservation & merging. | M1 | DONE |
+| M3 | Recipe Editor UX & Extraction Intelligence | Card images in review pane (`/api/cards/{card_id}/image`), last-recipe navigation confirmation dialog, inline tag editing, ` [GUESS]` title flagging, anecdote & marginalia preservation. | M1 | DONE |
+| M4 | Exporters, Google Docs OAuth, Images & Filenames | Google Docs OAuth 2.0 & direct doc creation, high-res embedded scans in PDF & DOCX with proportional scaling, customizable export filenames modal, universal tag serialization. | M1, M3 | DONE |
+| M5 | Final Verification & Adversarial Coverage Hardening | 100% E2E test pass (Tiers 1-4) and Tier 5 adversarial coverage hardening. | M1, M2, M3, M4 | PLANNED |
+
+---
 
 ## Interface Contracts
 
-### 1. SPA Static File & Catch-All Routing
-- `GET /assets/{file_path}`: Serves compiled static JS/CSS/image assets from `recipeboxer/api/static/assets/`.
-- `GET /{full_path:path}`: Returns `recipeboxer/api/static/index.html` for any client-side routes (e.g. `/`, `/ingest`, `/correlate`, `/recipes`, `/export`) when the request does not match `/api/*` or an existing static file.
+### Ingestion ↔ Session Store & Pipeline
+- **Request**: `PipelineStartRequest(directory_path=..., default_tags=['Tag1', 'Tag2'])`
+- **Multipart Upload**: `POST /api/cards/upload` with form field `default_tags` (JSON string or comma-separated list).
+- **Session Model**: `session.config.default_tags: List[str]`.
+- **Extraction Hook**: `recipe.tags = clean_and_deduplicate(session.config.default_tags + extracted_tags)`.
 
-### 2. Ingestion & Session Management
-- `POST /api/pipeline/start`: JSON body `{folder_path: str, max_concurrency: int, slow_batch_size: int, slow_batch_interval_seconds: float, model: str}` -> returns `{session_id: str, status: str}`.
-- `POST /api/cards/upload`: Multipart form upload of card images for drag-and-drop ingestion -> returns `{session_id: str, card_ids: List[str], count: int}`.
-- `GET /api/sessions`: Returns list of historical and active sessions stored in SQLite `[{session_id, folder_path, status, created_at, card_count, recipe_count}]`.
-- `GET /api/sessions/{session_id}`: Returns session details and progress state.
-- `DELETE /api/sessions/{session_id}`: Deletes a session and associated cached records.
-- `GET /api/events?session_id={id}`: SSE stream broadcasting live JSON events `{event: "progress"|"state_change"|"recipe_extracted"|"error", data: {...}}`.
+### SSE Telemetry ↔ Frontend `useSSE`
+- **Endpoint**: `GET /api/events?session_id={session_id}`
+- **Behavior**: Emits `state_change`, `progress`, `hitl_ready`, `recipe_extracted`, `completed`, `failed`, `cancelled`, and `: ping` heartbeat every 10s. Never abruptly disconnects; stays open with heartbeats.
+- **Frontend Hook**: `useSSE({ sessionId, enabled })` with ref-stabilized event handlers (`callbacksRef.current`) and exponential reconnect backoff.
 
-### 3. Card Images & Correlation HITL
-- `GET /api/cards/{card_id}/image`: Returns image bytes with `Content-Type: image/jpeg` or `image/png` and caching headers.
-- `GET /api/hitl/pending?session_id={id}`: Returns current pending correlation proposals.
-- `GET /api/hitl/candidates?session_id={id}&card_id={card_id}`: Returns ranked alternate candidates with heuristic score, semantic score, composite score, and reasoning snippet.
-- `POST /api/hitl/approve`: JSON body `{session_id: str, front_card_id: str, back_card_id: Optional[str], card_ids: Optional[List[str]], is_standalone: bool, is_rejected: bool, reverse_roles: bool}`.
+### HITL Multi-Card Review ↔ Correlation Merger
+- **Approval Payload**: `CardPairApproval(proposal_id=..., front_card_id=..., back_card_id=..., card_ids=['c1', 'c2', 'c3', 'c4'], decision='APPROVE')`
+- **Orchestrator Contract**: `orchestrator._extract_single_recipe` resolves `ordered_card_ids = approval.card_ids or [front, back, ...]`, maps to `ordered_fps`, and invokes `extractor.extract_cards(ordered_fps)`.
+- **Recipe Association**: `recipe.card_ids = ordered_card_ids`, `recipe.image_urls = ["/api/cards/{cid}/image?session_id=..." for cid in ordered_card_ids]`.
 
-### 4. Recipe Review, Mutation & Exports
-- `GET /api/recipes?session_id={id}`: Returns list of extracted recipes for a session.
-- `GET /api/recipes/{recipe_id}`: Returns single `RecipeSchema` JSON.
-- `PUT /api/recipes/{recipe_id}`: Accepts updated `RecipeSchema` JSON and persists updates to SQLite -> returns updated `RecipeSchema`.
-- `DELETE /api/recipes/{recipe_id}`: Removes a recipe.
-- `GET /api/export/csv?session_id={id}`: Returns Plan To Eat RFC 4180 CSV attachment.
-- `GET /api/export/json-ld?session_id={id}`: Returns Schema.org Recipe JSON-LD attachment.
-- `GET /api/export/json?session_id={id}`: Returns raw RecipeSchema JSON attachment.
+### Recipe Editor ↔ Navigation & Tags
+- **Review Confirmation**: Clicking "Next" on `recipes[recipes.length - 1]` renders `<Modal title="Recipe Review Complete">` with `[Cancel]` and `[Yes, Go to Export]`.
+- **Image URL**: Calls `GET /api/cards/{card_id}/image?session_id={session_id}` with `isLoading` and `hasError` reset on `cardId`/`imageUrl` change.
+- **Tag Manager**: Emits `onAddTag(tag)` and `onRemoveTag(tag)` synchronizing with `useRecipeForm.isDirty` and saving via `api.updateRecipe`.
+
+### Exporters ↔ Filenames & Google Docs OAuth
+- **Custom Filenames**: All export endpoints accept `filename: Optional[str] = Query(None)`. Response sets `Content-Disposition: attachment; filename="{sanitized_filename}"`.
+- **Frontend Export Modal**: `ExportFilenameModal` renders suggested filename `getSuggestedFilename(tab, sessionId, customPrefix)`, allows editing, and passes name to downloader.
+- **Google Docs Direct Creation**:
+  - `POST /api/export/google-docs/create-document`
+  - Body: `{"session_id": "...", "access_token": "...", "document_title": "..."}`
+  - Uploads card images to Google Drive, creates Google Doc, applies batch update requests, returns `{"document_id": "...", "url": "..."}`.
+- **Tag Serialization**:
+  - Plan To Eat CSV: Column 8 `Tags` (`", ".join(tags)` with RFC 4180 quote escaping)
+  - Schema.org JSON-LD: `keywords` comma string + `recipeCategory`
+  - Markdown: YAML frontmatter `tags: [...]`
+  - Cooklang: `>> tags: ...`
+  - Paprika: `"categories": [...]`
+
+---
 
 ## Code Layout
-```
-recipeboxer/
-├── api/
-│   ├── app.py              # FastAPI app, static mounts, CORS, SPA fallback
-│   ├── routes.py           # REST endpoints, SSE streaming, session & recipe CRUD
-│   └── static/             # Vite production build output (index.html, assets/)
-├── agent/
-│   ├── session.py          # Session state machine, pipeline orchestration
-│   └── orchestrator.py     # End-to-end pipeline runner
-├── correlation/
-│   ├── optimizer.py        # Card pairing optimizer, candidate ranking
-│   └── scorer.py           # Heuristic & semantic correlation scoring
-├── exporter/
-│   ├── plan_to_eat.py      # RFC 4180 CSV exporter
-│   ├── json_ld.py          # Schema.org Recipe JSON-LD exporter
-│   └── json_export.py      # Raw Recipe JSON exporter
-├── ingestion/
-│   └── scanner.py          # Card discovery & image validation
-├── models/
-│   ├── card.py             # ScannedCard, VisualFingerprint models
-│   ├── hitl.py             # CardPairApproval, CorrelationCandidate models
-│   ├── recipe.py           # RecipeSchema, Ingredient, Direction models
-│   └── session.py          # SessionSummary, IngestionConfig models
-└── storage/
-    ├── cache.py            # SQLite FingerprintCache
-    └── session_store.py    # SQLite Session and Recipe Store
 
-frontend/
-├── index.html              # SPA entry point
-├── package.json            # React 18, Vite, TypeScript, Tailwind CSS, Lucide icons
-├── tsconfig.json           # TypeScript configuration
-├── vite.config.ts          # Vite configuration with outDir: "../recipeboxer/api/static"
-├── tailwind.config.js      # Tailwind CSS configuration with dark mode: 'class'
-├── src/
-│   ├── main.tsx            # React root mount
-│   ├── App.tsx             # Main layout, router / view switcher, theme provider
-│   ├── types/              # TypeScript API & state interfaces
-│   ├── api/                # API client (REST & SSE EventSource hooks)
-│   ├── components/
-│   │   ├── Navbar.tsx              # Brand header, session indicator, theme toggle
-│   │   ├── IngestionController.tsx # Folder path, dropzone, throttle controls, model selection
-│   │   ├── RapidQueue.tsx          # Card comparison queue & keyboard shortcut listener
-│   │   ├── CandidateDrawer.tsx     # Slide-out ranked candidate list & reasoning
-│   │   ├── MultiCardGrouping.tsx   # 3+ card multi-part grouping tray & reordering
-│   │   ├── CardImageViewer.tsx     # Pan/zoom, 90° rotation, contrast/invert filters
-│   │   ├── RecipeEditor.tsx        # Side-by-side viewer & editable recipe form
-│   │   └── ExportModal.tsx         # Plan To Eat CSV, JSON-LD, JSON download dialog
-│   └── hooks/
-│       ├── useTheme.ts             # Light/Dark mode state & localStorage persistence
-│       ├── useSSE.ts               # Server-Sent Events listener with auto-reconnect
-│       └── useKeyboardShortcuts.ts # Input-trapped keyboard navigation
-└── tests/                  # Vitest + React Testing Library component tests
-```
+- Frontend:
+  - `frontend/src/components/ingestion/SourceSelector.tsx`
+  - `frontend/src/components/ingestion/SessionLauncher.tsx`
+  - `frontend/src/components/ingestion/ConfigPanel.tsx`
+  - `frontend/src/components/hitl/HitlWorkspace.tsx`
+  - `frontend/src/components/hitl/RapidQueueCard.tsx`
+  - `frontend/src/components/hitl/MultiCardGrouping.tsx`
+  - `frontend/src/components/hitl/MultiCardInspectionModal.tsx`
+  - `frontend/src/components/recipe/RecipeEditorView.tsx`
+  - `frontend/src/components/recipe/RecipeForm.tsx`
+  - `frontend/src/components/recipe/TagManager.tsx`
+  - `frontend/src/components/viewer/CardViewerCanvas.tsx`
+  - `frontend/src/components/export/ExportDialog.tsx`
+  - `frontend/src/components/export/ExportFilenameModal.tsx`
+  - `frontend/src/hooks/useSSE.ts`
+  - `frontend/src/App.tsx`
+  - `frontend/src/types/pipeline.ts`
+  - `frontend/src/utils/api.ts`
+- Backend:
+  - `src/recipeboxer/api/routes.py`
+  - `src/recipeboxer/agent/orchestrator.py`
+  - `src/recipeboxer/extraction/extractor.py`
+  - `src/recipeboxer/vision/router.py`
+  - `src/recipeboxer/models/pipeline.py`
+  - `src/recipeboxer/models/hitl.py`
+  - `src/recipeboxer/models/recipe.py`
+  - `src/recipeboxer/models/session.py`
+  - `src/recipeboxer/exporter/plan_to_eat.py`
+  - `src/recipeboxer/exporter/google_docs.py`
+  - `src/recipeboxer/exporter/docx_export.py`
+  - `src/recipeboxer/exporter/pdf_export.py`
+  - `src/recipeboxer/exporter/markdown_export.py`
+  - `src/recipeboxer/exporter/cooklang.py`
+  - `src/recipeboxer/exporter/paprika.py`
+  - `src/recipeboxer/exporter/json_ld.py`
+- Tests:
+  - `tests/`
+  - `frontend/tests/`

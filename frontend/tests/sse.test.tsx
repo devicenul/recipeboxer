@@ -9,10 +9,11 @@ class MockEventSource {
   onopen: (() => void) | null = null;
   onerror: ((err: any) => void) | null = null;
   listeners: Record<string, ((e: any) => void)[]> = {};
+  private openTimer: any = null;
 
   constructor(url: string) {
     this.url = url;
-    setTimeout(() => {
+    this.openTimer = setTimeout(() => {
       this.onopen?.();
     }, 10);
   }
@@ -42,6 +43,10 @@ class MockEventSource {
   }
 
   close() {
+    if (this.openTimer) {
+      clearTimeout(this.openTimer);
+      this.openTimer = null;
+    }
     this.listeners = {};
   }
 }
@@ -116,5 +121,87 @@ describe('R1: Server-Sent Events (SSE) Live Stream Hook', () => {
       session_id: 'sess_123',
       proposals_count: 5,
     });
+  });
+
+  it('stabilizes callbacks using ref without reconnecting on inline function changes', async () => {
+    let callCount = 0;
+    (global as any).EventSource = vi.fn((url: string) => {
+      callCount++;
+      mockEventSourceInstance = new MockEventSource(url);
+      return mockEventSourceInstance;
+    });
+
+    const onStateChange1 = vi.fn();
+    const { rerender } = renderHook(
+      ({ cb }) =>
+        useSSE({
+          sessionId: 'sess_stable_1',
+          onStateChange: cb,
+        }),
+      {
+        initialProps: { cb: onStateChange1 },
+      }
+    );
+
+    expect(callCount).toBe(1);
+
+    // Re-render with brand new function reference
+    const onStateChange2 = vi.fn();
+    rerender({ cb: onStateChange2 });
+
+    // EventSource constructor should NOT have been called again
+    expect(callCount).toBe(1);
+
+    // Emitting event should invoke the latest callback reference (onStateChange2)
+    act(() => {
+      mockEventSourceInstance?.emit('state_change', {
+        session_id: 'sess_stable_1',
+        status: PipelineState.EXTRACTING,
+        progress: { percent_complete: 80.0 },
+      });
+    });
+
+    expect(onStateChange1).not.toHaveBeenCalled();
+    expect(onStateChange2).toHaveBeenCalledWith(
+      expect.objectContaining({ status: PipelineState.EXTRACTING })
+    );
+  });
+
+  it('handles connection error with backoff and error notification', async () => {
+    vi.useFakeTimers();
+    let callCount = 0;
+    (global as any).EventSource = vi.fn((url: string) => {
+      callCount++;
+      mockEventSourceInstance = new MockEventSource(url);
+      return mockEventSourceInstance;
+    });
+
+    const onError = vi.fn();
+    const { result } = renderHook(() =>
+      useSSE({
+        sessionId: 'sess_err_test',
+        onError,
+      })
+    );
+
+    expect(callCount).toBe(1);
+
+    // Trigger error on active EventSource
+    act(() => {
+      mockEventSourceInstance?.triggerError(new Error('Network disconnected'));
+    });
+
+    expect(onError).toHaveBeenCalled();
+    expect(result.current.isConnected).toBe(false);
+    expect(result.current.isReconnecting).toBe(true);
+
+    // Fast-forward backoff delay (1500ms)
+    act(() => {
+      vi.advanceTimersByTime(1600);
+    });
+
+    // Should have reconnected
+    expect(callCount).toBe(2);
+    vi.useRealTimers();
   });
 });

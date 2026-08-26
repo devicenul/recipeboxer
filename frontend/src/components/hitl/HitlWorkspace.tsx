@@ -3,6 +3,7 @@ import { CheckCircle2, AlertCircle, Loader2, ArrowRight, RefreshCw, Layers } fro
 import { CorrelationProposal, CardPairApproval, CorrelationCandidate } from '../../types/hitl';
 import { RapidQueueCard } from './RapidQueueCard';
 import { CandidateDrawer } from './CandidateDrawer';
+import { MultiCardInspectionModal } from './MultiCardInspectionModal';
 import { Button } from '../common/Button';
 import { useKeyboard } from '../../hooks/useKeyboard';
 import { api } from '../../utils/api';
@@ -23,6 +24,7 @@ export const HitlWorkspace: React.FC<HitlWorkspaceProps> = ({
   const [multiCardGroups, setMultiCardGroups] = useState<Record<string, string[]>>({}); // front_card_id -> string[]
 
   const [isDrawerOpen, setIsDrawerOpen] = useState<boolean>(false);
+  const [isInspectionModalOpen, setIsInspectionModalOpen] = useState<boolean>(false);
   const [candidates, setCandidates] = useState<CorrelationCandidate[]>([]);
   const [loadingCandidates, setLoadingCandidates] = useState<boolean>(false);
 
@@ -231,13 +233,16 @@ export const HitlWorkspace: React.FC<HitlWorkspaceProps> = ({
 
   // Keyboard shortcut integration
   useKeyboard({
-    enabled: !!currentProposal && !isDrawerOpen && !isSubmitting,
+    enabled: !!currentProposal && !isDrawerOpen && !isInspectionModalOpen && !isSubmitting,
     onApprove: handleApprove,
     onStandalone: handleStandalone,
     onReverse: handleReverse,
     onReject: handleReject,
     onToggleCandidates: handleToggleDrawer,
-    onEscape: () => setIsDrawerOpen(false),
+    onEscape: () => {
+      setIsDrawerOpen(false);
+      setIsInspectionModalOpen(false);
+    },
   });
 
   // Submit approvals
@@ -300,6 +305,7 @@ export const HitlWorkspace: React.FC<HitlWorkspaceProps> = ({
           onToggleDrawer={handleToggleDrawer}
           onReorderGroup={handleReorderGroup}
           onDetachCard={handleDetachCard}
+          onOpenInspectionModal={() => setIsInspectionModalOpen(true)}
         />
       ) : (
         /* Queue Finished Summary */
@@ -370,6 +376,33 @@ export const HitlWorkspace: React.FC<HitlWorkspaceProps> = ({
           onSelectCandidateAsBack={handleSelectCandidateAsBack}
           onAttachCandidateToGroup={handleAttachCandidateToGroup}
           isLoading={loadingCandidates}
+        />
+      )}
+
+      {/* Dedicated Multi-Card Full-Size Inspection Modal */}
+      {currentProposal && (
+        <MultiCardInspectionModal
+          isOpen={isInspectionModalOpen}
+          onClose={() => setIsInspectionModalOpen(false)}
+          cardIds={currentGroup}
+          sessionId={sessionId}
+          proposalId={currentProposal.proposal_id}
+          onReorder={handleReorderGroup}
+          onDetach={handleDetachCard}
+          onApprove={(orderedIds) => {
+            handleReorderGroup(orderedIds);
+            const approval: CardPairApproval = {
+              proposal_id: currentProposal.proposal_id,
+              front_card_id: orderedIds[0] || currentProposal.front_card_id,
+              back_card_id: orderedIds[1] || null,
+              card_ids: orderedIds.length > 2 ? orderedIds : (orderedIds.length > 1 ? orderedIds : undefined),
+              is_standalone: orderedIds.length === 1 || currentProposal.is_standalone,
+              is_rejected: false,
+            };
+            setApprovals((prev) => [...prev.filter((a) => a.front_card_id !== approval.front_card_id), approval]);
+            setIsInspectionModalOpen(false);
+            advanceQueue();
+          }}
         />
       )}
     </div>

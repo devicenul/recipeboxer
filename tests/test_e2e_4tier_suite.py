@@ -275,8 +275,9 @@ class TestTier1FeatureCoverage:
             assert response.status_code == 200
             assert "text/event-stream" in response.headers["content-type"]
             assert "no-cache" in response.headers.get("cache-control", "")
-            async for _ in response.aiter_lines():
-                pass
+            async for line in response.aiter_lines():
+                if line:
+                    break
 
     @pytest.mark.asyncio
     async def test_t1_f03_02_sse_initial_status_event_broadcast(
@@ -292,6 +293,8 @@ class TestTier1FeatureCoverage:
             async for line in response.aiter_lines():
                 if line.startswith("event:"):
                     received_events.append(line.split(":", 1)[1].strip())
+                    if "completed" in received_events:
+                        break
         assert "state_change" in received_events or "completed" in received_events
 
     @pytest.mark.asyncio
@@ -1407,6 +1410,8 @@ class TestTier2BoundaryAndCornerCases:
             async for line in resp.aiter_lines():
                 if line.startswith("event:"):
                     received.append(line.split(":", 1)[1].strip())
+                    if "failed" in received:
+                        break
         assert "failed" in received
 
     @pytest.mark.asyncio
@@ -1419,8 +1424,9 @@ class TestTier2BoundaryAndCornerCases:
         session.state = PipelineState.COMPLETED
         async with full_api_client.stream("GET", f"/api/events?session_id={sid}") as resp:
             assert resp.status_code == 200
-            async for _ in resp.aiter_lines():
-                pass
+            async for line in resp.aiter_lines():
+                if line:
+                    break
 
     @pytest.mark.asyncio
     async def test_t2_f03_03_sse_rapid_progress_burst_telemetry(
@@ -1459,10 +1465,12 @@ class TestTier2BoundaryAndCornerCases:
             async with full_api_client.stream("GET", f"/api/events?session_id={sid}") as r2:
                 assert r1.status_code == 200
                 assert r2.status_code == 200
-                async for _ in r1.aiter_lines():
-                    pass
-                async for _ in r2.aiter_lines():
-                    pass
+                async for line in r1.aiter_lines():
+                    if line:
+                        break
+                async for line in r2.aiter_lines():
+                    if line:
+                        break
 
     # ------------------------------------------------------------------------
     # Feature 4 BVA (Session Manager & Persistence)
@@ -2622,8 +2630,9 @@ class TestTier3CrossFeatureInteractions:
         # SSE connects to resumed session
         async with full_api_client.stream("GET", f"/api/events?session_id={sid}") as sse_stream:
             assert sse_stream.status_code == 200
-            async for _ in sse_stream.aiter_lines():
-                pass
+            async for line in sse_stream.aiter_lines():
+                if line:
+                    break
 
     @pytest.mark.asyncio
     async def test_t3_10_high_concurrency_ingestion_extreme_quoting_and_json_ld_export(

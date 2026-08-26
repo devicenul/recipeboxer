@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Download,
   FileSpreadsheet,
@@ -10,6 +10,7 @@ import {
   FileCode,
   Flame,
   Printer,
+  Edit3,
 } from 'lucide-react';
 import { RecipeSchema } from '../../types/recipe';
 import { CsvPreview } from './CsvPreview';
@@ -19,6 +20,7 @@ import { MarkdownPreview } from './MarkdownPreview';
 import { CooklangPreview } from './CooklangPreview';
 import { GoogleDocsPreview } from './GoogleDocsPreview';
 import { BinaryExportPreview } from './BinaryExportPreview';
+import { ExportFilenameModal } from './ExportFilenameModal';
 import { Button } from '../common/Button';
 import { downloadPlanToEatCsv } from '../../utils/exportPlanToEat';
 import { downloadJsonLd } from '../../utils/exportJsonLd';
@@ -44,8 +46,47 @@ export type ExportTab =
   | 'docx'
   | 'pdf';
 
+export const getExtensionForTab = (tab: ExportTab): string => {
+  switch (tab) {
+    case 'csv': return '.csv';
+    case 'jsonld': return '.json';
+    case 'raw': return '.json';
+    case 'markdown': return '.md';
+    case 'cooklang': return '.cook';
+    case 'paprika': return '.paprikarecipes';
+    case 'googledocs': return '.html';
+    case 'docx': return '.docx';
+    case 'pdf': return '.pdf';
+  }
+};
+
+export const getSuggestedStem = (recipeList: RecipeSchema[], sid?: string): string => {
+  const base =
+    recipeList.length === 1 && recipeList[0].title
+      ? recipeList[0].title
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '_')
+          .replace(/^_+|_+$/g, '')
+      : 'recipeboxer_cookbook';
+  const suffix = sid ? `_${sid.slice(-6)}` : '';
+  return `${base || 'recipeboxer_export'}${suffix}`;
+};
+
 export const ExportDialog: React.FC<ExportDialogProps> = ({ recipes, sessionId }) => {
   const [activeTab, setActiveTab] = useState<ExportTab>('csv');
+  const [customFilename, setCustomFilename] = useState<string>(() => {
+    const stem = getSuggestedStem(recipes || [], sessionId);
+    return `${stem}.csv`;
+  });
+  const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (recipes && recipes.length > 0) {
+      const stem = getSuggestedStem(recipes, sessionId);
+      const ext = getExtensionForTab(activeTab);
+      setCustomFilename(`${stem}${ext}`);
+    }
+  }, [recipes, sessionId]);
 
   if (!recipes || recipes.length === 0) {
     return (
@@ -61,35 +102,44 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({ recipes, sessionId }
     );
   }
 
-  const handleDownload = () => {
-    const filenameSuffix = sessionId ? `_${sessionId.slice(-6)}` : '';
+  const handleTabChange = (newTab: ExportTab) => {
+    setActiveTab(newTab);
+    // Update filename extension while preserving current stem
+    const currentDot = customFilename.lastIndexOf('.');
+    const stem = currentDot > 0 ? customFilename.substring(0, currentDot) : customFilename;
+    const newExt = getExtensionForTab(newTab);
+    setCustomFilename(`${stem || getSuggestedStem(recipes, sessionId)}${newExt}`);
+  };
+
+  const handleDownload = (filenameToUse?: string) => {
+    const targetFilename = (filenameToUse || customFilename).trim() || `recipeboxer_export${getExtensionForTab(activeTab)}`;
     switch (activeTab) {
       case 'csv':
-        downloadPlanToEatCsv(recipes, `recipeboxer_export${filenameSuffix}.csv`);
+        downloadPlanToEatCsv(recipes, targetFilename);
         break;
       case 'jsonld':
-        downloadJsonLd(recipes, `recipeboxer_json_ld${filenameSuffix}.json`);
+        downloadJsonLd(recipes, targetFilename);
         break;
       case 'raw':
-        downloadRawJson(recipes, `recipeboxer_recipes${filenameSuffix}.json`);
+        downloadRawJson(recipes, targetFilename);
         break;
       case 'markdown':
-        downloadMarkdown(recipes, `recipeboxer_recipes${filenameSuffix}.md`);
+        downloadMarkdown(recipes, targetFilename);
         break;
       case 'cooklang':
-        downloadCooklang(recipes, `recipeboxer_recipes${filenameSuffix}.cook`);
+        downloadCooklang(recipes, targetFilename);
         break;
       case 'googledocs':
-        downloadGoogleDocsHtml(recipes, `recipeboxer_google_docs${filenameSuffix}.html`);
+        downloadGoogleDocsHtml(recipes, targetFilename);
         break;
       case 'paprika':
-        downloadPaprika(sessionId, `recipeboxer_export${filenameSuffix}.paprikarecipes`);
+        downloadPaprika(sessionId, targetFilename);
         break;
       case 'docx':
-        downloadDocx(sessionId, `recipeboxer_cookbook${filenameSuffix}.docx`);
+        downloadDocx(sessionId, targetFilename);
         break;
       case 'pdf':
-        downloadPdf(sessionId, `recipeboxer_cookbook${filenameSuffix}.pdf`);
+        downloadPdf(sessionId, targetFilename);
         break;
     }
   };
@@ -122,14 +172,42 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({ recipes, sessionId }
           </p>
         </div>
 
-        <Button
-          variant="success"
-          size="md"
-          onClick={handleDownload}
-          leftIcon={<Download className="w-4 h-4" />}
+        <div className="flex items-center gap-3">
+          <Button
+            variant="success"
+            size="md"
+            onClick={() => handleDownload()}
+            leftIcon={<Download className="w-4 h-4" />}
+          >
+            Download {getActiveTabTitle()}
+          </Button>
+        </div>
+      </div>
+
+      {/* Customizable Export Filename Bar */}
+      <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-850/60 border border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2 text-xs font-semibold text-slate-700 dark:text-slate-300">
+          <label htmlFor="export-filename-field" className="shrink-0 flex items-center gap-1.5">
+            <Edit3 className="w-3.5 h-3.5 text-emerald-500" />
+            <span>Export Filename:</span>
+          </label>
+          <input
+            id="export-filename-field"
+            type="text"
+            value={customFilename}
+            onChange={(e) => setCustomFilename(e.target.value)}
+            className="px-3 py-1.5 text-xs font-mono rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-850 text-slate-900 dark:text-slate-100 focus:outline-hidden focus:ring-2 focus:ring-emerald-500 min-w-[260px]"
+            placeholder="recipeboxer_export.csv"
+          />
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setIsModalOpen(true)}
+          className="text-xs text-emerald-600 dark:text-emerald-400 hover:underline cursor-pointer flex items-center gap-1"
         >
-          Download {getActiveTabTitle()}
-        </Button>
+          <span>More Options</span>
+        </button>
       </div>
 
       {/* Group 1: Primary Formats (R0) */}
@@ -141,7 +219,7 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({ recipes, sessionId }
           {/* Plan To Eat CSV */}
           <button
             type="button"
-            onClick={() => setActiveTab('csv')}
+            onClick={() => handleTabChange('csv')}
             className={`p-3.5 rounded-xl border text-left flex flex-col gap-1 transition-all cursor-pointer ${
               activeTab === 'csv'
                 ? 'border-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/30 ring-2 ring-emerald-500/20'
@@ -160,7 +238,7 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({ recipes, sessionId }
           {/* Schema.org JSON-LD */}
           <button
             type="button"
-            onClick={() => setActiveTab('jsonld')}
+            onClick={() => handleTabChange('jsonld')}
             className={`p-3.5 rounded-xl border text-left flex flex-col gap-1 transition-all cursor-pointer ${
               activeTab === 'jsonld'
                 ? 'border-blue-500 bg-blue-50/50 dark:bg-blue-950/30 ring-2 ring-blue-500/20'
@@ -179,7 +257,7 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({ recipes, sessionId }
           {/* Raw JSON */}
           <button
             type="button"
-            onClick={() => setActiveTab('raw')}
+            onClick={() => handleTabChange('raw')}
             className={`p-3.5 rounded-xl border text-left flex flex-col gap-1 transition-all cursor-pointer ${
               activeTab === 'raw'
                 ? 'border-purple-500 bg-purple-50/50 dark:bg-purple-950/30 ring-2 ring-purple-500/20'
@@ -206,7 +284,7 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({ recipes, sessionId }
           {/* Obsidian Markdown */}
           <button
             type="button"
-            onClick={() => setActiveTab('markdown')}
+            onClick={() => handleTabChange('markdown')}
             className={`p-3.5 rounded-xl border text-left flex flex-col gap-1 transition-all cursor-pointer ${
               activeTab === 'markdown'
                 ? 'border-purple-500 bg-purple-50/50 dark:bg-purple-950/30 ring-2 ring-purple-500/20'
@@ -225,7 +303,7 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({ recipes, sessionId }
           {/* Cooklang */}
           <button
             type="button"
-            onClick={() => setActiveTab('cooklang')}
+            onClick={() => handleTabChange('cooklang')}
             className={`p-3.5 rounded-xl border text-left flex flex-col gap-1 transition-all cursor-pointer ${
               activeTab === 'cooklang'
                 ? 'border-amber-500 bg-amber-50/50 dark:bg-amber-950/30 ring-2 ring-amber-500/20'
@@ -244,7 +322,7 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({ recipes, sessionId }
           {/* Paprika */}
           <button
             type="button"
-            onClick={() => setActiveTab('paprika')}
+            onClick={() => handleTabChange('paprika')}
             className={`p-3.5 rounded-xl border text-left flex flex-col gap-1 transition-all cursor-pointer ${
               activeTab === 'paprika'
                 ? 'border-orange-500 bg-orange-50/50 dark:bg-orange-950/30 ring-2 ring-orange-500/20'
@@ -271,7 +349,7 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({ recipes, sessionId }
           {/* Google Docs */}
           <button
             type="button"
-            onClick={() => setActiveTab('googledocs')}
+            onClick={() => handleTabChange('googledocs')}
             className={`p-3.5 rounded-xl border text-left flex flex-col gap-1 transition-all cursor-pointer ${
               activeTab === 'googledocs'
                 ? 'border-emerald-600 bg-emerald-50/50 dark:bg-emerald-950/30 ring-2 ring-emerald-600/20'
@@ -283,14 +361,14 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({ recipes, sessionId }
               <span>Google Docs Archival</span>
             </div>
             <p className="text-[11px] text-slate-500 dark:text-slate-400">
-              Structured batch update requests & HTML archive.
+              Direct OAuth publishing & HTML archive.
             </p>
           </button>
 
           {/* Offline DOCX */}
           <button
             type="button"
-            onClick={() => setActiveTab('docx')}
+            onClick={() => handleTabChange('docx')}
             className={`p-3.5 rounded-xl border text-left flex flex-col gap-1 transition-all cursor-pointer ${
               activeTab === 'docx'
                 ? 'border-blue-600 bg-blue-50/50 dark:bg-blue-950/30 ring-2 ring-blue-600/20'
@@ -309,7 +387,7 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({ recipes, sessionId }
           {/* Printable PDF */}
           <button
             type="button"
-            onClick={() => setActiveTab('pdf')}
+            onClick={() => handleTabChange('pdf')}
             className={`p-3.5 rounded-xl border text-left flex flex-col gap-1 transition-all cursor-pointer ${
               activeTab === 'pdf'
                 ? 'border-rose-600 bg-rose-50/50 dark:bg-rose-950/30 ring-2 ring-rose-600/20'
@@ -334,29 +412,45 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({ recipes, sessionId }
         {activeTab === 'raw' && <RawJsonPreview recipes={recipes} />}
         {activeTab === 'markdown' && <MarkdownPreview recipes={recipes} />}
         {activeTab === 'cooklang' && <CooklangPreview recipes={recipes} />}
-        {activeTab === 'googledocs' && <GoogleDocsPreview recipes={recipes} />}
+        {activeTab === 'googledocs' && (
+          <GoogleDocsPreview
+            recipes={recipes}
+            sessionId={sessionId}
+            customFilename={customFilename}
+          />
+        )}
         {activeTab === 'paprika' && (
           <BinaryExportPreview
             format="paprika"
             recipes={recipes}
-            onDownload={handleDownload}
+            onDownload={() => handleDownload()}
           />
         )}
         {activeTab === 'docx' && (
           <BinaryExportPreview
             format="docx"
             recipes={recipes}
-            onDownload={handleDownload}
+            onDownload={() => handleDownload()}
           />
         )}
         {activeTab === 'pdf' && (
           <BinaryExportPreview
             format="pdf"
             recipes={recipes}
-            onDownload={handleDownload}
+            onDownload={() => handleDownload()}
           />
         )}
       </div>
+
+      {/* Custom Filename Modal */}
+      <ExportFilenameModal
+        isOpen={isModalOpen}
+        filename={customFilename}
+        formatName={getActiveTabTitle()}
+        onSave={(newFn) => setCustomFilename(newFn)}
+        onClose={() => setIsModalOpen(false)}
+        onDownload={(fn) => handleDownload(fn)}
+      />
     </div>
   );
 };

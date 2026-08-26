@@ -134,7 +134,16 @@ Transcribe this recipe card with deep attention to historical handwriting nuance
 - Convert archaic butter measurements ('butter size of an egg' -> 1/4 cup butter, 'size of a walnut' -> 2 tbsp).
 - Disambiguate cursive letterforms ('r' vs 'v', 'n' vs 'u', 'S' vs 'L').
 
-2. FORMATTING REQUIREMENTS:
+2. TITLE INFERENCE & GUESSING:
+- If the card has a clearly stated title, extract it cleanly without modification.
+- If the recipe has NO stated title, or if the title is missing, torn, illegible, or inferred from ingredients/context: infer the most descriptive title (e.g. 'Old-Fashioned Apple Crisp') and ALWAYS append the suffix ' [GUESS]' (e.g. 'Old-Fashioned Apple Crisp [GUESS]') to clearly flag it for user verification.
+
+3. ANECDOTE, STORY & METADATA PRESERVATION:
+- Extract family stories, personal memories, handwritten marginalia (e.g., 'Aunt Clara\\'s wedding cake 1942', 'Good for Sunday suppers'), vintage dates, and occasion notes into the 'description' field.
+- Extract author attribution, vintage dates, handwritten signatures, and heirloom provenance into 'source_notes'.
+- STRICT ISOLATION: NEVER place family stories, personal anecdotes, or marginalia into the 'ingredients' list or 'directions' steps — keep ingredients and directions strictly confined to culinary measurements, ingredients, and sequential preparation/cooking steps.
+
+4. FORMATTING REQUIREMENTS:
 - Separate multi-ingredient lines into distinct individual ingredient strings.
 - Format directions sequentially with clear '1. ', '2. ', '3. ' step numbering.
 - Preserve card author, dates, and historical attribution in 'source_notes'.

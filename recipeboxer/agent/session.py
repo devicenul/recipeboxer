@@ -268,6 +268,39 @@ class PipelineSession:
             self.pipeline_task.cancel()
         logger.info(f"[{self.session_id}] PipelineSession cancelled.")
 
+    def transition_to(self, new_state: Union[PipelineState, str]) -> None:
+        """Transitions session to a new PipelineState."""
+        if isinstance(new_state, str):
+            self.state = PipelineState(new_state)
+        else:
+            self.state = new_state
+
+    def update_progress(
+        self,
+        total_scans: Optional[int] = None,
+        fingerprinted: Optional[int] = None,
+        proposals: Optional[int] = None,
+        approved: Optional[int] = None,
+        extracted: Optional[int] = None,
+        current_stage: Optional[str] = None,
+        percent_complete: Optional[float] = None,
+    ) -> None:
+        """Updates progress metrics fields."""
+        if total_scans is not None:
+            self.progress_metrics.total_scans = total_scans
+        if fingerprinted is not None:
+            self.progress_metrics.fingerprinted = fingerprinted
+        if proposals is not None:
+            self.progress_metrics.proposals = proposals
+        if approved is not None:
+            self.progress_metrics.approved = approved
+        if extracted is not None:
+            self.progress_metrics.extracted = extracted
+        if current_stage is not None:
+            self.progress_metrics.current_stage = current_stage
+        if percent_complete is not None:
+            self.progress_metrics.percent_complete = percent_complete
+
     def record_token_usage(
         self,
         prompt_tokens: int = 0,

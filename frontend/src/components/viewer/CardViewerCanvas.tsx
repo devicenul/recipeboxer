@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { ImageOff, Loader2 } from 'lucide-react';
 import { CanvasTransform, FilterSettings } from '../../types/viewer';
 
@@ -29,6 +29,11 @@ export const CardViewerCanvas: React.FC<CardViewerCanvasProps> = ({
   const [dragStart, setDragStart] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
+
+  useEffect(() => {
+    setIsLoading(true);
+    setHasError(false);
+  }, [imageUrl, cardId]);
 
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -145,7 +150,19 @@ export const CardViewerCanvas: React.FC<CardViewerCanvasProps> = ({
           )}
         </>
       ) : (
-        <div className="text-xs text-slate-400 dark:text-slate-500">No image available</div>
+        <div className="flex flex-col items-center justify-center p-8 text-center gap-3 text-slate-400 dark:text-slate-500">
+          <div className="p-4 bg-slate-200/60 dark:bg-slate-800/60 rounded-full">
+            <ImageOff className="w-8 h-8" />
+          </div>
+          <div>
+            <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+              No Card Scan Image Available
+            </h4>
+            <p className="text-xs max-w-xs mt-1 text-slate-500 dark:text-slate-400">
+              No scanned card image is associated with this recipe or card ID.
+            </p>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -42,6 +42,26 @@ export function useSSE({
   const reconnectTimeoutRef = useRef<any>(null);
   const backoffDelayRef = useRef<number>(1000);
 
+  const callbacksRef = useRef({
+    onStateChange,
+    onProgress,
+    onHitlReady,
+    onRecipeExtracted,
+    onCompleted,
+    onError,
+  });
+
+  useEffect(() => {
+    callbacksRef.current = {
+      onStateChange,
+      onProgress,
+      onHitlReady,
+      onRecipeExtracted,
+      onCompleted,
+      onError,
+    };
+  });
+
   const cleanup = useCallback(() => {
     if (eventSourceRef.current) {
       eventSourceRef.current.close();
@@ -78,27 +98,28 @@ export function useSSE({
           const data = JSON.parse(dataStr);
           setLastEvent({ type, data });
 
+          const callbacks = callbacksRef.current;
           switch (type) {
             case 'state_change':
-              onStateChange?.(data);
+              callbacks.onStateChange?.(data);
               break;
             case 'progress':
-              onProgress?.(data);
+              callbacks.onProgress?.(data);
               break;
             case 'hitl_ready':
-              onHitlReady?.(data);
+              callbacks.onHitlReady?.(data);
               break;
             case 'recipe_extracted':
-              onRecipeExtracted?.(data);
+              callbacks.onRecipeExtracted?.(data);
               break;
             case 'completed':
-              onCompleted?.(data);
+              callbacks.onCompleted?.(data);
               break;
             case 'failed':
-              onStateChange?.(data);
+              callbacks.onStateChange?.(data);
               break;
             case 'cancelled':
-              onStateChange?.(data);
+              callbacks.onStateChange?.(data);
               break;
           }
         } catch {
@@ -117,7 +138,7 @@ export function useSSE({
       es.onerror = (err) => {
         setIsConnected(false);
         setIsReconnecting(true);
-        onError?.(err);
+        callbacksRef.current.onError?.(err);
 
         // Schedule auto-reconnect with exponential backoff
         cleanup();
@@ -132,9 +153,9 @@ export function useSSE({
     } catch (e) {
       setIsConnected(false);
       setIsReconnecting(true);
-      onError?.(e);
+      callbacksRef.current.onError?.(e);
     }
-  }, [enabled, sessionId, onStateChange, onProgress, onHitlReady, onRecipeExtracted, onCompleted, onError, cleanup]);
+  }, [enabled, sessionId, cleanup]);
 
   useEffect(() => {
     connect();

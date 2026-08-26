@@ -9,6 +9,7 @@ export interface RecipeReviewPageProps {
   sessionId?: string | null;
   onRecipeUpdated: (updated: RecipeSchema) => void;
   onNavigateToIngest: () => void;
+  onNavigateToExport?: () => void;
 }
 
 export const RecipeReviewPage: React.FC<RecipeReviewPageProps> = ({
@@ -16,6 +17,7 @@ export const RecipeReviewPage: React.FC<RecipeReviewPageProps> = ({
   sessionId,
   onRecipeUpdated,
   onNavigateToIngest,
+  onNavigateToExport,
 }) => {
   if (!recipes || recipes.length === 0) {
     return (
@@ -42,6 +44,7 @@ export const RecipeReviewPage: React.FC<RecipeReviewPageProps> = ({
         recipes={recipes}
         sessionId={sessionId || undefined}
         onRecipeUpdated={onRecipeUpdated}
+        onNavigateToExport={onNavigateToExport}
       />
     </div>
   );

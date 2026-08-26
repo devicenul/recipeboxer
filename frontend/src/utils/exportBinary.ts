@@ -36,13 +36,13 @@ export async function downloadFromApiEndpoint(
 }
 
 export function downloadDocx(sessionId?: string, filename = 'recipeboxer_cookbook.docx'): void {
-  downloadFromApiEndpoint('/api/export/docx', { session_id: sessionId }, filename);
+  downloadFromApiEndpoint('/api/export/docx', { session_id: sessionId, filename }, filename);
 }
 
 export function downloadPdf(sessionId?: string, filename = 'recipeboxer_cookbook.pdf'): void {
-  downloadFromApiEndpoint('/api/export/pdf', { session_id: sessionId }, filename);
+  downloadFromApiEndpoint('/api/export/pdf', { session_id: sessionId, filename }, filename);
 }
 
 export function downloadPaprika(sessionId?: string, filename = 'recipeboxer_export.paprikarecipes'): void {
-  downloadFromApiEndpoint('/api/export/paprika', { session_id: sessionId }, filename);
+  downloadFromApiEndpoint('/api/export/paprika', { session_id: sessionId, filename }, filename);
 }

@@ -127,6 +127,10 @@ class IngestionConfig(BaseModel):
         default=None,
         description="Local directory path containing recipe card scans",
     )
+    default_tags: List[str] = Field(
+        default_factory=list,
+        description="Initial batch default tags to apply to all recipes scanned in this session",
+    )
     max_concurrency: int = Field(
         default=5,
         ge=1,

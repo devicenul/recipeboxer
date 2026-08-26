@@ -62,6 +62,10 @@ class PipelineStartRequest(BaseModel):
     """Request schema for POST /api/pipeline/start."""
     scans_dir: Optional[str] = Field(default=None, description="Filesystem directory containing recipe card scans")
     directory_path: Optional[str] = Field(default=None, description="Alias for scans_dir")
+    default_tags: List[str] = Field(
+        default_factory=list,
+        description="Initial batch default tags to apply to all recipes scanned in this session",
+    )
     source_provider: Optional[str] = Field(default=None, description="External source provider ID (e.g. google_photos, google_drive, s3, gcs, local)")
     source_container_id: Optional[str] = Field(default=None, description="Selected container / album / folder ID")
     source_item_ids: Optional[List[str]] = Field(default=None, description="Specific item IDs to ingest from provider")

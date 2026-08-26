@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   FolderOpen,
   Upload,
@@ -16,6 +16,9 @@ import { Badge } from '../common/Badge';
 import { SourceConnectionStatus, SourceContainer } from '../../types/sources';
 import { AlbumPickerModal } from './AlbumPickerModal';
 import { api } from '../../utils/api';
+
+export const isDirectoryPickerSupported = (): boolean =>
+  typeof window !== 'undefined' && typeof (window as any).showDirectoryPicker === 'function';
 
 export type IngestionSourceType = 'local' | 'google_photos' | 'google_drive' | 's3' | 'gcs';
 
@@ -60,6 +63,54 @@ export const SourceSelector: React.FC<SourceSelectorProps> = ({
 }) => {
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [providerStatuses, setProviderStatuses] = useState<Record<string, SourceConnectionStatus>>({});
+  const folderInputRef = useRef<HTMLInputElement>(null);
+
+  const handleBrowseDirectory = async () => {
+    if (isDirectoryPickerSupported()) {
+      try {
+        const dirHandle = await (window as any).showDirectoryPicker({ mode: 'read' });
+        if (dirHandle?.name) {
+          onFolderPathChange(dirHandle.name);
+        }
+        const selectedFiles: File[] = [];
+        if (typeof dirHandle.values === 'function') {
+          for await (const entry of dirHandle.values()) {
+            if (entry.kind === 'file' && typeof entry.getFile === 'function') {
+              const file = await entry.getFile();
+              if (/\.(jpe?g|png|webp|tiff?|gif|bmp)$/i.test(file.name)) {
+                selectedFiles.push(file);
+              }
+            }
+          }
+        }
+        if (selectedFiles.length > 0) {
+          onUploadedFilesChange(selectedFiles);
+        }
+        return;
+      } catch (err: any) {
+        if (err.name === 'AbortError') return;
+      }
+    }
+    folderInputRef.current?.click();
+  };
+
+  const handleFallbackDirectoryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      const firstFile = files[0];
+      const relativePath = (firstFile as any).webkitRelativePath || '';
+      const folderName = relativePath.split('/')[0] || firstFile.name || '';
+      if (folderName) {
+        onFolderPathChange(folderName);
+      }
+      const imageFiles = Array.from(files).filter((f) =>
+        /\.(jpe?g|png|webp|tiff?|gif|bmp)$/i.test(f.name)
+      );
+      if (imageFiles.length > 0) {
+        onUploadedFilesChange(imageFiles);
+      }
+    }
+  };
 
   useEffect(() => {
     let isMounted = true;
@@ -215,14 +266,36 @@ export const SourceSelector: React.FC<SourceSelectorProps> = ({
               <label className="text-sm font-semibold text-slate-800 dark:text-slate-200">
                 Local Scans Directory Path
               </label>
-              <input
-                type="text"
-                placeholder="/path/to/recipe/scans"
-                value={folderPath}
-                onChange={(e) => onFolderPathChange(e.target.value)}
-                disabled={disabled}
-                className="w-full px-3.5 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
-              />
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="/path/to/recipe/scans"
+                  value={folderPath}
+                  onChange={(e) => onFolderPathChange(e.target.value)}
+                  disabled={disabled}
+                  className="flex-1 px-3.5 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                />
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={handleBrowseDirectory}
+                  disabled={disabled}
+                  leftIcon={<FolderOpen className="w-4 h-4" />}
+                >
+                  Browse Folder...
+                </Button>
+                <input
+                  ref={folderInputRef}
+                  type="file"
+                  // @ts-ignore
+                  webkitdirectory=""
+                  directory=""
+                  multiple
+                  className="hidden"
+                  onChange={handleFallbackDirectoryChange}
+                  tabIndex={-1}
+                />
+              </div>
               <p className="text-xs text-slate-500 dark:text-slate-400">
                 Path to a local folder containing high-resolution scanned recipe card images (.jpg, .png, .webp, .tiff).
               </p>

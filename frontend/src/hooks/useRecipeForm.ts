@@ -163,6 +163,44 @@ export function useRecipeForm({ initialRecipe, sessionId, onSaved }: UseRecipeFo
     setIsDirty(true);
   }, []);
 
+  const updateTag = useCallback((oldTag: string, newTag: string) => {
+    const clean = newTag.trim();
+    if (!clean) {
+      setRecipe((prev) => ({
+        ...prev,
+        tags: (prev.tags || []).filter((t) => t !== oldTag),
+      }));
+      setIsDirty(true);
+      return;
+    }
+    setRecipe((prev) => {
+      const current = prev.tags || [];
+      const duplicate = current.some((t) => t.toLowerCase() === clean.toLowerCase() && t !== oldTag);
+      if (duplicate) {
+        return { ...prev, tags: current.filter((t) => t !== oldTag) };
+      }
+      return {
+        ...prev,
+        tags: current.map((t) => (t === oldTag ? clean : t)),
+      };
+    });
+    setIsDirty(true);
+  }, []);
+
+  const setTags = useCallback((tags: string[]) => {
+    const seen = new Set<string>();
+    const cleaned: string[] = [];
+    for (const t of tags) {
+      const trimT = t.trim();
+      if (trimT && !seen.has(trimT.toLowerCase())) {
+        seen.add(trimT.toLowerCase());
+        cleaned.push(trimT);
+      }
+    }
+    setRecipe((prev) => ({ ...prev, tags: cleaned }));
+    setIsDirty(true);
+  }, []);
+
   // Validation
   const validate = useCallback((): boolean => {
     const errs: Record<string, string> = {};
@@ -201,13 +239,23 @@ export function useRecipeForm({ initialRecipe, sessionId, onSaved }: UseRecipeFo
         })
         .filter((d) => d.length > 3);
 
+      const seenTags = new Set<string>();
+      const sanitizedTags: string[] = [];
+      for (const t of (recipe.tags || [])) {
+        const cleanT = t.trim();
+        if (cleanT && !seenTags.has(cleanT.toLowerCase())) {
+          seenTags.add(cleanT.toLowerCase());
+          sanitizedTags.push(cleanT);
+        }
+      }
+
       const payload: RecipeSchema = {
         ...recipe,
         title: recipe.title.trim(),
         description: recipe.description?.trim() || '',
         ingredients: cleanedIngredients,
         directions: cleanedDirections,
-        tags: Array.from(new Set(recipe.tags || [])),
+        tags: sanitizedTags,
       };
 
       const updated = await api.updateRecipe(recipe.recipe_id, payload, sessionId);
@@ -250,6 +298,8 @@ export function useRecipeForm({ initialRecipe, sessionId, onSaved }: UseRecipeFo
     moveDirection,
     addTag,
     removeTag,
+    updateTag,
+    setTags,
     validate,
     save,
     reset,

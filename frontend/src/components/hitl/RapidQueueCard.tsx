@@ -1,5 +1,5 @@
 import React from 'react';
-import { Check, UserX, ArrowLeftRight, X, Sparkles, SlidersHorizontal } from 'lucide-react';
+import { Check, UserX, ArrowLeftRight, X, Sparkles, SlidersHorizontal, Maximize2 } from 'lucide-react';
 import { CorrelationProposal } from '../../types/hitl';
 import { CardViewerCanvas } from '../viewer/CardViewerCanvas';
 import { VisualToolbar } from '../viewer/VisualToolbar';
@@ -22,6 +22,7 @@ export interface RapidQueueCardProps {
   onToggleDrawer: () => void;
   onReorderGroup?: (order: string[]) => void;
   onDetachCard?: (cardId: string) => void;
+  onOpenInspectionModal?: () => void;
 }
 
 export const RapidQueueCard: React.FC<RapidQueueCardProps> = ({
@@ -37,6 +38,7 @@ export const RapidQueueCard: React.FC<RapidQueueCardProps> = ({
   onToggleDrawer,
   onReorderGroup,
   onDetachCard,
+  onOpenInspectionModal,
 }) => {
   const viewer = useImageViewer();
 
@@ -56,6 +58,17 @@ export const RapidQueueCard: React.FC<RapidQueueCardProps> = ({
           <span className="text-xs text-slate-500 dark:text-slate-400">
             ID: <strong className="font-mono text-slate-700 dark:text-slate-300">{proposal.proposal_id}</strong>
           </span>
+          {groupedCardIds.length > 2 && onOpenInspectionModal && (
+            <button
+              type="button"
+              onClick={onOpenInspectionModal}
+              className="flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-lg bg-purple-100 text-purple-800 hover:bg-purple-200 dark:bg-purple-950 dark:text-purple-300 dark:hover:bg-purple-900 transition-colors cursor-pointer"
+              title="Inspect all cards in full-size split view modal"
+            >
+              <Maximize2 className="w-3.5 h-3.5" />
+              <span>Inspect All ({groupedCardIds.length} Cards)</span>
+            </button>
+          )}
         </div>
 
         {/* Global Toolbar for Dual Canvas Viewers */}
@@ -116,6 +129,7 @@ export const RapidQueueCard: React.FC<RapidQueueCardProps> = ({
           sessionId={sessionId}
           onReorder={onReorderGroup}
           onDetach={onDetachCard}
+          onOpenInspectionModal={onOpenInspectionModal}
         />
       )}
 

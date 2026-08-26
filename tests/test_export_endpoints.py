@@ -232,3 +232,145 @@ class TestExportEndpoints:
         data = res_ld.json()
         assert data["@context"] == "https://schema.org"
         assert data["@type"] == "Recipe"
+
+    @pytest.mark.asyncio
+    async def test_export_endpoints_custom_filename(self, client: httpx.AsyncClient, populated_session: str):
+        """GAP-02: Verify custom filename query parameter is reflected in Content-Disposition across all formats."""
+        # DOCX
+        res_docx = await client.get(f"/api/export/docx?session_id={populated_session}&filename=grandma_cookbook.docx")
+        assert res_docx.status_code == 200
+        assert 'filename="grandma_cookbook.docx"' in res_docx.headers["content-disposition"]
+
+        # PDF
+        res_pdf = await client.get(f"/api/export/pdf?session_id={populated_session}&filename=my_holiday_pie.pdf")
+        assert res_pdf.status_code == 200
+        assert 'filename="my_holiday_pie.pdf"' in res_pdf.headers["content-disposition"]
+
+        # CSV
+        res_csv = await client.get(f"/api/export/csv?session_id={populated_session}&filename=custom_plan_to_eat.csv")
+        assert res_csv.status_code == 200
+        assert 'filename="custom_plan_to_eat.csv"' in res_csv.headers["content-disposition"]
+
+        # Markdown
+        res_md = await client.get(f"/api/export/markdown?session_id={populated_session}&filename=obsidian_notes.md")
+        assert res_md.status_code == 200
+        assert 'filename="obsidian_notes.md"' in res_md.headers["content-disposition"]
+
+        # Cooklang
+        res_cook = await client.get(f"/api/export/cooklang?session_id={populated_session}&filename=apple_crisp.cook")
+        assert res_cook.status_code == 200
+        assert 'filename="apple_crisp.cook"' in res_cook.headers["content-disposition"]
+
+        # Paprika
+        res_paprika = await client.get(f"/api/export/paprika?session_id={populated_session}&filename=paprika_recipes.paprikarecipes")
+        assert res_paprika.status_code == 200
+        assert 'filename="paprika_recipes.paprikarecipes"' in res_paprika.headers["content-disposition"]
+
+        # Google Docs HTML
+        res_gdocs = await client.get(f"/api/export/google-docs?session_id={populated_session}&format=html&filename=shared_recipes.html")
+        assert res_gdocs.status_code == 200
+        assert 'filename="shared_recipes.html"' in res_gdocs.headers["content-disposition"]
+
+    @pytest.mark.asyncio
+    async def test_export_filename_sanitization_path_traversal(self, client: httpx.AsyncClient, populated_session: str):
+        """Verify filenames are sanitized against path traversal (../) and illegal characters."""
+        res = await client.get(f"/api/export/pdf?session_id={populated_session}&filename=../../../../etc/malicious.pdf")
+        assert res.status_code == 200
+        assert 'filename="malicious.pdf"' in res.headers["content-disposition"]
+
+        res_illegal = await client.get(f"/api/export/docx?session_id={populated_session}&filename=bad:name*?<>|.docx")
+        assert res_illegal.status_code == 200
+        assert 'filename="badname.docx"' in res_illegal.headers["content-disposition"]
+
+    @pytest.mark.asyncio
+    async def test_google_docs_create_document_endpoint(self, client: httpx.AsyncClient, populated_session: str, monkeypatch):
+        """GAP-01: Test POST /api/export/google-docs/create-document endpoint."""
+        # 1. Missing token -> 400
+        res_missing = await client.post(
+            "/api/export/google-docs/create-document",
+            json={"session_id": populated_session, "access_token": ""},
+        )
+        assert res_missing.status_code == 400
+
+        # 2. Mocked successful creation
+        def mock_create(self, access_token, recipes, title="RecipeBoxer Archival Cookbook", **kwargs):
+            return {
+                "document_id": "doc_abc_12345",
+                "url": "https://docs.google.com/document/d/doc_abc_12345/edit",
+                "title": title,
+                "recipe_count": len(recipes),
+            }
+
+        monkeypatch.setattr(
+            "recipeboxer.exporter.google_docs.GoogleDocsExporter.create_google_document",
+            mock_create,
+        )
+
+        res_success = await client.post(
+            "/api/export/google-docs/create-document",
+            json={
+                "session_id": populated_session,
+                "access_token": "ya29.valid_mock_token",
+                "document_title": "Family Heirloom Collection",
+            },
+        )
+        assert res_success.status_code == 200
+        data = res_success.json()
+        assert data["document_id"] == "doc_abc_12345"
+        assert "https://docs.google.com/document/d/doc_abc_12345/edit" in data["url"]
+        assert data["title"] == "Family Heirloom Collection"
+        assert data["recipe_count"] == 1
+
+        # 3. 401 Unauthorized token
+        def mock_create_401(self, access_token, recipes, **kwargs):
+            raise ValueError("Invalid or expired Google OAuth access token (401 Unauthorized)")
+
+        monkeypatch.setattr(
+            "recipeboxer.exporter.google_docs.GoogleDocsExporter.create_google_document",
+            mock_create_401,
+        )
+
+        res_401 = await client.post(
+            "/api/export/google-docs/create-document",
+            json={"session_id": populated_session, "access_token": "ya29.expired_token"},
+        )
+        assert res_401.status_code == 401
+        assert "authorization failed" in res_401.json()["detail"].lower()
+
+    @pytest.mark.asyncio
+    async def test_tag_serialization_across_all_formats(self, client: httpx.AsyncClient, populated_session: str):
+        """F5.4 & GAP-05: Enforce tag serialization compliance across Plan to Eat, JSON-LD, Markdown, Cooklang, Paprika."""
+        # 1. Plan to Eat CSV: Col 8 "Tags" contains "Dessert, Autumn, Fruit"
+        res_csv = await client.get(f"/api/export/csv?session_id={populated_session}")
+        assert res_csv.status_code == 200
+        assert '"Dessert, Autumn, Fruit"' in res_csv.text or "Dessert, Autumn, Fruit" in res_csv.text
+
+        # 2. Schema.org JSON-LD: keywords & recipeCategory
+        res_ld = await client.get(f"/api/export/json-ld?session_id={populated_session}")
+        assert res_ld.status_code == 200
+        data_ld = res_ld.json()
+        assert "Dessert" in data_ld["keywords"]
+        assert "Autumn" in data_ld["keywords"]
+        assert "Fruit" in data_ld["keywords"]
+        assert data_ld["recipeCategory"] == "Dessert"
+
+        # 3. Obsidian Markdown: YAML frontmatter tags
+        res_md = await client.get(f"/api/export/markdown?session_id={populated_session}")
+        assert res_md.status_code == 200
+        assert "tags:" in res_md.text
+        assert "- Dessert" in res_md.text
+        assert "- Autumn" in res_md.text
+        assert "- Fruit" in res_md.text
+
+        # 4. Cooklang: >> tags:
+        res_cook = await client.get(f"/api/export/cooklang?session_id={populated_session}")
+        assert res_cook.status_code == 200
+        assert ">> tags: Dessert, Autumn, Fruit" in res_cook.text
+
+        # 5. Paprika: categories list
+        res_paprika = await client.get(f"/api/export/paprika?session_id={populated_session}")
+        assert res_paprika.status_code == 200
+        decomp = gzip.decompress(res_paprika.content)
+        paprika_data = json.loads(decomp.decode("utf-8"))
+        assert paprika_data["categories"] == ["Dessert", "Autumn", "Fruit"]
+

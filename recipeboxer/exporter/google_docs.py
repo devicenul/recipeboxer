@@ -16,6 +16,8 @@ from pathlib import Path
 import re
 from typing import Any, Callable, Dict, List, Optional, Union
 
+import httpx
+
 from recipeboxer.models.recipe import RecipeSchema
 
 logger = logging.getLogger(__name__)
@@ -641,6 +643,217 @@ ol.direction-list li {
             return self.export_to_html(recipes, title=title, image_resolver=image_resolver).encode(self.encoding)
         return self.export_to_json_string(recipes, title=title, image_resolver=image_resolver).encode(self.encoding)
 
+    def create_google_document(
+        self,
+        access_token: str,
+        recipes: Union[RecipeSchema, List[RecipeSchema]],
+        title: str = "RecipeBoxer Archival Cookbook",
+        image_resolver: Optional[Callable[[str], Optional[Union[str, Path, bytes]]]] = None,
+        drive_folder_name: str = "RecipeBoxer Scans",
+        http_client: Optional[httpx.Client] = None,
+    ) -> Dict[str, Any]:
+        """Creates an authentic Google Doc in the user's account using Google Docs & Drive APIs.
+
+        1. Uploads card scan images to the user's Google Drive folder.
+        2. Creates a new Google Document.
+        3. Applies structured batchUpdate requests (typography, tables, lists, inline images).
+        4. Returns the created document ID and direct URL.
+        """
+        if not access_token or not access_token.strip():
+            raise ValueError("Google OAuth access token is required")
+
+        recipe_list = [recipes] if isinstance(recipes, RecipeSchema) else list(recipes)
+        if not recipe_list:
+            raise ValueError("No recipes provided for Google Docs export")
+
+        clean_token = access_token.strip()
+        headers = {
+            "Authorization": f"Bearer {clean_token}",
+            "Accept": "application/json",
+        }
+
+        client_provided = http_client is not None
+        client = http_client or httpx.Client(timeout=45.0)
+
+        try:
+            # Step 1: Create or find target folder in Google Drive
+            folder_id: Optional[str] = None
+            try:
+                search_resp = client.get(
+                    "https://www.googleapis.com/drive/v3/files",
+                    headers=headers,
+                    params={
+                        "q": f"name='{drive_folder_name}' and mimeType='application/vnd.google-apps.folder' and trashed=false",
+                        "fields": "files(id, name)",
+                    },
+                )
+                if search_resp.status_code == 200:
+                    files = search_resp.json().get("files", [])
+                    if files:
+                        folder_id = files[0]["id"]
+                elif search_resp.status_code == 401:
+                    raise ValueError("Invalid or expired Google OAuth access token (401 Unauthorized)")
+
+                if not folder_id and search_resp.status_code in (200, 404):
+                    create_folder_resp = client.post(
+                        "https://www.googleapis.com/drive/v3/files",
+                        headers=headers,
+                        json={
+                            "name": drive_folder_name,
+                            "mimeType": "application/vnd.google-apps.folder",
+                        },
+                    )
+                    if create_folder_resp.status_code in (200, 201):
+                        folder_id = create_folder_resp.json().get("id")
+                    elif create_folder_resp.status_code == 401:
+                        raise ValueError("Invalid or expired Google OAuth access token (401 Unauthorized)")
+            except ValueError:
+                raise
+            except Exception as e:
+                logger.warning(f"Could not initialize Google Drive folder '{drive_folder_name}': {e}")
+
+            # Step 2: Upload Card Scan Images to Google Drive
+            drive_image_map: Dict[str, str] = {}
+            for recipe in recipe_list:
+                for cid in recipe.card_ids:
+                    if cid in drive_image_map:
+                        continue
+                    resolved = image_resolver(cid) if image_resolver else None
+                    if resolved is None:
+                        continue
+
+                    # If already a public web URL, use directly
+                    if isinstance(resolved, str) and (resolved.startswith("http://") or resolved.startswith("https://")):
+                        drive_image_map[cid] = resolved
+                        continue
+
+                    raw_bytes: Optional[bytes] = None
+                    file_ext = "jpg"
+                    mime_type = "image/jpeg"
+
+                    if isinstance(resolved, (bytes, bytearray)):
+                        raw_bytes = bytes(resolved)
+                    elif isinstance(resolved, (str, Path)):
+                        p = Path(resolved)
+                        if p.exists() and p.is_file():
+                            raw_bytes = p.read_bytes()
+                            file_ext = p.suffix.lstrip(".").lower() or "jpg"
+                            mime_type = "image/png" if file_ext == "png" else "image/jpeg"
+
+                    if not raw_bytes:
+                        continue
+
+                    file_name = f"scan_{cid}.{file_ext}"
+                    try:
+                        # Multipart upload to Google Drive
+                        metadata: Dict[str, Any] = {"name": file_name}
+                        if folder_id:
+                            metadata["parents"] = [folder_id]
+
+                        boundary = "-------RecipeBoxerBoundary" + re.sub(r"[^a-zA-Z0-9]", "", str(cid))[:12]
+                        body_parts = (
+                            f"--{boundary}\r\n"
+                            f"Content-Type: application/json; charset=UTF-8\r\n\r\n"
+                            f"{json.dumps(metadata)}\r\n"
+                            f"--{boundary}\r\n"
+                            f"Content-Type: {mime_type}\r\n\r\n"
+                        ).encode("utf-8") + raw_bytes + f"\r\n--{boundary}--\r\n".encode("utf-8")
+
+                        upload_headers = {
+                            "Authorization": f"Bearer {clean_token}",
+                            "Content-Type": f"multipart/related; boundary={boundary}",
+                            "Accept": "application/json",
+                        }
+
+                        upload_resp = client.post(
+                            "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webContentLink,thumbnailLink",
+                            headers=upload_headers,
+                            content=body_parts,
+                        )
+
+                        if upload_resp.status_code in (200, 201):
+                            up_data = upload_resp.json()
+                            file_id = up_data.get("id")
+                            if file_id:
+                                # Make file readable so Docs service can embed it
+                                try:
+                                    client.post(
+                                        f"https://www.googleapis.com/drive/v3/files/{file_id}/permissions",
+                                        headers=headers,
+                                        json={"role": "reader", "type": "anyone"},
+                                    )
+                                except Exception:
+                                    pass
+
+                                img_link = up_data.get("webContentLink") or f"https://drive.google.com/uc?export=view&id={file_id}"
+                                drive_image_map[cid] = img_link
+                        elif upload_resp.status_code == 401:
+                            raise ValueError("Invalid or expired Google OAuth access token (401 Unauthorized)")
+                        else:
+                            logger.warning(f"Failed to upload card {cid} to Google Drive: {upload_resp.status_code} {upload_resp.text}")
+                    except ValueError:
+                        raise
+                    except Exception as exc:
+                        logger.warning(f"Error uploading image {cid} to Google Drive: {exc}")
+
+            # Step 3: Create Google Document
+            doc_create_resp = client.post(
+                "https://docs.googleapis.com/v1/documents",
+                headers=headers,
+                json={"title": title},
+            )
+            if doc_create_resp.status_code == 401:
+                raise ValueError("Invalid or expired Google OAuth access token (401 Unauthorized)")
+            if doc_create_resp.status_code not in (200, 201):
+                raise ValueError(f"Failed to create Google Doc: HTTP {doc_create_resp.status_code} - {doc_create_resp.text}")
+
+            doc_data = doc_create_resp.json()
+            document_id = doc_data.get("documentId")
+            if not document_id:
+                raise ValueError("Google Docs API did not return a valid documentId")
+
+            # Step 4: Build Batch Update Requests
+            def drive_image_resolver(cid: str) -> Optional[Union[str, Path, bytes]]:
+                if cid in drive_image_map:
+                    return drive_image_map[cid]
+                if image_resolver:
+                    res = image_resolver(cid)
+                    if isinstance(res, str) and (res.startswith("http://") or res.startswith("https://")):
+                        return res
+                return None
+
+            batch_requests = self.build_batch_update_requests(
+                recipes=recipe_list,
+                image_resolver=drive_image_resolver,
+                include_page_breaks=True,
+            )
+
+            # Step 5: Execute Batch Update Requests
+            if batch_requests:
+                batch_resp = client.post(
+                    f"https://docs.googleapis.com/v1/documents/{document_id}:batchUpdate",
+                    headers=headers,
+                    json={"requests": batch_requests},
+                )
+                if batch_resp.status_code == 401:
+                    raise ValueError("Invalid or expired Google OAuth access token (401 Unauthorized)")
+                if batch_resp.status_code not in (200, 201):
+                    logger.warning(f"Google Docs batchUpdate returned HTTP {batch_resp.status_code}: {batch_resp.text}")
+
+            doc_url = f"https://docs.google.com/document/d/{document_id}/edit"
+            logger.info(f"Successfully created Google Doc '{title}' ({document_id}) with {len(recipe_list)} recipe(s)")
+
+            return {
+                "document_id": document_id,
+                "url": doc_url,
+                "title": title,
+                "recipe_count": len(recipe_list),
+            }
+
+        finally:
+            if not client_provided:
+                client.close()
+
 
 def export_recipes_to_google_docs_batch_requests(
     recipes: Union[RecipeSchema, List[RecipeSchema]],
@@ -666,3 +879,23 @@ def export_recipes_to_google_docs_html(
 ) -> str:
     """Convenience helper to export Google Docs HTML archive string."""
     return GoogleDocsExporter().export_to_html(recipes, title=title, image_resolver=image_resolver)
+
+
+def create_google_docs_archival_document(
+    access_token: str,
+    recipes: Union[RecipeSchema, List[RecipeSchema]],
+    title: str = "RecipeBoxer Archival Cookbook",
+    image_resolver: Optional[Callable[[str], Optional[Union[str, Path, bytes]]]] = None,
+    drive_folder_name: str = "RecipeBoxer Scans",
+    http_client: Optional[httpx.Client] = None,
+) -> Dict[str, Any]:
+    """Convenience helper to create a real Google Doc in the user's account."""
+    return GoogleDocsExporter().create_google_document(
+        access_token=access_token,
+        recipes=recipes,
+        title=title,
+        image_resolver=image_resolver,
+        drive_folder_name=drive_folder_name,
+        http_client=http_client,
+    )
+

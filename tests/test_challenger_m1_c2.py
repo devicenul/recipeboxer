@@ -121,6 +121,8 @@ class TestSSEStreaming:
                     if line.startswith("event:"):
                         event_name = line.split(":", 1)[1].strip()
                         received_events.append(event_name)
+                        if event_name == "completed":
+                            break
 
         assert "state_change" in received_events
         assert "progress" in received_events
@@ -148,6 +150,8 @@ class TestSSEStreaming:
                     if line.startswith("event:"):
                         event_name = line.split(":", 1)[1].strip()
                         received_events.append(event_name)
+                        if event_name == "failed":
+                            break
 
         assert "failed" in received_events
 
@@ -185,6 +189,8 @@ class TestSSEStreaming:
                     if line.startswith("data:") and "rec_batch_" in line:
                         payload = json.loads(line.split("data:", 1)[1].strip())
                         received_recipes.append(payload.get("recipe_id"))
+                        if len(received_recipes) == 4:
+                            break
 
         assert len(received_recipes) == 4
         assert received_recipes == ["rec_batch_1", "rec_batch_2", "rec_batch_3", "rec_batch_4"]

@@ -393,3 +393,15 @@ def test_pipeline_start_request_and_response():
         message="Started",
     )
     assert resp.total_scans_found == 8
+
+
+def test_pipeline_start_request_default_tags():
+    """Verify PipelineStartRequest defaults and explicit default_tags list."""
+    req_default = PipelineStartRequest(scans_dir="/path/to/scans")
+    assert req_default.default_tags == []
+
+    req_with_tags = PipelineStartRequest(
+        scans_dir="/path/to/scans",
+        default_tags=["Vintage", "Dessert", "Grandma's Box"],
+    )
+    assert req_with_tags.default_tags == ["Vintage", "Dessert", "Grandma's Box"]

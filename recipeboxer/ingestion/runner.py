@@ -38,6 +38,10 @@ class IngestionConfig(BaseModel):
     max_concurrency: int = Field(default=5, ge=1, le=50)
     slow_batch_size: int = Field(default=2, ge=1, le=50)
     slow_batch_interval_seconds: float = Field(default=2.0, ge=0.0)
+    default_tags: List[str] = Field(
+        default_factory=list,
+        description="Batch default tags to automatically assign to recipes extracted in this session",
+    )
 
 
 class CardTaskResult(BaseModel):

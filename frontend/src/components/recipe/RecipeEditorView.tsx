@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
-import { ChefHat, ChevronLeft, ChevronRight, Image as ImageIcon } from 'lucide-react';
+import { ChefHat, ChevronLeft, ChevronRight, Image as ImageIcon, ArrowRight } from 'lucide-react';
 import { RecipeSchema } from '../../types/recipe';
 import { RecipeForm } from './RecipeForm';
 import { CardViewerCanvas } from '../viewer/CardViewerCanvas';
 import { VisualToolbar } from '../viewer/VisualToolbar';
+import { Button } from '../common/Button';
+import { Modal } from '../common/Modal';
 import { useImageViewer } from '../../hooks/useImageViewer';
 import { api } from '../../utils/api';
 
@@ -11,15 +13,18 @@ export interface RecipeEditorViewProps {
   recipes: RecipeSchema[];
   sessionId?: string;
   onRecipeUpdated: (updated: RecipeSchema) => void;
+  onNavigateToExport?: () => void;
 }
 
 export const RecipeEditorView: React.FC<RecipeEditorViewProps> = ({
   recipes,
   sessionId,
   onRecipeUpdated,
+  onNavigateToExport,
 }) => {
   const [selectedRecipeIndex, setSelectedRecipeIndex] = useState<number>(0);
   const [selectedCardIndex, setSelectedCardIndex] = useState<number>(0);
+  const [isExportConfirmModalOpen, setIsExportConfirmModalOpen] = useState<boolean>(false);
 
   const viewer = useImageViewer();
 
@@ -39,8 +44,11 @@ export const RecipeEditorView: React.FC<RecipeEditorViewProps> = ({
 
   const currentRecipe = recipes[selectedRecipeIndex] || recipes[0];
   const cardIds = currentRecipe.card_ids || [];
+  const imageUrls = currentRecipe.image_urls || [];
   const activeCardId = cardIds[selectedCardIndex] || cardIds[0] || null;
-  const activeImageUrl = activeCardId ? api.getCardImageUrl(activeCardId, sessionId) : null;
+  const activeImageUrl = activeCardId
+    ? api.getCardImageUrl(activeCardId, sessionId)
+    : imageUrls[selectedCardIndex] || imageUrls[0] || null;
 
   return (
     <div className="flex flex-col gap-4" data-tour="recipe-editor">
@@ -83,12 +91,15 @@ export const RecipeEditorView: React.FC<RecipeEditorViewProps> = ({
           <button
             type="button"
             onClick={() => {
-              setSelectedRecipeIndex((prev) => Math.min(recipes.length - 1, prev + 1));
-              setSelectedCardIndex(0);
+              if (selectedRecipeIndex === recipes.length - 1) {
+                setIsExportConfirmModalOpen(true);
+              } else {
+                setSelectedRecipeIndex((prev) => Math.min(recipes.length - 1, prev + 1));
+                setSelectedCardIndex(0);
+              }
             }}
-            disabled={selectedRecipeIndex === recipes.length - 1}
-            className="p-1.5 rounded-lg border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 cursor-pointer"
-            title="Next Recipe"
+            className="p-1.5 rounded-lg border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+            title={selectedRecipeIndex === recipes.length - 1 ? 'Finish Review & Go to Export' : 'Next Recipe'}
           >
             <ChevronRight className="w-4 h-4" />
           </button>
@@ -166,6 +177,39 @@ export const RecipeEditorView: React.FC<RecipeEditorViewProps> = ({
           />
         </div>
       </div>
+
+      {/* Workflow Navigation Confirmation Dialog */}
+      <Modal
+        isOpen={isExportConfirmModalOpen}
+        onClose={() => setIsExportConfirmModalOpen(false)}
+        title="Go to export?"
+        maxWidth="md"
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              onClick={() => setIsExportConfirmModalOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="success"
+              onClick={() => {
+                setIsExportConfirmModalOpen(false);
+                onNavigateToExport?.();
+              }}
+              rightIcon={<ArrowRight className="w-4 h-4" />}
+            >
+              Yes
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm text-slate-700 dark:text-slate-300">
+          You have reached the final recipe in the review queue. Would you like to proceed to the
+          Export tab to download your digitized recipes?
+        </p>
+      </Modal>
     </div>
   );
 };

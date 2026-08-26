@@ -15,10 +15,17 @@ import xml.etree.ElementTree as ET
 import zipfile
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from PIL import Image
 
 from recipeboxer.models.recipe import RecipeSchema
 
 logger = logging.getLogger(__name__)
+
+# Standard EMU dimensions (1 inch = 914,400 EMUs)
+# Max printable width: 5.5 inches = 5,029,200 EMUs
+# Max printable height: 4.0 inches = 3,657,600 EMUs
+MAX_EMU_WIDTH = 5029200
+MAX_EMU_HEIGHT = 3657600
 
 
 def _escape_xml(text: str) -> str:
@@ -167,7 +174,9 @@ class DocxExporter:
   </w:style>
 </w:styles>"""
 
-    def _generate_drawing_xml(self, rel_id: str, doc_img_idx: int, cx: int = 4500000, cy: int = 3200000) -> str:
+    def _generate_drawing_xml(
+        self, rel_id: str, doc_img_idx: int, cx: int = MAX_EMU_WIDTH, cy: int = MAX_EMU_HEIGHT
+    ) -> str:
         """Generates DrawingML OpenXML element for embedding an image."""
         doc_pr_id = doc_img_idx + 100
         return f"""<w:r>
@@ -210,7 +219,7 @@ class DocxExporter:
     def _build_document_xml(
         self,
         recipes: List[RecipeSchema],
-        image_map: Dict[str, Tuple[str, str]],  # card_id -> (rel_id, media_target)
+        image_map: Dict[str, Tuple[Any, ...]],  # card_id -> (rel_id, media_target, cx, cy)
     ) -> str:
         """Constructs word/document.xml with heirloom cookbook formatting."""
         p_elements: List[str] = []
@@ -321,18 +330,22 @@ class DocxExporter:
 </w:p>""")
 
             # 7. Embedded Card Scans
-            recipe_imgs: List[Tuple[str, str]] = []  # (card_id, rel_id)
+            recipe_imgs: List[Tuple[str, str, int, int]] = []  # (card_id, rel_id, cx, cy)
             for cid in recipe.card_ids:
                 if cid in image_map:
-                    recipe_imgs.append((cid, image_map[cid][0]))
+                    img_info = image_map[cid]
+                    rel_id = img_info[0]
+                    cx = img_info[2] if len(img_info) > 2 else MAX_EMU_WIDTH
+                    cy = img_info[3] if len(img_info) > 3 else MAX_EMU_HEIGHT
+                    recipe_imgs.append((cid, rel_id, cx, cy))
 
             if recipe_imgs:
                 p_elements.append("""<w:p>
   <w:pPr><w:pStyle w:val="Heading3"/></w:pPr>
   <w:r><w:t>Archival Card Scans</w:t></w:r>
 </w:p>""")
-                for c_num, (cid, rel_id) in enumerate(recipe_imgs, start=1):
-                    draw_xml = self._generate_drawing_xml(rel_id, doc_img_counter)
+                for c_num, (cid, rel_id, cx, cy) in enumerate(recipe_imgs, start=1):
+                    draw_xml = self._generate_drawing_xml(rel_id, doc_img_counter, cx=cx, cy=cy)
                     doc_img_counter += 1
                     p_elements.append(f"<w:p>{draw_xml}</w:p>")
                     caption_esc = _escape_xml(f"Figure {c_num}: Original Scanned Card ({cid})")
@@ -372,7 +385,7 @@ class DocxExporter:
 
         media_files: List[Tuple[str, str, bytes]] = []  # (filename, rel_id, bytes)
         image_relationships: List[Tuple[str, str]] = []  # (rel_id, target)
-        image_map: Dict[str, Tuple[str, str]] = {}  # card_id -> (rel_id, target)
+        image_map: Dict[str, Tuple[str, str, int, int]] = {}  # card_id -> (rel_id, target, cx, cy)
 
         if image_resolver:
             img_idx = 1
@@ -399,9 +412,23 @@ class DocxExporter:
                         filename = f"image_{img_idx}.{ext}"
                         rel_id = f"rIdImg{img_idx}"
                         target = f"media/{filename}"
+
+                        # Calculate proportional EMU dimensions to preserve physical aspect ratio
+                        cx = MAX_EMU_WIDTH
+                        cy = MAX_EMU_HEIGHT
+                        try:
+                            with Image.open(io.BytesIO(img_bytes)) as pil_img:
+                                w_px, h_px = pil_img.size
+                                if w_px > 0 and h_px > 0:
+                                    scale = min(MAX_EMU_WIDTH / w_px, MAX_EMU_HEIGHT / h_px)
+                                    cx = int(round(w_px * scale))
+                                    cy = int(round(h_px * scale))
+                        except Exception as exc:
+                            logger.debug(f"Could not inspect PIL dimensions for {filename}: {exc}")
+
                         media_files.append((filename, rel_id, img_bytes))
                         image_relationships.append((rel_id, target))
-                        image_map[cid] = (rel_id, target)
+                        image_map[cid] = (rel_id, target, cx, cy)
                         img_idx += 1
 
         # Build XML components

@@ -11,6 +11,7 @@ export interface RecipeSchema {
   tags: string[];
   source_notes?: string;
   card_ids?: string[];
+  image_urls?: string[];
   confidence_score?: number;
   extracted_at?: string;
 }

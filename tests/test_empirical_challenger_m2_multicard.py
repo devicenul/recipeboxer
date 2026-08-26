@@ -1,0 +1,354 @@
+"""Empirical Challenger Deep Adversarial Test Suite for Milestone 2 (Multi-Card >2 Cards HITL & Extraction Ordering).
+
+Verifies:
+1. Multi-card sets (3, 4, 5, 6, 8+ cards) sequential extraction and ordering preservation without page inversion.
+2. Gemini API multimodal payload generation with exact sequential page numbering (Front, Continuation 1, 2, ... N).
+3. Deterministic offline multi-card direction generation preserving explicit input permutation order.
+4. PipelineSession end-to-end integration: 4-card custom sequence approval, tag propagation, image URL generation.
+5. Detachment, heterogeneous input types (PIL.Image, bytes, Path, ScannedCard, VisualFingerprint), and batch execution.
+6. Multi-proposal batch session with mixed multi-card, standalone, and rejected cards.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import hashlib
+import io
+import json
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+from PIL import Image
+
+from recipeboxer.agent.orchestrator import AgentOrchestrator, PipelineSession
+from recipeboxer.correlation.optimizer import PairingOptimizer
+from recipeboxer.extraction.extractor import GeminiRecipeExtractor
+from recipeboxer.ingestion.scanner import ScannedCard
+from recipeboxer.models.domain import CardRole, VisualFingerprint
+from recipeboxer.models.hitl import CardPairApproval, HITLDecision
+from recipeboxer.models.pipeline import IngestionMode, PipelineStartRequest, PipelineState
+from recipeboxer.models.recipe import RecipeSchema
+from tests.conftest import MockGeminiClient, SQLiteFingerprintCache, SyntheticDeckInfo
+
+
+def _make_dummy_fingerprint(card_id: str, role: CardRole = CardRole.STANDALONE) -> VisualFingerprint:
+    return VisualFingerprint(
+        card_id=card_id,
+        image_path=f"/tmp/scans/{card_id}",
+        sha256_hash=hashlib.sha256(card_id.encode("utf-8")).hexdigest(),
+        role=role,
+    )
+
+
+class TestMultiCardExtractionOrdering:
+    """Stress tests for GeminiRecipeExtractor with 3, 4, 5, 6, 8 card sequences."""
+
+    @pytest.fixture
+    def extractor(self):
+        return GeminiRecipeExtractor(api_key="mock_key", model_name="gemini-3.7-flash")
+
+    @pytest.mark.asyncio
+    async def test_extract_empty_list_raises_value_error(self, extractor):
+        """Empty input list raises ValueError."""
+        with pytest.raises(ValueError, match="No card inputs provided"):
+            await extractor.extract([])
+
+    @pytest.mark.asyncio
+    async def test_extract_cards_5_card_custom_permutation_preserves_order(self, extractor):
+        """5-card custom permutation is preserved in recipe.card_ids, image_urls, and sequential directions."""
+        card_ids = ["page_5.jpg", "page_2.jpg", "page_4.jpg", "page_1.jpg", "page_3.jpg"]
+        fps = [_make_dummy_fingerprint(cid) for cid in card_ids]
+
+        recipe = await extractor.extract_cards(fps)
+        assert isinstance(recipe, RecipeSchema)
+        assert recipe.card_ids == card_ids
+        assert len(recipe.image_urls) == 5
+        for idx, cid in enumerate(card_ids):
+            assert recipe.image_urls[idx] == f"/api/cards/{cid}/image"
+
+        # Check directions order matches input card permutation
+        assert len(recipe.directions) == 5
+        assert recipe.directions[0].startswith("1. Front preparation")
+        assert "card page_2.jpg" in recipe.directions[1]
+        assert "card page_4.jpg" in recipe.directions[2]
+        assert "card page_1.jpg" in recipe.directions[3]
+        assert "card page_3.jpg" in recipe.directions[4]
+
+    @pytest.mark.asyncio
+    async def test_extract_cards_8_card_large_recipe_sequence(self, extractor):
+        """8-card large multi-card recipe sequence extraction preserves all 8 cards without truncation."""
+        card_ids = [f"card_part_{i:02d}.jpg" for i in range(1, 9)]
+        fps = [_make_dummy_fingerprint(cid) for cid in card_ids]
+
+        recipe = await extractor.extract(fps)
+        assert recipe.card_ids == card_ids
+        assert len(recipe.image_urls) == 8
+        assert len(recipe.directions) == 8
+        for i in range(1, 9):
+            assert recipe.directions[i - 1].startswith(f"{i}. ")
+
+    @pytest.mark.asyncio
+    async def test_extract_heterogeneous_input_sequence_types(self, extractor, tmp_path):
+        """extract() supports heterogeneous sequence types: VisualFingerprint, Path, ScannedCard, bytes, PIL.Image."""
+        p1 = tmp_path / "card_01.jpg"
+        p1.write_bytes(b"image_bytes_1")
+
+        fp = _make_dummy_fingerprint("card_02.jpg")
+        sc = ScannedCard(card_id="card_03.jpg", file_path=p1, sha256_hash="hash1", file_size_bytes=100)
+
+        img = Image.new("RGB", (100, 100), color="white")
+        raw_b = b"dummy_jpeg_bytes_4"
+
+        heterogeneous_cards = [fp, p1, sc, img, raw_b]
+        recipe = await extractor.extract(heterogeneous_cards)
+
+        assert isinstance(recipe, RecipeSchema)
+        assert len(recipe.card_ids) == 5
+        assert len(recipe.image_urls) == 5
+        assert len(recipe.directions) == 5
+        assert recipe.directions[0].startswith("1. ")
+
+    @pytest.mark.asyncio
+    async def test_gemini_api_payload_6_cards_sequential_labels_and_instructions(self):
+        """Gemini API payload structure contains exact sequential labels for 6 cards."""
+        extractor = GeminiRecipeExtractor(
+            api_key="real-gemini-api-key-test",
+            model_name="gemini-3.7-flash",
+        )
+
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {
+            "candidates": [
+                {
+                    "content": {
+                        "parts": [
+                            {
+                                "text": json.dumps({
+                                    "title": "Grandma's 6-Card Masterpiece",
+                                    "ingredients": ["10 cups flour", "4 cups sugar", "2 lbs butter"],
+                                    "directions": [
+                                        "Step 1: Prep starter dough.",
+                                        "Step 2: Ferment overnight.",
+                                        "Step 3: Knead and shape.",
+                                        "Step 4: Second rise.",
+                                        "Step 5: Bake in hearth.",
+                                        "Step 6: Cool and glaze.",
+                                    ],
+                                    "tags": ["Baking", "Masterpiece"],
+                                })
+                            }
+                        ]
+                    }
+                }
+            ]
+        }
+        mock_resp.raise_for_status = MagicMock()
+
+        card_ids = [f"deck_card_{i}.jpg" for i in range(1, 7)]
+        resolved_cards = [(f"bytes_{cid}".encode("utf-8"), f"/tmp/{cid}", cid) for cid in card_ids]
+
+        with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
+            mock_post.return_value = mock_resp
+            recipe = await extractor._call_gemini_extraction_api(resolved_cards=resolved_cards)
+
+            assert mock_post.called
+            call_kwargs = mock_post.call_args.kwargs
+            contents = call_kwargs["json"]["contents"][0]["parts"]
+
+            # Prompt instruction checks
+            instruction_parts = [p["text"] for p in contents if "text" in p and "spanning 6 card faces" in p["text"]]
+            assert len(instruction_parts) == 1
+            assert "exact sequential order" in instruction_parts[0]
+
+            # Label parts checks
+            label_parts = [p["text"] for p in contents if "text" in p and p["text"].startswith("Image ")]
+            assert len(label_parts) == 6
+            assert label_parts[0] == "Image 1: Front (Page 1): deck_card_1.jpg"
+            assert label_parts[1] == "Image 2: Continuation 1 (Page 2): deck_card_2.jpg"
+            assert label_parts[2] == "Image 3: Continuation 2 (Page 3): deck_card_3.jpg"
+            assert label_parts[3] == "Image 4: Continuation 3 (Page 4): deck_card_4.jpg"
+            assert label_parts[4] == "Image 5: Continuation 4 (Page 5): deck_card_5.jpg"
+            assert label_parts[5] == "Image 6: Continuation 5 (Page 6): deck_card_6.jpg"
+
+            assert recipe.title == "Grandma's 6-Card Masterpiece"
+            assert recipe.card_ids == card_ids
+            assert len(recipe.image_urls) == 6
+
+
+class TestPipelineSessionMultiCardOrchestration:
+    """End-to-end PipelineSession integration tests with multi-card sequences."""
+
+    @pytest.mark.asyncio
+    async def test_session_multi_card_4_cards_approval_with_batch_tags(
+        self,
+        synthetic_card_deck: SyntheticDeckInfo,
+        mock_gemini_client: MockGeminiClient,
+        test_cache: SQLiteFingerprintCache,
+    ):
+        """PipelineSession executes 4-card sequence approval, preserving order and propagating default batch tags."""
+        session = PipelineSession(
+            session_id="sess_multi_4card_tags",
+            config=PipelineStartRequest(
+                scans_dir=str(synthetic_card_deck.directory),
+                mode=IngestionMode.PARALLEL,
+                default_tags=["Vintage Holiday", "Heirloom"],
+                max_concurrency=4,
+            ),
+            cache=test_cache,
+            extractor=mock_gemini_client,
+            mock_client=mock_gemini_client,
+        )
+
+        task = asyncio.create_task(session.run())
+
+        # Wait until HITL_PENDING
+        for _ in range(100):
+            if session.state == PipelineState.HITL_PENDING:
+                break
+            await asyncio.sleep(0.02)
+
+        assert session.state == PipelineState.HITL_PENDING
+        all_card_ids = list(session.fingerprints.keys())
+        assert len(all_card_ids) >= 4
+
+        # Select 4 cards in inverted order
+        selected_4 = [all_card_ids[3], all_card_ids[1], all_card_ids[0], all_card_ids[2]]
+
+        approval = CardPairApproval(
+            proposal_id="prop_4card_inverted",
+            front_card_id=selected_4[0],
+            back_card_id=selected_4[1],
+            card_ids=selected_4,
+            decision=HITLDecision.APPROVE,
+        )
+        session.submit_approval([approval])
+
+        await task
+        assert session.state == PipelineState.COMPLETED
+        assert len(session.recipes) == 1
+        rec = session.recipes[0]
+        assert rec.card_ids == selected_4
+        assert len(rec.image_urls) == 4
+        for cid in selected_4:
+            assert f"/api/cards/{cid}/image?session_id=sess_multi_4card_tags" in rec.image_urls
+
+        # Verify batch tags attached
+        assert "Vintage Holiday" in rec.tags
+        assert "Heirloom" in rec.tags
+
+    @pytest.mark.asyncio
+    async def test_session_multi_card_reversal_fallback_when_card_ids_empty(
+        self,
+        synthetic_card_deck: SyntheticDeckInfo,
+        mock_gemini_client: MockGeminiClient,
+        test_cache: SQLiteFingerprintCache,
+    ):
+        """PipelineSession handles reverse_roles=True when card_ids is empty, reversing front and back."""
+        session = PipelineSession(
+            session_id="sess_multi_rev_fallback",
+            config=PipelineStartRequest(
+                scans_dir=str(synthetic_card_deck.directory),
+                mode=IngestionMode.PARALLEL,
+            ),
+            cache=test_cache,
+            extractor=mock_gemini_client,
+            mock_client=mock_gemini_client,
+        )
+
+        task = asyncio.create_task(session.run())
+
+        for _ in range(100):
+            if session.state == PipelineState.HITL_PENDING:
+                break
+            await asyncio.sleep(0.02)
+
+        assert session.state == PipelineState.HITL_PENDING
+        all_card_ids = list(session.fingerprints.keys())
+
+        c_front = all_card_ids[0]
+        c_back = all_card_ids[1]
+
+        # Submit approval with reverse_roles=True and no explicit card_ids list
+        approval = CardPairApproval(
+            proposal_id="prop_rev_roles",
+            front_card_id=c_front,
+            back_card_id=c_back,
+            reverse_roles=True,
+            decision=HITLDecision.APPROVE,
+        )
+        session.submit_approval([approval])
+
+        await task
+        assert session.state == PipelineState.COMPLETED
+        assert len(session.recipes) == 1
+        rec = session.recipes[0]
+        # Should be [c_back, c_front]
+        assert rec.card_ids == [c_back, c_front]
+
+    @pytest.mark.asyncio
+    async def test_session_mixed_multi_card_standalone_and_rejection_batch(
+        self,
+        synthetic_card_deck: SyntheticDeckInfo,
+        mock_gemini_client: MockGeminiClient,
+        test_cache: SQLiteFingerprintCache,
+    ):
+        """PipelineSession processes a batch containing 3-card group, standalone card, and rejected card."""
+        session = PipelineSession(
+            session_id="sess_mixed_batch",
+            config=PipelineStartRequest(
+                scans_dir=str(synthetic_card_deck.directory),
+                mode=IngestionMode.PARALLEL,
+            ),
+            cache=test_cache,
+            extractor=mock_gemini_client,
+            mock_client=mock_gemini_client,
+        )
+
+        task = asyncio.create_task(session.run())
+
+        for _ in range(100):
+            if session.state == PipelineState.HITL_PENDING:
+                break
+            await asyncio.sleep(0.02)
+
+        assert session.state == PipelineState.HITL_PENDING
+        all_card_ids = list(session.fingerprints.keys())
+        assert len(all_card_ids) >= 5
+
+        # 1. 3-card group
+        app1 = CardPairApproval(
+            proposal_id="prop_3card",
+            front_card_id=all_card_ids[0],
+            back_card_id=all_card_ids[1],
+            card_ids=[all_card_ids[0], all_card_ids[1], all_card_ids[2]],
+            decision=HITLDecision.APPROVE,
+        )
+
+        # 2. Standalone card
+        app2 = CardPairApproval(
+            proposal_id="prop_standalone",
+            front_card_id=all_card_ids[3],
+            back_card_id=None,
+            card_ids=[all_card_ids[3]],
+            is_standalone=True,
+            decision=HITLDecision.APPROVE,
+        )
+
+        # 3. Rejected proposal
+        app3 = CardPairApproval(
+            proposal_id="prop_rejected",
+            front_card_id=all_card_ids[4],
+            back_card_id=None,
+            is_rejected=True,
+            decision=HITLDecision.REJECT,
+        )
+
+        session.submit_approval([app1, app2, app3], rejected_ids=[all_card_ids[4]])
+
+        await task
+        assert session.state == PipelineState.COMPLETED
+        assert len(session.recipes) == 2
+        assert session.recipes[0].card_ids == [all_card_ids[0], all_card_ids[1], all_card_ids[2]]
+        assert session.recipes[1].card_ids == [all_card_ids[3]]

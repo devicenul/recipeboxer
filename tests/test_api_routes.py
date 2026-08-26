@@ -1,5 +1,4 @@
-"""Comprehensive test suite for RecipeBoxer FastAPI REST endpoints, HITL, image streaming, recipe CRUD, and exports."""
-
+import asyncio
 import io
 from pathlib import Path
 from typing import AsyncGenerator
@@ -375,3 +374,78 @@ class TestAPIRoutes:
         assert res_json.status_code == 200
         assert "application/json" in res_json.headers["content-type"]
         assert "Blueberry Muffins" in res_json.text
+
+    # ------------------------------------------------------------------------
+    # 6. Ingestion Batch Default Tags & SSE Stream Stability Tests
+    # ------------------------------------------------------------------------
+
+    @pytest.mark.asyncio
+    async def test_pipeline_start_with_batch_default_tags(
+        self, client: httpx.AsyncClient, tmp_path: Path, test_session_manager: SessionManager
+    ):
+        """Test POST /api/pipeline/start stores default_tags in session configuration."""
+        scans_dir = tmp_path / "batch_tags_scans"
+        scans_dir.mkdir()
+        img_file = scans_dir / "card1.jpg"
+        img_file.write_bytes(_create_dummy_image_bytes("JPEG"))
+
+        payload = {
+            "scans_dir": str(scans_dir),
+            "mode": "parallel",
+            "default_tags": ["Grandma's Box", "Baking", "1950s"],
+        }
+
+        res = await client.post("/api/pipeline/start", json=payload)
+        assert res.status_code == 200
+        data = res.json()
+        sid = data["session_id"]
+
+        session = test_session_manager.get_session(sid)
+        assert session is not None
+        assert getattr(session.config, "default_tags", None) == ["Grandma's Box", "Baking", "1950s"]
+
+    @pytest.mark.asyncio
+    async def test_upload_cards_with_batch_default_tags(
+        self, client: httpx.AsyncClient, test_session_manager: SessionManager
+    ):
+        """Test POST /api/cards/upload accepts default_tags form parameter."""
+        img1 = _create_dummy_image_bytes("JPEG")
+        files = [("files", ("card_test.jpg", img1, "image/jpeg"))]
+        data = {
+            "mode": "parallel",
+            "default_tags": '["Heirloom", "Casseroles"]',
+        }
+
+        res = await client.post("/api/cards/upload", files=files, data=data)
+        assert res.status_code == 200
+        sid = res.json()["session_id"]
+
+        session = test_session_manager.get_session(sid)
+        assert session is not None
+        assert getattr(session.config, "default_tags", None) == ["Heirloom", "Casseroles"]
+
+    @pytest.mark.asyncio
+    async def test_sse_stream_initial_handshake_and_keepalive(
+        self, client: httpx.AsyncClient, test_session_manager: SessionManager
+    ):
+        """Test GET /api/events sends initial handshake and keeps alive without abrupt closure."""
+        sid = "sess_sse_test"
+        session = test_session_manager.create_session(session_id=sid)
+
+        async def complete_session():
+            await asyncio.sleep(0.05)
+            session.state = PipelineState.COMPLETED
+
+        asyncio.create_task(complete_session())
+
+        async with client.stream("GET", f"/api/events?session_id={sid}") as response:
+            assert response.status_code == 200
+            assert "text/event-stream" in response.headers["content-type"]
+            chunks = []
+            async for chunk in response.aiter_text():
+                chunks.append(chunk)
+                if "completed" in chunk:
+                    break
+            joined = "".join(chunks)
+            assert ": connected" in joined
+            assert "event: state_change" in joined or "event: completed" in joined

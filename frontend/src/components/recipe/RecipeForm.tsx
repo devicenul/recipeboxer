@@ -37,6 +37,7 @@ export const RecipeForm: React.FC<RecipeFormProps> = ({
     moveDirection,
     addTag,
     removeTag,
+    updateTag,
     save,
     reset,
   } = useRecipeForm({
@@ -235,6 +236,7 @@ export const RecipeForm: React.FC<RecipeFormProps> = ({
           tags={recipe.tags}
           onAddTag={addTag}
           onRemoveTag={removeTag}
+          onEditTag={updateTag}
         />
       </div>
 

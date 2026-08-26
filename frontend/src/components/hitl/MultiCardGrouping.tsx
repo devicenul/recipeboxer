@@ -1,5 +1,5 @@
-import React from 'react';
-import { Layers, X, ArrowLeft, ArrowRight } from 'lucide-react';
+import React, { useState } from 'react';
+import { Layers, X, ArrowLeft, ArrowRight, Maximize2, GripVertical } from 'lucide-react';
 import { api } from '../../utils/api';
 
 export interface MultiCardGroupingProps {
@@ -7,6 +7,7 @@ export interface MultiCardGroupingProps {
   sessionId?: string;
   onReorder: (newOrder: string[]) => void;
   onDetach: (cardId: string) => void;
+  onOpenInspectionModal?: () => void;
   className?: string;
 }
 
@@ -15,8 +16,12 @@ export const MultiCardGrouping: React.FC<MultiCardGroupingProps> = ({
   sessionId,
   onReorder,
   onDetach,
+  onOpenInspectionModal,
   className = '',
 }) => {
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+
   if (!cardIds || cardIds.length <= 1) {
     return null;
   }
@@ -39,6 +44,40 @@ export const MultiCardGrouping: React.FC<MultiCardGroupingProps> = ({
     onReorder(next);
   };
 
+  const handleDragStart = (e: React.DragEvent, index: number) => {
+    setDraggedIndex(index);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', String(index));
+  };
+
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (dragOverIndex !== index) {
+      setDragOverIndex(index);
+    }
+  };
+
+  const handleDragEnd = () => {
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+  };
+
+  const handleDrop = (e: React.DragEvent, targetIndex: number) => {
+    e.preventDefault();
+    const sourceIdxStr = e.dataTransfer.getData('text/plain');
+    const sourceIndex = sourceIdxStr !== '' ? parseInt(sourceIdxStr, 10) : draggedIndex;
+
+    if (sourceIndex !== null && !isNaN(sourceIndex) && sourceIndex !== targetIndex) {
+      const next = [...cardIds];
+      const [movedItem] = next.splice(sourceIndex, 1);
+      next.splice(targetIndex, 0, movedItem);
+      onReorder(next);
+    }
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+  };
+
   return (
     <div className={`p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs flex flex-col gap-3 ${className}`}>
       <div className="flex items-center justify-between">
@@ -46,9 +85,22 @@ export const MultiCardGrouping: React.FC<MultiCardGroupingProps> = ({
           <Layers className="w-4 h-4 text-purple-500" />
           <span>Multi-Card Recipe Group ({cardIds.length} cards attached)</span>
         </div>
-        <span className="text-[11px] text-slate-500 dark:text-slate-400">
-          Reorder sequential pages for transcription
-        </span>
+        <div className="flex items-center gap-3">
+          <span className="text-[11px] text-slate-500 dark:text-slate-400">
+            Reorder sequential pages for transcription
+          </span>
+          {onOpenInspectionModal && (
+            <button
+              type="button"
+              onClick={onOpenInspectionModal}
+              className="flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-semibold text-purple-700 hover:text-purple-800 dark:text-purple-300 dark:hover:text-purple-200 bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/60 dark:hover:bg-purple-900/60 border border-purple-200 dark:border-purple-800 rounded-lg cursor-pointer transition-colors"
+              title="Inspect all cards in full-size split canvas view"
+            >
+              <Maximize2 className="w-3.5 h-3.5" />
+              <span>Inspect Full-Size Modal</span>
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="flex items-center gap-3 overflow-x-auto pb-2 pt-1">
@@ -57,14 +109,33 @@ export const MultiCardGrouping: React.FC<MultiCardGroupingProps> = ({
           const isBack = idx === 1;
           const roleLabel = isFront ? 'Front (Page 1)' : isBack ? 'Back (Page 2)' : `Part ${idx + 1}`;
           const imgUrl = api.getCardImageUrl(cid, sessionId);
+          const isDragging = draggedIndex === idx;
+          const isDragOver = dragOverIndex === idx;
 
           return (
             <div
               key={cid}
-              className="flex items-center gap-2 shrink-0 group relative bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 shadow-xs"
+              draggable
+              onDragStart={(e) => handleDragStart(e, idx)}
+              onDragOver={(e) => handleDragOver(e, idx)}
+              onDragEnd={handleDragEnd}
+              onDrop={(e) => handleDrop(e, idx)}
+              className={`flex items-center gap-2 shrink-0 group relative bg-slate-50 dark:bg-slate-800/60 border rounded-xl p-2.5 shadow-xs transition-all duration-150 ${
+                isDragging
+                  ? 'opacity-40 border-dashed border-blue-500'
+                  : isDragOver
+                  ? 'border-blue-500 ring-2 ring-blue-400/30'
+                  : 'border-slate-200 dark:border-slate-700'
+              }`}
             >
-              {/* Thumbnail */}
-              <div className="w-16 h-20 bg-slate-200 dark:bg-slate-900 rounded-lg overflow-hidden border border-slate-300 dark:border-slate-700 relative">
+              {/* Thumbnail (Click to open full inspection) */}
+              <div
+                onClick={() => onOpenInspectionModal?.()}
+                className={`w-16 h-20 bg-slate-200 dark:bg-slate-900 rounded-lg overflow-hidden border border-slate-300 dark:border-slate-700 relative ${
+                  onOpenInspectionModal ? 'cursor-pointer hover:opacity-90 hover:ring-2 hover:ring-purple-400/50' : ''
+                }`}
+                title={onOpenInspectionModal ? 'Click to inspect in full-size modal' : cid}
+              >
                 <img
                   src={imgUrl}
                   alt={cid}
@@ -127,3 +198,4 @@ export const MultiCardGrouping: React.FC<MultiCardGroupingProps> = ({
     </div>
   );
 };
+

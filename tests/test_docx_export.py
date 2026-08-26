@@ -207,3 +207,54 @@ class TestDocxExporter:
         data = export_recipes_to_docx(sample_recipes)
         assert len(data) > 0
         assert data[:4] == b"PK\x03\x04"  # Zip header
+
+    def test_docx_image_proportional_aspect_ratio(self, tmp_path: Path):
+        """GAP-03: Verify proportional aspect ratio EMU scaling for horizontal, vertical, and square images."""
+        # 1. Horizontal 2:1 image (600x300)
+        horiz_path = tmp_path / "card_horiz.jpg"
+        Image.new("RGB", (600, 300), color=(200, 100, 100)).save(horiz_path, format="JPEG")
+
+        # 2. Vertical 1:2 image (300x600)
+        vert_path = tmp_path / "card_vert.jpg"
+        Image.new("RGB", (300, 600), color=(100, 200, 100)).save(vert_path, format="JPEG")
+
+        recipe = RecipeSchema(
+            recipe_id="rec_aspect",
+            title="Aspect Ratio Recipe",
+            ingredients=["1 test item"],
+            directions=["Step 1"],
+            card_ids=["card_horiz", "card_vert"],
+        )
+
+        def resolver(cid: str):
+            if cid == "card_horiz":
+                return horiz_path
+            if cid == "card_vert":
+                return vert_path
+            return None
+
+        exporter = DocxExporter()
+        docx_bytes = exporter.export_to_bytes(recipe, image_resolver=resolver)
+
+        zip_buf = io.BytesIO(docx_bytes)
+        with zipfile.ZipFile(zip_buf, "r") as zf:
+            doc_xml = zf.read("word/document.xml").decode("utf-8")
+            # Parse XML to find wp:extent elements
+            root = ET.fromstring(doc_xml)
+            extents = root.findall(".//{http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing}extent")
+            assert len(extents) == 2
+
+            # Extent 1 (Horizontal 2:1)
+            cx1 = int(extents[0].attrib["cx"])
+            cy1 = int(extents[0].attrib["cy"])
+            # Aspect ratio cx/cy should be ~2.0
+            ratio1 = cx1 / cy1
+            assert abs(ratio1 - 2.0) < 0.05
+
+            # Extent 2 (Vertical 1:2)
+            cx2 = int(extents[2 - 1].attrib["cx"])
+            cy2 = int(extents[2 - 1].attrib["cy"])
+            # Aspect ratio cx/cy should be ~0.5
+            ratio2 = cx2 / cy2
+            assert abs(ratio2 - 0.5) < 0.05
+

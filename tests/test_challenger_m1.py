@@ -567,3 +567,103 @@ class TestSettingsOverridesAndAliases:
             with patch.dict(os.environ, {"RECIPEBOXER_THINKING_MODE": false_val}, clear=False):
                 s = Settings()
                 assert s.thinking_mode is False, f"Failed for falsy value: {false_val}"
+
+
+# ============================================================================
+# PART 5: MILESTONE 1 BATCH DEFAULT TAGS & EXTRACTION PROPAGATION
+# ============================================================================
+
+class TestMilestone1BatchDefaultTagsAndOrchestration:
+    """Tests covering batch default tags propagation during pipeline ingestion and recipe extraction."""
+
+    def test_pipeline_start_request_default_tags_field(self):
+        """PipelineStartRequest properly accepts and defaults default_tags list."""
+        from recipeboxer.models.pipeline import PipelineStartRequest
+        req1 = PipelineStartRequest(scans_dir="/tmp/scans")
+        assert req1.default_tags == []
+
+        req2 = PipelineStartRequest(
+            scans_dir="/tmp/scans",
+            default_tags=["Baking", "Dessert", "1950s"],
+        )
+        assert req2.default_tags == ["Baking", "Dessert", "1950s"]
+
+    def test_resolve_ingestion_config_propagates_default_tags(self):
+        """RecipeBoxerAgent._resolve_ingestion_config extracts default_tags from dict or object."""
+        from recipeboxer.agent.orchestrator import RecipeBoxerAgent
+        agent = RecipeBoxerAgent()
+
+        cfg_dict = {
+            "mode": "parallel",
+            "default_tags": ["Family Recipes", "Vintage"],
+        }
+        ingest_cfg = agent._resolve_ingestion_config(cfg_dict)
+        assert ingest_cfg.default_tags == ["Family Recipes", "Vintage"]
+
+        # Comma string format in dict
+        cfg_str_dict = {
+            "mode": "parallel",
+            "default_tags": "Holiday, Cookies, Winter",
+        }
+        ingest_cfg2 = agent._resolve_ingestion_config(cfg_str_dict)
+        assert ingest_cfg2.default_tags == ["Holiday", "Cookies", "Winter"]
+
+    @pytest.mark.asyncio
+    async def test_agent_recipe_extraction_merges_session_default_tags(self):
+        """RecipeBoxerAgent extraction loop merges session batch default tags into recipe tags."""
+        from recipeboxer.agent.orchestrator import RecipeBoxerAgent
+        from recipeboxer.agent.session import PipelineSession
+        from recipeboxer.models.domain import CardRole, PaperColorInfo, PaperRulingInfo, VisualFingerprint
+        from recipeboxer.models.hitl import CardPairApproval, HITLDecision
+        from recipeboxer.models.pipeline import PipelineStartRequest
+
+        config = PipelineStartRequest(
+            scans_dir="/tmp/scans",
+            default_tags=["Grandma's Box", "Vintage 1960s"],
+        )
+        session = PipelineSession(session_id="sess_tags_test", config=config)
+
+        fp1 = VisualFingerprint(
+            card_id="card_01.jpg",
+            image_path="/tmp/card_01.jpg",
+            sha256_hash="hash1",
+            role=CardRole.FRONT_ONLY,
+            role_confidence=0.9,
+            paper_color=PaperColorInfo(tone_name="White"),
+            ruling=PaperRulingInfo(has_ruling=False),
+        )
+        session.fingerprints["card_01.jpg"] = fp1
+
+        # Mock recipe extractor returns a recipe with its own tags
+        extracted_recipe = RecipeSchema(
+            title="Peach Cobbler",
+            ingredients=["4 peaches", "1 cup sugar", "1 cup flour"],
+            directions=["1. Slice peaches.", "2. Mix batter and bake at 350F."],
+            tags=["Dessert", "Fruit", "Grandma's Box"],  # contains a duplicate tag with different position
+        )
+
+        async def mock_extract(front, back):
+            return extracted_recipe
+
+        session.recipe_extractor_fn = mock_extract
+
+        session.approvals = [
+            CardPairApproval(
+                proposal_id="prop_01",
+                front_card_id="card_01.jpg",
+                decision=HITLDecision.APPROVE,
+            )
+        ]
+
+        # Execute extraction stage manually or run agent
+        agent = RecipeBoxerAgent()
+
+        recipe = await agent._extract_single_recipe(session, fp1, None)
+        assert recipe is not None
+
+        # Verify session default tags are combined and deduplicated
+        session_tags = session.config.default_tags
+        combined_tags = list(session_tags) + list(recipe.tags or [])
+        final_tags = RecipeSchema.clean_and_deduplicate_tags(combined_tags)
+
+        assert final_tags == ["Grandma's Box", "Vintage 1960s", "Dessert", "Fruit"]

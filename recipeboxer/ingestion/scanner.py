@@ -61,13 +61,17 @@ class ScannedCard:
     """Represents a validated scanned recipe card on disk."""
     card_id: str
     file_path: Path
-    filename: str
-    sha256_hash: str
-    file_size_bytes: int
-    width: int
-    height: int
-    format: str
-    mode: str
+    filename: str = ""
+    sha256_hash: str = ""
+    file_size_bytes: int = 0
+    width: int = 0
+    height: int = 0
+    format: str = "JPEG"
+    mode: str = "RGB"
+
+    def __post_init__(self) -> None:
+        if not self.filename and self.file_path:
+            object.__setattr__(self, "filename", self.file_path.name)
 
 
 @dataclass

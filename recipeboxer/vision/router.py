@@ -138,7 +138,16 @@ Transcribe this recipe card with deep attention to historical handwriting nuance
 - Convert archaic butter measurements ('butter size of an egg' -> 1/4 cup butter, 'size of a walnut' -> 2 tbsp).
 - Disambiguate cursive letterforms ('r' vs 'v', 'n' vs 'u', 'S' vs 'L').
 
-2. FORMATTING REQUIREMENTS:
+2. TITLE INFERENCE & GUESSING:
+- If the card has a clearly stated title, extract it cleanly without modification.
+- If the recipe has NO stated title, or if the title is missing, torn, illegible, or inferred from ingredients/context: infer the most descriptive title (e.g. 'Old-Fashioned Apple Crisp') and ALWAYS append the suffix ' [GUESS]' (e.g. 'Old-Fashioned Apple Crisp [GUESS]') to clearly flag it for user verification.
+
+3. ANECDOTE, STORY & METADATA PRESERVATION:
+- Extract family stories, personal memories, handwritten marginalia (e.g., 'Aunt Clara\\'s wedding cake 1942', 'Good for Sunday suppers'), vintage dates, and occasion notes into the 'description' field.
+- Extract author attribution, vintage dates, handwritten signatures, and heirloom provenance into 'source_notes'.
+- STRICT ISOLATION: NEVER place family stories, personal anecdotes, or marginalia into the 'ingredients' list or 'directions' steps — keep ingredients and directions strictly confined to culinary measurements, ingredients, and sequential preparation/cooking steps.
+
+4. FORMATTING REQUIREMENTS:
 - Separate multi-ingredient lines into distinct individual ingredient strings.
 - Format directions sequentially with clear '1. ', '2. ', '3. ' step numbering.
 - Preserve card author, dates, and historical attribution in 'source_notes'.
@@ -154,11 +163,20 @@ Transcribe this recipe clipping with strict focus on multi-column layout order a
 - Capture primary title and headnotes from spanning banner headers.
 - If sub-recipes exist (e.g. 'For the Sauce:'), retain clear subheadings.
 
-2. ADVERTISEMENT & COUPON EXCLUSION:
+2. TITLE INFERENCE & GUESSING:
+- If the clipping has a clearly stated title, extract it cleanly without modification.
+- If the clipping has NO stated title, or if the header is cut off/missing: infer the most descriptive title from ingredients/context and ALWAYS append the suffix ' [GUESS]' (e.g. 'Quick Drop Biscuits [GUESS]') to flag for verification.
+
+3. ANECDOTE, STORY & METADATA PRESERVATION:
+- Extract introductory culinary headnotes, promotional background anecdotes, and occasion notes into 'description'.
+- Extract publication names, dates, clipped bylines, and brand attribution into 'source_notes'.
+- STRICT ISOLATION: NEVER place narrative notes, brand history, or clipping marginalia into 'ingredients' or 'directions' — keep ingredients and directions strictly confined to culinary measurements and numbered preparation steps.
+
+4. ADVERTISEMENT & COUPON EXCLUSION:
 - STRICTLY EXCLUDE: 'Clip and save', coupon offers, expiration dates, box top redemption addresses, magazine page numbers, publication dates, and unrelated ad sidebars.
 - Retain culinary product brand names (e.g. 'Crisco', 'Borden\\'s Eagle Brand') in title and source attribution notes.
 
-3. STRUCTURED OUTPUT:
+5. STRUCTURED OUTPUT:
 - Separate distinct ingredients into clean strings with quantities and units.
 - Number directions sequentially as '1. ', '2. '.
 - Output ONLY valid JSON adhering strictly to RecipeSchema.
@@ -173,7 +191,16 @@ Transcribe this typewritten card with high fidelity:
 - Convert shorthand abbreviations ('pkg.', 'tsp.', 'tbsp.') cleanly.
 - If club stamps or dates are present (e.g. 'Nov 1956'), capture them in 'source_notes'.
 
-2. STRUCTURED RECIPE OUTPUT:
+2. TITLE INFERENCE & GUESSING:
+- If the card has a clearly stated title, extract it cleanly.
+- If the recipe has NO stated title, or if the title is missing, illegible, or inferred: infer the most descriptive title and ALWAYS append ' [GUESS]' (e.g. 'Church Potluck Casserole [GUESS]').
+
+3. ANECDOTE, STORY & METADATA PRESERVATION:
+- Extract typewriter headnotes, family anecdotes, handwritten marginalia additions, and occasion notes into 'description'.
+- Extract club attribution, church group names, typist initials, dates, and card provenance into 'source_notes'.
+- STRICT ISOLATION: NEVER place background anecdotes, marginalia, or personal notes into 'ingredients' or 'directions' — keep ingredients and directions strictly confined to culinary ingredients and cooking steps.
+
+4. STRUCTURED RECIPE OUTPUT:
 - Extract Title, Description, Yield/Servings, Prep Time, Cook Time, Total Time.
 - Output clean array of Ingredient strings and sequentially numbered Directions ('1. ', '2. ').
 - Respond strictly with valid JSON conforming to RecipeSchema.
@@ -187,7 +214,16 @@ Transcribe this recipe card which contains overlapping mediums, pasted cutouts, 
 - Transcribe around oil smudges, coffee rings, tape strips, and torn card edges without omitting ingredients.
 - Note physical condition, annotations, and provenance in 'source_notes'.
 
-2. STRUCTURED RECIPE OUTPUT:
+2. TITLE INFERENCE & GUESSING:
+- If the card has a clearly stated title, extract it cleanly.
+- If the title is torn away, illegible, obscured by stains, or missing: infer the most descriptive title and ALWAYS append ' [GUESS]' (e.g. 'Heirloom Lasagna [GUESS]').
+
+3. ANECDOTE, STORY & METADATA PRESERVATION:
+- Extract handwritten margin notes, family memories, occasion remarks (e.g., 'Made for Joe\\'s birthday 1974'), and background stories into 'description'.
+- Extract signatures, dates, clipped origins, and physical provenance into 'source_notes'.
+- STRICT ISOLATION: NEVER place family stories, anecdotes, or handwritten marginalia into 'ingredients' or 'directions' — keep ingredients and directions strictly confined to culinary measurements and preparation steps.
+
+4. STRUCTURED RECIPE OUTPUT:
 - Extract full Title, Description, Ingredients array, and sequentially numbered Directions ('1. ', '2. ').
 - Respond strictly with valid JSON conforming to RecipeSchema.
 """

@@ -1,7 +1,8 @@
 import React from 'react';
-import { Settings2, Cpu, Zap, BrainCircuit } from 'lucide-react';
+import { Settings2, Cpu, Zap, BrainCircuit, Tag } from 'lucide-react';
 import { Slider } from '../common/Slider';
 import { IngestionMode, PipelineStartRequest } from '../../types/pipeline';
+import { TagManager } from '../recipe/TagManager';
 
 export interface ConfigPanelProps {
   config: PipelineStartRequest;
@@ -149,6 +150,27 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
             onChange={(val) => update({ thinking_budget_tokens: val })}
           />
         )}
+      </div>
+
+      {/* Batch Default Tags */}
+      <div className="pt-3 border-t border-slate-200 dark:border-slate-800 flex flex-col gap-2">
+        <TagManager
+          tags={config.default_tags || []}
+          onAddTag={(tag) => {
+            const current = config.default_tags || [];
+            if (!current.includes(tag)) {
+              update({ default_tags: [...current, tag] });
+            }
+          }}
+          onRemoveTag={(tag) => {
+            const current = config.default_tags || [];
+            update({ default_tags: current.filter((t) => t !== tag) });
+          }}
+          disabled={disabled}
+        />
+        <p className="text-xs text-slate-500 dark:text-slate-400">
+          Initial batch default tags automatically applied to all recipe cards scanned and extracted in this session.
+        </p>
       </div>
     </div>
   );

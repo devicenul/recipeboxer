@@ -433,3 +433,172 @@ async def test_extractor_alias_method():
     recipe = await extractor.extract_recipe(b"mock_bytes")
     assert isinstance(recipe, RecipeSchema)
 
+
+@pytest.mark.asyncio
+async def test_extract_cards_multi_card_sequence_offline():
+    """Tests extract_cards with 3+ cards offline, ensuring sequential directions and card_ids preservation."""
+    extractor = GeminiRecipeExtractor(api_key=None)
+
+    fp1 = VisualFingerprint(
+        card_id="grandma_cake_page1.jpg",
+        image_path="/scans/grandma_cake_page1.jpg",
+        sha256_hash="hash1",
+        role=CardRole.FRONT_ONLY,
+    )
+    fp2 = VisualFingerprint(
+        card_id="grandma_cake_page2.jpg",
+        image_path="/scans/grandma_cake_page2.jpg",
+        sha256_hash="hash2",
+        role=CardRole.BACK_ONLY,
+    )
+    fp3 = VisualFingerprint(
+        card_id="grandma_cake_page3.jpg",
+        image_path="/scans/grandma_cake_page3.jpg",
+        sha256_hash="hash3",
+        role=CardRole.BACK_ONLY,
+    )
+
+    recipe = await extractor.extract_cards([fp1, fp2, fp3])
+    assert isinstance(recipe, RecipeSchema)
+    assert recipe.card_ids == ["grandma_cake_page1.jpg", "grandma_cake_page2.jpg", "grandma_cake_page3.jpg"]
+    assert len(recipe.image_urls) == 3
+    assert recipe.image_urls[0] == "/api/cards/grandma_cake_page1.jpg/image"
+    assert len(recipe.directions) == 3
+    assert recipe.directions[0].startswith("1. ")
+    assert recipe.directions[1].startswith("2. ")
+    assert recipe.directions[2].startswith("3. ")
+
+
+@pytest.mark.asyncio
+async def test_extractor_multi_card_gemini_api_payload_structure():
+    """Tests Gemini API payload structure when 3+ cards are extracted, ensuring sequential labels and prompt instructions."""
+    extractor = GeminiRecipeExtractor(
+        api_key="real-gemini-api-key-test",
+        model_name="gemini-3.7-flash",
+    )
+
+    mock_resp = MagicMock()
+    mock_resp.json.return_value = {
+        "candidates": [
+            {
+                "content": {
+                    "parts": [
+                        {
+                            "text": json.dumps({
+                                "title": "3-Page Wedding Cake",
+                                "ingredients": ["4 cups cake flour", "2 cups sugar", "1 cup butter"],
+                                "directions": [
+                                    "Mix dry ingredients.",
+                                    "Cream butter and sugar, then add eggs.",
+                                    "Bake at 350F for 35 mins and ice with buttercream.",
+                                ],
+                                "tags": ["Cake", "Wedding", "Dessert"],
+                            })
+                        }
+                    ]
+                }
+            }
+        ]
+    }
+    mock_resp.raise_for_status = MagicMock()
+
+    resolved_cards = [
+        (b"card1_bytes", "/path/card1.jpg", "card1.jpg"),
+        (b"card2_bytes", "/path/card2.jpg", "card2.jpg"),
+        (b"card3_bytes", "/path/card3.jpg", "card3.jpg"),
+    ]
+
+    with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
+        mock_post.return_value = mock_resp
+        recipe = await extractor._call_gemini_extraction_api(resolved_cards=resolved_cards)
+
+        assert mock_post.called
+        call_kwargs = mock_post.call_args.kwargs
+        contents = call_kwargs["json"]["contents"][0]["parts"]
+
+        # Check prompt instruction
+        instruction_parts = [p["text"] for p in contents if "text" in p and "spanning 3 card faces" in p["text"]]
+        assert len(instruction_parts) == 1
+        assert "exact sequential order" in instruction_parts[0]
+
+        # Check sequential card labels
+        label_parts = [p["text"] for p in contents if "text" in p and p["text"].startswith("Image ")]
+        assert len(label_parts) == 3
+        assert "Image 1: Front (Page 1): card1.jpg" in label_parts[0]
+        assert "Image 2: Continuation 1 (Page 2): card2.jpg" in label_parts[1]
+        assert "Image 3: Continuation 2 (Page 3): card3.jpg" in label_parts[2]
+
+        assert recipe.title == "3-Page Wedding Cake"
+        assert recipe.card_ids == ["card1.jpg", "card2.jpg", "card3.jpg"]
+        assert len(recipe.image_urls) == 3
+
+
+@pytest.mark.asyncio
+async def test_extraction_prompts_contain_guess_and_anecdote_rules():
+    """Validates that all system extraction prompts mandate [GUESS] suffix and strict anecdote isolation."""
+    from recipeboxer.vision.router import (
+        MIXED_MEDIA_SYSTEM_PROMPT,
+        PRINT_CLIPPING_SYSTEM_PROMPT,
+        TYPEWRITTEN_SYSTEM_PROMPT,
+        VINTAGE_HANDWRITING_SYSTEM_PROMPT,
+    )
+
+    prompts = [
+        RECIPE_EXTRACTION_SYSTEM_INSTRUCTION,
+        VINTAGE_HANDWRITING_SYSTEM_PROMPT,
+        PRINT_CLIPPING_SYSTEM_PROMPT,
+        TYPEWRITTEN_SYSTEM_PROMPT,
+        MIXED_MEDIA_SYSTEM_PROMPT,
+    ]
+
+    for p in prompts:
+        assert "[GUESS]" in p
+        assert "TITLE INFERENCE & GUESSING" in p or "TITLE INFERENCE" in p or "TITLE" in p
+        assert "description" in p
+        assert "source_notes" in p
+        assert "STRICT ISOLATION" in p or "ingredients" in p
+
+
+@pytest.mark.asyncio
+async def test_offline_extraction_inferred_untitled_card_appends_guess():
+    """Validates that offline extraction appends [GUESS] to inferred/untitled cards."""
+    extractor = GeminiRecipeExtractor(api_key=None)
+
+    fp = VisualFingerprint(
+        card_id="untitled_scanned_card_001.jpg",
+        image_path="/tmp/untitled_scanned_card_001.jpg",
+        sha256_hash="abc12345678",
+        role=CardRole.STANDALONE,
+        boundary_text=BoundaryText(
+            first_line="Apple Brown Betty",
+            last_line="Serve warm.",
+        ),
+    )
+
+    recipe = await extractor.extract(fp)
+    assert isinstance(recipe, RecipeSchema)
+    assert recipe.title.endswith(" [GUESS]")
+    assert "Apple Brown Betty" in recipe.title
+
+
+@pytest.mark.asyncio
+async def test_recipe_schema_preserves_guess_and_anecdote_isolation():
+    """Validates that RecipeSchema maintains title guessing and clean metadata separation."""
+    recipe = RecipeSchema(
+        title="Heirloom Cinnamon Streusel [GUESS]",
+        description="Passed down from Great-Aunt Clara for Sunday suppers after church in 1938.",
+        source_notes="Grandma's cedar recipe box (1938 handwritten index card)",
+        ingredients=["2 cups flour", "1 cup sugar", "2 tsp cinnamon"],
+        directions=["1. Combine dry ingredients.", "2. Bake at 350F for 30 minutes."],
+        tags=["Baking", "Vintage", "Sunday Supper"],
+    )
+
+    assert recipe.title == "Heirloom Cinnamon Streusel [GUESS]"
+    assert "1938" in recipe.description
+    assert "Sunday suppers" in recipe.description
+    assert "cedar recipe box" in recipe.source_notes
+    assert all("1938" not in ing for ing in recipe.ingredients)
+    assert all("suppers" not in d for d in recipe.directions)
+
+
+

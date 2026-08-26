@@ -7,10 +7,13 @@ import json
 import logging
 import mimetypes
 import os
+import re
 import shutil
 import uuid
 from pathlib import Path
 from typing import Any, AsyncGenerator, Dict, List, Optional
+
+from pydantic import BaseModel, Field
 
 from fastapi import (
     APIRouter,
@@ -395,6 +398,7 @@ async def upload_cards(
     slow_batch_size: Optional[int] = Form(2),
     slow_batch_interval_seconds: Optional[float] = Form(2.0),
     model: Optional[str] = Form("gemini-3.7-flash"),
+    default_tags: Optional[str] = Form(None),
     auto_start: Optional[bool] = Form(False),
     manager: SessionManager = Depends(get_manager),
     store: SessionStore = Depends(get_store),
@@ -403,6 +407,17 @@ async def upload_cards(
     """Accepts multipart card image uploads, validates each with PIL, and registers a session."""
     if not files:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No files uploaded")
+
+    parsed_default_tags: List[str] = []
+    if default_tags:
+        try:
+            parsed = json.loads(default_tags)
+            if isinstance(parsed, list):
+                parsed_default_tags = [str(t).strip() for t in parsed if str(t).strip()]
+            elif isinstance(parsed, str):
+                parsed_default_tags = [t.strip() for t in parsed.split(",") if t.strip()]
+        except Exception:
+            parsed_default_tags = [t.strip() for t in default_tags.split(",") if t.strip()]
 
     sid = session_id or f"sess_{uuid.uuid4().hex[:8]}"
     upload_dir = settings.cache_dir / "uploads" / sid
@@ -443,8 +458,14 @@ async def upload_cards(
             slow_batch_size=slow_batch_size or 2,
             slow_batch_interval_seconds=slow_batch_interval_seconds or 2.0,
             model=model or "gemini-3.7-flash",
+            default_tags=parsed_default_tags,
         )
         session = manager.create_session(config=config, session_id=sid)
+    elif parsed_default_tags and hasattr(session, "config"):
+        if hasattr(session.config, "default_tags"):
+            session.config.default_tags = list(set(session.config.default_tags + parsed_default_tags))
+        elif isinstance(session.config, dict):
+            session.config["default_tags"] = list(set(session.config.get("default_tags", []) + parsed_default_tags))
 
     session.cards.extend(valid_cards)
     session.scanned_paths.extend(saved_paths)
@@ -525,61 +546,74 @@ async def stream_events(
     manager: SessionManager = Depends(get_manager),
 ) -> StreamingResponse:
     """Streams Server-Sent Events (SSE) broadcasting real-time session progress and state changes."""
+    if session_id is not None and manager.get_session(session_id) is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Session '{session_id}' not found",
+        )
+
     async def event_generator() -> AsyncGenerator[str, None]:
         last_state: Optional[str] = None
         last_extracted_count: int = 0
         last_percent: float = -1.0
         ticks = 0
 
-        while True:
-            if await request.is_disconnected():
-                break
+        # Initial keep-alive connection handshake comment
+        yield ": connected\n\n"
 
-            session = manager.get_session(session_id)
-            if session is None:
-                yield f"event: status\ndata: {json.dumps({'status': 'IDLE', 'session_id': session_id or 'none'})}\n\n"
-                await asyncio.sleep(1.0)
-                ticks += 1
-                if ticks % 15 == 0:
+        try:
+            while True:
+                if await request.is_disconnected():
+                    break
+
+                session = manager.get_session(session_id) if session_id else None
+                if session is None:
+                    yield f"event: status\ndata: {json.dumps({'status': 'IDLE', 'session_id': session_id or 'none'})}\n\n"
                     yield ": ping\n\n"
-                continue
+                    break
 
-            status_obj = session.get_status()
-            current_state = status_obj.status.value
+                status_obj = session.get_status()
+                current_state = status_obj.status.value
 
-            # State change event
-            if current_state != last_state:
-                last_state = current_state
-                yield f"event: state_change\ndata: {status_obj.model_dump_json()}\n\n"
+                # State change event
+                if current_state != last_state:
+                    last_state = current_state
+                    yield f"event: state_change\ndata: {status_obj.model_dump_json()}\n\n"
 
-            # Progress change event
-            curr_pct = status_obj.progress.percent_complete
-            if abs(curr_pct - last_percent) >= 1.0 or ticks == 0:
-                last_percent = curr_pct
-                yield f"event: progress\ndata: {status_obj.model_dump_json()}\n\n"
+                # Progress change event
+                curr_pct = status_obj.progress.percent_complete
+                if abs(curr_pct - last_percent) >= 1.0 or ticks == 0:
+                    last_percent = curr_pct
+                    yield f"event: progress\ndata: {status_obj.model_dump_json()}\n\n"
 
-            # HITL ready event
-            if current_state == PipelineState.HITL_PENDING.value and ticks == 0:
-                yield f"event: hitl_ready\ndata: {json.dumps({'session_id': session.session_id, 'proposals_count': len(session.proposals)})}\n\n"
+                # HITL ready event
+                if current_state == PipelineState.HITL_PENDING.value and (ticks == 0 or current_state != last_state):
+                    yield f"event: hitl_ready\ndata: {json.dumps({'session_id': session.session_id, 'proposals_count': len(session.proposals)})}\n\n"
 
-            # Recipe extracted event
-            curr_extracted = len(session.recipes)
-            if curr_extracted > last_extracted_count:
-                new_recipes = session.recipes[last_extracted_count:curr_extracted]
-                for r in new_recipes:
-                    yield f"event: recipe_extracted\ndata: {r.model_dump_json()}\n\n"
-                last_extracted_count = curr_extracted
+                # Recipe extracted event
+                curr_extracted = len(session.recipes)
+                if curr_extracted > last_extracted_count:
+                    new_recipes = session.recipes[last_extracted_count:curr_extracted]
+                    for r in new_recipes:
+                        yield f"event: recipe_extracted\ndata: {r.model_dump_json()}\n\n"
+                    last_extracted_count = curr_extracted
 
-            # Terminal states
-            if current_state in (PipelineState.COMPLETED.value, PipelineState.FAILED.value, PipelineState.CANCELLED.value):
-                yield f"event: {current_state.lower()}\ndata: {status_obj.model_dump_json()}\n\n"
-                break
+                # Terminal states: emit terminal state event and finish stream
+                if current_state in (PipelineState.COMPLETED.value, PipelineState.FAILED.value, PipelineState.CANCELLED.value):
+                    yield f"event: {current_state.lower()}\ndata: {status_obj.model_dump_json()}\n\n"
+                    break
 
-            ticks += 1
-            if ticks % 15 == 0:
-                yield ": ping\n\n"
+                ticks += 1
+                if ticks % 10 == 0:
+                    yield ": ping\n\n"
 
-            await asyncio.sleep(0.5)
+                await asyncio.sleep(0.5)
+                if await request.is_disconnected():
+                    break
+        except (asyncio.CancelledError, GeneratorExit):
+            return
+        except Exception:
+            return
 
     return StreamingResponse(
         event_generator(),
@@ -1354,6 +1388,93 @@ def _get_image_resolver(
     return resolver
 
 
+def sanitize_export_filename(
+    filename: Optional[str],
+    default_name: str,
+    expected_ext: Optional[str] = None,
+) -> str:
+    """Sanitizes an export filename against path traversal and illegal filesystem characters."""
+    if not filename:
+        return default_name
+
+    # Strip path components and directory names
+    clean = os.path.basename(str(filename).strip())
+
+    # Remove illegal characters (\ / : * ? " < > | and control chars)
+    clean = re.sub(r'[\/\\:\*\?"<>\|\x00-\x1f\x7f]', '', clean)
+    clean = clean.strip(". ")
+
+    if not clean:
+        return default_name
+
+    if expected_ext:
+        normalized_ext = f".{expected_ext.lstrip('.')}"
+        if not clean.lower().endswith(normalized_ext.lower()):
+            clean = f"{clean}{normalized_ext}"
+
+    return clean
+
+
+class GoogleDocsCreateDocRequest(BaseModel):
+    session_id: Optional[str] = Field(None, description="Optional target session ID")
+    access_token: str = Field(..., description="Google OAuth 2.0 access token")
+    document_title: Optional[str] = Field("RecipeBoxer Archival Cookbook", description="Document title")
+    folder_name: Optional[str] = Field("RecipeBoxer Scans", description="Drive folder for scan uploads")
+
+
+@router.post(
+    "/export/google-docs/create-document",
+    status_code=status.HTTP_200_OK,
+    summary="Create authentic Google Doc in user account via Google Docs/Drive API",
+)
+async def create_google_doc_document(
+    payload: GoogleDocsCreateDocRequest,
+    manager: SessionManager = Depends(get_manager),
+    store: SessionStore = Depends(get_store),
+) -> Dict[str, Any]:
+    """Creates an authentic Google Doc in the authenticated user's account.
+
+    Uploads card scan images to Google Drive, creates the document, applies batch updates,
+    and returns document ID and URL.
+    """
+    if not payload.access_token or not payload.access_token.strip():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Google OAuth access token is required",
+        )
+
+    recipes = _get_export_recipes_for_format(payload.session_id, manager, store)
+    resolver = _get_image_resolver(payload.session_id, manager, store)
+    exporter = GoogleDocsExporter()
+
+    try:
+        result = exporter.create_google_document(
+            access_token=payload.access_token,
+            recipes=recipes,
+            title=payload.document_title or "RecipeBoxer Archival Cookbook",
+            image_resolver=resolver,
+            drive_folder_name=payload.folder_name or "RecipeBoxer Scans",
+        )
+        return result
+    except ValueError as val_err:
+        err_msg = str(val_err)
+        if "401" in err_msg or "unauthorized" in err_msg.lower() or ("invalid" in err_msg.lower() and "token" in err_msg.lower()):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=f"Google OAuth authorization failed: {err_msg}",
+            )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=err_msg,
+        )
+    except Exception as exc:
+        logger.error(f"Error creating Google Doc: {exc}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Failed to communicate with Google Docs/Drive API: {exc}",
+        )
+
+
 @router.get(
     "/export/csv",
     status_code=status.HTTP_200_OK,
@@ -1361,10 +1482,13 @@ def _get_image_resolver(
 )
 async def export_csv(
     session_id: Optional[str] = Query(None, description="Optional target session ID"),
+    filename: Optional[str] = Query(None, description="Custom export filename"),
     manager: SessionManager = Depends(get_manager),
     store: SessionStore = Depends(get_store),
 ) -> Response:
     """Returns the generated Plan To Eat CSV file as text/csv attachment with RFC 4180 headers."""
+    target_filename = sanitize_export_filename(filename, "recipeboxer_export.csv", "csv")
+
     session = manager.get_session(session_id)
     if session is None:
         if session_id is not None:
@@ -1390,7 +1514,7 @@ async def export_csv(
             return Response(
                 content=csv_content,
                 media_type="text/csv; charset=utf-8",
-                headers={"Content-Disposition": 'attachment; filename="recipeboxer_export.csv"'},
+                headers={"Content-Disposition": f'attachment; filename="{target_filename}"'},
             )
         else:
             raise HTTPException(
@@ -1407,18 +1531,18 @@ async def export_csv(
                 detail="CSV export not ready: pipeline has not completed extraction",
             )
 
-    if session.csv_output_path and Path(session.csv_output_path).exists():
+    if session.csv_output_path and Path(session.csv_output_path).exists() and not filename:
         return FileResponse(
             path=session.csv_output_path,
             media_type="text/csv; charset=utf-8",
-            filename="recipeboxer_export.csv",
-            headers={"Content-Disposition": 'attachment; filename="recipeboxer_export.csv"'},
+            filename=target_filename,
+            headers={"Content-Disposition": f'attachment; filename="{target_filename}"'},
         )
 
     return Response(
         content=session.csv_content,
         media_type="text/csv; charset=utf-8",
-        headers={"Content-Disposition": 'attachment; filename="recipeboxer_export.csv"'},
+        headers={"Content-Disposition": f'attachment; filename="{target_filename}"'},
     )
 
 
@@ -1434,17 +1558,19 @@ async def export_csv(
 )
 async def export_json_ld(
     session_id: Optional[str] = Query(None, description="Optional target session ID"),
+    filename: Optional[str] = Query(None, description="Custom export filename"),
     manager: SessionManager = Depends(get_manager),
     store: SessionStore = Depends(get_store),
 ) -> Response:
     """Returns Schema.org Recipe structured JSON-LD format."""
     recipes = _get_export_recipes_for_format(session_id, manager, store)
     json_ld_str = export_recipes_to_json_ld(recipes)
+    target_filename = sanitize_export_filename(filename, "recipeboxer_recipes_json_ld.json", "json")
 
     return Response(
         content=json_ld_str,
         media_type="application/ld+json; charset=utf-8",
-        headers={"Content-Disposition": 'attachment; filename="recipeboxer_recipes_json_ld.json"'},
+        headers={"Content-Disposition": f'attachment; filename="{target_filename}"'},
     )
 
 
@@ -1455,17 +1581,19 @@ async def export_json_ld(
 )
 async def export_json(
     session_id: Optional[str] = Query(None, description="Optional target session ID"),
+    filename: Optional[str] = Query(None, description="Custom export filename"),
     manager: SessionManager = Depends(get_manager),
     store: SessionStore = Depends(get_store),
 ) -> Response:
     """Returns standard RecipeSchema JSON array download."""
     recipes = _get_export_recipes_for_format(session_id, manager, store)
     json_str = export_recipes_to_json(recipes)
+    target_filename = sanitize_export_filename(filename, "recipeboxer_recipes.json", "json")
 
     return Response(
         content=json_str,
         media_type="application/json; charset=utf-8",
-        headers={"Content-Disposition": 'attachment; filename="recipeboxer_recipes.json"'},
+        headers={"Content-Disposition": f'attachment; filename="{target_filename}"'},
     )
 
 
@@ -1476,6 +1604,7 @@ async def export_json(
 )
 async def export_docx(
     session_id: Optional[str] = Query(None, description="Optional target session ID"),
+    filename: Optional[str] = Query(None, description="Custom export filename"),
     manager: SessionManager = Depends(get_manager),
     store: SessionStore = Depends(get_store),
 ) -> Response:
@@ -1483,11 +1612,12 @@ async def export_docx(
     recipes = _get_export_recipes_for_format(session_id, manager, store)
     resolver = _get_image_resolver(session_id, manager, store)
     docx_bytes = export_recipes_to_docx(recipes, image_resolver=resolver)
+    target_filename = sanitize_export_filename(filename, "recipeboxer_cookbook.docx", "docx")
 
     return Response(
         content=docx_bytes,
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        headers={"Content-Disposition": 'attachment; filename="recipeboxer_cookbook.docx"'},
+        headers={"Content-Disposition": f'attachment; filename="{target_filename}"'},
     )
 
 
@@ -1498,6 +1628,7 @@ async def export_docx(
 )
 async def export_pdf(
     session_id: Optional[str] = Query(None, description="Optional target session ID"),
+    filename: Optional[str] = Query(None, description="Custom export filename"),
     manager: SessionManager = Depends(get_manager),
     store: SessionStore = Depends(get_store),
 ) -> Response:
@@ -1505,11 +1636,12 @@ async def export_pdf(
     recipes = _get_export_recipes_for_format(session_id, manager, store)
     resolver = _get_image_resolver(session_id, manager, store)
     pdf_bytes = export_recipes_to_pdf(recipes, image_resolver=resolver)
+    target_filename = sanitize_export_filename(filename, "recipeboxer_cookbook.pdf", "pdf")
 
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
-        headers={"Content-Disposition": 'attachment; filename="recipeboxer_cookbook.pdf"'},
+        headers={"Content-Disposition": f'attachment; filename="{target_filename}"'},
     )
 
 
@@ -1525,6 +1657,7 @@ async def export_pdf(
 )
 async def export_markdown(
     session_id: Optional[str] = Query(None, description="Optional target session ID"),
+    filename: Optional[str] = Query(None, description="Custom export filename"),
     use_wikilinks: bool = Query(True, description="Whether to format card images as Obsidian wikilinks"),
     manager: SessionManager = Depends(get_manager),
     store: SessionStore = Depends(get_store),
@@ -1533,11 +1666,12 @@ async def export_markdown(
     recipes = _get_export_recipes_for_format(session_id, manager, store)
     resolver = _get_image_resolver(session_id, manager, store)
     md_content = export_recipes_to_markdown(recipes, use_wikilinks=use_wikilinks, image_resolver=resolver)
+    target_filename = sanitize_export_filename(filename, "recipeboxer_recipes.md", "md")
 
     return Response(
         content=md_content,
         media_type="text/markdown; charset=utf-8",
-        headers={"Content-Disposition": 'attachment; filename="recipeboxer_recipes.md"'},
+        headers={"Content-Disposition": f'attachment; filename="{target_filename}"'},
     )
 
 
@@ -1553,17 +1687,19 @@ async def export_markdown(
 )
 async def export_cooklang(
     session_id: Optional[str] = Query(None, description="Optional target session ID"),
+    filename: Optional[str] = Query(None, description="Custom export filename"),
     manager: SessionManager = Depends(get_manager),
     store: SessionStore = Depends(get_store),
 ) -> Response:
     """Returns Cooklang (.cook) markup formatted with ingredients, cookware, and timers."""
     recipes = _get_export_recipes_for_format(session_id, manager, store)
     cook_content = export_recipes_to_cooklang(recipes)
+    target_filename = sanitize_export_filename(filename, "recipeboxer_recipes.cook", "cook")
 
     return Response(
         content=cook_content,
         media_type="text/plain; charset=utf-8",
-        headers={"Content-Disposition": 'attachment; filename="recipeboxer_recipes.cook"'},
+        headers={"Content-Disposition": f'attachment; filename="{target_filename}"'},
     )
 
 
@@ -1574,6 +1710,7 @@ async def export_cooklang(
 )
 async def export_paprika(
     session_id: Optional[str] = Query(None, description="Optional target session ID"),
+    filename: Optional[str] = Query(None, description="Custom export filename"),
     as_zip: bool = Query(False, description="Whether to format multi-recipe archive as ZIP of .paprikarecipe files"),
     manager: SessionManager = Depends(get_manager),
     store: SessionStore = Depends(get_store),
@@ -1583,10 +1720,14 @@ async def export_paprika(
     resolver = _get_image_resolver(session_id, manager, store)
     paprika_bytes = export_recipes_to_paprika(recipes, image_resolver=resolver, as_zip_archive=as_zip)
 
+    default_ext = "zip" if as_zip else "paprikarecipes"
+    default_name = f"recipeboxer_export.{default_ext}"
+    target_filename = sanitize_export_filename(filename, default_name, default_ext)
+
     return Response(
         content=paprika_bytes,
         media_type="application/x-paprikarecipes",
-        headers={"Content-Disposition": 'attachment; filename="recipeboxer_export.paprikarecipes"'},
+        headers={"Content-Disposition": f'attachment; filename="{target_filename}"'},
     )
 
 
@@ -1605,6 +1746,7 @@ async def export_google_docs(
     session_id: Optional[str] = Query(None, description="Optional target session ID"),
     format: Optional[str] = Query("batch_requests", description="'batch_requests', 'json', or 'html'"),
     title: Optional[str] = Query("RecipeBoxer Archival Cookbook", description="Cookbook Title"),
+    filename: Optional[str] = Query(None, description="Custom export filename"),
     manager: SessionManager = Depends(get_manager),
     store: SessionStore = Depends(get_store),
 ) -> Any:
@@ -1617,6 +1759,7 @@ async def export_google_docs(
                 session_id = body.get("session_id", session_id)
                 format = body.get("format", format)
                 title = body.get("title", title)
+                filename = body.get("filename", filename)
         except Exception:
             pass
 
@@ -1627,21 +1770,24 @@ async def export_google_docs(
     fmt = (format or "batch_requests").lower().strip()
     if fmt == "html":
         html_content = exporter.export_to_html(recipes, title=title or "RecipeBoxer Archival Cookbook", image_resolver=resolver)
+        target_filename = sanitize_export_filename(filename, "recipeboxer_google_docs.html", "html")
         return Response(
             content=html_content,
             media_type="text/html; charset=utf-8",
-            headers={"Content-Disposition": 'attachment; filename="recipeboxer_google_docs.html"'},
+            headers={"Content-Disposition": f'attachment; filename="{target_filename}"'},
         )
     elif fmt == "json":
         json_str = exporter.export_to_json_string(recipes, title=title or "RecipeBoxer Archival Cookbook", image_resolver=resolver)
+        target_filename = sanitize_export_filename(filename, "recipeboxer_google_docs.json", "json")
         return Response(
             content=json_str,
             media_type="application/json; charset=utf-8",
-            headers={"Content-Disposition": 'attachment; filename="recipeboxer_google_docs.json"'},
+            headers={"Content-Disposition": f'attachment; filename="{target_filename}"'},
         )
     else:
         # Default: batch_requests dictionary
         data = exporter.export_to_json_dict(recipes, title=title or "RecipeBoxer Archival Cookbook", image_resolver=resolver)
         return data
+
 
 
