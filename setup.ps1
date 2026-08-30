@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    RecipeBoxer — Cross-Platform Windows PowerShell Setup Script
+    RecipeBoxer - Cross-Platform Windows PowerShell Setup Script
 .DESCRIPTION
     Detects Python 3.10+, bootstraps an isolated virtual environment (.venv),
     upgrades build packaging tools (pip, wheel, setuptools), installs production
@@ -22,7 +22,7 @@ if (-not $ScriptDir) {
 $VenvDir = Join-Path $ScriptDir ".venv"
 
 Write-Host "======================================================================" -ForegroundColor Cyan
-Write-Host " RecipeBoxer — Environment Bootstrap & Setup (PowerShell)" -ForegroundColor Cyan
+Write-Host " RecipeBoxer - Environment Bootstrap & Setup (PowerShell)" -ForegroundColor Cyan
 Write-Host "======================================================================" -ForegroundColor Cyan
 
 # 1. Locate compatible Python 3.10+ interpreter
@@ -56,9 +56,8 @@ foreach ($cand in $Candidates) {
 
     if ($hasCmd) {
         try {
-            $testArgs = $cmdArgs + @("-c", "import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)")
-            $proc = Start-Process -FilePath $cmdName -ArgumentList $testArgs -NoNewWindow -Wait -PassThru -ErrorAction SilentlyContinue
-            if ($proc.ExitCode -eq 0) {
+            & $cmdName $cmdArgs -c "import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)" *>$null
+            if ($LASTEXITCODE -eq 0) {
                 $PythonCommand = $cmdName
                 $PythonArgs = $cmdArgs
                 break

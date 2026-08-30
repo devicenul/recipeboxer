@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    RecipeBoxer — Cross-Platform Windows PowerShell Execution Script
+    RecipeBoxer - Cross-Platform Windows PowerShell Execution Script
 .DESCRIPTION
     Checks for virtual environment (.venv), auto-triggers setup.ps1 if missing,
     configures default environment variables, and launches the FastAPI backend /

@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    RecipeBoxer — Cross-Platform Windows PowerShell Test Automation Script
+    RecipeBoxer - Cross-Platform Windows PowerShell Test Automation Script
 .DESCRIPTION
     Checks for virtual environment (.venv) and pytest executable, auto-triggers
     setup.ps1 if missing, forwards all command-line arguments to pytest, and
