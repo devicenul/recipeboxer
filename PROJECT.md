@@ -1,83 +1,61 @@
-# Project: RecipeBoxer Pipeline & Full-Stack Refinements
+# Project: RecipeBoxer Corpus Expansion & Frontend Defect Resolution
 
 ## Architecture
-RecipeBoxer is an end-to-end multi-modal historical recipe transcription system consisting of:
-1. **Frontend**: React 18 + TypeScript + Vite + TailwindCSS + Lucide Icons + Vitest suite.
-   - Core components: `SessionLauncher`, `ConfigPanel`, `ProgressDashboard`, `HitlWorkspace`, `RecipeEditorView`, `ExportModal`.
-   - Real-time communication: Server-Sent Events (`useSSE`) connecting to FastAPI backend `/api/events/{session_id}`.
-2. **Backend**: FastAPI + Pydantic v2 + Pillow / OpenCV + Google Gemini Vision API (`gemini-3.7-flash`, `gemini-3.1-pro`).
-   - Ingestion & Scanning (`recipeboxer/ingestion/`)
-   - Visual Fingerprinting & Feature Extraction (`recipeboxer/vision/`)
-   - Transition Scoring, Heuristics & Semantic Verification (`recipeboxer/correlation/`)
-   - Graph Chaining & Optimization (`recipeboxer/correlation/optimizer.py`)
-   - Pipeline Orchestration & Session State (`recipeboxer/agent/`)
-   - Multimodal Structured Recipe Extraction & Manifest Resolution (`recipeboxer/extraction/`)
-   - REST & SSE API Layer (`recipeboxer/api/routes.py`)
+RecipeBoxer is an archival culinary document processing pipeline combining computer vision, physical substrate heuristics, multimodal semantic extraction, and a React frontend for ingestion, human-in-the-loop review, recipe editing, and multi-format export.
+
+- **Frontend Subsystem (`frontend/src/`)**: React 18 + TypeScript + Vite + Tailwind CSS + Lucide Icons. Manages application state, tabs (`ingest`, `hitl`, `recipes`, `export`), SSE connection (`useSSE`), and recipe review/editing.
+- **Corpus & Generator Subsystem (`recipeboxer/tools/`, `tests/fixtures/sample_cards/`)**: PIL-based high-resolution archival document synthesizer generating realistic recipe cards across 6 historical modalities with textures, aging, stamps, clippings, and ink physics. Ground truth stored in `manifest.json` and documented in `README.md`.
+- **Backend Correlation & Heuristics Subsystem (`recipeboxer/engine/`, `recipeboxer/heuristics/`)**: Substrate colorimetry (CIE L*a*b*), ruling lines, ink analysis, bleed-through detection, continuation heuristics, and DAG sequence chaining (`PairingOptimizer`).
+- **Extraction & Export Subsystem (`recipeboxer/pipeline/`, `recipeboxer/export/`)**: Isolated recipe transcription, preservation of attribution and provenance (`source_notes`, `description`), and 8 export formats (PlanToEat, Paprika, Markdown, Cooklang, JSON-LD, GoogleDocs, PDF, Docx).
 
 ## Feature Inventory
-| # | Feature | Description | Milestone | Source | Status |
-|---|---------|-------------|-----------|--------|--------|
-| F1.1 | Model Options Alignment | Update frontend ConfigPanel & SessionLauncher options to gemini-3.7-flash and gemini-3.1-pro (remove gemini-3.7-pro) | M1 | R1 | DONE |
-| F1.2 | Backend Model Propagation | Declare model field on PipelineStartRequest, propagate session settings into extractor/correlation configs | M1 | R1 | DONE |
-| F1.3 | Test Suite Model Alignment | Align frontend and backend test assertions to assert gemini-3.1-pro | M1 | R1 | DONE |
-| F2.1 | Continuation Card Role Fix | Fix fingerprint role classification so card1_back, card2_front, etc. classify as SEQUENCE_CONTINUATION | M2 | R2 | DONE |
-| F2.2 | Sequential Header Transition Score | Fix calculate_sequential_header_score for physical front-to-back and card-to-card transitions | M2 | R2 | DONE |
-| F2.3 | Semantic Token Isolation | Clean tokenization & stopwords in semantic continuity verification to prevent cross-recipe false positives | M2 | R2 | DONE |
-| F2.4 | Multi-Card Maximal Path Chaining | Enhance path traversal and sequence absorption in optimizer.py for 4-part Fruitcake and 3-part Turkey Feast | M2 | R2 | DONE |
-| F2.5 | Unmatched Card HITL Packaging | Package any unmatched cards as standalone review proposals so all 23 cards appear in Rapid Review Queue (0 dropped) | M2 | R2 | DONE |
-| F3.1 | Post-HITL Live Extraction View | Render active extraction dashboard with recipe counter (Recipe X of Y), dynamic sub-bar, and live SSE telemetry during EXTRACTING state | M3 | R3 | DONE |
-| F3.2 | Incremental SSE Recipe Broadcast | Incrementally append to session.recipes and update metrics in orchestrator Stage 5 so SSE emits live per-recipe events | M3 | R3 | DONE |
-| F3.3 | Auto-Transition to Recipe Editor | Automatically switch activeTab to 'recipes' upon receiving COMPLETED pipeline state in App.tsx | M3 | R3 | DONE |
-| F4.1 | Eliminate Keyword Cross-Contamination | Tighten synthetic keyword matching rules in extractor.py so generic words like "pie" do not misroute recipes | M4 | R4 | DONE |
-| F4.2 | Dual-Index Ground-Truth Manifest | Implement in-memory manifest lookup by SHA256 and normalized Card IDs against sample_cards/manifest.json | M4 | R4 | DONE |
-| F4.3 | Multi-Part Sequence Assembly ($N \ge 3$) | Assemble ordered card_ids and image_urls for N>=3 multi-card sequences and ensure full isolation | M4 | R4 | DONE |
-| F5.1 | Full Test Suite Verification | Execute complete backend pytest and frontend Vitest suites with 0 errors | M5 | Acceptance | DONE |
-| F5.2 | Adversarial Hardening & Forensics | Challenger adversarial test suites + Forensic Integrity Audit (CLEAN verdict) | M5 | Audit & Gate | DONE |
+| # | Feature | Description | Milestone | Source |
+|---|---------|-------------|-----------|--------|
+| 1 | Single-fire Pipeline Completion Tab Transition | Ensure `App.tsx` transitions to `recipes` tab strictly once upon entering `COMPLETED` state using `completedSessionsRef` execution tracker. | M1 | ORIGINAL_REQUEST R1.1, R1.2 |
+| 2 | Stable Tab Switching Post-Completion | Fix auto-reversion defect so switching to Export, Ingest, HITL, or dialogs remains on target view without resetting on SSE reconnects/heartbeats. | M1 | ORIGINAL_REQUEST R1.1, R1.3 |
+| 3 | Proceed to Export Navigation Stability | In Recipe Editor, clicking Next -> Proceed to Export stays on Export view and preserves editor state without snapping back to Recipe 1. | M1 | ORIGINAL_REQUEST R1.1, R1.3 |
+| 4 | Corpus Expansion: Vintage Handwritten Cursive (1940s–1970s) | Add 2 new recipes (4 high-res front/back card scans) with fountain pen / ballpoint ink dynamics and paper aging. | M2 | ORIGINAL_REQUEST R2.1 |
+| 5 | Corpus Expansion: Typewritten & Stamped (1950s–1970s) | Add 2 new recipes (4 high-res front/back card scans) with typewriter ribbon wear, character bounce, and vintage club date stamps. | M2 | ORIGINAL_REQUEST R2.2 |
+| 6 | Corpus Expansion: Magazine Clippings & Package Labels (1960s–1980s) | Add 2 new recipes (4 high-res front/back card scans) with multi-column newsprint cutouts, glue boundaries, and tape residue. | M2 | ORIGINAL_REQUEST R2.3 |
+| 7 | Corpus Expansion: Stained / Damaged / Edge-Worn Substrates | Add 2 new recipes (4 high-res front/back card scans) with oil smudges, coffee rings, dog-ears, and torn edges. | M2 | ORIGINAL_REQUEST R2.4 |
+| 8 | Corpus Expansion: Multi-Card Narrative Sets | Add 2 new multi-card sets (one 3-card continuous sequence and one 4-card continuous sequence with explicit continuation cues; 7 cards total). | M2 | ORIGINAL_REQUEST R2.5 |
+| 9 | Corpus Expansion: Standalone Single-Sided Cards | Add 2 new single-sided standalone recipes (2 high-res card scans). | M2 | ORIGINAL_REQUEST R2.6 |
+| 10 | Card Generator Tool Update | Update `recipeboxer/tools/card_generator.py` with `ARCHIVAL_RECIPE_TEMPLATES` and deterministic generation logic for all 48 cards and manifest creation. | M2 | ORIGINAL_REQUEST R2 |
+| 11 | Ground Truth Manifest Synchronization | Update `tests/fixtures/sample_cards/manifest.json` with ground truth data, roles, SHA256 hashes, and provenance for all 48 cards across 24 recipes. | M2 | ORIGINAL_REQUEST R2, R3.1 |
+| 12 | Provenance & Licensing Documentation | Update `tests/fixtures/sample_cards/README.md` with complete provenance, public domain / CC0 licensing, and historical background for all 24 recipes. | M3 | ORIGINAL_REQUEST R3.2 |
+| 13 | Attribution Preservation & Display | Verify recipe attribution metadata (`source_notes`, `description`, dates, archive series) flows into frontend Recipe Editor and Export subsystems. | M3 | ORIGINAL_REQUEST R3.3 |
+| 14 | Generalization & Anti-Overfitting Verification | Ensure all heuristics evaluate physical document traits without hardcoded card ID bypasses; assert ground truth in tests while keeping production heuristics disciplined and well-calibrated. | M4 | ORIGINAL_REQUEST R4.1, Follow-up |
+| 15 | Multi-Card Sequence Chaining & Review Retention | Verify that 3-card and 4-card sets chain into sequence proposals, 0 cards are dropped from review queues, and strict content isolation is maintained. | M4 | ORIGINAL_REQUEST R4.2 |
+| 16 | Test Suite Regression & Count Updates | Update test assertions expecting 23 cards / 12 recipes to 48 cards / 24 recipes, ensuring 0 regressions across all existing tests. | M4 | ORIGINAL_REQUEST Verification |
+| 17 | Full End-to-End Suite Verification | Verify 100% pass across backend Pytest suite, frontend Vitest suite (`npm test -- --run`), and frontend production build (`npm run build`). | M5 | ORIGINAL_REQUEST Verification |
 
 ## Milestones
 | # | Name | Scope | Dependencies | Status |
 |---|------|-------|-------------|--------|
-| 1 | M1: Gemini Model Selection Alignment | ConfigPanel, SessionLauncher, backend PipelineStartRequest, settings propagation, test assertions | none | DONE |
-| 2 | M2: Multi-Card Sequence Correlation & Unmatched Card Retention | fingerprint.py, domain.py, heuristics.py, semantic.py, optimizer.py, orchestrator.py | M1 | DONE |
-| 3 | M3: Post-HITL Intermediate Extraction Progress & Auto-Transition | App.tsx, ProgressDashboard.tsx, orchestrator.py Stage 5 incremental updates | M1 | DONE |
-| 4 | M4: Isolated Recipe Transcription & Ground-Truth Corpus Fidelity | extractor.py manifest resolution, keyword isolation, multi-part card ID / image URL assembly | M1, M2 | DONE |
-| 5 | M5: E2E Full Test Suite Verification, Adversarial Hardening & Audit | Full pytest (1503 tests), frontend Vitest (244 tests), production build, Challenger tests, Forensic Audit | M1, M2, M3, M4 | DONE |
+| M1 | Frontend Tab Navigation & Reversion Defect Fix | Fix `frontend/src/App.tsx` completion tracker ref, prevent SSE reconnect reversion, add vitest routing tests. | None | DONE |
+| M2 | Corpus Generator & Image Expansion (25 new cards / 12 new recipes across 6 dimensions) | Update `card_generator.py`, generate 25 new high-res cards (total 48 cards), update `manifest.json`. | None | DONE |
+| M3 | Attribution, Provenance & Metadata Subsystems | Update `README.md`, verify `source_notes` and provenance preservation across frontend/export. | M2 | DONE |
+| M4 | Generalization, Correlation Heuristics & Test Suite Updates | Verify physical traits heuristics, update test suite card count assertions, verify 3-card/4-card chaining. | M2 | DONE |
+| M5 | Full End-to-End Verification & Gate Hardening | Run complete backend pytest suite, frontend Vitest suite, and frontend build. | M1, M3, M4 | DONE |
 
 ## Interface Contracts
+### Frontend `App.tsx` ↔ `useSSE.ts`
+- `App.tsx` tracks completed sessions via `completedSessionsRef = useRef<Set<string>>(new Set())`.
+- `handlePipelineCompleted(sessionId, status)` executes `setActiveTab('recipes')` and `fetchRecipes(...)` strictly once per unique completed session run.
+- Non-completed state events reset the session ID from `completedSessionsRef` to allow re-runs.
 
-### Frontend ↔ Backend Pipeline API
-- `POST /api/pipeline/start`: JSON body or multipart/form-data containing `model: "gemini-3.7-flash" | "gemini-3.1-pro"`.
-- `GET /api/events/{session_id}`: SSE stream emitting `event: state_change`, `event: progress`, `event: recipe_extracted`, `event: completed`.
-- `GET /api/hitl/pending`: Returns `proposals: List[CorrelationProposal]` containing all 23 cards (no cards omitted).
-- `POST /api/hitl/approve`: Accepts list of `HITLApproval` decisions. Pipeline transitions to `EXTRACTING` then `COMPLETED`.
+### Card Generator ↔ `manifest.json` & Image Fixtures
+- Tool: `recipeboxer/tools/card_generator.py`
+- Output directory: `tests/fixtures/sample_cards/`
+- Manifest path: `tests/fixtures/sample_cards/manifest.json`
+- Each recipe entry defines: `recipe_id`, `title`, `dimension`, `provenance`, `source_notes`, `historical_date`, `archive_series`, `cards` array (with `filename`, `role`, `sha256`, `dimensions`), `ground_truth` (`ingredients`, `steps`, `servings`, `prep_time`, `cook_time`).
 
-### Extractor Manifest Contract
-- Inputs: `resolved_cards: List[Tuple[bytes, str, str]]` (raw_bytes, file_path, card_id).
-- Dual-Index: Lookup by `sha256(raw_bytes)` and `normalized(card_id)`.
-- Output: `RecipeSchema` matching ground-truth with `card_ids` set to input ordered card IDs and `image_urls` matching card IDs.
+### Heuristics ↔ Test Assertions
+- Ground truth test cases explicitly test expected matching from `manifest.json`.
+- Production heuristics in `recipeboxer/heuristics/` operate on extracted visual/textual features (CIE L*a*b* ΔE ≤ 5.0, ruling pitch, ink classification, continuation headers, sequence cues) without hardcoded card ID bypasses.
 
 ## Code Layout
-- Frontend: `frontend/src/`
-  - `components/ingestion/ConfigPanel.tsx`
-  - `components/ingestion/SessionLauncher.tsx`
-  - `components/ingestion/ProgressDashboard.tsx`
-  - `components/hitl/HitlWorkspace.tsx`
-  - `App.tsx`
-  - `types/pipeline.ts`
-- Backend:
-  - `recipeboxer/config.py`
-  - `recipeboxer/models/pipeline.py`
-  - `recipeboxer/models/domain.py`
-  - `recipeboxer/agent/session.py`
-  - `recipeboxer/agent/orchestrator.py`
-  - `recipeboxer/vision/fingerprint.py`
-  - `recipeboxer/vision/heuristics.py`
-  - `recipeboxer/correlation/semantic.py`
-  - `recipeboxer/correlation/optimizer.py`
-  - `recipeboxer/extraction/extractor.py`
-  - `recipeboxer/api/routes.py`
-- Tests:
-  - `tests/test_correlation.py`, `tests/test_heuristics.py`, `tests/test_recipe_extractor.py`, `tests/test_sample_card_corpus.py`
-  - `tests/test_e2e_4tier_suite.py`, `tests/test_fastapi_routes.py`, `tests/test_eval_runner.py`, `tests/e2e/test_e2e_pipeline.py`
-  - `tests/test_challenger_r1_r2.py`, `tests/test_challenger_2_r3_r4_stress.py`, `tests/test_sample_corpus_sequence_verification.py`
-  - `frontend/tests/`
+- Frontend: `frontend/src/App.tsx`, `frontend/src/components/`, `frontend/tests/app_routing.test.tsx`
+- Generator Tool: `recipeboxer/tools/card_generator.py`
+- Test Fixtures: `tests/fixtures/sample_cards/*.png`, `tests/fixtures/sample_cards/manifest.json`, `tests/fixtures/sample_cards/README.md`
+- Backend Engine & Tests: `recipeboxer/engine/`, `recipeboxer/heuristics/`, `tests/test_sample_cards.py`, `tests/test_pipeline.py`, `tests/test_heuristics.py`, `tests/test_exporter.py`

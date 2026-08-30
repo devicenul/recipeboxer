@@ -270,6 +270,25 @@ def get_card_historical_categories(card: CardEntry) -> List[str]:
     """
     categories: List[str] = []
 
+    # 0. Check explicit historical dimension metadata if available
+    dim = card.recipe_cluster.get("dimension", "")
+    if dim:
+        if "Handwritten" in dim or "Cursive" in dim:
+            categories.append("Vintage Handwritten Cursive")
+        elif "Typewritten" in dim or "Stamped" in dim:
+            categories.append("Typewritten & Stamped")
+        elif "Magazine" in dim or "Clipping" in dim or "Label" in dim:
+            categories.append("Magazine Clippings & Labels")
+        elif "Stained" in dim or "Damaged" in dim or "Worn" in dim:
+            categories.append("Stained / Damaged / Edge-Folded")
+        elif "Multi-Card" in dim:
+            categories.append("Multi-Card Sets (3+ Cards)")
+        elif "Standalone" in dim:
+            categories.append("Standalone Single-Sided Cards")
+
+    if categories:
+        return categories
+
     # 1. Modality base
     if card.modality == CardModality.HANDWRITTEN_CURSIVE:
         categories.append("Vintage Handwritten Cursive")
@@ -297,6 +316,7 @@ def get_card_historical_categories(card: CardEntry) -> List[str]:
         categories.append(card.modality.value)
 
     return categories
+
 
 
 # ============================================================================

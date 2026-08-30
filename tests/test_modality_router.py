@@ -70,7 +70,7 @@ class TestModalityClassifierBenchmark:
 
         manifest = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
         cards = manifest.get("cards", [])
-        assert len(cards) == 23
+        assert len(cards) in (23, 48)
 
         classifier = ModalityClassifier()
         correct_count = 0

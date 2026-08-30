@@ -964,8 +964,21 @@ class SyntheticCardGenerator:
 
         # Stamps
         if deg.stamps:
-            stamp_txt = f"RECIPE CLUB {self.rng.randint(1952, 1974)}"
+            if "swedish_meatballs" in rec_id:
+                stamp_txt = "BETTER HOMES CLUB OCT 1961"
+            elif "lemon_chiffon" in rec_id:
+                stamp_txt = "LADIES AUXILIARY 1958"
+            elif "beef_stroganoff" in rec_id:
+                stamp_txt = "RECIPE CLUB 1956"
+            else:
+                stamp_txt = f"RECIPE CLUB {self.rng.randint(1952, 1974)}"
             img_front = apply_date_stamp(img_front, 40, self.card_height - 65, stamp_txt, self.rng)
+            front_artifacts.append({
+                "artifact_type": "RUBBER_DATE_STAMP",
+                "quadrant": "BOTTOM_LEFT",
+                "severity": "MILD",
+                "description": f"Vintage ink stamp: {stamp_txt}",
+            })
 
         # Tape residue
         if deg.tape_residue:
@@ -1111,6 +1124,12 @@ class SyntheticCardGenerator:
         if deg.stamps:
             stamp_txt = f"RECIPE CLUB {self.rng.randint(1952, 1974)}"
             img = apply_date_stamp(img, 40, self.card_height - 65, stamp_txt, self.rng)
+            artifacts.append({
+                "artifact_type": "RUBBER_DATE_STAMP",
+                "quadrant": "BOTTOM_LEFT",
+                "severity": "MILD",
+                "description": f"Vintage ink stamp: {stamp_txt}",
+            })
         if deg.ink_fade > 0:
             img = apply_ink_fade(img, deg.ink_fade, self.rng)
         if abs(deg.rotation_skew_deg) > 0.1:
@@ -1382,7 +1401,7 @@ class SyntheticCardGenerator:
 # ============================================================================
 
 ARCHIVAL_RECIPE_TEMPLATES: List[Dict[str, Any]] = [
-    # Modality 1: Vintage Handwritten Cursive
+    # Modality 1: Vintage Handwritten Cursive (1940s–1970s)
     {
         "recipe_id": "rec_vhc_apple_crisp_1948",
         "title": "Grandma's 1948 Old-Fashioned Apple Crisp",
@@ -1412,6 +1431,10 @@ ARCHIVAL_RECIPE_TEMPLATES: List[Dict[str, Any]] = [
         ],
         "tags": ["Dessert", "Baking", "Vintage", "Fall"],
         "source_notes": "Handwritten 1948 Index Card",
+        "dimension": "Vintage Handwritten Cursive (1940s–1970s)",
+        "historical_date": "1948",
+        "provenance": "Midwestern Family Heirloom Kitchen Tin",
+        "archive_series": "Heritage Handwritten Series",
     },
     {
         "recipe_id": "rec_vhc_rhubarb_pie_1965",
@@ -1440,8 +1463,78 @@ ARCHIVAL_RECIPE_TEMPLATES: List[Dict[str, Any]] = [
         ],
         "tags": ["Dessert", "Pie", "Rhubarb", "Vintage"],
         "source_notes": "Handwritten 1965 Index Card (Blue Fountain Pen)",
+        "dimension": "Vintage Handwritten Cursive (1940s–1970s)",
+        "historical_date": "1965",
+        "provenance": "Aunt Clara's Recipe Box (Cedar Rapids, IA)",
+        "archive_series": "Heritage Handwritten Series",
     },
-    # Modality 2: Typewritten & Stamped
+    {
+        "recipe_id": "rec_vhc_strawberry_rhubarb_jam_1954",
+        "title": "Eleanor's 1954 Summer Strawberry Rhubarb Jam",
+        "description": "Vintage handwritten preserve recipe from 1954 county fair box.",
+        "yield_servings": "6 half-pint jars",
+        "prep_time": "20 mins",
+        "cook_time": "25 mins",
+        "total_time": "45 mins",
+        "ingredients": [
+            "4 cups fresh strawberries, hulled and crushed",
+            "4 cups fresh rhubarb, finely chopped",
+            "1 package (1.75 oz) powdered fruit pectin",
+            "7 cups granulated sugar",
+            "1/2 tsp unsalted butter (to reduce foaming)",
+        ],
+        "directions": [
+            "1. Combine crushed strawberries, chopped rhubarb, and powdered pectin in large heavy bottom pot.",
+            "2. Bring mixture to rolling boil over high heat, stirring constantly.",
+            "3. Add sugar quickly and return to rolling boil for 1 full minute.",
+            "4. Remove from heat, skim foam, ladle into sterilized jars leaving 1/4 inch headspace.",
+            "5. Process jars in boiling water bath for 10 minutes.",
+        ],
+        "tags": ["Preserves", "Canning", "Vintage", "Summer"],
+        "source_notes": "Eleanor Vance (1954) Iowa County Fair Recipe Box (Blue Fountain Pen Script)",
+        "dimension": "Vintage Handwritten Cursive (1940s–1970s)",
+        "historical_date": "1954",
+        "provenance": "Eleanor Vance Iowa County Fair Collection",
+        "archive_series": "Heritage Handwritten Series",
+    },
+    {
+        "recipe_id": "rec_vhc_amish_cinnamon_bread_1973",
+        "title": "Amish Friendship Cinnamon Streusel Bread (1973)",
+        "description": "Traditional Amish friendship sourdough bread with cinnamon sugar streusel.",
+        "yield_servings": "2 loaves (16 slices)",
+        "prep_time": "25 mins",
+        "cook_time": "55 mins",
+        "total_time": "1 hr 20 mins",
+        "ingredients": [
+            "1 cup Amish friendship bread starter",
+            "2/3 cup vegetable oil",
+            "3 large eggs",
+            "2 cups all-purpose flour",
+            "1 cup granulated sugar",
+            "1 1/2 tsp baking powder",
+            "1/2 tsp baking soda",
+            "1/2 tsp salt",
+            "1 box (3.4 oz) vanilla instant pudding mix",
+            "1 tbsp ground cinnamon",
+            "1/2 cup brown sugar (for streusel topping)",
+        ],
+        "directions": [
+            "1. Preheat oven to 325°F; grease and sugar two 8x4-inch loaf pans.",
+            "2. In large bowl, combine starter, oil, eggs, flour, sugar, baking powder, baking soda, salt, and pudding mix.",
+            "3. In small bowl, mix cinnamon and brown sugar for streusel.",
+            "4. Pour half batter into pans, sprinkle half streusel, add remaining batter, and top with remaining streusel.",
+            "5. Bake at 325°F for 50-55 minutes until toothpick inserted in center comes out clean.",
+            "6. Cool in pans 10 minutes before turning out onto wire racks.",
+        ],
+        "tags": ["Baking", "Bread", "Amish", "Cinnamon", "Vintage"],
+        "source_notes": "Handwritten 1973 Church Community Exchange Card",
+        "dimension": "Vintage Handwritten Cursive (1940s–1970s)",
+        "historical_date": "1973",
+        "provenance": "Lancaster County Church Community Exchange",
+        "archive_series": "Heritage Handwritten Series",
+    },
+
+    # Modality 2: Typewritten & Stamped (1950s–1970s)
     {
         "recipe_id": "rec_typ_beef_stroganoff_1956",
         "title": "1956 Classic Beef Stroganoff",
@@ -1473,6 +1566,10 @@ ARCHIVAL_RECIPE_TEMPLATES: List[Dict[str, Any]] = [
         ],
         "tags": ["Dinner", "Beef", "Vintage", "Classic"],
         "source_notes": "Typewritten Card (July 1956 Recipe Club Stamp)",
+        "dimension": "Typewritten & Stamped (1950s–1970s)",
+        "historical_date": "1956",
+        "provenance": "Suburban Homemakers Recipe Club",
+        "archive_series": "Mid-Century Typewritten Series",
     },
     {
         "recipe_id": "rec_typ_tomato_soup_cake_1952",
@@ -1505,8 +1602,85 @@ ARCHIVAL_RECIPE_TEMPLATES: List[Dict[str, Any]] = [
         ],
         "tags": ["Baking", "Cake", "Vintage", "Pantry"],
         "source_notes": "Typewritten Pantry Card (1952)",
+        "dimension": "Typewritten & Stamped (1950s–1970s)",
+        "historical_date": "1952",
+        "provenance": "Post-War Community Kitchen Archive",
+        "archive_series": "Mid-Century Typewritten Series",
     },
-    # Modality 3: Magazine Clippings & Package Labels
+    {
+        "recipe_id": "rec_typ_swedish_meatballs_1961",
+        "title": "1961 Scandinavian Swedish Meatballs",
+        "description": "Typewritten classic spiced meatballs in rich sour cream gravy.",
+        "yield_servings": "6 servings (30 meatballs)",
+        "prep_time": "30 mins",
+        "cook_time": "25 mins",
+        "total_time": "55 mins",
+        "ingredients": [
+            "1 lb ground chuck beef",
+            "1/2 lb ground pork",
+            "1/2 cup fine dry breadcrumbs",
+            "1/2 cup heavy cream",
+            "1 small onion, grated fine",
+            "1 large egg",
+            "1/4 tsp ground allspice & nutmeg",
+            "1 tsp salt & 1/2 tsp white pepper",
+            "3 tbsp butter for pan frying",
+            "2 tbsp flour & 1 1/2 cups beef broth for cream gravy",
+            "1/2 cup sour cream for finishing",
+        ],
+        "directions": [
+            "1. Soak breadcrumbs in heavy cream in large bowl for 10 minutes.",
+            "2. Add ground meats, grated onion, egg, allspice, nutmeg, salt, and white pepper; mix thoroughly.",
+            "3. Shape into 1-inch uniform meatballs.",
+            "4. Melt butter in heavy skillet; brown meatballs on all sides in batches, transfer to dish.",
+            "5. Whisk flour into pan drippings, gradually add beef broth and simmer until thickened.",
+            "6. Stir in sour cream, return meatballs to skillet, and simmer gently 10 minutes.",
+            "7. Serve hot over buttered egg noodles with lingonberry jam.",
+        ],
+        "tags": ["Dinner", "Swedish", "Meatballs", "Classic", "Vintage"],
+        "source_notes": "Typewritten Card (October 1961 Better Homes Homemakers Stamp)",
+        "dimension": "Typewritten & Stamped (1950s–1970s)",
+        "historical_date": "1961",
+        "provenance": "Better Homes Homemakers Club Archive",
+        "archive_series": "Mid-Century Typewritten Series",
+    },
+    {
+        "recipe_id": "rec_typ_lemon_chiffon_pie_1958",
+        "title": "1958 Mile-High Lemon Chiffon Pie",
+        "description": "Airy chilled lemon gelatin meringue chiffon pie in flaky crust.",
+        "yield_servings": "8 slices",
+        "prep_time": "30 mins",
+        "cook_time": "10 mins",
+        "total_time": "3 hrs 40 mins",
+        "ingredients": [
+            "1 envelope unflavored gelatin",
+            "1/4 cup cold water",
+            "4 large eggs, separated",
+            "1 cup granulated sugar, divided",
+            "1/2 cup fresh lemon juice",
+            "1 tbsp grated lemon zest",
+            "1/2 tsp salt",
+            "1 pre-baked 9-inch pastry crust",
+            "1 cup whipped cream for topping",
+        ],
+        "directions": [
+            "1. Soften gelatin in 1/4 cup cold water in small bowl.",
+            "2. In top of double boiler, beat egg yolks with 1/2 cup sugar, lemon juice, zest, and salt.",
+            "3. Cook over simmering water, stirring constantly until thick and custardy (about 8 mins).",
+            "4. Remove from heat; stir in softened gelatin until completely dissolved; cool until mixture begins to congeal.",
+            "5. Beat egg whites until stiff peaks form, gradually adding remaining 1/2 cup sugar.",
+            "6. Fold meringue gently into cooled lemon gelatin mixture.",
+            "7. Pile high into baked pastry shell and refrigerate at least 3 hours until set.",
+        ],
+        "tags": ["Dessert", "Pie", "Lemon", "Vintage", "Chiffon"],
+        "source_notes": "Typewritten Ladies Auxiliary Bake Sale 1958 Archive",
+        "dimension": "Typewritten & Stamped (1950s–1970s)",
+        "historical_date": "1958",
+        "provenance": "Ladies Auxiliary Bake Sale Archive",
+        "archive_series": "Mid-Century Typewritten Series",
+    },
+
+    # Modality 3: Magazine Clippings & Package Labels (1960s–1980s)
     {
         "recipe_id": "rec_clp_crisco_fried_chicken",
         "title": "Crisco Golden Southern Fried Chicken",
@@ -1535,6 +1709,10 @@ ARCHIVAL_RECIPE_TEMPLATES: List[Dict[str, Any]] = [
         ],
         "tags": ["Dinner", "Chicken", "Southern", "Magazine Clipping"],
         "source_notes": "1962 Magazine Advertisement Cutout",
+        "dimension": "Magazine Clippings & Package Labels (1960s–1980s)",
+        "historical_date": "1962",
+        "provenance": "Southern Living Magazine Clipping",
+        "archive_series": "Period Clippings & Ephemera",
     },
     {
         "recipe_id": "rec_clp_condensed_milk_pie_1962",
@@ -1562,8 +1740,79 @@ ARCHIVAL_RECIPE_TEMPLATES: List[Dict[str, Any]] = [
         ],
         "tags": ["Dessert", "Chocolate", "Pie", "Package Clipping"],
         "source_notes": "1962 Eagle Brand Can Label Clipping",
+        "dimension": "Magazine Clippings & Package Labels (1960s–1980s)",
+        "historical_date": "1962",
+        "provenance": "Borden Eagle Brand Sweetened Condensed Milk Can Label",
+        "archive_series": "Period Clippings & Ephemera",
     },
-    # Modality 4: Stained / Damaged / Edge-Worn
+    {
+        "recipe_id": "rec_clp_green_bean_casserole_1968",
+        "title": "1968 Campbell's Classic Green Bean Casserole",
+        "description": "Vintage holiday magazine clipping with mushroom soup and crispy fried onions.",
+        "yield_servings": "6 servings",
+        "prep_time": "10 mins",
+        "cook_time": "30 mins",
+        "total_time": "40 mins",
+        "ingredients": [
+            "1 can (10 1/2 oz) Campbell's Condensed Cream of Mushroom Soup",
+            "1/2 cup whole milk",
+            "1 tsp soy sauce",
+            "1 dash black pepper",
+            "4 cups cooked cut green beans (fresh or frozen)",
+            "1 1/3 cups French's Crispy Fried Onions, divided",
+        ],
+        "directions": [
+            "1. Preheat oven to 350°F.",
+            "2. In 1 1/2-quart baking dish, mix mushroom soup, milk, soy sauce, black pepper, green beans, and 2/3 cup fried onions.",
+            "3. Bake at 350°F for 25 minutes until hot and bubbling.",
+            "4. Stir casserole gently; scatter remaining 2/3 cup crispy fried onions over top.",
+            "5. Bake 5 minutes longer until golden brown.",
+        ],
+        "tags": ["Casserole", "Holiday", "Vegetables", "Vintage Clipping"],
+        "source_notes": "1968 Holiday Magazine Advertisement Clipping with Cellophane Tape",
+        "dimension": "Magazine Clippings & Package Labels (1960s–1980s)",
+        "historical_date": "1968",
+        "provenance": "Campbell's Soup Holiday Magazine Advertisement",
+        "archive_series": "Period Clippings & Ephemera",
+    },
+    {
+        "recipe_id": "rec_clp_toll_house_cookies_1975",
+        "title": "1975 Original Toll House Chocolate Chip Cookies",
+        "description": "Original morsels bag recipe clipping for classic chocolate chip cookies.",
+        "yield_servings": "60 cookies (5 dozen)",
+        "prep_time": "15 mins",
+        "cook_time": "12 mins",
+        "total_time": "27 mins",
+        "ingredients": [
+            "2 1/4 cups all-purpose flour",
+            "1 tsp baking soda",
+            "1 tsp salt",
+            "1 cup (2 sticks) butter, softened",
+            "3/4 cup granulated sugar",
+            "3/4 cup packed brown sugar",
+            "1 tsp vanilla extract",
+            "2 large eggs",
+            "2 cups (12 oz package) Nestlé Toll House Semi-Sweet Morsels",
+            "1 cup chopped walnuts (optional)",
+        ],
+        "directions": [
+            "1. Preheat oven to 375°F.",
+            "2. Combine flour, baking soda, and salt in small bowl.",
+            "3. Beat softened butter, granulated sugar, brown sugar, and vanilla extract in large bowl until creamy.",
+            "4. Add eggs one at a time, beating well after each addition.",
+            "5. Gradually beat in flour mixture; stir in chocolate morsels and nuts.",
+            "6. Drop by rounded tablespoon onto ungreased baking sheets.",
+            "7. Bake at 375°F for 9 to 11 minutes until golden brown; cool on wire racks.",
+        ],
+        "tags": ["Cookies", "Chocolate", "Baking", "Package Clipping"],
+        "source_notes": "1975 Semi-Sweet Morsels Yellow Package Bag Cutout",
+        "dimension": "Magazine Clippings & Package Labels (1960s–1980s)",
+        "historical_date": "1975",
+        "provenance": "Nestlé Toll House Semi-Sweet Morsels Package Back",
+        "archive_series": "Period Clippings & Ephemera",
+    },
+
+    # Modality 4: Stained / Damaged / Edge-Worn Substrates
     {
         "recipe_id": "rec_dmg_moms_lasagna_1971",
         "title": "Mom's Sunday Homemade Lasagna",
@@ -1598,6 +1847,10 @@ ARCHIVAL_RECIPE_TEMPLATES: List[Dict[str, Any]] = [
         ],
         "tags": ["Dinner", "Italian", "Pasta", "Family Favorite"],
         "source_notes": "Stained & Dog-Eared 1971 Ruled Card",
+        "dimension": "Stained / Damaged / Edge-Worn Substrates",
+        "historical_date": "1971",
+        "provenance": "Family Kitchen Recipe Box with Sauce Smudges",
+        "archive_series": "Working Kitchen Artifacts",
     },
     {
         "recipe_id": "rec_dmg_butter_shortbread",
@@ -1626,8 +1879,85 @@ ARCHIVAL_RECIPE_TEMPLATES: List[Dict[str, Any]] = [
         ],
         "tags": ["Baking", "Cookies", "Scottish", "Damaged Card"],
         "source_notes": "1958 Butter-Stained Index Card with Edge Tear",
+        "dimension": "Stained / Damaged / Edge-Worn Substrates",
+        "historical_date": "1958",
+        "provenance": "Scottish Immigrant Family Heirloom Card",
+        "archive_series": "Working Kitchen Artifacts",
     },
-    # Modality 5: Multi-Card Sets (3-4 Cards)
+    {
+        "recipe_id": "rec_dmg_buttermilk_pancakes_1969",
+        "title": "Sunday Morning Sourdough Buttermilk Pancakes (1969)",
+        "description": "Butter and syrup stained index card for fluffy heirloom buttermilk pancakes.",
+        "yield_servings": "16 pancakes",
+        "prep_time": "15 mins",
+        "cook_time": "15 mins",
+        "total_time": "30 mins",
+        "ingredients": [
+            "2 cups all-purpose flour",
+            "2 tbsp granulated sugar",
+            "2 tsp baking powder",
+            "1 tsp baking soda",
+            "1/2 tsp salt",
+            "2 cups thick buttermilk",
+            "2 large eggs",
+            "1/4 cup unsalted butter, melted & cooled",
+            "1 tsp pure vanilla extract",
+            "Warm pure maple syrup for serving",
+        ],
+        "directions": [
+            "1. In large bowl, whisk flour, sugar, baking powder, baking soda, and salt.",
+            "2. In separate bowl, beat buttermilk, eggs, melted butter, and vanilla.",
+            "3. Pour wet ingredients into dry; whisk gently just until combined (batter should remain lumpy).",
+            "4. Heat cast-iron griddle over medium heat and grease lightly with butter.",
+            "5. Pour 1/4 cup batter per pancake onto hot griddle.",
+            "6. Cook until bubbles pop on surface and edges look set (2-3 mins); flip and cook 1-2 mins longer until golden.",
+            "7. Serve warm immediately with whipped butter and maple syrup.",
+        ],
+        "tags": ["Breakfast", "Pancakes", "Vintage", "Damaged Card"],
+        "source_notes": "1969 Butter-Stained Sunday Pancake Card with Torn Edge",
+        "dimension": "Stained / Damaged / Edge-Worn Substrates",
+        "historical_date": "1969",
+        "provenance": "Sunday Breakfast Collection with Syrup & Butter Smudges",
+        "archive_series": "Working Kitchen Artifacts",
+    },
+    {
+        "recipe_id": "rec_dmg_beef_bourguignon_1974",
+        "title": "Heirloom French Beef Bourguignon (1974)",
+        "description": "Dog-eared, wine-splattered recipe card for slow-braised beef in Burgundy wine.",
+        "yield_servings": "6 servings",
+        "prep_time": "35 mins",
+        "cook_time": "2 hrs 30 mins",
+        "total_time": "3 hrs 05 mins",
+        "ingredients": [
+            "3 lbs beef chuck roast, cut into 2-inch chunks",
+            "6 oz thick-cut bacon, diced",
+            "1 large yellow onion, sliced",
+            "2 large carrots, sliced into 1/2-inch rounds",
+            "3 cloves garlic, minced",
+            "1 bottle (750 ml) dry red Burgundy wine",
+            "2 cups beef stock",
+            "2 tbsp tomato paste",
+            "1 bouquet garni (thyme, parsley, bay leaf)",
+            "1 lb fresh button mushrooms, quartered & sautéed in butter",
+            "18 small pearl onions, peeled",
+        ],
+        "directions": [
+            "1. Sauté diced bacon in large Dutch oven over medium heat until crisp; remove with slotted spoon.",
+            "2. Dry beef chunks thoroughly; sear in hot bacon fat in batches until deeply browned on all sides; remove.",
+            "3. Sauté sliced onion and carrots in pot 5 mins; stir in minced garlic and tomato paste for 1 min.",
+            "4. Return beef and bacon to pot; pour in red wine and beef stock to cover; add bouquet garni.",
+            "5. Cover tightly and simmer over low heat (or in 325°F oven) for 2 to 2 1/2 hours until beef is fork-tender.",
+            "6. Fold in sautéed mushrooms and glazed pearl onions; simmer 15 minutes longer until sauce is glossy.",
+        ],
+        "tags": ["Dinner", "French", "Beef", "Stew", "Classic"],
+        "source_notes": "1974 Dog-Eared French Cookery Card with Coffee Ring Stain",
+        "dimension": "Stained / Damaged / Edge-Worn Substrates",
+        "historical_date": "1974",
+        "provenance": "French Cooking Class Recipe Card with Wine & Coffee Ring Stains",
+        "archive_series": "Working Kitchen Artifacts",
+    },
+
+    # Modality 5: Multi-Card Narrative Sets
     {
         "recipe_id": "rec_mcs_turkey_stuffing_feast",
         "title": "Grandma's Thanksgiving Roast Turkey & Sage Stuffing",
@@ -1662,6 +1992,10 @@ ARCHIVAL_RECIPE_TEMPLATES: List[Dict[str, Any]] = [
         ],
         "tags": ["Holiday", "Turkey", "Thanksgiving", "Multi-Card"],
         "source_notes": "Multi-Card 3-Part Handwritten Holiday Set",
+        "dimension": "Multi-Card Narrative Sets",
+        "historical_date": "1950",
+        "provenance": "Grandma's Thanksgiving Holiday Feast Card Set (3 Cards)",
+        "archive_series": "Multi-Part Culinary Manuscripts",
     },
     {
         "recipe_id": "rec_mcs_wedding_fruitcake_1942",
@@ -1697,7 +2031,95 @@ ARCHIVAL_RECIPE_TEMPLATES: List[Dict[str, Any]] = [
         ],
         "tags": ["Baking", "Fruitcake", "Heirloom", "Multi-Card"],
         "source_notes": "4-Card Heirloom 1942 Handwritten Wedding Recipe",
+        "dimension": "Multi-Card Narrative Sets",
+        "historical_date": "1942",
+        "provenance": "Heirloom Dark Wedding Fruitcake 4-Card Set",
+        "archive_series": "Multi-Part Culinary Manuscripts",
     },
+    {
+        "recipe_id": "rec_mcs_sunday_pot_roast_gravy",
+        "title": "Grandma's All-Day Sunday Pot Roast & Root Vegetables",
+        "description": "3-card continuous heirloom recipe for slow-braised chuck roast with rich pan gravy.",
+        "yield_servings": "8 servings",
+        "prep_time": "30 mins",
+        "cook_time": "3 hrs 30 mins",
+        "total_time": "4 hrs",
+        "ingredients": [
+            "4 lbs boneless beef chuck roast, tied",
+            "2 tbsp vegetable oil",
+            "2 tsp coarse kosher salt & 1 tsp freshly cracked black pepper",
+            "2 large yellow onions, quartered",
+            "4 cloves garlic, smashed",
+            "2 cups rich beef bone broth",
+            "1 cup dry red wine",
+            "2 tbsp Worcestershire sauce",
+            "1 lb small red potatoes, halved",
+            "1 lb whole carrots, peeled and cut into 2-inch lengths",
+            "3 stalks celery, cut into chunks",
+            "3 tbsp all-purpose flour for gravy reduction",
+        ],
+        "directions": [
+            "1. Preheat oven to 300°F (150°C).",
+            "2. Season chuck roast aggressively on all surfaces with coarse salt and black pepper.",
+            "3. Heat oil in heavy cast-iron Dutch oven over high heat; sear roast 4-5 mins per side until deep mahogany crust develops.",
+            "4. Remove beef; add quartered onions and smashed garlic to pot, cooking 3 mins until fragrant.",
+            "5. Pour in red wine, scraping up browned fond from bottom of pot; add beef broth and Worcestershire sauce.",
+            "6. Return roast to pot, cover with tight-fitting lid, and braise at 300°F for 2 hours.",
+            "7. Scatter red potatoes, carrots, and celery around roast in pot, spooning braising juices over vegetables.",
+            "8. Cover and return to oven for 1 to 1 1/2 hours longer until beef is melt-in-the-mouth tender.",
+            "9. Transfer beef and vegetables to large warm serving platter; tent loosely with foil.",
+            "10. Skim fat from pot juices; bring to a simmer over medium heat, whisk in flour slurry, and reduce 5 mins until rich, velvety brown gravy forms.",
+        ],
+        "tags": ["Dinner", "Beef", "Roast", "Heirloom", "Multi-Card"],
+        "source_notes": "Multi-Card 3-Part Heirloom Pot Roast Manuscript (Grandma's 1958 Cedar Box)",
+        "dimension": "Multi-Card Narrative Sets",
+        "historical_date": "1958",
+        "provenance": "Grandma's Cedar Box Pot Roast 3-Card Manuscript",
+        "archive_series": "Multi-Part Culinary Manuscripts",
+    },
+    {
+        "recipe_id": "rec_mcs_traditional_panettone_1955",
+        "title": "1955 Artisanal Milanese Holiday Panettone",
+        "description": "4-card traditional sourdough panettone recipe with multi-stage doughs and fruit curing.",
+        "yield_servings": "2 large panettoni (20 servings)",
+        "prep_time": "2 hrs",
+        "cook_time": "45 mins",
+        "total_time": "18 hrs",
+        "ingredients": [
+            "1 cup active sourdough starter (pasta madre)",
+            "4 1/2 cups Manitoba / high-protein bread flour",
+            "1 cup whole milk, lukewarm",
+            "1 cup unsalted European butter, softened",
+            "1 cup granulated sugar",
+            "6 large egg yolks",
+            "1 vanilla bean, split and scraped",
+            "1 tsp fine sea salt",
+            "1 1/2 cups golden raisins, rum-soaked",
+            "1 cup candied orange and citron peel, diced",
+            "1 tbsp honey and 1 orange zest",
+            "Melted butter for scoring cross",
+        ],
+        "directions": [
+            "1. Part 1 (Primo Impasto): Dissolve sourdough starter in lukewarm milk with 1 cup flour; proof 3 hours at 80°F until tripled.",
+            "2. Beat 3 egg yolks with 1/2 cup sugar; knead into proofed starter with 2 cups flour and 1/2 cup softened butter until smooth and elastic.",
+            "3. Cover dough tightly and let rise overnight in warm draft-free place (12 hours) until quadrupled in volume.",
+            "4. Part 2 (Secondo Impasto): Deflate first dough; knead in honey, orange zest, scraped vanilla bean, remaining 3 egg yolks, 1/2 cup sugar, and salt.",
+            "5. Gradually work in remaining 1 1/2 cups flour and remaining 1/2 cup softened butter until shiny dough forms windowpane.",
+            "6. Drain rum-soaked raisins and toss with candied citron; gently fold fruits evenly throughout dough.",
+            "7. Divide dough into 2 equal portions; shape into tight boules and place into tall 6-inch panettone paper molds.",
+            "8. Proof in warm humid area 4-6 hours until dough reaches 1/2 inch below mold rim.",
+            "9. Cut shallow cross in top of each dome with sharp razor; place pat of butter in center of cross.",
+            "10. Bake at 350°F (175°C) for 40-45 minutes until deep mahogany and internal temp reaches 190°F.",
+            "11. Part 3 (Curing & Hanging): Pierce bottom of each panettone with two long metal skewers; hang upside down suspended between chairs for 10 hours to prevent collapse.",
+        ],
+        "tags": ["Baking", "Panettone", "Holiday", "Italian", "Multi-Card", "Heirloom"],
+        "source_notes": "4-Card Heirloom Milanese Holiday Panettone Archival Set (1955)",
+        "dimension": "Multi-Card Narrative Sets",
+        "historical_date": "1955",
+        "provenance": "Milanese Bakery Family Heirloom 4-Card Manuscript",
+        "archive_series": "Multi-Part Culinary Manuscripts",
+    },
+
     # Modality 6: Standalone Single-Sided Cards
     {
         "recipe_id": "rec_sta_quick_chocolate_fudge",
@@ -1723,6 +2145,10 @@ ARCHIVAL_RECIPE_TEMPLATES: List[Dict[str, Any]] = [
         ],
         "tags": ["Candy", "Chocolate", "Quick", "Standalone"],
         "source_notes": "Standalone Index Card",
+        "dimension": "Standalone Single-Sided Cards",
+        "historical_date": "1960",
+        "provenance": "Quick Confections Recipe Tin",
+        "archive_series": "Quick Pantry Standalones",
     },
     {
         "recipe_id": "rec_sta_southern_pecan_pie",
@@ -1750,6 +2176,73 @@ ARCHIVAL_RECIPE_TEMPLATES: List[Dict[str, Any]] = [
         ],
         "tags": ["Dessert", "Pie", "Southern", "Standalone"],
         "source_notes": "Standalone Kraft Paper Card",
+        "dimension": "Standalone Single-Sided Cards",
+        "historical_date": "1965",
+        "provenance": "Georgia Country Kitchen Kraft Paper Card",
+        "archive_series": "Quick Pantry Standalones",
+    },
+    {
+        "recipe_id": "rec_sta_classic_banana_bread",
+        "title": "Classic Moist Walnut Banana Bread",
+        "description": "Standalone single-card quick bread recipe written on grid graph paper.",
+        "yield_servings": "1 loaf (10 slices)",
+        "prep_time": "15 mins",
+        "cook_time": "60 mins",
+        "total_time": "1 hr 15 mins",
+        "ingredients": [
+            "3 very ripe bananas, mashed (about 1 1/2 cups)",
+            "1/3 cup melted unsalted butter",
+            "3/4 cup granulated sugar",
+            "1 large egg, beaten",
+            "1 tsp pure vanilla extract",
+            "1 tsp baking soda",
+            "Pinch of salt",
+            "1 1/2 cups all-purpose flour",
+            "1/2 cup toasted walnuts, chopped",
+        ],
+        "directions": [
+            "1. Preheat oven to 350°F; butter an 8x4-inch loaf pan.",
+            "2. In large bowl, mash ripe bananas with a fork until smooth; stir in melted butter.",
+            "3. Mix in sugar, beaten egg, and vanilla extract.",
+            "4. Sprinkle baking soda and salt over mixture; fold in flour until just combined.",
+            "5. Fold in chopped walnuts; pour batter into prepared pan.",
+            "6. Bake at 350°F for 55-60 minutes until golden brown and cake tester comes out clean.",
+        ],
+        "tags": ["Baking", "Bread", "Banana", "Quick", "Standalone"],
+        "source_notes": "Single-Sided Grid Graph Recipe Card (1964)",
+        "dimension": "Standalone Single-Sided Cards",
+        "historical_date": "1964",
+        "provenance": "Midwestern School Bake Sale Grid Paper Card",
+        "archive_series": "Quick Pantry Standalones",
+    },
+    {
+        "recipe_id": "rec_sta_old_fashioned_lemonade",
+        "title": "Old-Fashioned Country Fair Lemonade",
+        "description": "Standalone kraft paper card with classic boiled simple syrup lemonade recipe.",
+        "yield_servings": "8 glasses (2 quarts)",
+        "prep_time": "15 mins",
+        "cook_time": "5 mins",
+        "total_time": "1 hr 20 mins",
+        "ingredients": [
+            "1 1/2 cups freshly squeezed lemon juice (from 6-8 large lemons)",
+            "1 1/4 cups granulated sugar",
+            "1 cup boiling water (for simple syrup)",
+            "5 cups ice-cold filtered water",
+            "Lemon wheels and fresh mint sprigs for garnish",
+            "Plenty of ice cubes",
+        ],
+        "directions": [
+            "1. In heatproof pitcher, stir sugar into 1 cup boiling water until completely dissolved to create simple syrup.",
+            "2. Strain fresh lemon juice to remove seeds and pulp; add to simple syrup in pitcher.",
+            "3. Stir in 5 cups cold filtered water; chill in refrigerator at least 1 hour.",
+            "4. Serve over ice with lemon slices and mint.",
+        ],
+        "tags": ["Beverage", "Summer", "Lemonade", "Classic", "Standalone"],
+        "source_notes": "Standalone Kraft Paper Country Fair Refreshment Card",
+        "dimension": "Standalone Single-Sided Cards",
+        "historical_date": "1955",
+        "provenance": "County Fair Refreshment Stand Kraft Card",
+        "archive_series": "Quick Pantry Standalones",
     },
 ]
 
@@ -1779,42 +2272,74 @@ def generate_synthetic_corpus(
         templates = templates[:count]
 
     for template_dict in templates:
-        rec = RecipeSchema(**template_dict)
+        rec_data = dict(template_dict)
+        dimension = rec_data.pop("dimension", "Vintage Culinary Archive")
+        provenance = rec_data.pop("provenance", "Curated Archival Card")
+        historical_date = rec_data.pop("historical_date", "")
+        archive_series = rec_data.pop("archive_series", "Historical Recipe Corpus")
+
+        rec = RecipeSchema(**rec_data)
         rec_id = rec.recipe_id
 
         # Determine modality and substrate
         m = modality or (
-            CardModality.HANDWRITTEN_CURSIVE if "vhc" in rec_id or "apple" in rec_id or "rhubarb" in rec_id or "turkey" in rec_id or "fruitcake" in rec_id
-            else CardModality.TYPEWRITTEN if "typ" in rec_id
+            CardModality.HANDWRITTEN_CURSIVE if (
+                "vhc" in rec_id or "apple" in rec_id or "rhubarb" in rec_id or
+                "turkey" in rec_id or "fruitcake" in rec_id or "jam" in rec_id or
+                "amish" in rec_id or "pot_roast" in rec_id or "panettone" in rec_id or
+                "banana" in rec_id or "fudge" in rec_id or "pecan" in rec_id
+            )
+            else CardModality.TYPEWRITTEN if ("typ" in rec_id or "lemonade" in rec_id)
             else CardModality.PRINTED_CLIPPING if "clp" in rec_id
             else CardModality.MIXED_MEDIA if "dmg" in rec_id
             else CardModality.HANDWRITTEN_CURSIVE
         )
 
         s = substrate or (
-            PaperSubstrate.RULED_INDEX if "apple" in rec_id or "lasagna" in rec_id or "turkey" in rec_id or "rhubarb" in rec_id
-            else PaperSubstrate.AGED_YELLOW if "typ" in rec_id or "fruitcake" in rec_id
-            else PaperSubstrate.WHITE_LINEN if "clp" in rec_id or "shortbread" in rec_id
-            else PaperSubstrate.KRAFT_BROWN if "pecan" in rec_id
+            PaperSubstrate.GRID_GRAPH if "banana" in rec_id
+            else PaperSubstrate.KRAFT_BROWN if ("pecan" in rec_id or "lemonade" in rec_id)
+            else PaperSubstrate.WHITE_LINEN if ("clp" in rec_id or "shortbread" in rec_id or "lemon_chiffon" in rec_id)
+            else PaperSubstrate.AGED_YELLOW if ("typ" in rec_id or "fruitcake" in rec_id or "amish" in rec_id or "bourguignon" in rec_id or "panettone" in rec_id)
+            else PaperSubstrate.RULED_INDEX if ("apple" in rec_id or "lasagna" in rec_id or "turkey" in rec_id or "rhubarb" in rec_id or "strawberry" in rec_id or "pancakes" in rec_id or "pot_roast" in rec_id or "fudge" in rec_id)
             else PaperSubstrate.RULED_INDEX
         )
 
+        # Custom degradation per recipe
         deg = DegradationConfig.from_level(degradation_level, rng)
+        if "swedish_meatballs" in rec_id or "lemon_chiffon" in rec_id or "beef_stroganoff" in rec_id:
+            deg.stamps = True
+        if "green_bean" in rec_id or "toll_house" in rec_id:
+            deg.tape_residue = True
+        if "buttermilk_pancakes" in rec_id:
+            deg.oil_smudges = 2
+            deg.edge_tears = True
+            deg.bleed_through = True
+        if "beef_bourguignon" in rec_id:
+            deg.coffee_rings = 1
+            deg.dog_ears = True
+            deg.bleed_through = True
+        if "moms_lasagna" in rec_id:
+            deg.oil_smudges = 1
+            deg.coffee_rings = 1
+            deg.bleed_through = True
+            deg.dog_ears = True
 
         # Generate according to cluster type
-        if "fruitcake" in rec_id:
+        if "fruitcake" in rec_id or "panettone" in rec_id:
             cards = generator.generate_multi_card_set(rec, num_cards=4, modality=m, substrate=s, degradation=deg)
-        elif "mcs" in rec_id or "turkey" in rec_id:
+        elif "mcs" in rec_id or "turkey" in rec_id or "pot_roast" in rec_id:
             cards = generator.generate_multi_card_set(rec, num_cards=3, modality=m, substrate=s, degradation=deg)
-        elif "sta" in rec_id or "shortbread" in rec_id or "condensed_milk" in rec_id:
+        elif "sta" in rec_id or "shortbread" in rec_id or "condensed_milk" in rec_id or "banana" in rec_id or "lemonade" in rec_id:
             cards = [generator.generate_standalone_card(rec, modality=m, substrate=s, degradation=deg)]
         else:
             cards = list(generator.generate_card_pair(rec, modality=m, substrate=s, degradation=deg))
 
+        ext = ".jpg" if image_format.upper() == "JPEG" else ".png"
+
         for card in cards:
-            ext = ".jpg" if image_format.upper() == "JPEG" else ".png"
             file_name = f"{Path(card.filename).stem}{ext}"
             card.filename = file_name
+            card.card_id = file_name
             img_file_path = out_path / file_name
 
             if image_format.upper() == "JPEG":
@@ -1828,14 +2353,25 @@ def generate_synthetic_corpus(
             raw_bytes = img_file_path.read_bytes()
             sha256_hex = hashlib.sha256(raw_bytes).hexdigest()
 
-            # Build Manifest Entry
+            # Synchronize card_ids list on the ground truth recipe
+            card.recipe.card_ids = [f"{Path(c).stem}{ext}" for c in card.recipe.card_ids]
+
+            # Build Manifest Entry with full attribution and provenance details
+            cluster_info = dict(card.recipe_cluster)
+            cluster_info.update({
+                "dimension": dimension,
+                "provenance": provenance,
+                "historical_date": historical_date,
+                "archive_series": archive_series,
+            })
+
             manifest_entries.append({
-                "card_id": card.card_id,
+                "card_id": file_name,
                 "filename": file_name,
                 "sha256_hash": sha256_hex,
                 "modality": card.modality.value,
                 "role": card.role.value,
-                "recipe_cluster": card.recipe_cluster,
+                "recipe_cluster": cluster_info,
                 "physical_characteristics": card.physical_characteristics,
                 "ground_truth_recipe": card.recipe.model_dump(),
             })
@@ -1853,6 +2389,7 @@ def generate_synthetic_corpus(
         manifest_path.write_text(json.dumps(manifest_data, indent=2), encoding="utf-8")
 
     return all_cards
+
 
 
 # ============================================================================

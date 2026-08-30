@@ -6,18 +6,18 @@ This directory contains the curated benchmark sample recipe card fixture dataset
 
 ## 1. Corpus Overview & Architecture
 
-The corpus contains 23 high-resolution digitized recipe card scans representing 12 diverse culinary recipes across 6 historical modalities and structural configurations. Every scan is paired with ground-truth metadata in `manifest.json` adhering to the authoritative RecipeBoxer domain contracts (`RecipeSchema`, `VisualFingerprint`, `CardRole`, and `PhysicalArtifact`).
+The corpus contains 48 high-resolution digitized recipe card scans representing 24 diverse culinary recipes across 6 historical modalities and structural configurations. Every scan is paired with ground-truth metadata in `manifest.json` adhering to the authoritative RecipeBoxer domain contracts (`RecipeSchema`, `VisualFingerprint`, `CardRole`, and `PhysicalArtifact`).
 
-### Historical & Archival Modalities Covered
+### Historical & Archival Modalities Covered (6 Dimensions, 24 Recipes, 48 Cards)
 
 | Modality ID | Name & Historical Context | Physical & Visual Characteristics | Recipe Examples |
 |---|---|---|---|
-| `HANDWRITTEN_CURSIVE` | **Vintage Handwritten Cursive** (1940s–1970s) | Aged yellowed index cards, blue-black fountain pen bleed, natural baseline wander, variable pen stroke pressure, faded pencil annotations. | • Grandma's 1948 Old-Fashioned Apple Crisp (Front/Back pair)<br>• Aunt Clara's 1965 Rhubarb Custard Pie (Front/Back pair) |
-| `TYPEWRITTEN` | **Typewritten & Stamped** (1950s–1970s) | Manual mechanical typewriter ribbon wear, character baseline bounce, variable ink strike density, vintage recipe club date stamp ink impressions. | • 1956 Classic Beef Stroganoff (Front/Back pair with Recipe Club Stamp)<br>• 1952 Tomato Soup Mystery Spice Cake (Front/Back pair) |
-| `PRINTED_CLIPPING` | **Magazine Clippings & Package Labels** (1960s–1980s) | Newsprint cutouts glued or taped to index cards, multi-column print layout, bold display headlines, package back product instructions, cellophane tape aging residue. | • Crisco Golden Southern Fried Chicken (Front/Back clipping set)<br>• 1962 Borden's Eagle Brand Magic Chocolate Pie (Standalone package cutout) |
-| `MIXED_MEDIA` / Damaged | **Stained / Damaged / Edge-Worn Substrates** | Translucent amber oil/grease smudges spanning boundaries, concentric coffee/tea cup ring stains, dog-eared corner folds, ragged torn edges, ink bleed-through. | • Mom's Sunday Homemade Lasagna (Front/Back pair with coffee ring & mirrored bleed-through)<br>• Traditional Scottish Butter Shortbread (Standalone with edge tear) |
-| Multi-Card Sets (3–4 Cards) | **Multi-Part Continuous Narratives** | Extended multi-card recipes with continuous narrative flow across 3 to 4 sequential sides (`card1_front` -> `card1_back` -> `card2_front` -> `card2_back`), continuation cues (`(over ->)`, `(See Card 2 Front ->)`). | • Grandma's Thanksgiving Roast Turkey & Sage Stuffing (3-card set)<br>• 1942 Heirloom Dark Holiday Wedding Fruitcake (4-card set) |
-| `STANDALONE` | **Standalone Single-Sided Cards** | Self-contained single-card recipes with integrated ingredients and sequential method on a single face. | • 10-Minute Quick Chocolate Fudge (Standalone ruled card)<br>• Southern Pecan Pie (Standalone kraft paper card) |
+| `HANDWRITTEN_CURSIVE` | **Vintage Handwritten Cursive** (1940s–1970s) | Aged yellowed index cards, blue-black fountain pen bleed, natural baseline wander, variable pen stroke pressure, faded pencil annotations. | • Grandma's 1948 Old-Fashioned Apple Crisp (Front/Back pair)<br>• Aunt Clara's 1965 Rhubarb Custard Pie (Front/Back pair)<br>• Eleanor's 1954 Summer Strawberry Rhubarb Jam (Front/Back pair)<br>• Amish Friendship Cinnamon Streusel Bread (1973) (Front/Back pair) |
+| `TYPEWRITTEN` | **Typewritten & Stamped** (1950s–1970s) | Manual mechanical typewriter ribbon wear, character baseline bounce, variable ink strike density, vintage recipe club date stamp ink impressions. | • 1956 Classic Beef Stroganoff (Front/Back pair with Recipe Club Stamp)<br>• 1952 Tomato Soup Mystery Spice Cake (Front/Back pair)<br>• 1961 Scandinavian Swedish Meatballs (Front/Back pair with Date Stamp)<br>• 1958 Mile-High Lemon Chiffon Pie (Front/Back pair with Auxiliary Stamp) |
+| `PRINTED_CLIPPING` | **Magazine Clippings & Package Labels** (1960s–1980s) | Newsprint cutouts glued or taped to index cards, multi-column print layout, bold display headlines, package back product instructions, cellophane tape aging residue. | • Crisco Golden Southern Fried Chicken (Front/Back clipping set)<br>• 1962 Borden's Eagle Brand Magic Chocolate Pie (Standalone package cutout)<br>• 1968 Campbell's Classic Green Bean Casserole (Front/Back pair with aged tape)<br>• 1975 Original Toll House Chocolate Chip Cookies (Front/Back pair package cutout) |
+| `MIXED_MEDIA` / Damaged | **Stained / Damaged / Edge-Worn Substrates** | Translucent amber oil/grease smudges spanning boundaries, concentric coffee/tea cup ring stains, dog-eared corner folds, ragged torn edges, ink bleed-through. | • Mom's Sunday Homemade Lasagna (Front/Back pair with coffee ring & mirrored bleed-through)<br>• Traditional Scottish Butter Shortbread (Standalone with edge tear)<br>• Sunday Morning Sourdough Buttermilk Pancakes (1969) (Front/Back pair with syrup smudges)<br>• Heirloom French Beef Bourguignon (1974) (Front/Back pair with wine/coffee ring stain) |
+| Multi-Card Sets (3–4 Cards) | **Multi-Part Continuous Narratives** | Extended multi-card recipes with continuous narrative flow across 3 to 4 sequential sides (`card1_front` -> `card1_back` -> `card2_front` -> `card2_back`), continuation cues (`(over ->)`, `(See Card 2 Front ->)`). | • Grandma's Thanksgiving Roast Turkey & Sage Stuffing (3-card set)<br>• 1942 Heirloom Dark Holiday Wedding Fruitcake (4-card set)<br>• Grandma's All-Day Sunday Pot Roast & Root Vegetables (3-card set)<br>• 1955 Artisanal Milanese Holiday Panettone (4-card set) |
+| `STANDALONE` | **Standalone Single-Sided Cards** | Self-contained single-card recipes with integrated ingredients and sequential method on a single face. | • 10-Minute Quick Chocolate Fudge (Standalone ruled card)<br>• Southern Pecan Pie (Standalone kraft paper card)<br>• Classic Moist Walnut Banana Bread (Grid graph paper card)<br>• Old-Fashioned Country Fair Lemonade (Kraft brown paper card) |
 
 ---
 
@@ -56,9 +56,10 @@ The machine-readable manifest `manifest.json` maps every card scan in this direc
 {
   "version": "1.0.0",
   "dataset_name": "RecipeBoxer Curated Historical Recipe Card Corpus",
-  "total_cards": 23,
-  "total_recipes": 12,
+  "total_cards": 48,
+  "total_recipes": 24,
   "cards": [
+
     {
       "card_id": "rec_vhc_apple_crisp_1948_front.jpg",
       "filename": "rec_vhc_apple_crisp_1948_front.jpg",

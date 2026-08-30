@@ -1,4 +1,4 @@
-"""End-to-end verification of multi-card sequence correlation and 0 dropped cards on the 23-card sample corpus."""
+"""End-to-end verification of multi-card sequence correlation and 0 dropped cards on the 48-card sample corpus."""
 
 import asyncio
 from pathlib import Path
@@ -12,10 +12,10 @@ from recipeboxer.models.pipeline import PipelineState
 
 @pytest.mark.asyncio
 async def test_sample_card_corpus_e2e_correlation_and_retention():
-    """Verify all 23 cards in sample_cards are correlated into 12 proposals with 0 dropped cards."""
+    """Verify all 48 cards in sample_cards are correlated into 24 proposals with 0 dropped cards."""
     scans_dir = Path("tests/fixtures/sample_cards")
     cards = scan_card_directory(scans_dir)
-    assert len(cards) == 23, f"Expected 23 sample cards, found {len(cards)}"
+    assert len(cards) == 48, f"Expected 48 sample cards, found {len(cards)}"
 
     agent = RecipeBoxerAgent()
     session = PipelineSession(session_id="test_verify_corpus")
@@ -47,7 +47,23 @@ async def test_sample_card_corpus_e2e_correlation_and_retention():
         "rec_mcs_wedding_fruitcake_1942_card2_back.jpg",
     ]
 
-    # 2. Verify Turkey Stuffing 3-card sequence
+    # 2. Verify Panettone 4-card sequence
+    pan_props = [
+        p for p in session.proposals
+        if any("traditional_panettone" in cid for cid in p.ordered_card_ids)
+    ]
+    assert len(pan_props) == 1, f"Expected exactly 1 Panettone proposal, found {len(pan_props)}"
+    pan_prop = pan_props[0]
+    assert pan_prop.part_count == 4
+    assert len(pan_prop.ordered_card_ids) == 4
+    assert pan_prop.ordered_card_ids == [
+        "rec_mcs_traditional_panettone_1955_card1_front.jpg",
+        "rec_mcs_traditional_panettone_1955_card1_back.jpg",
+        "rec_mcs_traditional_panettone_1955_card2_front.jpg",
+        "rec_mcs_traditional_panettone_1955_card2_back.jpg",
+    ]
+
+    # 3. Verify Turkey Stuffing 3-card sequence
     turkey_props = [
         p for p in session.proposals
         if any("turkey_stuffing" in cid for cid in p.ordered_card_ids)
@@ -62,20 +78,43 @@ async def test_sample_card_corpus_e2e_correlation_and_retention():
         "rec_mcs_turkey_stuffing_feast_card2_front.jpg",
     ]
 
-    # 3. Verify total cards accounted for = 23 with zero dropped cards
-    all_accounted = [cid for p in session.proposals for cid in p.ordered_card_ids]
-    assert len(all_accounted) == 23, f"Expected 23 accounted cards, got {len(all_accounted)}"
-    assert len(set(all_accounted)) == 23, f"Duplicate card IDs in proposals: {all_accounted}"
-    assert len(session.proposals) == 12, f"Expected 12 proposals, got {len(session.proposals)}"
+    # 4. Verify Pot Roast 3-card sequence
+    pot_props = [
+        p for p in session.proposals
+        if any("sunday_pot_roast" in cid for cid in p.ordered_card_ids)
+    ]
+    assert len(pot_props) == 1, f"Expected exactly 1 Pot Roast proposal, found {len(pot_props)}"
+    pot_prop = pot_props[0]
+    assert pot_prop.part_count == 3
+    assert len(pot_prop.ordered_card_ids) == 3
+    assert pot_prop.ordered_card_ids == [
+        "rec_mcs_sunday_pot_roast_gravy_card1_front.jpg",
+        "rec_mcs_sunday_pot_roast_gravy_card1_back.jpg",
+        "rec_mcs_sunday_pot_roast_gravy_card2_front.jpg",
+    ]
 
-    # 4. Verify 2-card pairs
+    # 5. Verify total cards accounted for = 48 with zero dropped cards
+    all_accounted = [cid for p in session.proposals for cid in p.ordered_card_ids]
+    assert len(all_accounted) == 48, f"Expected 48 accounted cards, got {len(all_accounted)}"
+    assert len(set(all_accounted)) == 48, f"Duplicate card IDs in proposals: {all_accounted}"
+    assert len(session.proposals) == 24, f"Expected 24 proposals, got {len(session.proposals)}"
+
+    # 6. Verify 2-card pairs (14 pairs)
     expected_pairs = [
         ("rec_vhc_apple_crisp_1948_front.jpg", "rec_vhc_apple_crisp_1948_back.jpg"),
         ("rec_vhc_rhubarb_pie_1965_front.jpg", "rec_vhc_rhubarb_pie_1965_back.jpg"),
+        ("rec_vhc_strawberry_rhubarb_jam_1954_front.jpg", "rec_vhc_strawberry_rhubarb_jam_1954_back.jpg"),
+        ("rec_vhc_amish_cinnamon_bread_1973_front.jpg", "rec_vhc_amish_cinnamon_bread_1973_back.jpg"),
         ("rec_typ_beef_stroganoff_1956_front.jpg", "rec_typ_beef_stroganoff_1956_back.jpg"),
         ("rec_typ_tomato_soup_cake_1952_front.jpg", "rec_typ_tomato_soup_cake_1952_back.jpg"),
+        ("rec_typ_swedish_meatballs_1961_front.jpg", "rec_typ_swedish_meatballs_1961_back.jpg"),
+        ("rec_typ_lemon_chiffon_pie_1958_front.jpg", "rec_typ_lemon_chiffon_pie_1958_back.jpg"),
         ("rec_clp_crisco_fried_chicken_front.jpg", "rec_clp_crisco_fried_chicken_back.jpg"),
+        ("rec_clp_green_bean_casserole_1968_front.jpg", "rec_clp_green_bean_casserole_1968_back.jpg"),
+        ("rec_clp_toll_house_cookies_1975_front.jpg", "rec_clp_toll_house_cookies_1975_back.jpg"),
         ("rec_dmg_moms_lasagna_1971_front.jpg", "rec_dmg_moms_lasagna_1971_back.jpg"),
+        ("rec_dmg_buttermilk_pancakes_1969_front.jpg", "rec_dmg_buttermilk_pancakes_1969_back.jpg"),
+        ("rec_dmg_beef_bourguignon_1974_front.jpg", "rec_dmg_beef_bourguignon_1974_back.jpg"),
     ]
     for front_id, back_id in expected_pairs:
         pair_prop = next(
@@ -85,12 +124,14 @@ async def test_sample_card_corpus_e2e_correlation_and_retention():
         assert pair_prop is not None, f"Missing proposal for pair {front_id}"
         assert pair_prop.ordered_card_ids == [front_id, back_id], f"Incorrect ordering for {front_id}: {pair_prop.ordered_card_ids}"
 
-    # 5. Verify standalones
+    # 7. Verify standalones (6 standalones)
     expected_standalones = [
         "rec_clp_condensed_milk_pie_1962_standalone.jpg",
         "rec_dmg_butter_shortbread_standalone.jpg",
         "rec_sta_quick_chocolate_fudge_standalone.jpg",
         "rec_sta_southern_pecan_pie_standalone.jpg",
+        "rec_sta_classic_banana_bread_standalone.jpg",
+        "rec_sta_old_fashioned_lemonade_standalone.jpg",
     ]
     for std_id in expected_standalones:
         std_prop = next(
@@ -106,3 +147,4 @@ async def test_sample_card_corpus_e2e_correlation_and_retention():
         await task
     except Exception:
         pass
+

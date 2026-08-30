@@ -297,7 +297,7 @@ class TestIngestionRunnerStress:
         elapsed = time.monotonic() - t0
 
         assert result.status == IngestionStatus.COMPLETED
-        assert len(result.fingerprints) == 23
+        assert len(result.fingerprints) == len(cards)
         # 5 chunks -> exactly 4 sleeps of 0.05s = 0.20s minimum
         assert elapsed >= 4 * interval
         # If it had a 5th trailing sleep, elapsed would be >= 5 * interval (0.25s + overhead).

@@ -510,5 +510,106 @@ def test_corpus_integrity_catches_invalid_recipe_schema(tmp_path: Path):
     assert "rec_bad_schema" in report["invalid_recipes"][0]
 
 
+# ============================================================================
+# 7. EXPANDED CORPUS & HISTORICAL DIMENSIONS (24 RECIPES / 48 CARDS)
+# ============================================================================
+
+def test_expanded_corpus_exact_counts_and_all_six_historical_dimensions(sample_card_corpus: SampleCardCorpus):
+    """Verify that the corpus contains exactly 48 cards across 24 recipes spanning all 6 historical dimensions."""
+    assert len(sample_card_corpus) == 48, f"Expected exactly 48 cards, found {len(sample_card_corpus)}"
+    assert len(sample_card_corpus.recipes) == 24, f"Expected exactly 24 unique recipes, found {len(sample_card_corpus.recipes)}"
+
+    expected_recipes = {
+        # Dim 1: Vintage Handwritten Cursive (1940s–1970s)
+        "rec_vhc_apple_crisp_1948",
+        "rec_vhc_rhubarb_pie_1965",
+        "rec_vhc_strawberry_rhubarb_jam_1954",
+        "rec_vhc_amish_cinnamon_bread_1973",
+        # Dim 2: Typewritten & Stamped (1950s–1970s)
+        "rec_typ_beef_stroganoff_1956",
+        "rec_typ_tomato_soup_cake_1952",
+        "rec_typ_swedish_meatballs_1961",
+        "rec_typ_lemon_chiffon_pie_1958",
+        # Dim 3: Magazine Clippings & Package Labels (1960s–1980s)
+        "rec_clp_crisco_fried_chicken",
+        "rec_clp_condensed_milk_pie_1962",
+        "rec_clp_green_bean_casserole_1968",
+        "rec_clp_toll_house_cookies_1975",
+        # Dim 4: Stained / Damaged / Edge-Worn Substrates
+        "rec_dmg_moms_lasagna_1971",
+        "rec_dmg_butter_shortbread",
+        "rec_dmg_buttermilk_pancakes_1969",
+        "rec_dmg_beef_bourguignon_1974",
+        # Dim 5: Multi-Card Narrative Sets
+        "rec_mcs_turkey_stuffing_feast",
+        "rec_mcs_wedding_fruitcake_1942",
+        "rec_mcs_sunday_pot_roast_gravy",
+        "rec_mcs_traditional_panettone_1955",
+        # Dim 6: Standalone Single-Sided Cards
+        "rec_sta_quick_chocolate_fudge",
+        "rec_sta_southern_pecan_pie",
+        "rec_sta_classic_banana_bread",
+        "rec_sta_old_fashioned_lemonade",
+    }
+
+    found_recipes = {r.recipe_id for r in sample_card_corpus.recipes}
+    assert found_recipes == expected_recipes, f"Recipe set mismatch: missing {expected_recipes - found_recipes}, unexpected {found_recipes - expected_recipes}"
+
+
+def test_all_twelve_new_recipes_present_with_valid_metadata(sample_card_corpus: SampleCardCorpus):
+    """Verify each of the 12 new recipes is present, complete, and contains authentic attribution metadata."""
+    new_recipe_ids = [
+        "rec_vhc_strawberry_rhubarb_jam_1954",
+        "rec_vhc_amish_cinnamon_bread_1973",
+        "rec_typ_swedish_meatballs_1961",
+        "rec_typ_lemon_chiffon_pie_1958",
+        "rec_clp_green_bean_casserole_1968",
+        "rec_clp_toll_house_cookies_1975",
+        "rec_dmg_buttermilk_pancakes_1969",
+        "rec_dmg_beef_bourguignon_1974",
+        "rec_mcs_sunday_pot_roast_gravy",
+        "rec_mcs_traditional_panettone_1955",
+        "rec_sta_classic_banana_bread",
+        "rec_sta_old_fashioned_lemonade",
+    ]
+
+    for rid in new_recipe_ids:
+        cluster = sample_card_corpus.get_recipe_cluster(rid)
+        assert len(cluster) >= 1, f"No cards found for new recipe: {rid}"
+        recipe = cluster[0].ground_truth_recipe
+        assert recipe.title, f"Missing title for {rid}"
+        assert len(recipe.ingredients) >= 3, f"Too few ingredients for {rid}"
+        assert len(recipe.directions) >= 2, f"Too few directions for {rid}"
+        assert recipe.source_notes, f"Missing source_notes attribution for {rid}"
+
+        # Verify cluster attribution metadata
+        cluster_info = cluster[0].recipe_cluster
+        assert cluster_info.get("provenance"), f"Missing provenance for {rid}"
+        assert cluster_info.get("archive_series"), f"Missing archive_series for {rid}"
+        assert cluster_info.get("historical_date"), f"Missing historical_date for {rid}"
+        assert cluster_info.get("dimension"), f"Missing dimension for {rid}"
+
+
+def test_multi_card_expanded_sequences_continuity(sample_card_corpus: SampleCardCorpus):
+    """Verify the 3-card pot roast and 4-card panettone sets have continuous sequences and valid roles."""
+    # 3-card pot roast
+    pot_roast_cards = sample_card_corpus.get_recipe_cluster("rec_mcs_sunday_pot_roast_gravy")
+    assert len(pot_roast_cards) == 3
+    assert pot_roast_cards[0].recipe_cluster["cluster_role"] == "card1_front"
+    assert pot_roast_cards[1].recipe_cluster["cluster_role"] == "card1_back"
+    assert pot_roast_cards[2].recipe_cluster["cluster_role"] == "card2_front"
+    assert pot_roast_cards[0].role == CardRole.SEQUENCE_START
+    assert pot_roast_cards[1].role == CardRole.SEQUENCE_CONTINUATION
+    assert pot_roast_cards[2].role == CardRole.SEQUENCE_CONTINUATION
+
+    # 4-card panettone
+    panettone_cards = sample_card_corpus.get_recipe_cluster("rec_mcs_traditional_panettone_1955")
+    assert len(panettone_cards) == 4
+    roles = [c.recipe_cluster["cluster_role"] for c in panettone_cards]
+    assert roles == ["card1_front", "card1_back", "card2_front", "card2_back"]
+    assert panettone_cards[0].role == CardRole.SEQUENCE_START
+    assert all(c.role == CardRole.SEQUENCE_CONTINUATION for c in panettone_cards[1:])
+
+
 
 

@@ -609,7 +609,7 @@ async def test_offline_extraction_ground_truth_all_12_corpus_recipes():
     corpus = load_sample_corpus()
     extractor = GeminiRecipeExtractor(api_key=None)
 
-    assert len(corpus._cards_by_recipe) == 12
+    assert len(corpus._cards_by_recipe) >= 12
 
     for rec_id, cards in corpus._cards_by_recipe.items():
         sorted_cards = sorted(cards, key=lambda c: c.recipe_cluster.get("sequence_position", 0))

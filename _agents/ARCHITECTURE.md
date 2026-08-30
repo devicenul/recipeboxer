@@ -487,15 +487,13 @@ RecipeBoxer includes a comprehensive evaluation and continuous regression harnes
 - **LLM-as-a-Judge Rubric** (`evals/judge.py`):
   - Independent Gemini evaluation rubric assessing 4 qualitative dimensions (Semantic Fidelity, Preservation of Marginalia, Cross-Consistency, Step Ordering Logic) with offline mock mode.
 - **Benchmark Runner CLI** (`evals/run_benchmarks.py`, `evals/runner.py`):
-  - Benchmarks extraction and correlation against the 23-card historical corpus (`tests/fixtures/sample_cards/manifest.json`).
-
----
+  - Benchmarks extraction and correlation against the 48-card historical corpus (`tests/fixtures/sample_cards/manifest.json`).
 
 ## 5. Summary of System Statistics & Testing Verification
  
-- **Full-Stack Test Coverage**: **1,747 tests passing (100% pass rate)**
-  - **1,503 backend Pytest unit, boundary, integration, E2E, and adversarial stress tests** (including 5-tier testing pyramid and challenger suites).
-  - **244 frontend Vitest component and workflow tests** across 21 test suites.
+- **Full-Stack Test Coverage**: **1,788 tests passing (100% pass rate)**
+  - **1,530 backend Pytest unit, boundary, integration, E2E, and adversarial stress tests** (including 5-tier testing pyramid and challenger suites).
+  - **258 frontend Vitest component and workflow tests** across 23 test suites.
 - **Supported Export Formats**: 9 Formats (Plan To Eat CSV, Schema.org JSON-LD, Google Docs, DOCX, PDF, Obsidian MD, Cooklang, Paprika, Raw JSON).
 - **Supported Source Providers**: 4 Providers (Local Directory/Uploads, Google Photos API, Google Drive, S3/GCS Object Storage).
 - **Embedded Static Bundle**: Compiled directly into `recipeboxer/api/static/` for zero-dependency standalone execution.

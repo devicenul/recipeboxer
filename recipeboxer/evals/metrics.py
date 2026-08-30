@@ -605,9 +605,15 @@ def _extract_pairs_from_input(
                     full_clusters.append(set(cards))
                 elif len(cards) >= 3:
                     full_clusters.append(set(cards))
-                    for idx in range(len(cards) - 1):
-                        pair = tuple(sorted([cards[idx], cards[idx + 1]]))
-                        pair_links.add(pair)
+                    i = 0
+                    while i < len(cards):
+                        if i == len(cards) - 1:
+                            standalone_cards.add(cards[i])
+                            i += 1
+                        else:
+                            pair = tuple(sorted([cards[i], cards[i + 1]]))
+                            pair_links.add(pair)
+                            i += 2
 
             elif isinstance(item, (set, list, tuple)):
                 items = [_canonical_card_id(x) for x in item if x]

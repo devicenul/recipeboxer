@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Header } from './components/layout/Header';
 import { StatusBar } from './components/layout/StatusBar';
 import { NavTab } from './components/layout/Navigation';
@@ -77,6 +77,9 @@ export const AppContent: React.FC = () => {
   const [recipes, setRecipes] = useState<RecipeSchema[]>([]);
   const [pendingHitlCount, setPendingHitlCount] = useState<number>(0);
 
+  // Completion tracker to ensure auto-transition to 'recipes' fires strictly once per completed session execution
+  const completedSessionsRef = useRef<Set<string>>(new Set());
+
   // Sync recipes when session changes or completes
   const fetchRecipes = useCallback(async (sid?: string | null) => {
     const target = sid || sessionId;
@@ -88,6 +91,27 @@ export const AppContent: React.FC = () => {
       // Ignored
     }
   }, [sessionId]);
+
+  const handlePipelineCompleted = useCallback(
+    (statusOrSid: PipelineStatus | string, optionalStatus?: PipelineStatus) => {
+      let sid: string | null = null;
+      let status: PipelineStatus | undefined;
+      if (typeof statusOrSid === 'string') {
+        sid = statusOrSid;
+        status = optionalStatus;
+      } else {
+        status = statusOrSid;
+        sid = status.session_id && status.session_id !== 'none' ? status.session_id : (sessionId || 'default');
+      }
+      const targetSid = sid && sid !== 'none' ? sid : (sessionId || 'default');
+      if (!completedSessionsRef.current.has(targetSid)) {
+        completedSessionsRef.current.add(targetSid);
+        setActiveTab('recipes');
+        fetchRecipes(targetSid !== 'default' ? targetSid : sessionId);
+      }
+    },
+    [sessionId, fetchRecipes]
+  );
 
   const fetchStatus = useCallback(async (sid?: string | null) => {
     const target = sid || sessionId;
@@ -119,13 +143,16 @@ export const AppContent: React.FC = () => {
       if (status.session_id && status.session_id !== 'none' && !sessionId) {
         setSessionId(status.session_id);
       }
+      const sid = status.session_id && status.session_id !== 'none' ? status.session_id : sessionId;
+      if (status.status !== PipelineState.COMPLETED && sid) {
+        completedSessionsRef.current.delete(sid);
+      }
       if (status.status === PipelineState.HITL_PENDING) {
         setPendingHitlCount(status.progress.proposals_generated || 1);
         setActiveTab('hitl');
       } else if (status.status === PipelineState.COMPLETED) {
         setPendingHitlCount(0);
-        setActiveTab('recipes');
-        fetchRecipes(status.session_id || sessionId);
+        handlePipelineCompleted(status);
       }
     },
     onProgress: (status) => {
@@ -133,10 +160,13 @@ export const AppContent: React.FC = () => {
       if (status.session_id && status.session_id !== 'none' && !sessionId) {
         setSessionId(status.session_id);
       }
+      const sid = status.session_id && status.session_id !== 'none' ? status.session_id : sessionId;
+      if (status.status !== PipelineState.COMPLETED && sid) {
+        completedSessionsRef.current.delete(sid);
+      }
       if (status.status === PipelineState.COMPLETED) {
         setPendingHitlCount(0);
-        setActiveTab('recipes');
-        fetchRecipes(status.session_id || sessionId);
+        handlePipelineCompleted(status);
       }
     },
     onHitlReady: (data) => {
@@ -161,8 +191,7 @@ export const AppContent: React.FC = () => {
         setSessionId(status.session_id);
       }
       setPendingHitlCount(0);
-      setActiveTab('recipes');
-      fetchRecipes(status.session_id || sessionId);
+      handlePipelineCompleted(status);
     },
   });
 

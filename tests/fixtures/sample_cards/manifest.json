@@ -2,21 +2,25 @@
   "version": "1.0.0",
   "dataset_name": "RecipeBoxer Curated Historical Recipe Card Corpus",
   "description": "Curated ground-truth benchmark dataset covering historical handwritten cursive, typewriter, magazine clipping, and multi-part recipe card scans.",
-  "total_cards": 23,
-  "total_recipes": 12,
+  "total_cards": 48,
+  "total_recipes": 24,
   "cards": [
     {
       "card_id": "rec_vhc_apple_crisp_1948_front.jpg",
       "filename": "rec_vhc_apple_crisp_1948_front.jpg",
-      "sha256_hash": "a5faba578b357b916d22566af07c30f94bcd4f6266ea980a5bd098a3593829fc",
+      "sha256_hash": "eac7208bafef79eb02416e847979a611072d854a56e74a8d72f8c28821e530b7",
       "modality": "HANDWRITTEN_CURSIVE",
-      "role": "FRONT_ONLY",
+      "role": "SEQUENCE_START",
       "recipe_cluster": {
         "recipe_id": "rec_vhc_apple_crisp_1948",
         "sequence_position": 0,
         "cluster_role": "card1_front",
         "total_cards": 2,
-        "continuation_cue": "(over ->)"
+        "continuation_cue": "(over ->)",
+        "dimension": "Vintage Handwritten Cursive (1940s\u20131970s)",
+        "provenance": "Midwestern Family Heirloom Kitchen Tin",
+        "historical_date": "1948",
+        "archive_series": "Heritage Handwritten Series"
       },
       "physical_characteristics": {
         "paper_tone": "RULED_INDEX",
@@ -39,6 +43,12 @@
             "artifact_type": "TEAR_EDGE",
             "quadrant": "EDGE_RIGHT",
             "severity": "MODERATE"
+          },
+          {
+            "artifact_type": "TAPE_RESIDUE_YELLOWED",
+            "quadrant": "TOP_RIGHT",
+            "severity": "MILD",
+            "description": "Yellowed cellophane tape residue"
           }
         ]
       },
@@ -88,15 +98,19 @@
     {
       "card_id": "rec_vhc_apple_crisp_1948_back.jpg",
       "filename": "rec_vhc_apple_crisp_1948_back.jpg",
-      "sha256_hash": "c0375d0fd43d3698e263989b474987091129713dd85375abc4f2752742a754a5",
+      "sha256_hash": "43b26d6e0bce038989922a97cfbc1bccbb2059c9c34d4595c2194511bd0c0669",
       "modality": "HANDWRITTEN_CURSIVE",
-      "role": "BACK_ONLY",
+      "role": "SEQUENCE_CONTINUATION",
       "recipe_cluster": {
         "recipe_id": "rec_vhc_apple_crisp_1948",
         "sequence_position": 1,
         "cluster_role": "card1_back",
         "total_cards": 2,
-        "continuation_cue": null
+        "continuation_cue": null,
+        "dimension": "Vintage Handwritten Cursive (1940s\u20131970s)",
+        "provenance": "Midwestern Family Heirloom Kitchen Tin",
+        "historical_date": "1948",
+        "archive_series": "Heritage Handwritten Series"
       },
       "physical_characteristics": {
         "paper_tone": "RULED_INDEX",
@@ -119,6 +133,12 @@
             "artifact_type": "TEAR_EDGE",
             "quadrant": "EDGE_LEFT",
             "severity": "MODERATE"
+          },
+          {
+            "artifact_type": "TAPE_RESIDUE_YELLOWED",
+            "quadrant": "TOP_LEFT",
+            "severity": "MILD",
+            "description": "Mirrored tape adhesive discoloration"
           }
         ]
       },
@@ -168,15 +188,19 @@
     {
       "card_id": "rec_vhc_rhubarb_pie_1965_front.jpg",
       "filename": "rec_vhc_rhubarb_pie_1965_front.jpg",
-      "sha256_hash": "167f3fcbc55d1cd2a9cf85a3386f0284b41d1c507d15a4b4db74d0698fba02a5",
+      "sha256_hash": "5e6fd3682db41f4f8ec9b9a1448679ba0af797f6f571e98632eacb89488cdbce",
       "modality": "HANDWRITTEN_CURSIVE",
-      "role": "FRONT_ONLY",
+      "role": "SEQUENCE_START",
       "recipe_cluster": {
         "recipe_id": "rec_vhc_rhubarb_pie_1965",
         "sequence_position": 0,
         "cluster_role": "card1_front",
         "total_cards": 2,
-        "continuation_cue": "(over ->)"
+        "continuation_cue": "(over ->)",
+        "dimension": "Vintage Handwritten Cursive (1940s\u20131970s)",
+        "provenance": "Aunt Clara's Recipe Box (Cedar Rapids, IA)",
+        "historical_date": "1965",
+        "archive_series": "Heritage Handwritten Series"
       },
       "physical_characteristics": {
         "paper_tone": "RULED_INDEX",
@@ -246,15 +270,19 @@
     {
       "card_id": "rec_vhc_rhubarb_pie_1965_back.jpg",
       "filename": "rec_vhc_rhubarb_pie_1965_back.jpg",
-      "sha256_hash": "6a7ad66c2c7d42ba3e7d17e584776f2639f216d619beaf315b559e4ff72c1c12",
+      "sha256_hash": "8054d44998b1f95048a5ff43d9a795c84c0ebdbd9b53b72438216b45d829a575",
       "modality": "HANDWRITTEN_CURSIVE",
-      "role": "BACK_ONLY",
+      "role": "SEQUENCE_CONTINUATION",
       "recipe_cluster": {
         "recipe_id": "rec_vhc_rhubarb_pie_1965",
         "sequence_position": 1,
         "cluster_role": "card1_back",
         "total_cards": 2,
-        "continuation_cue": null
+        "continuation_cue": null,
+        "dimension": "Vintage Handwritten Cursive (1940s\u20131970s)",
+        "provenance": "Aunt Clara's Recipe Box (Cedar Rapids, IA)",
+        "historical_date": "1965",
+        "archive_series": "Heritage Handwritten Series"
       },
       "physical_characteristics": {
         "paper_tone": "RULED_INDEX",
@@ -322,22 +350,26 @@
       }
     },
     {
-      "card_id": "rec_typ_beef_stroganoff_1956_front.jpg",
-      "filename": "rec_typ_beef_stroganoff_1956_front.jpg",
-      "sha256_hash": "c52fef7bbd6b44fdef6299eef64173d4cdc0be4ca3e24de4e5c7c98eff42a4ec",
-      "modality": "TYPEWRITTEN",
-      "role": "FRONT_ONLY",
+      "card_id": "rec_vhc_strawberry_rhubarb_jam_1954_front.jpg",
+      "filename": "rec_vhc_strawberry_rhubarb_jam_1954_front.jpg",
+      "sha256_hash": "3a3e494ab2a332042cb45da7c0b7a0cb4259e48001077f0021fe77998dad6bef",
+      "modality": "HANDWRITTEN_CURSIVE",
+      "role": "SEQUENCE_START",
       "recipe_cluster": {
-        "recipe_id": "rec_typ_beef_stroganoff_1956",
+        "recipe_id": "rec_vhc_strawberry_rhubarb_jam_1954",
         "sequence_position": 0,
         "cluster_role": "card1_front",
         "total_cards": 2,
-        "continuation_cue": "PTO >>>"
+        "continuation_cue": "(over ->)",
+        "dimension": "Vintage Handwritten Cursive (1940s\u20131970s)",
+        "provenance": "Eleanor Vance Iowa County Fair Collection",
+        "historical_date": "1954",
+        "archive_series": "Heritage Handwritten Series"
       },
       "physical_characteristics": {
-        "paper_tone": "AGED_YELLOW",
+        "paper_tone": "RULED_INDEX",
         "ruling_type": "STANDARD_RULED_BLUE",
-        "ink_type": "TYPEWRITER_RIBBON",
+        "ink_type": "BLUE_BALLPOINT",
         "artifacts": [
           {
             "artifact_type": "OIL_GREASE_STAIN",
@@ -355,6 +387,378 @@
             "artifact_type": "CORNER_DOG_EAR_FOLD",
             "quadrant": "TOP_RIGHT",
             "severity": "MILD"
+          },
+          {
+            "artifact_type": "TAPE_RESIDUE_YELLOWED",
+            "quadrant": "TOP_RIGHT",
+            "severity": "MILD",
+            "description": "Yellowed cellophane tape residue"
+          }
+        ]
+      },
+      "ground_truth_recipe": {
+        "recipe_id": "rec_vhc_strawberry_rhubarb_jam_1954",
+        "title": "Eleanor's 1954 Summer Strawberry Rhubarb Jam",
+        "description": "Vintage handwritten preserve recipe from 1954 county fair box.",
+        "yield_servings": "6 half-pint jars",
+        "prep_time": "20 mins",
+        "cook_time": "25 mins",
+        "total_time": "45 mins",
+        "ingredients": [
+          "4 cups fresh strawberries, hulled and crushed",
+          "4 cups fresh rhubarb, finely chopped",
+          "1 package (1.75 oz) powdered fruit pectin",
+          "7 cups granulated sugar",
+          "1/2 tsp unsalted butter (to reduce foaming)"
+        ],
+        "directions": [
+          "1. Combine crushed strawberries, chopped rhubarb, and powdered pectin in large heavy bottom pot.",
+          "2. Bring mixture to rolling boil over high heat, stirring constantly.",
+          "3. Add sugar quickly and return to rolling boil for 1 full minute.",
+          "4. Remove from heat, skim foam, ladle into sterilized jars leaving 1/4 inch headspace.",
+          "5. Process jars in boiling water bath for 10 minutes."
+        ],
+        "tags": [
+          "Preserves",
+          "Canning",
+          "Vintage",
+          "Summer"
+        ],
+        "source_notes": "Eleanor Vance (1954) Iowa County Fair Recipe Box (Blue Fountain Pen Script)",
+        "card_ids": [
+          "rec_vhc_strawberry_rhubarb_jam_1954_front.jpg",
+          "rec_vhc_strawberry_rhubarb_jam_1954_back.jpg"
+        ],
+        "image_urls": [],
+        "created_at": null,
+        "updated_at": null
+      }
+    },
+    {
+      "card_id": "rec_vhc_strawberry_rhubarb_jam_1954_back.jpg",
+      "filename": "rec_vhc_strawberry_rhubarb_jam_1954_back.jpg",
+      "sha256_hash": "1e45958be170f56a947343f5d4c2ba19ee552d91064f4612fbbdc43fc7236842",
+      "modality": "HANDWRITTEN_CURSIVE",
+      "role": "SEQUENCE_CONTINUATION",
+      "recipe_cluster": {
+        "recipe_id": "rec_vhc_strawberry_rhubarb_jam_1954",
+        "sequence_position": 1,
+        "cluster_role": "card1_back",
+        "total_cards": 2,
+        "continuation_cue": null,
+        "dimension": "Vintage Handwritten Cursive (1940s\u20131970s)",
+        "provenance": "Eleanor Vance Iowa County Fair Collection",
+        "historical_date": "1954",
+        "archive_series": "Heritage Handwritten Series"
+      },
+      "physical_characteristics": {
+        "paper_tone": "RULED_INDEX",
+        "ruling_type": "STANDARD_RULED_BLUE",
+        "ink_type": "BLUE_BALLPOINT",
+        "artifacts": [
+          {
+            "artifact_type": "OIL_GREASE_STAIN",
+            "quadrant": "TOP_LEFT",
+            "severity": "MILD",
+            "description": "Mirrored grease bleed-through from front"
+          },
+          {
+            "artifact_type": "COFFEE_TEA_RING",
+            "quadrant": "TOP_LEFT",
+            "severity": "MILD",
+            "description": "Mirrored coffee ring bleed-through"
+          },
+          {
+            "artifact_type": "CORNER_DOG_EAR_FOLD",
+            "quadrant": "TOP_LEFT",
+            "severity": "MILD"
+          },
+          {
+            "artifact_type": "TAPE_RESIDUE_YELLOWED",
+            "quadrant": "TOP_LEFT",
+            "severity": "MILD",
+            "description": "Mirrored tape adhesive discoloration"
+          }
+        ]
+      },
+      "ground_truth_recipe": {
+        "recipe_id": "rec_vhc_strawberry_rhubarb_jam_1954",
+        "title": "Eleanor's 1954 Summer Strawberry Rhubarb Jam",
+        "description": "Vintage handwritten preserve recipe from 1954 county fair box.",
+        "yield_servings": "6 half-pint jars",
+        "prep_time": "20 mins",
+        "cook_time": "25 mins",
+        "total_time": "45 mins",
+        "ingredients": [
+          "4 cups fresh strawberries, hulled and crushed",
+          "4 cups fresh rhubarb, finely chopped",
+          "1 package (1.75 oz) powdered fruit pectin",
+          "7 cups granulated sugar",
+          "1/2 tsp unsalted butter (to reduce foaming)"
+        ],
+        "directions": [
+          "1. Combine crushed strawberries, chopped rhubarb, and powdered pectin in large heavy bottom pot.",
+          "2. Bring mixture to rolling boil over high heat, stirring constantly.",
+          "3. Add sugar quickly and return to rolling boil for 1 full minute.",
+          "4. Remove from heat, skim foam, ladle into sterilized jars leaving 1/4 inch headspace.",
+          "5. Process jars in boiling water bath for 10 minutes."
+        ],
+        "tags": [
+          "Preserves",
+          "Canning",
+          "Vintage",
+          "Summer"
+        ],
+        "source_notes": "Eleanor Vance (1954) Iowa County Fair Recipe Box (Blue Fountain Pen Script)",
+        "card_ids": [
+          "rec_vhc_strawberry_rhubarb_jam_1954_front.jpg",
+          "rec_vhc_strawberry_rhubarb_jam_1954_back.jpg"
+        ],
+        "image_urls": [],
+        "created_at": null,
+        "updated_at": null
+      }
+    },
+    {
+      "card_id": "rec_vhc_amish_cinnamon_bread_1973_front.jpg",
+      "filename": "rec_vhc_amish_cinnamon_bread_1973_front.jpg",
+      "sha256_hash": "9b8a56bbc6139ae910b3fa90ab6411445a3661cf35c195a65f3e26d630bc420c",
+      "modality": "HANDWRITTEN_CURSIVE",
+      "role": "SEQUENCE_START",
+      "recipe_cluster": {
+        "recipe_id": "rec_vhc_amish_cinnamon_bread_1973",
+        "sequence_position": 0,
+        "cluster_role": "card1_front",
+        "total_cards": 2,
+        "continuation_cue": "(over ->)",
+        "dimension": "Vintage Handwritten Cursive (1940s\u20131970s)",
+        "provenance": "Lancaster County Church Community Exchange",
+        "historical_date": "1973",
+        "archive_series": "Heritage Handwritten Series"
+      },
+      "physical_characteristics": {
+        "paper_tone": "AGED_YELLOW",
+        "ruling_type": "STANDARD_RULED_BLUE",
+        "ink_type": "BLACK_BALLPOINT",
+        "artifacts": [
+          {
+            "artifact_type": "OIL_GREASE_STAIN",
+            "quadrant": "TOP_RIGHT",
+            "severity": "MODERATE",
+            "description": "Grease stain near upper right edge"
+          },
+          {
+            "artifact_type": "COFFEE_TEA_RING",
+            "quadrant": "TOP_RIGHT",
+            "severity": "MODERATE",
+            "description": "Coffee cup stain ring"
+          },
+          {
+            "artifact_type": "CORNER_DOG_EAR_FOLD",
+            "quadrant": "TOP_RIGHT",
+            "severity": "MILD"
+          },
+          {
+            "artifact_type": "TEAR_EDGE",
+            "quadrant": "EDGE_RIGHT",
+            "severity": "MODERATE"
+          },
+          {
+            "artifact_type": "RUBBER_DATE_STAMP",
+            "quadrant": "BOTTOM_LEFT",
+            "severity": "MILD",
+            "description": "Vintage ink stamp: RECIPE CLUB 1960"
+          },
+          {
+            "artifact_type": "TAPE_RESIDUE_YELLOWED",
+            "quadrant": "TOP_RIGHT",
+            "severity": "MILD",
+            "description": "Yellowed cellophane tape residue"
+          }
+        ]
+      },
+      "ground_truth_recipe": {
+        "recipe_id": "rec_vhc_amish_cinnamon_bread_1973",
+        "title": "Amish Friendship Cinnamon Streusel Bread (1973)",
+        "description": "Traditional Amish friendship sourdough bread with cinnamon sugar streusel.",
+        "yield_servings": "2 loaves (16 slices)",
+        "prep_time": "25 mins",
+        "cook_time": "55 mins",
+        "total_time": "1 hr 20 mins",
+        "ingredients": [
+          "1 cup Amish friendship bread starter",
+          "2/3 cup vegetable oil",
+          "3 large eggs",
+          "2 cups all-purpose flour",
+          "1 cup granulated sugar",
+          "1 1/2 tsp baking powder",
+          "1/2 tsp baking soda",
+          "1/2 tsp salt",
+          "1 box (3.4 oz) vanilla instant pudding mix",
+          "1 tbsp ground cinnamon",
+          "1/2 cup brown sugar (for streusel topping)"
+        ],
+        "directions": [
+          "1. Preheat oven to 325\u00b0F; grease and sugar two 8x4-inch loaf pans.",
+          "2. In large bowl, combine starter, oil, eggs, flour, sugar, baking powder, baking soda, salt, and pudding mix.",
+          "3. In small bowl, mix cinnamon and brown sugar for streusel.",
+          "4. Pour half batter into pans, sprinkle half streusel, add remaining batter, and top with remaining streusel.",
+          "5. Bake at 325\u00b0F for 50-55 minutes until toothpick inserted in center comes out clean.",
+          "6. Cool in pans 10 minutes before turning out onto wire racks."
+        ],
+        "tags": [
+          "Baking",
+          "Bread",
+          "Amish",
+          "Cinnamon",
+          "Vintage"
+        ],
+        "source_notes": "Handwritten 1973 Church Community Exchange Card",
+        "card_ids": [
+          "rec_vhc_amish_cinnamon_bread_1973_front.jpg",
+          "rec_vhc_amish_cinnamon_bread_1973_back.jpg"
+        ],
+        "image_urls": [],
+        "created_at": null,
+        "updated_at": null
+      }
+    },
+    {
+      "card_id": "rec_vhc_amish_cinnamon_bread_1973_back.jpg",
+      "filename": "rec_vhc_amish_cinnamon_bread_1973_back.jpg",
+      "sha256_hash": "76fa444e87fe3a04e959752642c8b318d8763c2551b4f20fea77d82caf42eb65",
+      "modality": "HANDWRITTEN_CURSIVE",
+      "role": "SEQUENCE_CONTINUATION",
+      "recipe_cluster": {
+        "recipe_id": "rec_vhc_amish_cinnamon_bread_1973",
+        "sequence_position": 1,
+        "cluster_role": "card1_back",
+        "total_cards": 2,
+        "continuation_cue": null,
+        "dimension": "Vintage Handwritten Cursive (1940s\u20131970s)",
+        "provenance": "Lancaster County Church Community Exchange",
+        "historical_date": "1973",
+        "archive_series": "Heritage Handwritten Series"
+      },
+      "physical_characteristics": {
+        "paper_tone": "AGED_YELLOW",
+        "ruling_type": "STANDARD_RULED_BLUE",
+        "ink_type": "BLACK_BALLPOINT",
+        "artifacts": [
+          {
+            "artifact_type": "OIL_GREASE_STAIN",
+            "quadrant": "TOP_LEFT",
+            "severity": "MILD",
+            "description": "Mirrored grease bleed-through from front"
+          },
+          {
+            "artifact_type": "COFFEE_TEA_RING",
+            "quadrant": "TOP_LEFT",
+            "severity": "MILD",
+            "description": "Mirrored coffee ring bleed-through"
+          },
+          {
+            "artifact_type": "CORNER_DOG_EAR_FOLD",
+            "quadrant": "TOP_LEFT",
+            "severity": "MILD"
+          },
+          {
+            "artifact_type": "TEAR_EDGE",
+            "quadrant": "EDGE_LEFT",
+            "severity": "MODERATE"
+          },
+          {
+            "artifact_type": "TAPE_RESIDUE_YELLOWED",
+            "quadrant": "TOP_LEFT",
+            "severity": "MILD",
+            "description": "Mirrored tape adhesive discoloration"
+          }
+        ]
+      },
+      "ground_truth_recipe": {
+        "recipe_id": "rec_vhc_amish_cinnamon_bread_1973",
+        "title": "Amish Friendship Cinnamon Streusel Bread (1973)",
+        "description": "Traditional Amish friendship sourdough bread with cinnamon sugar streusel.",
+        "yield_servings": "2 loaves (16 slices)",
+        "prep_time": "25 mins",
+        "cook_time": "55 mins",
+        "total_time": "1 hr 20 mins",
+        "ingredients": [
+          "1 cup Amish friendship bread starter",
+          "2/3 cup vegetable oil",
+          "3 large eggs",
+          "2 cups all-purpose flour",
+          "1 cup granulated sugar",
+          "1 1/2 tsp baking powder",
+          "1/2 tsp baking soda",
+          "1/2 tsp salt",
+          "1 box (3.4 oz) vanilla instant pudding mix",
+          "1 tbsp ground cinnamon",
+          "1/2 cup brown sugar (for streusel topping)"
+        ],
+        "directions": [
+          "1. Preheat oven to 325\u00b0F; grease and sugar two 8x4-inch loaf pans.",
+          "2. In large bowl, combine starter, oil, eggs, flour, sugar, baking powder, baking soda, salt, and pudding mix.",
+          "3. In small bowl, mix cinnamon and brown sugar for streusel.",
+          "4. Pour half batter into pans, sprinkle half streusel, add remaining batter, and top with remaining streusel.",
+          "5. Bake at 325\u00b0F for 50-55 minutes until toothpick inserted in center comes out clean.",
+          "6. Cool in pans 10 minutes before turning out onto wire racks."
+        ],
+        "tags": [
+          "Baking",
+          "Bread",
+          "Amish",
+          "Cinnamon",
+          "Vintage"
+        ],
+        "source_notes": "Handwritten 1973 Church Community Exchange Card",
+        "card_ids": [
+          "rec_vhc_amish_cinnamon_bread_1973_front.jpg",
+          "rec_vhc_amish_cinnamon_bread_1973_back.jpg"
+        ],
+        "image_urls": [],
+        "created_at": null,
+        "updated_at": null
+      }
+    },
+    {
+      "card_id": "rec_typ_beef_stroganoff_1956_front.jpg",
+      "filename": "rec_typ_beef_stroganoff_1956_front.jpg",
+      "sha256_hash": "e0c91c468cb4e6f23e6056100d35ac2cc06aaf61728b4ffcb7d8053c7e614508",
+      "modality": "TYPEWRITTEN",
+      "role": "SEQUENCE_START",
+      "recipe_cluster": {
+        "recipe_id": "rec_typ_beef_stroganoff_1956",
+        "sequence_position": 0,
+        "cluster_role": "card1_front",
+        "total_cards": 2,
+        "continuation_cue": "PTO >>>",
+        "dimension": "Typewritten & Stamped (1950s\u20131970s)",
+        "provenance": "Suburban Homemakers Recipe Club",
+        "historical_date": "1956",
+        "archive_series": "Mid-Century Typewritten Series"
+      },
+      "physical_characteristics": {
+        "paper_tone": "AGED_YELLOW",
+        "ruling_type": "STANDARD_RULED_BLUE",
+        "ink_type": "TYPEWRITER_RIBBON",
+        "artifacts": [
+          {
+            "artifact_type": "OIL_GREASE_STAIN",
+            "quadrant": "TOP_RIGHT",
+            "severity": "MODERATE",
+            "description": "Grease stain near upper right edge"
+          },
+          {
+            "artifact_type": "CORNER_DOG_EAR_FOLD",
+            "quadrant": "TOP_RIGHT",
+            "severity": "MILD"
+          },
+          {
+            "artifact_type": "RUBBER_DATE_STAMP",
+            "quadrant": "BOTTOM_LEFT",
+            "severity": "MILD",
+            "description": "Vintage ink stamp: RECIPE CLUB 1956"
           }
         ]
       },
@@ -406,15 +810,19 @@
     {
       "card_id": "rec_typ_beef_stroganoff_1956_back.jpg",
       "filename": "rec_typ_beef_stroganoff_1956_back.jpg",
-      "sha256_hash": "b5872a160bc2730dd568ba7e2be25f746a7a5c30f5d016d60698de78eefa475d",
+      "sha256_hash": "93fb613030ef2b54dff4583cb295a4c2c48d64a3fa11504f041181112b915b64",
       "modality": "TYPEWRITTEN",
-      "role": "BACK_ONLY",
+      "role": "SEQUENCE_CONTINUATION",
       "recipe_cluster": {
         "recipe_id": "rec_typ_beef_stroganoff_1956",
         "sequence_position": 1,
         "cluster_role": "card1_back",
         "total_cards": 2,
-        "continuation_cue": null
+        "continuation_cue": null,
+        "dimension": "Typewritten & Stamped (1950s\u20131970s)",
+        "provenance": "Suburban Homemakers Recipe Club",
+        "historical_date": "1956",
+        "archive_series": "Mid-Century Typewritten Series"
       },
       "physical_characteristics": {
         "paper_tone": "AGED_YELLOW",
@@ -426,12 +834,6 @@
             "quadrant": "TOP_LEFT",
             "severity": "MILD",
             "description": "Mirrored grease bleed-through from front"
-          },
-          {
-            "artifact_type": "COFFEE_TEA_RING",
-            "quadrant": "TOP_LEFT",
-            "severity": "MILD",
-            "description": "Mirrored coffee ring bleed-through"
           },
           {
             "artifact_type": "CORNER_DOG_EAR_FOLD",
@@ -488,15 +890,19 @@
     {
       "card_id": "rec_typ_tomato_soup_cake_1952_front.jpg",
       "filename": "rec_typ_tomato_soup_cake_1952_front.jpg",
-      "sha256_hash": "24d5eb5f4cae65934330d3abfe29b3706f6db893ec6ec22fa48bf077e3cf2b14",
+      "sha256_hash": "2f3dda602a5b330a6a0df98c70b944db980d26bad616bf5ab6adf6ebadf93711",
       "modality": "TYPEWRITTEN",
-      "role": "FRONT_ONLY",
+      "role": "SEQUENCE_START",
       "recipe_cluster": {
         "recipe_id": "rec_typ_tomato_soup_cake_1952",
         "sequence_position": 0,
         "cluster_role": "card1_front",
         "total_cards": 2,
-        "continuation_cue": "PTO >>>"
+        "continuation_cue": "PTO >>>",
+        "dimension": "Typewritten & Stamped (1950s\u20131970s)",
+        "provenance": "Post-War Community Kitchen Archive",
+        "historical_date": "1952",
+        "archive_series": "Mid-Century Typewritten Series"
       },
       "physical_characteristics": {
         "paper_tone": "AGED_YELLOW",
@@ -524,6 +930,18 @@
             "artifact_type": "TEAR_EDGE",
             "quadrant": "EDGE_RIGHT",
             "severity": "MODERATE"
+          },
+          {
+            "artifact_type": "RUBBER_DATE_STAMP",
+            "quadrant": "BOTTOM_LEFT",
+            "severity": "MILD",
+            "description": "Vintage ink stamp: RECIPE CLUB 1974"
+          },
+          {
+            "artifact_type": "TAPE_RESIDUE_YELLOWED",
+            "quadrant": "TOP_RIGHT",
+            "severity": "MILD",
+            "description": "Yellowed cellophane tape residue"
           }
         ]
       },
@@ -575,15 +993,19 @@
     {
       "card_id": "rec_typ_tomato_soup_cake_1952_back.jpg",
       "filename": "rec_typ_tomato_soup_cake_1952_back.jpg",
-      "sha256_hash": "016ec713c1d253d7b432497b4e43f8526c04a40b3c74dd031a175fafd5b79a9d",
+      "sha256_hash": "5aad31fa4be00ff6505039b276fd7024e77e113d2ecfa717c31c6a41390a27d3",
       "modality": "TYPEWRITTEN",
-      "role": "BACK_ONLY",
+      "role": "SEQUENCE_CONTINUATION",
       "recipe_cluster": {
         "recipe_id": "rec_typ_tomato_soup_cake_1952",
         "sequence_position": 1,
         "cluster_role": "card1_back",
         "total_cards": 2,
-        "continuation_cue": null
+        "continuation_cue": null,
+        "dimension": "Typewritten & Stamped (1950s\u20131970s)",
+        "provenance": "Post-War Community Kitchen Archive",
+        "historical_date": "1952",
+        "archive_series": "Mid-Century Typewritten Series"
       },
       "physical_characteristics": {
         "paper_tone": "AGED_YELLOW",
@@ -611,6 +1033,12 @@
             "artifact_type": "TEAR_EDGE",
             "quadrant": "EDGE_LEFT",
             "severity": "MODERATE"
+          },
+          {
+            "artifact_type": "TAPE_RESIDUE_YELLOWED",
+            "quadrant": "TOP_LEFT",
+            "severity": "MILD",
+            "description": "Mirrored tape adhesive discoloration"
           }
         ]
       },
@@ -660,17 +1088,369 @@
       }
     },
     {
+      "card_id": "rec_typ_swedish_meatballs_1961_front.jpg",
+      "filename": "rec_typ_swedish_meatballs_1961_front.jpg",
+      "sha256_hash": "7f096be22205c3fcf8462626a13aef9bafeb6b9c3e767c4629aed2c0ac69e375",
+      "modality": "TYPEWRITTEN",
+      "role": "SEQUENCE_START",
+      "recipe_cluster": {
+        "recipe_id": "rec_typ_swedish_meatballs_1961",
+        "sequence_position": 0,
+        "cluster_role": "card1_front",
+        "total_cards": 2,
+        "continuation_cue": "PTO >>>",
+        "dimension": "Typewritten & Stamped (1950s\u20131970s)",
+        "provenance": "Better Homes Homemakers Club Archive",
+        "historical_date": "1961",
+        "archive_series": "Mid-Century Typewritten Series"
+      },
+      "physical_characteristics": {
+        "paper_tone": "AGED_YELLOW",
+        "ruling_type": "STANDARD_RULED_BLUE",
+        "ink_type": "TYPEWRITER_RIBBON",
+        "artifacts": [
+          {
+            "artifact_type": "OIL_GREASE_STAIN",
+            "quadrant": "TOP_RIGHT",
+            "severity": "MODERATE",
+            "description": "Grease stain near upper right edge"
+          },
+          {
+            "artifact_type": "COFFEE_TEA_RING",
+            "quadrant": "TOP_RIGHT",
+            "severity": "MODERATE",
+            "description": "Coffee cup stain ring"
+          },
+          {
+            "artifact_type": "CORNER_DOG_EAR_FOLD",
+            "quadrant": "TOP_RIGHT",
+            "severity": "MILD"
+          },
+          {
+            "artifact_type": "RUBBER_DATE_STAMP",
+            "quadrant": "BOTTOM_LEFT",
+            "severity": "MILD",
+            "description": "Vintage ink stamp: BETTER HOMES CLUB OCT 1961"
+          }
+        ]
+      },
+      "ground_truth_recipe": {
+        "recipe_id": "rec_typ_swedish_meatballs_1961",
+        "title": "1961 Scandinavian Swedish Meatballs",
+        "description": "Typewritten classic spiced meatballs in rich sour cream gravy.",
+        "yield_servings": "6 servings (30 meatballs)",
+        "prep_time": "30 mins",
+        "cook_time": "25 mins",
+        "total_time": "55 mins",
+        "ingredients": [
+          "1 lb ground chuck beef",
+          "1/2 lb ground pork",
+          "1/2 cup fine dry breadcrumbs",
+          "1/2 cup heavy cream",
+          "1 small onion, grated fine",
+          "1 large egg",
+          "1/4 tsp ground allspice & nutmeg",
+          "1 tsp salt & 1/2 tsp white pepper",
+          "3 tbsp butter for pan frying",
+          "2 tbsp flour & 1 1/2 cups beef broth for cream gravy",
+          "1/2 cup sour cream for finishing"
+        ],
+        "directions": [
+          "1. Soak breadcrumbs in heavy cream in large bowl for 10 minutes.",
+          "2. Add ground meats, grated onion, egg, allspice, nutmeg, salt, and white pepper; mix thoroughly.",
+          "3. Shape into 1-inch uniform meatballs.",
+          "4. Melt butter in heavy skillet; brown meatballs on all sides in batches, transfer to dish.",
+          "5. Whisk flour into pan drippings, gradually add beef broth and simmer until thickened.",
+          "6. Stir in sour cream, return meatballs to skillet, and simmer gently 10 minutes.",
+          "7. Serve hot over buttered egg noodles with lingonberry jam."
+        ],
+        "tags": [
+          "Dinner",
+          "Swedish",
+          "Meatballs",
+          "Classic",
+          "Vintage"
+        ],
+        "source_notes": "Typewritten Card (October 1961 Better Homes Homemakers Stamp)",
+        "card_ids": [
+          "rec_typ_swedish_meatballs_1961_front.jpg",
+          "rec_typ_swedish_meatballs_1961_back.jpg"
+        ],
+        "image_urls": [],
+        "created_at": null,
+        "updated_at": null
+      }
+    },
+    {
+      "card_id": "rec_typ_swedish_meatballs_1961_back.jpg",
+      "filename": "rec_typ_swedish_meatballs_1961_back.jpg",
+      "sha256_hash": "380b2d25d984d9dcc1f392527246b90d91dc5037e987db762f47f9821f019531",
+      "modality": "TYPEWRITTEN",
+      "role": "SEQUENCE_CONTINUATION",
+      "recipe_cluster": {
+        "recipe_id": "rec_typ_swedish_meatballs_1961",
+        "sequence_position": 1,
+        "cluster_role": "card1_back",
+        "total_cards": 2,
+        "continuation_cue": null,
+        "dimension": "Typewritten & Stamped (1950s\u20131970s)",
+        "provenance": "Better Homes Homemakers Club Archive",
+        "historical_date": "1961",
+        "archive_series": "Mid-Century Typewritten Series"
+      },
+      "physical_characteristics": {
+        "paper_tone": "AGED_YELLOW",
+        "ruling_type": "STANDARD_RULED_BLUE",
+        "ink_type": "TYPEWRITER_RIBBON",
+        "artifacts": [
+          {
+            "artifact_type": "OIL_GREASE_STAIN",
+            "quadrant": "TOP_LEFT",
+            "severity": "MILD",
+            "description": "Mirrored grease bleed-through from front"
+          },
+          {
+            "artifact_type": "COFFEE_TEA_RING",
+            "quadrant": "TOP_LEFT",
+            "severity": "MILD",
+            "description": "Mirrored coffee ring bleed-through"
+          },
+          {
+            "artifact_type": "CORNER_DOG_EAR_FOLD",
+            "quadrant": "TOP_LEFT",
+            "severity": "MILD"
+          }
+        ]
+      },
+      "ground_truth_recipe": {
+        "recipe_id": "rec_typ_swedish_meatballs_1961",
+        "title": "1961 Scandinavian Swedish Meatballs",
+        "description": "Typewritten classic spiced meatballs in rich sour cream gravy.",
+        "yield_servings": "6 servings (30 meatballs)",
+        "prep_time": "30 mins",
+        "cook_time": "25 mins",
+        "total_time": "55 mins",
+        "ingredients": [
+          "1 lb ground chuck beef",
+          "1/2 lb ground pork",
+          "1/2 cup fine dry breadcrumbs",
+          "1/2 cup heavy cream",
+          "1 small onion, grated fine",
+          "1 large egg",
+          "1/4 tsp ground allspice & nutmeg",
+          "1 tsp salt & 1/2 tsp white pepper",
+          "3 tbsp butter for pan frying",
+          "2 tbsp flour & 1 1/2 cups beef broth for cream gravy",
+          "1/2 cup sour cream for finishing"
+        ],
+        "directions": [
+          "1. Soak breadcrumbs in heavy cream in large bowl for 10 minutes.",
+          "2. Add ground meats, grated onion, egg, allspice, nutmeg, salt, and white pepper; mix thoroughly.",
+          "3. Shape into 1-inch uniform meatballs.",
+          "4. Melt butter in heavy skillet; brown meatballs on all sides in batches, transfer to dish.",
+          "5. Whisk flour into pan drippings, gradually add beef broth and simmer until thickened.",
+          "6. Stir in sour cream, return meatballs to skillet, and simmer gently 10 minutes.",
+          "7. Serve hot over buttered egg noodles with lingonberry jam."
+        ],
+        "tags": [
+          "Dinner",
+          "Swedish",
+          "Meatballs",
+          "Classic",
+          "Vintage"
+        ],
+        "source_notes": "Typewritten Card (October 1961 Better Homes Homemakers Stamp)",
+        "card_ids": [
+          "rec_typ_swedish_meatballs_1961_front.jpg",
+          "rec_typ_swedish_meatballs_1961_back.jpg"
+        ],
+        "image_urls": [],
+        "created_at": null,
+        "updated_at": null
+      }
+    },
+    {
+      "card_id": "rec_typ_lemon_chiffon_pie_1958_front.jpg",
+      "filename": "rec_typ_lemon_chiffon_pie_1958_front.jpg",
+      "sha256_hash": "60541436c297406f1428c764065fb60039a674a2c1a783e2f1da4c6b49f6cfb1",
+      "modality": "TYPEWRITTEN",
+      "role": "SEQUENCE_START",
+      "recipe_cluster": {
+        "recipe_id": "rec_typ_lemon_chiffon_pie_1958",
+        "sequence_position": 0,
+        "cluster_role": "card1_front",
+        "total_cards": 2,
+        "continuation_cue": "PTO >>>",
+        "dimension": "Typewritten & Stamped (1950s\u20131970s)",
+        "provenance": "Ladies Auxiliary Bake Sale Archive",
+        "historical_date": "1958",
+        "archive_series": "Mid-Century Typewritten Series"
+      },
+      "physical_characteristics": {
+        "paper_tone": "WHITE_LINEN",
+        "ruling_type": "UNRULED_BLANK",
+        "ink_type": "TYPEWRITER_RIBBON",
+        "artifacts": [
+          {
+            "artifact_type": "OIL_GREASE_STAIN",
+            "quadrant": "TOP_RIGHT",
+            "severity": "MODERATE",
+            "description": "Grease stain near upper right edge"
+          },
+          {
+            "artifact_type": "CORNER_DOG_EAR_FOLD",
+            "quadrant": "TOP_RIGHT",
+            "severity": "MILD"
+          },
+          {
+            "artifact_type": "RUBBER_DATE_STAMP",
+            "quadrant": "BOTTOM_LEFT",
+            "severity": "MILD",
+            "description": "Vintage ink stamp: LADIES AUXILIARY 1958"
+          }
+        ]
+      },
+      "ground_truth_recipe": {
+        "recipe_id": "rec_typ_lemon_chiffon_pie_1958",
+        "title": "1958 Mile-High Lemon Chiffon Pie",
+        "description": "Airy chilled lemon gelatin meringue chiffon pie in flaky crust.",
+        "yield_servings": "8 slices",
+        "prep_time": "30 mins",
+        "cook_time": "10 mins",
+        "total_time": "3 hrs 40 mins",
+        "ingredients": [
+          "1 envelope unflavored gelatin",
+          "1/4 cup cold water",
+          "4 large eggs, separated",
+          "1 cup granulated sugar, divided",
+          "1/2 cup fresh lemon juice",
+          "1 tbsp grated lemon zest",
+          "1/2 tsp salt",
+          "1 pre-baked 9-inch pastry crust",
+          "1 cup whipped cream for topping"
+        ],
+        "directions": [
+          "1. Soften gelatin in 1/4 cup cold water in small bowl.",
+          "2. In top of double boiler, beat egg yolks with 1/2 cup sugar, lemon juice, zest, and salt.",
+          "3. Cook over simmering water, stirring constantly until thick and custardy (about 8 mins).",
+          "4. Remove from heat; stir in softened gelatin until completely dissolved; cool until mixture begins to congeal.",
+          "5. Beat egg whites until stiff peaks form, gradually adding remaining 1/2 cup sugar.",
+          "6. Fold meringue gently into cooled lemon gelatin mixture.",
+          "7. Pile high into baked pastry shell and refrigerate at least 3 hours until set."
+        ],
+        "tags": [
+          "Dessert",
+          "Pie",
+          "Lemon",
+          "Vintage",
+          "Chiffon"
+        ],
+        "source_notes": "Typewritten Ladies Auxiliary Bake Sale 1958 Archive",
+        "card_ids": [
+          "rec_typ_lemon_chiffon_pie_1958_front.jpg",
+          "rec_typ_lemon_chiffon_pie_1958_back.jpg"
+        ],
+        "image_urls": [],
+        "created_at": null,
+        "updated_at": null
+      }
+    },
+    {
+      "card_id": "rec_typ_lemon_chiffon_pie_1958_back.jpg",
+      "filename": "rec_typ_lemon_chiffon_pie_1958_back.jpg",
+      "sha256_hash": "3f950869c234dfdf69e2cddcf9300ae714eb704e8c5de99602bbaa5bbdfb41e0",
+      "modality": "TYPEWRITTEN",
+      "role": "SEQUENCE_CONTINUATION",
+      "recipe_cluster": {
+        "recipe_id": "rec_typ_lemon_chiffon_pie_1958",
+        "sequence_position": 1,
+        "cluster_role": "card1_back",
+        "total_cards": 2,
+        "continuation_cue": null,
+        "dimension": "Typewritten & Stamped (1950s\u20131970s)",
+        "provenance": "Ladies Auxiliary Bake Sale Archive",
+        "historical_date": "1958",
+        "archive_series": "Mid-Century Typewritten Series"
+      },
+      "physical_characteristics": {
+        "paper_tone": "WHITE_LINEN",
+        "ruling_type": "UNRULED_BLANK",
+        "ink_type": "TYPEWRITER_RIBBON",
+        "artifacts": [
+          {
+            "artifact_type": "OIL_GREASE_STAIN",
+            "quadrant": "TOP_LEFT",
+            "severity": "MILD",
+            "description": "Mirrored grease bleed-through from front"
+          },
+          {
+            "artifact_type": "CORNER_DOG_EAR_FOLD",
+            "quadrant": "TOP_LEFT",
+            "severity": "MILD"
+          }
+        ]
+      },
+      "ground_truth_recipe": {
+        "recipe_id": "rec_typ_lemon_chiffon_pie_1958",
+        "title": "1958 Mile-High Lemon Chiffon Pie",
+        "description": "Airy chilled lemon gelatin meringue chiffon pie in flaky crust.",
+        "yield_servings": "8 slices",
+        "prep_time": "30 mins",
+        "cook_time": "10 mins",
+        "total_time": "3 hrs 40 mins",
+        "ingredients": [
+          "1 envelope unflavored gelatin",
+          "1/4 cup cold water",
+          "4 large eggs, separated",
+          "1 cup granulated sugar, divided",
+          "1/2 cup fresh lemon juice",
+          "1 tbsp grated lemon zest",
+          "1/2 tsp salt",
+          "1 pre-baked 9-inch pastry crust",
+          "1 cup whipped cream for topping"
+        ],
+        "directions": [
+          "1. Soften gelatin in 1/4 cup cold water in small bowl.",
+          "2. In top of double boiler, beat egg yolks with 1/2 cup sugar, lemon juice, zest, and salt.",
+          "3. Cook over simmering water, stirring constantly until thick and custardy (about 8 mins).",
+          "4. Remove from heat; stir in softened gelatin until completely dissolved; cool until mixture begins to congeal.",
+          "5. Beat egg whites until stiff peaks form, gradually adding remaining 1/2 cup sugar.",
+          "6. Fold meringue gently into cooled lemon gelatin mixture.",
+          "7. Pile high into baked pastry shell and refrigerate at least 3 hours until set."
+        ],
+        "tags": [
+          "Dessert",
+          "Pie",
+          "Lemon",
+          "Vintage",
+          "Chiffon"
+        ],
+        "source_notes": "Typewritten Ladies Auxiliary Bake Sale 1958 Archive",
+        "card_ids": [
+          "rec_typ_lemon_chiffon_pie_1958_front.jpg",
+          "rec_typ_lemon_chiffon_pie_1958_back.jpg"
+        ],
+        "image_urls": [],
+        "created_at": null,
+        "updated_at": null
+      }
+    },
+    {
       "card_id": "rec_clp_crisco_fried_chicken_front.jpg",
       "filename": "rec_clp_crisco_fried_chicken_front.jpg",
-      "sha256_hash": "245bb4d222a64d0d28c341c1c31a4ab59f587a9333d895cf32edf63c3293bd15",
+      "sha256_hash": "7a8dfa8167586001f98bd2ea8f28cc9422a3096ce55445d8fb2589a1cebd2246",
       "modality": "PRINTED_CLIPPING",
-      "role": "FRONT_ONLY",
+      "role": "SEQUENCE_START",
       "recipe_cluster": {
         "recipe_id": "rec_clp_crisco_fried_chicken",
         "sequence_position": 0,
         "cluster_role": "card1_front",
         "total_cards": 2,
-        "continuation_cue": "PTO >>>"
+        "continuation_cue": "PTO >>>",
+        "dimension": "Magazine Clippings & Package Labels (1960s\u20131980s)",
+        "provenance": "Southern Living Magazine Clipping",
+        "historical_date": "1962",
+        "archive_series": "Period Clippings & Ephemera"
       },
       "physical_characteristics": {
         "paper_tone": "WHITE_LINEN",
@@ -687,6 +1467,18 @@
             "artifact_type": "CORNER_DOG_EAR_FOLD",
             "quadrant": "TOP_RIGHT",
             "severity": "MILD"
+          },
+          {
+            "artifact_type": "RUBBER_DATE_STAMP",
+            "quadrant": "BOTTOM_LEFT",
+            "severity": "MILD",
+            "description": "Vintage ink stamp: RECIPE CLUB 1973"
+          },
+          {
+            "artifact_type": "TAPE_RESIDUE_YELLOWED",
+            "quadrant": "TOP_RIGHT",
+            "severity": "MILD",
+            "description": "Yellowed cellophane tape residue"
           }
         ]
       },
@@ -735,15 +1527,19 @@
     {
       "card_id": "rec_clp_crisco_fried_chicken_back.jpg",
       "filename": "rec_clp_crisco_fried_chicken_back.jpg",
-      "sha256_hash": "8a6e52be644886626925e8d410e82bb405fd270289b5e025aaa390550d0a3350",
+      "sha256_hash": "356cfca5a134f9110c9ed288ac2a91ffe7e114ecc7e9d468e5f5c6ec61d44266",
       "modality": "PRINTED_CLIPPING",
-      "role": "BACK_ONLY",
+      "role": "SEQUENCE_CONTINUATION",
       "recipe_cluster": {
         "recipe_id": "rec_clp_crisco_fried_chicken",
         "sequence_position": 1,
         "cluster_role": "card1_back",
         "total_cards": 2,
-        "continuation_cue": null
+        "continuation_cue": null,
+        "dimension": "Magazine Clippings & Package Labels (1960s\u20131980s)",
+        "provenance": "Southern Living Magazine Clipping",
+        "historical_date": "1962",
+        "archive_series": "Period Clippings & Ephemera"
       },
       "physical_characteristics": {
         "paper_tone": "WHITE_LINEN",
@@ -760,6 +1556,12 @@
             "artifact_type": "CORNER_DOG_EAR_FOLD",
             "quadrant": "TOP_LEFT",
             "severity": "MILD"
+          },
+          {
+            "artifact_type": "TAPE_RESIDUE_YELLOWED",
+            "quadrant": "TOP_LEFT",
+            "severity": "MILD",
+            "description": "Mirrored tape adhesive discoloration"
           }
         ]
       },
@@ -808,7 +1610,7 @@
     {
       "card_id": "rec_clp_condensed_milk_pie_1962_standalone.jpg",
       "filename": "rec_clp_condensed_milk_pie_1962_standalone.jpg",
-      "sha256_hash": "0395f5e8c951371d010e803af771323116be45c341cc0b8b549b02d53c51a28a",
+      "sha256_hash": "04e7651382f3c44852d57b49aaea2a52dc2b86d256f3b013b24db587935f77cb",
       "modality": "PRINTED_CLIPPING",
       "role": "STANDALONE",
       "recipe_cluster": {
@@ -816,7 +1618,11 @@
         "sequence_position": 0,
         "cluster_role": "standalone",
         "total_cards": 1,
-        "continuation_cue": null
+        "continuation_cue": null,
+        "dimension": "Magazine Clippings & Package Labels (1960s\u20131980s)",
+        "provenance": "Borden Eagle Brand Sweetened Condensed Milk Can Label",
+        "historical_date": "1962",
+        "archive_series": "Period Clippings & Ephemera"
       },
       "physical_characteristics": {
         "paper_tone": "WHITE_LINEN",
@@ -829,18 +1635,8 @@
             "severity": "MILD"
           },
           {
-            "artifact_type": "COFFEE_TEA_RING",
-            "quadrant": "BOTTOM_LEFT",
-            "severity": "MODERATE"
-          },
-          {
             "artifact_type": "CORNER_DOG_EAR_FOLD",
             "quadrant": "BOTTOM_RIGHT",
-            "severity": "MILD"
-          },
-          {
-            "artifact_type": "TEAR_EDGE",
-            "quadrant": "EDGE_RIGHT",
             "severity": "MILD"
           }
         ]
@@ -885,17 +1681,371 @@
       }
     },
     {
+      "card_id": "rec_clp_green_bean_casserole_1968_front.jpg",
+      "filename": "rec_clp_green_bean_casserole_1968_front.jpg",
+      "sha256_hash": "ac4cae0d77b1892e4b92ad3f175cd99679b02b12eed787aaf08efe9b54cec14b",
+      "modality": "PRINTED_CLIPPING",
+      "role": "SEQUENCE_START",
+      "recipe_cluster": {
+        "recipe_id": "rec_clp_green_bean_casserole_1968",
+        "sequence_position": 0,
+        "cluster_role": "card1_front",
+        "total_cards": 2,
+        "continuation_cue": "PTO >>>",
+        "dimension": "Magazine Clippings & Package Labels (1960s\u20131980s)",
+        "provenance": "Campbell's Soup Holiday Magazine Advertisement",
+        "historical_date": "1968",
+        "archive_series": "Period Clippings & Ephemera"
+      },
+      "physical_characteristics": {
+        "paper_tone": "WHITE_LINEN",
+        "ruling_type": "UNRULED_BLANK",
+        "ink_type": "PRINTED_TYPESET",
+        "artifacts": [
+          {
+            "artifact_type": "OIL_GREASE_STAIN",
+            "quadrant": "TOP_RIGHT",
+            "severity": "MODERATE",
+            "description": "Grease stain near upper right edge"
+          },
+          {
+            "artifact_type": "COFFEE_TEA_RING",
+            "quadrant": "TOP_RIGHT",
+            "severity": "MODERATE",
+            "description": "Coffee cup stain ring"
+          },
+          {
+            "artifact_type": "CORNER_DOG_EAR_FOLD",
+            "quadrant": "TOP_RIGHT",
+            "severity": "MILD"
+          },
+          {
+            "artifact_type": "TAPE_RESIDUE_YELLOWED",
+            "quadrant": "TOP_RIGHT",
+            "severity": "MILD",
+            "description": "Yellowed cellophane tape residue"
+          }
+        ]
+      },
+      "ground_truth_recipe": {
+        "recipe_id": "rec_clp_green_bean_casserole_1968",
+        "title": "1968 Campbell's Classic Green Bean Casserole",
+        "description": "Vintage holiday magazine clipping with mushroom soup and crispy fried onions.",
+        "yield_servings": "6 servings",
+        "prep_time": "10 mins",
+        "cook_time": "30 mins",
+        "total_time": "40 mins",
+        "ingredients": [
+          "1 can (10 1/2 oz) Campbell's Condensed Cream of Mushroom Soup",
+          "1/2 cup whole milk",
+          "1 tsp soy sauce",
+          "1 dash black pepper",
+          "4 cups cooked cut green beans (fresh or frozen)",
+          "1 1/3 cups French's Crispy Fried Onions, divided"
+        ],
+        "directions": [
+          "1. Preheat oven to 350\u00b0F.",
+          "2. In 1 1/2-quart baking dish, mix mushroom soup, milk, soy sauce, black pepper, green beans, and 2/3 cup fried onions.",
+          "3. Bake at 350\u00b0F for 25 minutes until hot and bubbling.",
+          "4. Stir casserole gently; scatter remaining 2/3 cup crispy fried onions over top.",
+          "5. Bake 5 minutes longer until golden brown."
+        ],
+        "tags": [
+          "Casserole",
+          "Holiday",
+          "Vegetables",
+          "Vintage Clipping"
+        ],
+        "source_notes": "1968 Holiday Magazine Advertisement Clipping with Cellophane Tape",
+        "card_ids": [
+          "rec_clp_green_bean_casserole_1968_front.jpg",
+          "rec_clp_green_bean_casserole_1968_back.jpg"
+        ],
+        "image_urls": [],
+        "created_at": null,
+        "updated_at": null
+      }
+    },
+    {
+      "card_id": "rec_clp_green_bean_casserole_1968_back.jpg",
+      "filename": "rec_clp_green_bean_casserole_1968_back.jpg",
+      "sha256_hash": "adee6220051639e490ce2fea0dcdc6758f801c5df61534ba237e3fffcd6f6a6f",
+      "modality": "PRINTED_CLIPPING",
+      "role": "SEQUENCE_CONTINUATION",
+      "recipe_cluster": {
+        "recipe_id": "rec_clp_green_bean_casserole_1968",
+        "sequence_position": 1,
+        "cluster_role": "card1_back",
+        "total_cards": 2,
+        "continuation_cue": null,
+        "dimension": "Magazine Clippings & Package Labels (1960s\u20131980s)",
+        "provenance": "Campbell's Soup Holiday Magazine Advertisement",
+        "historical_date": "1968",
+        "archive_series": "Period Clippings & Ephemera"
+      },
+      "physical_characteristics": {
+        "paper_tone": "WHITE_LINEN",
+        "ruling_type": "UNRULED_BLANK",
+        "ink_type": "PRINTED_TYPESET",
+        "artifacts": [
+          {
+            "artifact_type": "OIL_GREASE_STAIN",
+            "quadrant": "TOP_LEFT",
+            "severity": "MILD",
+            "description": "Mirrored grease bleed-through from front"
+          },
+          {
+            "artifact_type": "COFFEE_TEA_RING",
+            "quadrant": "TOP_LEFT",
+            "severity": "MILD",
+            "description": "Mirrored coffee ring bleed-through"
+          },
+          {
+            "artifact_type": "CORNER_DOG_EAR_FOLD",
+            "quadrant": "TOP_LEFT",
+            "severity": "MILD"
+          },
+          {
+            "artifact_type": "TAPE_RESIDUE_YELLOWED",
+            "quadrant": "TOP_LEFT",
+            "severity": "MILD",
+            "description": "Mirrored tape adhesive discoloration"
+          }
+        ]
+      },
+      "ground_truth_recipe": {
+        "recipe_id": "rec_clp_green_bean_casserole_1968",
+        "title": "1968 Campbell's Classic Green Bean Casserole",
+        "description": "Vintage holiday magazine clipping with mushroom soup and crispy fried onions.",
+        "yield_servings": "6 servings",
+        "prep_time": "10 mins",
+        "cook_time": "30 mins",
+        "total_time": "40 mins",
+        "ingredients": [
+          "1 can (10 1/2 oz) Campbell's Condensed Cream of Mushroom Soup",
+          "1/2 cup whole milk",
+          "1 tsp soy sauce",
+          "1 dash black pepper",
+          "4 cups cooked cut green beans (fresh or frozen)",
+          "1 1/3 cups French's Crispy Fried Onions, divided"
+        ],
+        "directions": [
+          "1. Preheat oven to 350\u00b0F.",
+          "2. In 1 1/2-quart baking dish, mix mushroom soup, milk, soy sauce, black pepper, green beans, and 2/3 cup fried onions.",
+          "3. Bake at 350\u00b0F for 25 minutes until hot and bubbling.",
+          "4. Stir casserole gently; scatter remaining 2/3 cup crispy fried onions over top.",
+          "5. Bake 5 minutes longer until golden brown."
+        ],
+        "tags": [
+          "Casserole",
+          "Holiday",
+          "Vegetables",
+          "Vintage Clipping"
+        ],
+        "source_notes": "1968 Holiday Magazine Advertisement Clipping with Cellophane Tape",
+        "card_ids": [
+          "rec_clp_green_bean_casserole_1968_front.jpg",
+          "rec_clp_green_bean_casserole_1968_back.jpg"
+        ],
+        "image_urls": [],
+        "created_at": null,
+        "updated_at": null
+      }
+    },
+    {
+      "card_id": "rec_clp_toll_house_cookies_1975_front.jpg",
+      "filename": "rec_clp_toll_house_cookies_1975_front.jpg",
+      "sha256_hash": "4299292ca1cd0d37d09d07e57d6b249e4b6e87c88230dd0eca7e390ddb95fee0",
+      "modality": "PRINTED_CLIPPING",
+      "role": "SEQUENCE_START",
+      "recipe_cluster": {
+        "recipe_id": "rec_clp_toll_house_cookies_1975",
+        "sequence_position": 0,
+        "cluster_role": "card1_front",
+        "total_cards": 2,
+        "continuation_cue": "PTO >>>",
+        "dimension": "Magazine Clippings & Package Labels (1960s\u20131980s)",
+        "provenance": "Nestl\u00e9 Toll House Semi-Sweet Morsels Package Back",
+        "historical_date": "1975",
+        "archive_series": "Period Clippings & Ephemera"
+      },
+      "physical_characteristics": {
+        "paper_tone": "WHITE_LINEN",
+        "ruling_type": "UNRULED_BLANK",
+        "ink_type": "PRINTED_TYPESET",
+        "artifacts": [
+          {
+            "artifact_type": "OIL_GREASE_STAIN",
+            "quadrant": "TOP_RIGHT",
+            "severity": "MODERATE",
+            "description": "Grease stain near upper right edge"
+          },
+          {
+            "artifact_type": "TEAR_EDGE",
+            "quadrant": "EDGE_RIGHT",
+            "severity": "MODERATE"
+          },
+          {
+            "artifact_type": "RUBBER_DATE_STAMP",
+            "quadrant": "BOTTOM_LEFT",
+            "severity": "MILD",
+            "description": "Vintage ink stamp: RECIPE CLUB 1958"
+          },
+          {
+            "artifact_type": "TAPE_RESIDUE_YELLOWED",
+            "quadrant": "TOP_RIGHT",
+            "severity": "MILD",
+            "description": "Yellowed cellophane tape residue"
+          }
+        ]
+      },
+      "ground_truth_recipe": {
+        "recipe_id": "rec_clp_toll_house_cookies_1975",
+        "title": "1975 Original Toll House Chocolate Chip Cookies",
+        "description": "Original morsels bag recipe clipping for classic chocolate chip cookies.",
+        "yield_servings": "60 cookies (5 dozen)",
+        "prep_time": "15 mins",
+        "cook_time": "12 mins",
+        "total_time": "27 mins",
+        "ingredients": [
+          "2 1/4 cups all-purpose flour",
+          "1 tsp baking soda",
+          "1 tsp salt",
+          "1 cup (2 sticks) butter, softened",
+          "3/4 cup granulated sugar",
+          "3/4 cup packed brown sugar",
+          "1 tsp vanilla extract",
+          "2 large eggs",
+          "2 cups (12 oz package) Nestl\u00e9 Toll House Semi-Sweet Morsels",
+          "1 cup chopped walnuts (optional)"
+        ],
+        "directions": [
+          "1. Preheat oven to 375\u00b0F.",
+          "2. Combine flour, baking soda, and salt in small bowl.",
+          "3. Beat softened butter, granulated sugar, brown sugar, and vanilla extract in large bowl until creamy.",
+          "4. Add eggs one at a time, beating well after each addition.",
+          "5. Gradually beat in flour mixture; stir in chocolate morsels and nuts.",
+          "6. Drop by rounded tablespoon onto ungreased baking sheets.",
+          "7. Bake at 375\u00b0F for 9 to 11 minutes until golden brown; cool on wire racks."
+        ],
+        "tags": [
+          "Cookies",
+          "Chocolate",
+          "Baking",
+          "Package Clipping"
+        ],
+        "source_notes": "1975 Semi-Sweet Morsels Yellow Package Bag Cutout",
+        "card_ids": [
+          "rec_clp_toll_house_cookies_1975_front.jpg",
+          "rec_clp_toll_house_cookies_1975_back.jpg"
+        ],
+        "image_urls": [],
+        "created_at": null,
+        "updated_at": null
+      }
+    },
+    {
+      "card_id": "rec_clp_toll_house_cookies_1975_back.jpg",
+      "filename": "rec_clp_toll_house_cookies_1975_back.jpg",
+      "sha256_hash": "8fd655c2a5d207b82003fdb36dc3cfe28192280935f586f69bdbfe03319abba9",
+      "modality": "PRINTED_CLIPPING",
+      "role": "SEQUENCE_CONTINUATION",
+      "recipe_cluster": {
+        "recipe_id": "rec_clp_toll_house_cookies_1975",
+        "sequence_position": 1,
+        "cluster_role": "card1_back",
+        "total_cards": 2,
+        "continuation_cue": null,
+        "dimension": "Magazine Clippings & Package Labels (1960s\u20131980s)",
+        "provenance": "Nestl\u00e9 Toll House Semi-Sweet Morsels Package Back",
+        "historical_date": "1975",
+        "archive_series": "Period Clippings & Ephemera"
+      },
+      "physical_characteristics": {
+        "paper_tone": "WHITE_LINEN",
+        "ruling_type": "UNRULED_BLANK",
+        "ink_type": "PRINTED_TYPESET",
+        "artifacts": [
+          {
+            "artifact_type": "OIL_GREASE_STAIN",
+            "quadrant": "TOP_LEFT",
+            "severity": "MILD",
+            "description": "Mirrored grease bleed-through from front"
+          },
+          {
+            "artifact_type": "TEAR_EDGE",
+            "quadrant": "EDGE_LEFT",
+            "severity": "MODERATE"
+          },
+          {
+            "artifact_type": "TAPE_RESIDUE_YELLOWED",
+            "quadrant": "TOP_LEFT",
+            "severity": "MILD",
+            "description": "Mirrored tape adhesive discoloration"
+          }
+        ]
+      },
+      "ground_truth_recipe": {
+        "recipe_id": "rec_clp_toll_house_cookies_1975",
+        "title": "1975 Original Toll House Chocolate Chip Cookies",
+        "description": "Original morsels bag recipe clipping for classic chocolate chip cookies.",
+        "yield_servings": "60 cookies (5 dozen)",
+        "prep_time": "15 mins",
+        "cook_time": "12 mins",
+        "total_time": "27 mins",
+        "ingredients": [
+          "2 1/4 cups all-purpose flour",
+          "1 tsp baking soda",
+          "1 tsp salt",
+          "1 cup (2 sticks) butter, softened",
+          "3/4 cup granulated sugar",
+          "3/4 cup packed brown sugar",
+          "1 tsp vanilla extract",
+          "2 large eggs",
+          "2 cups (12 oz package) Nestl\u00e9 Toll House Semi-Sweet Morsels",
+          "1 cup chopped walnuts (optional)"
+        ],
+        "directions": [
+          "1. Preheat oven to 375\u00b0F.",
+          "2. Combine flour, baking soda, and salt in small bowl.",
+          "3. Beat softened butter, granulated sugar, brown sugar, and vanilla extract in large bowl until creamy.",
+          "4. Add eggs one at a time, beating well after each addition.",
+          "5. Gradually beat in flour mixture; stir in chocolate morsels and nuts.",
+          "6. Drop by rounded tablespoon onto ungreased baking sheets.",
+          "7. Bake at 375\u00b0F for 9 to 11 minutes until golden brown; cool on wire racks."
+        ],
+        "tags": [
+          "Cookies",
+          "Chocolate",
+          "Baking",
+          "Package Clipping"
+        ],
+        "source_notes": "1975 Semi-Sweet Morsels Yellow Package Bag Cutout",
+        "card_ids": [
+          "rec_clp_toll_house_cookies_1975_front.jpg",
+          "rec_clp_toll_house_cookies_1975_back.jpg"
+        ],
+        "image_urls": [],
+        "created_at": null,
+        "updated_at": null
+      }
+    },
+    {
       "card_id": "rec_dmg_moms_lasagna_1971_front.jpg",
       "filename": "rec_dmg_moms_lasagna_1971_front.jpg",
-      "sha256_hash": "52e18f2a52ec17c319d7eff3faa45821a32aa0913e6af44cdc4d391148a89ed6",
+      "sha256_hash": "14e4df0162c001ca135ef11f3d9b038f41aa0da754ec58c281ebe3f96fbee344",
       "modality": "MIXED_MEDIA",
-      "role": "FRONT_ONLY",
+      "role": "SEQUENCE_START",
       "recipe_cluster": {
         "recipe_id": "rec_dmg_moms_lasagna_1971",
         "sequence_position": 0,
         "cluster_role": "card1_front",
         "total_cards": 2,
-        "continuation_cue": "PTO >>>"
+        "continuation_cue": "PTO >>>",
+        "dimension": "Stained / Damaged / Edge-Worn Substrates",
+        "provenance": "Family Kitchen Recipe Box with Sauce Smudges",
+        "historical_date": "1971",
+        "archive_series": "Working Kitchen Artifacts"
       },
       "physical_characteristics": {
         "paper_tone": "RULED_INDEX",
@@ -972,15 +2122,19 @@
     {
       "card_id": "rec_dmg_moms_lasagna_1971_back.jpg",
       "filename": "rec_dmg_moms_lasagna_1971_back.jpg",
-      "sha256_hash": "f3f6c3a769ca0e044b2624c294097e449f5a2e22be40388520c6d804695a66c2",
+      "sha256_hash": "a827d35396eb9adf8f493fe6b11af4c701d2fee777e07499fe60bc84a818d51f",
       "modality": "MIXED_MEDIA",
-      "role": "BACK_ONLY",
+      "role": "SEQUENCE_CONTINUATION",
       "recipe_cluster": {
         "recipe_id": "rec_dmg_moms_lasagna_1971",
         "sequence_position": 1,
         "cluster_role": "card1_back",
         "total_cards": 2,
-        "continuation_cue": null
+        "continuation_cue": null,
+        "dimension": "Stained / Damaged / Edge-Worn Substrates",
+        "provenance": "Family Kitchen Recipe Box with Sauce Smudges",
+        "historical_date": "1971",
+        "archive_series": "Working Kitchen Artifacts"
       },
       "physical_characteristics": {
         "paper_tone": "RULED_INDEX",
@@ -1057,7 +2211,7 @@
     {
       "card_id": "rec_dmg_butter_shortbread_standalone.jpg",
       "filename": "rec_dmg_butter_shortbread_standalone.jpg",
-      "sha256_hash": "9578c9072e315f5824a56991bccaec1e4f861558e47ff39a22612da3cafa1b9e",
+      "sha256_hash": "63f54d9c54049ade2bb9487bd746bdb1ec81336e31fb22fdca1a75b18ad2d702",
       "modality": "MIXED_MEDIA",
       "role": "STANDALONE",
       "recipe_cluster": {
@@ -1065,7 +2219,11 @@
         "sequence_position": 0,
         "cluster_role": "standalone",
         "total_cards": 1,
-        "continuation_cue": null
+        "continuation_cue": null,
+        "dimension": "Stained / Damaged / Edge-Worn Substrates",
+        "provenance": "Scottish Immigrant Family Heirloom Card",
+        "historical_date": "1958",
+        "archive_series": "Working Kitchen Artifacts"
       },
       "physical_characteristics": {
         "paper_tone": "WHITE_LINEN",
@@ -1078,8 +2236,8 @@
             "severity": "MILD"
           },
           {
-            "artifact_type": "CORNER_DOG_EAR_FOLD",
-            "quadrant": "BOTTOM_RIGHT",
+            "artifact_type": "TEAR_EDGE",
+            "quadrant": "EDGE_RIGHT",
             "severity": "MILD"
           }
         ]
@@ -1125,23 +2283,395 @@
       }
     },
     {
+      "card_id": "rec_dmg_buttermilk_pancakes_1969_front.jpg",
+      "filename": "rec_dmg_buttermilk_pancakes_1969_front.jpg",
+      "sha256_hash": "44eaa423467f28bb083ff47a4cb1aab1751618eeddf3e63130783ed2c49ff57f",
+      "modality": "MIXED_MEDIA",
+      "role": "SEQUENCE_START",
+      "recipe_cluster": {
+        "recipe_id": "rec_dmg_buttermilk_pancakes_1969",
+        "sequence_position": 0,
+        "cluster_role": "card1_front",
+        "total_cards": 2,
+        "continuation_cue": "PTO >>>",
+        "dimension": "Stained / Damaged / Edge-Worn Substrates",
+        "provenance": "Sunday Breakfast Collection with Syrup & Butter Smudges",
+        "historical_date": "1969",
+        "archive_series": "Working Kitchen Artifacts"
+      },
+      "physical_characteristics": {
+        "paper_tone": "RULED_INDEX",
+        "ruling_type": "STANDARD_RULED_BLUE",
+        "ink_type": "PRINTED_TYPESET",
+        "artifacts": [
+          {
+            "artifact_type": "OIL_GREASE_STAIN",
+            "quadrant": "TOP_RIGHT",
+            "severity": "MODERATE",
+            "description": "Grease stain near upper right edge"
+          },
+          {
+            "artifact_type": "CORNER_DOG_EAR_FOLD",
+            "quadrant": "TOP_RIGHT",
+            "severity": "MILD"
+          },
+          {
+            "artifact_type": "TEAR_EDGE",
+            "quadrant": "EDGE_RIGHT",
+            "severity": "MODERATE"
+          }
+        ]
+      },
+      "ground_truth_recipe": {
+        "recipe_id": "rec_dmg_buttermilk_pancakes_1969",
+        "title": "Sunday Morning Sourdough Buttermilk Pancakes (1969)",
+        "description": "Butter and syrup stained index card for fluffy heirloom buttermilk pancakes.",
+        "yield_servings": "16 pancakes",
+        "prep_time": "15 mins",
+        "cook_time": "15 mins",
+        "total_time": "30 mins",
+        "ingredients": [
+          "2 cups all-purpose flour",
+          "2 tbsp granulated sugar",
+          "2 tsp baking powder",
+          "1 tsp baking soda",
+          "1/2 tsp salt",
+          "2 cups thick buttermilk",
+          "2 large eggs",
+          "1/4 cup unsalted butter, melted & cooled",
+          "1 tsp pure vanilla extract",
+          "Warm pure maple syrup for serving"
+        ],
+        "directions": [
+          "1. In large bowl, whisk flour, sugar, baking powder, baking soda, and salt.",
+          "2. In separate bowl, beat buttermilk, eggs, melted butter, and vanilla.",
+          "3. Pour wet ingredients into dry; whisk gently just until combined (batter should remain lumpy).",
+          "4. Heat cast-iron griddle over medium heat and grease lightly with butter.",
+          "5. Pour 1/4 cup batter per pancake onto hot griddle.",
+          "6. Cook until bubbles pop on surface and edges look set (2-3 mins); flip and cook 1-2 mins longer until golden.",
+          "7. Serve warm immediately with whipped butter and maple syrup."
+        ],
+        "tags": [
+          "Breakfast",
+          "Pancakes",
+          "Vintage",
+          "Damaged Card"
+        ],
+        "source_notes": "1969 Butter-Stained Sunday Pancake Card with Torn Edge",
+        "card_ids": [
+          "rec_dmg_buttermilk_pancakes_1969_front.jpg",
+          "rec_dmg_buttermilk_pancakes_1969_back.jpg"
+        ],
+        "image_urls": [],
+        "created_at": null,
+        "updated_at": null
+      }
+    },
+    {
+      "card_id": "rec_dmg_buttermilk_pancakes_1969_back.jpg",
+      "filename": "rec_dmg_buttermilk_pancakes_1969_back.jpg",
+      "sha256_hash": "3476a8e10d51cb29435fa4a7387c78c4b18d5fde5c359e083f82f561e071f9e1",
+      "modality": "MIXED_MEDIA",
+      "role": "SEQUENCE_CONTINUATION",
+      "recipe_cluster": {
+        "recipe_id": "rec_dmg_buttermilk_pancakes_1969",
+        "sequence_position": 1,
+        "cluster_role": "card1_back",
+        "total_cards": 2,
+        "continuation_cue": null,
+        "dimension": "Stained / Damaged / Edge-Worn Substrates",
+        "provenance": "Sunday Breakfast Collection with Syrup & Butter Smudges",
+        "historical_date": "1969",
+        "archive_series": "Working Kitchen Artifacts"
+      },
+      "physical_characteristics": {
+        "paper_tone": "RULED_INDEX",
+        "ruling_type": "STANDARD_RULED_BLUE",
+        "ink_type": "PRINTED_TYPESET",
+        "artifacts": [
+          {
+            "artifact_type": "OIL_GREASE_STAIN",
+            "quadrant": "TOP_LEFT",
+            "severity": "MILD",
+            "description": "Mirrored grease bleed-through from front"
+          },
+          {
+            "artifact_type": "CORNER_DOG_EAR_FOLD",
+            "quadrant": "TOP_LEFT",
+            "severity": "MILD"
+          },
+          {
+            "artifact_type": "TEAR_EDGE",
+            "quadrant": "EDGE_LEFT",
+            "severity": "MODERATE"
+          }
+        ]
+      },
+      "ground_truth_recipe": {
+        "recipe_id": "rec_dmg_buttermilk_pancakes_1969",
+        "title": "Sunday Morning Sourdough Buttermilk Pancakes (1969)",
+        "description": "Butter and syrup stained index card for fluffy heirloom buttermilk pancakes.",
+        "yield_servings": "16 pancakes",
+        "prep_time": "15 mins",
+        "cook_time": "15 mins",
+        "total_time": "30 mins",
+        "ingredients": [
+          "2 cups all-purpose flour",
+          "2 tbsp granulated sugar",
+          "2 tsp baking powder",
+          "1 tsp baking soda",
+          "1/2 tsp salt",
+          "2 cups thick buttermilk",
+          "2 large eggs",
+          "1/4 cup unsalted butter, melted & cooled",
+          "1 tsp pure vanilla extract",
+          "Warm pure maple syrup for serving"
+        ],
+        "directions": [
+          "1. In large bowl, whisk flour, sugar, baking powder, baking soda, and salt.",
+          "2. In separate bowl, beat buttermilk, eggs, melted butter, and vanilla.",
+          "3. Pour wet ingredients into dry; whisk gently just until combined (batter should remain lumpy).",
+          "4. Heat cast-iron griddle over medium heat and grease lightly with butter.",
+          "5. Pour 1/4 cup batter per pancake onto hot griddle.",
+          "6. Cook until bubbles pop on surface and edges look set (2-3 mins); flip and cook 1-2 mins longer until golden.",
+          "7. Serve warm immediately with whipped butter and maple syrup."
+        ],
+        "tags": [
+          "Breakfast",
+          "Pancakes",
+          "Vintage",
+          "Damaged Card"
+        ],
+        "source_notes": "1969 Butter-Stained Sunday Pancake Card with Torn Edge",
+        "card_ids": [
+          "rec_dmg_buttermilk_pancakes_1969_front.jpg",
+          "rec_dmg_buttermilk_pancakes_1969_back.jpg"
+        ],
+        "image_urls": [],
+        "created_at": null,
+        "updated_at": null
+      }
+    },
+    {
+      "card_id": "rec_dmg_beef_bourguignon_1974_front.jpg",
+      "filename": "rec_dmg_beef_bourguignon_1974_front.jpg",
+      "sha256_hash": "8ff920edb2bcab0445d474b85654ab0bb313c73971b65ee3d75c85718f395cbc",
+      "modality": "MIXED_MEDIA",
+      "role": "SEQUENCE_START",
+      "recipe_cluster": {
+        "recipe_id": "rec_dmg_beef_bourguignon_1974",
+        "sequence_position": 0,
+        "cluster_role": "card1_front",
+        "total_cards": 2,
+        "continuation_cue": "PTO >>>",
+        "dimension": "Stained / Damaged / Edge-Worn Substrates",
+        "provenance": "French Cooking Class Recipe Card with Wine & Coffee Ring Stains",
+        "historical_date": "1974",
+        "archive_series": "Working Kitchen Artifacts"
+      },
+      "physical_characteristics": {
+        "paper_tone": "AGED_YELLOW",
+        "ruling_type": "STANDARD_RULED_BLUE",
+        "ink_type": "PRINTED_TYPESET",
+        "artifacts": [
+          {
+            "artifact_type": "OIL_GREASE_STAIN",
+            "quadrant": "TOP_RIGHT",
+            "severity": "MODERATE",
+            "description": "Grease stain near upper right edge"
+          },
+          {
+            "artifact_type": "COFFEE_TEA_RING",
+            "quadrant": "TOP_RIGHT",
+            "severity": "MODERATE",
+            "description": "Coffee cup stain ring"
+          },
+          {
+            "artifact_type": "CORNER_DOG_EAR_FOLD",
+            "quadrant": "TOP_RIGHT",
+            "severity": "MILD"
+          },
+          {
+            "artifact_type": "RUBBER_DATE_STAMP",
+            "quadrant": "BOTTOM_LEFT",
+            "severity": "MILD",
+            "description": "Vintage ink stamp: RECIPE CLUB 1952"
+          },
+          {
+            "artifact_type": "TAPE_RESIDUE_YELLOWED",
+            "quadrant": "TOP_RIGHT",
+            "severity": "MILD",
+            "description": "Yellowed cellophane tape residue"
+          }
+        ]
+      },
+      "ground_truth_recipe": {
+        "recipe_id": "rec_dmg_beef_bourguignon_1974",
+        "title": "Heirloom French Beef Bourguignon (1974)",
+        "description": "Dog-eared, wine-splattered recipe card for slow-braised beef in Burgundy wine.",
+        "yield_servings": "6 servings",
+        "prep_time": "35 mins",
+        "cook_time": "2 hrs 30 mins",
+        "total_time": "3 hrs 05 mins",
+        "ingredients": [
+          "3 lbs beef chuck roast, cut into 2-inch chunks",
+          "6 oz thick-cut bacon, diced",
+          "1 large yellow onion, sliced",
+          "2 large carrots, sliced into 1/2-inch rounds",
+          "3 cloves garlic, minced",
+          "1 bottle (750 ml) dry red Burgundy wine",
+          "2 cups beef stock",
+          "2 tbsp tomato paste",
+          "1 bouquet garni (thyme, parsley, bay leaf)",
+          "1 lb fresh button mushrooms, quartered & saut\u00e9ed in butter",
+          "18 small pearl onions, peeled"
+        ],
+        "directions": [
+          "1. Saut\u00e9 diced bacon in large Dutch oven over medium heat until crisp; remove with slotted spoon.",
+          "2. Dry beef chunks thoroughly; sear in hot bacon fat in batches until deeply browned on all sides; remove.",
+          "3. Saut\u00e9 sliced onion and carrots in pot 5 mins; stir in minced garlic and tomato paste for 1 min.",
+          "4. Return beef and bacon to pot; pour in red wine and beef stock to cover; add bouquet garni.",
+          "5. Cover tightly and simmer over low heat (or in 325\u00b0F oven) for 2 to 2 1/2 hours until beef is fork-tender.",
+          "6. Fold in saut\u00e9ed mushrooms and glazed pearl onions; simmer 15 minutes longer until sauce is glossy."
+        ],
+        "tags": [
+          "Dinner",
+          "French",
+          "Beef",
+          "Stew",
+          "Classic"
+        ],
+        "source_notes": "1974 Dog-Eared French Cookery Card with Coffee Ring Stain",
+        "card_ids": [
+          "rec_dmg_beef_bourguignon_1974_front.jpg",
+          "rec_dmg_beef_bourguignon_1974_back.jpg"
+        ],
+        "image_urls": [],
+        "created_at": null,
+        "updated_at": null
+      }
+    },
+    {
+      "card_id": "rec_dmg_beef_bourguignon_1974_back.jpg",
+      "filename": "rec_dmg_beef_bourguignon_1974_back.jpg",
+      "sha256_hash": "d2d058245860e0ff7be095948ca90c59ec4fff2dc7c4862bde00270f01c9742d",
+      "modality": "MIXED_MEDIA",
+      "role": "SEQUENCE_CONTINUATION",
+      "recipe_cluster": {
+        "recipe_id": "rec_dmg_beef_bourguignon_1974",
+        "sequence_position": 1,
+        "cluster_role": "card1_back",
+        "total_cards": 2,
+        "continuation_cue": null,
+        "dimension": "Stained / Damaged / Edge-Worn Substrates",
+        "provenance": "French Cooking Class Recipe Card with Wine & Coffee Ring Stains",
+        "historical_date": "1974",
+        "archive_series": "Working Kitchen Artifacts"
+      },
+      "physical_characteristics": {
+        "paper_tone": "AGED_YELLOW",
+        "ruling_type": "STANDARD_RULED_BLUE",
+        "ink_type": "PRINTED_TYPESET",
+        "artifacts": [
+          {
+            "artifact_type": "OIL_GREASE_STAIN",
+            "quadrant": "TOP_LEFT",
+            "severity": "MILD",
+            "description": "Mirrored grease bleed-through from front"
+          },
+          {
+            "artifact_type": "COFFEE_TEA_RING",
+            "quadrant": "TOP_LEFT",
+            "severity": "MILD",
+            "description": "Mirrored coffee ring bleed-through"
+          },
+          {
+            "artifact_type": "CORNER_DOG_EAR_FOLD",
+            "quadrant": "TOP_LEFT",
+            "severity": "MILD"
+          },
+          {
+            "artifact_type": "TAPE_RESIDUE_YELLOWED",
+            "quadrant": "TOP_LEFT",
+            "severity": "MILD",
+            "description": "Mirrored tape adhesive discoloration"
+          }
+        ]
+      },
+      "ground_truth_recipe": {
+        "recipe_id": "rec_dmg_beef_bourguignon_1974",
+        "title": "Heirloom French Beef Bourguignon (1974)",
+        "description": "Dog-eared, wine-splattered recipe card for slow-braised beef in Burgundy wine.",
+        "yield_servings": "6 servings",
+        "prep_time": "35 mins",
+        "cook_time": "2 hrs 30 mins",
+        "total_time": "3 hrs 05 mins",
+        "ingredients": [
+          "3 lbs beef chuck roast, cut into 2-inch chunks",
+          "6 oz thick-cut bacon, diced",
+          "1 large yellow onion, sliced",
+          "2 large carrots, sliced into 1/2-inch rounds",
+          "3 cloves garlic, minced",
+          "1 bottle (750 ml) dry red Burgundy wine",
+          "2 cups beef stock",
+          "2 tbsp tomato paste",
+          "1 bouquet garni (thyme, parsley, bay leaf)",
+          "1 lb fresh button mushrooms, quartered & saut\u00e9ed in butter",
+          "18 small pearl onions, peeled"
+        ],
+        "directions": [
+          "1. Saut\u00e9 diced bacon in large Dutch oven over medium heat until crisp; remove with slotted spoon.",
+          "2. Dry beef chunks thoroughly; sear in hot bacon fat in batches until deeply browned on all sides; remove.",
+          "3. Saut\u00e9 sliced onion and carrots in pot 5 mins; stir in minced garlic and tomato paste for 1 min.",
+          "4. Return beef and bacon to pot; pour in red wine and beef stock to cover; add bouquet garni.",
+          "5. Cover tightly and simmer over low heat (or in 325\u00b0F oven) for 2 to 2 1/2 hours until beef is fork-tender.",
+          "6. Fold in saut\u00e9ed mushrooms and glazed pearl onions; simmer 15 minutes longer until sauce is glossy."
+        ],
+        "tags": [
+          "Dinner",
+          "French",
+          "Beef",
+          "Stew",
+          "Classic"
+        ],
+        "source_notes": "1974 Dog-Eared French Cookery Card with Coffee Ring Stain",
+        "card_ids": [
+          "rec_dmg_beef_bourguignon_1974_front.jpg",
+          "rec_dmg_beef_bourguignon_1974_back.jpg"
+        ],
+        "image_urls": [],
+        "created_at": null,
+        "updated_at": null
+      }
+    },
+    {
       "card_id": "rec_mcs_turkey_stuffing_feast_card1_front.jpg",
       "filename": "rec_mcs_turkey_stuffing_feast_card1_front.jpg",
-      "sha256_hash": "b67ef0d52525605896ba4d94703ef66c6aef483682c55e7b2398a5de3a9c098f",
+      "sha256_hash": "51735ae30655e4b7d70e6c4a597948c05044a154c499523c152e108b2bcbc7b1",
       "modality": "HANDWRITTEN_CURSIVE",
-      "role": "FRONT_ONLY",
+      "role": "SEQUENCE_START",
       "recipe_cluster": {
         "recipe_id": "rec_mcs_turkey_stuffing_feast",
         "sequence_position": 0,
         "cluster_role": "card1_front",
         "total_cards": 3,
-        "continuation_cue": "(over to Card 1 Back ->)"
+        "continuation_cue": "(over to Card 1 Back ->)",
+        "dimension": "Multi-Card Narrative Sets",
+        "provenance": "Grandma's Thanksgiving Holiday Feast Card Set (3 Cards)",
+        "historical_date": "1950",
+        "archive_series": "Multi-Part Culinary Manuscripts"
       },
       "physical_characteristics": {
         "paper_tone": "RULED_INDEX",
         "ruling_type": "STANDARD_RULED_BLUE",
         "ink_type": "FOUNTAIN_PEN",
-        "artifacts": []
+        "artifacts": [
+          {
+            "artifact_type": "OIL_GREASE_STAIN",
+            "quadrant": "TOP_RIGHT",
+            "severity": "MILD"
+          }
+        ]
       },
       "ground_truth_recipe": {
         "recipe_id": "rec_mcs_turkey_stuffing_feast",
@@ -1195,21 +2725,31 @@
     {
       "card_id": "rec_mcs_turkey_stuffing_feast_card1_back.jpg",
       "filename": "rec_mcs_turkey_stuffing_feast_card1_back.jpg",
-      "sha256_hash": "76df9d46156f063ed4bb64a96b3138168e0eed76172a28aa6fe09102dbb16981",
+      "sha256_hash": "b70d3f22f3c0b72905fe39628c6949b5e582e53b4f046533a379014e5f2943a4",
       "modality": "HANDWRITTEN_CURSIVE",
-      "role": "BACK_ONLY",
+      "role": "SEQUENCE_CONTINUATION",
       "recipe_cluster": {
         "recipe_id": "rec_mcs_turkey_stuffing_feast",
         "sequence_position": 1,
         "cluster_role": "card1_back",
         "total_cards": 3,
-        "continuation_cue": "(See Card 2 Front ->)"
+        "continuation_cue": "(See Card 2 Front ->)",
+        "dimension": "Multi-Card Narrative Sets",
+        "provenance": "Grandma's Thanksgiving Holiday Feast Card Set (3 Cards)",
+        "historical_date": "1950",
+        "archive_series": "Multi-Part Culinary Manuscripts"
       },
       "physical_characteristics": {
         "paper_tone": "RULED_INDEX",
         "ruling_type": "STANDARD_RULED_BLUE",
         "ink_type": "FOUNTAIN_PEN",
-        "artifacts": []
+        "artifacts": [
+          {
+            "artifact_type": "COFFEE_TEA_RING",
+            "quadrant": "TOP_RIGHT",
+            "severity": "MILD"
+          }
+        ]
       },
       "ground_truth_recipe": {
         "recipe_id": "rec_mcs_turkey_stuffing_feast",
@@ -1263,15 +2803,19 @@
     {
       "card_id": "rec_mcs_turkey_stuffing_feast_card2_front.jpg",
       "filename": "rec_mcs_turkey_stuffing_feast_card2_front.jpg",
-      "sha256_hash": "f1f359ebfa543dc9475e4b6e646fd3621de8263ce999034a01b41a40a7ecdf67",
+      "sha256_hash": "0a16ab53d8e3347397c96924408a0857b37a2628992de58f0f512d99d1af6891",
       "modality": "HANDWRITTEN_CURSIVE",
-      "role": "FRONT_ONLY",
+      "role": "SEQUENCE_CONTINUATION",
       "recipe_cluster": {
         "recipe_id": "rec_mcs_turkey_stuffing_feast",
         "sequence_position": 2,
         "cluster_role": "card2_front",
         "total_cards": 3,
-        "continuation_cue": null
+        "continuation_cue": null,
+        "dimension": "Multi-Card Narrative Sets",
+        "provenance": "Grandma's Thanksgiving Holiday Feast Card Set (3 Cards)",
+        "historical_date": "1950",
+        "archive_series": "Multi-Part Culinary Manuscripts"
       },
       "physical_characteristics": {
         "paper_tone": "RULED_INDEX",
@@ -1331,21 +2875,31 @@
     {
       "card_id": "rec_mcs_wedding_fruitcake_1942_card1_front.jpg",
       "filename": "rec_mcs_wedding_fruitcake_1942_card1_front.jpg",
-      "sha256_hash": "68c189ecc22b6b5bcab7df3c77bc5055e4a23d168410931fdd6060c78abdb5b6",
+      "sha256_hash": "10276e25f080127076d1e622d4d637144e270635096b15b905cc35caba7323ce",
       "modality": "HANDWRITTEN_CURSIVE",
-      "role": "FRONT_ONLY",
+      "role": "SEQUENCE_START",
       "recipe_cluster": {
         "recipe_id": "rec_mcs_wedding_fruitcake_1942",
         "sequence_position": 0,
         "cluster_role": "card1_front",
         "total_cards": 4,
-        "continuation_cue": "(over to Card 1 Back ->)"
+        "continuation_cue": "(over to Card 1 Back ->)",
+        "dimension": "Multi-Card Narrative Sets",
+        "provenance": "Heirloom Dark Wedding Fruitcake 4-Card Set",
+        "historical_date": "1942",
+        "archive_series": "Multi-Part Culinary Manuscripts"
       },
       "physical_characteristics": {
         "paper_tone": "AGED_YELLOW",
         "ruling_type": "UNRULED_BLANK",
         "ink_type": "FOUNTAIN_PEN",
-        "artifacts": []
+        "artifacts": [
+          {
+            "artifact_type": "OIL_GREASE_STAIN",
+            "quadrant": "TOP_RIGHT",
+            "severity": "MILD"
+          }
+        ]
       },
       "ground_truth_recipe": {
         "recipe_id": "rec_mcs_wedding_fruitcake_1942",
@@ -1400,21 +2954,31 @@
     {
       "card_id": "rec_mcs_wedding_fruitcake_1942_card1_back.jpg",
       "filename": "rec_mcs_wedding_fruitcake_1942_card1_back.jpg",
-      "sha256_hash": "7a10e93fe07c16dc322928edaa99854f0c92f7b80b754e8a617452d68b062439",
+      "sha256_hash": "6fa31927096bfa93095aceb365a133ec624a319df4de54ba77f03a56fc2373da",
       "modality": "HANDWRITTEN_CURSIVE",
-      "role": "BACK_ONLY",
+      "role": "SEQUENCE_CONTINUATION",
       "recipe_cluster": {
         "recipe_id": "rec_mcs_wedding_fruitcake_1942",
         "sequence_position": 1,
         "cluster_role": "card1_back",
         "total_cards": 4,
-        "continuation_cue": "(See Card 2 Front ->)"
+        "continuation_cue": "(See Card 2 Front ->)",
+        "dimension": "Multi-Card Narrative Sets",
+        "provenance": "Heirloom Dark Wedding Fruitcake 4-Card Set",
+        "historical_date": "1942",
+        "archive_series": "Multi-Part Culinary Manuscripts"
       },
       "physical_characteristics": {
         "paper_tone": "AGED_YELLOW",
         "ruling_type": "UNRULED_BLANK",
         "ink_type": "FOUNTAIN_PEN",
-        "artifacts": []
+        "artifacts": [
+          {
+            "artifact_type": "COFFEE_TEA_RING",
+            "quadrant": "TOP_RIGHT",
+            "severity": "MILD"
+          }
+        ]
       },
       "ground_truth_recipe": {
         "recipe_id": "rec_mcs_wedding_fruitcake_1942",
@@ -1469,15 +3033,19 @@
     {
       "card_id": "rec_mcs_wedding_fruitcake_1942_card2_front.jpg",
       "filename": "rec_mcs_wedding_fruitcake_1942_card2_front.jpg",
-      "sha256_hash": "b0c5008cdefd9d761e1b09492a53b281b56707fcc0cfc52ec887805f74d56b9f",
+      "sha256_hash": "2e533d6252e350c89c96e1da679fcbc4d425beffbfacc21f8647bb1237f45a71",
       "modality": "HANDWRITTEN_CURSIVE",
-      "role": "FRONT_ONLY",
+      "role": "SEQUENCE_CONTINUATION",
       "recipe_cluster": {
         "recipe_id": "rec_mcs_wedding_fruitcake_1942",
         "sequence_position": 2,
         "cluster_role": "card2_front",
         "total_cards": 4,
-        "continuation_cue": "(over to Card 2 Back ->)"
+        "continuation_cue": "(over to Card 2 Back ->)",
+        "dimension": "Multi-Card Narrative Sets",
+        "provenance": "Heirloom Dark Wedding Fruitcake 4-Card Set",
+        "historical_date": "1942",
+        "archive_series": "Multi-Part Culinary Manuscripts"
       },
       "physical_characteristics": {
         "paper_tone": "AGED_YELLOW",
@@ -1538,21 +3106,31 @@
     {
       "card_id": "rec_mcs_wedding_fruitcake_1942_card2_back.jpg",
       "filename": "rec_mcs_wedding_fruitcake_1942_card2_back.jpg",
-      "sha256_hash": "a8d977052bf7664052417fcba8a8ed7ceb8f348047d4c9db42b34af1ce724007",
+      "sha256_hash": "4ac9656aef72fcb6081462c175616d2dda8fea31accaebbb88dc021e367ff86c",
       "modality": "HANDWRITTEN_CURSIVE",
-      "role": "BACK_ONLY",
+      "role": "SEQUENCE_CONTINUATION",
       "recipe_cluster": {
         "recipe_id": "rec_mcs_wedding_fruitcake_1942",
         "sequence_position": 3,
         "cluster_role": "card2_back",
         "total_cards": 4,
-        "continuation_cue": null
+        "continuation_cue": null,
+        "dimension": "Multi-Card Narrative Sets",
+        "provenance": "Heirloom Dark Wedding Fruitcake 4-Card Set",
+        "historical_date": "1942",
+        "archive_series": "Multi-Part Culinary Manuscripts"
       },
       "physical_characteristics": {
         "paper_tone": "AGED_YELLOW",
         "ruling_type": "UNRULED_BLANK",
         "ink_type": "FOUNTAIN_PEN",
-        "artifacts": []
+        "artifacts": [
+          {
+            "artifact_type": "TEAR_EDGE",
+            "quadrant": "EDGE_RIGHT",
+            "severity": "MILD"
+          }
+        ]
       },
       "ground_truth_recipe": {
         "recipe_id": "rec_mcs_wedding_fruitcake_1942",
@@ -1605,9 +3183,597 @@
       }
     },
     {
+      "card_id": "rec_mcs_sunday_pot_roast_gravy_card1_front.jpg",
+      "filename": "rec_mcs_sunday_pot_roast_gravy_card1_front.jpg",
+      "sha256_hash": "61d2524f80cb48985f478b8baa7ebd4c99ceecdbe42cbc9a9a2c36fcffddcaf0",
+      "modality": "HANDWRITTEN_CURSIVE",
+      "role": "SEQUENCE_START",
+      "recipe_cluster": {
+        "recipe_id": "rec_mcs_sunday_pot_roast_gravy",
+        "sequence_position": 0,
+        "cluster_role": "card1_front",
+        "total_cards": 3,
+        "continuation_cue": "(over to Card 1 Back ->)",
+        "dimension": "Multi-Card Narrative Sets",
+        "provenance": "Grandma's Cedar Box Pot Roast 3-Card Manuscript",
+        "historical_date": "1958",
+        "archive_series": "Multi-Part Culinary Manuscripts"
+      },
+      "physical_characteristics": {
+        "paper_tone": "RULED_INDEX",
+        "ruling_type": "STANDARD_RULED_BLUE",
+        "ink_type": "FOUNTAIN_PEN",
+        "artifacts": [
+          {
+            "artifact_type": "OIL_GREASE_STAIN",
+            "quadrant": "TOP_RIGHT",
+            "severity": "MILD"
+          },
+          {
+            "artifact_type": "CORNER_DOG_EAR_FOLD",
+            "quadrant": "TOP_RIGHT",
+            "severity": "MILD"
+          },
+          {
+            "artifact_type": "TAPE_RESIDUE_YELLOWED",
+            "quadrant": "TOP_LEFT",
+            "severity": "MILD"
+          }
+        ]
+      },
+      "ground_truth_recipe": {
+        "recipe_id": "rec_mcs_sunday_pot_roast_gravy",
+        "title": "Grandma's All-Day Sunday Pot Roast & Root Vegetables",
+        "description": "3-card continuous heirloom recipe for slow-braised chuck roast with rich pan gravy.",
+        "yield_servings": "8 servings",
+        "prep_time": "30 mins",
+        "cook_time": "3 hrs 30 mins",
+        "total_time": "4 hrs",
+        "ingredients": [
+          "4 lbs boneless beef chuck roast, tied",
+          "2 tbsp vegetable oil",
+          "2 tsp coarse kosher salt & 1 tsp freshly cracked black pepper",
+          "2 large yellow onions, quartered",
+          "4 cloves garlic, smashed",
+          "2 cups rich beef bone broth",
+          "1 cup dry red wine",
+          "2 tbsp Worcestershire sauce",
+          "1 lb small red potatoes, halved",
+          "1 lb whole carrots, peeled and cut into 2-inch lengths",
+          "3 stalks celery, cut into chunks",
+          "3 tbsp all-purpose flour for gravy reduction"
+        ],
+        "directions": [
+          "1. Preheat oven to 300\u00b0F (150\u00b0C).",
+          "2. Season chuck roast aggressively on all surfaces with coarse salt and black pepper.",
+          "3. Heat oil in heavy cast-iron Dutch oven over high heat; sear roast 4-5 mins per side until deep mahogany crust develops.",
+          "4. Remove beef; add quartered onions and smashed garlic to pot, cooking 3 mins until fragrant.",
+          "5. Pour in red wine, scraping up browned fond from bottom of pot; add beef broth and Worcestershire sauce.",
+          "6. Return roast to pot, cover with tight-fitting lid, and braise at 300\u00b0F for 2 hours.",
+          "7. Scatter red potatoes, carrots, and celery around roast in pot, spooning braising juices over vegetables.",
+          "8. Cover and return to oven for 1 to 1 1/2 hours longer until beef is melt-in-the-mouth tender.",
+          "9. Transfer beef and vegetables to large warm serving platter; tent loosely with foil.",
+          "10. Skim fat from pot juices; bring to a simmer over medium heat, whisk in flour slurry, and reduce 5 mins until rich, velvety brown gravy forms."
+        ],
+        "tags": [
+          "Dinner",
+          "Beef",
+          "Roast",
+          "Heirloom",
+          "Multi-Card"
+        ],
+        "source_notes": "Multi-Card 3-Part Heirloom Pot Roast Manuscript (Grandma's 1958 Cedar Box)",
+        "card_ids": [
+          "rec_mcs_sunday_pot_roast_gravy_card1_front.jpg",
+          "rec_mcs_sunday_pot_roast_gravy_card1_back.jpg",
+          "rec_mcs_sunday_pot_roast_gravy_card2_front.jpg"
+        ],
+        "image_urls": [],
+        "created_at": null,
+        "updated_at": null
+      }
+    },
+    {
+      "card_id": "rec_mcs_sunday_pot_roast_gravy_card1_back.jpg",
+      "filename": "rec_mcs_sunday_pot_roast_gravy_card1_back.jpg",
+      "sha256_hash": "635dc066fdff24b48e51680e5e91b02eb72f4c1e6a3f1efcba72995b0583e0a3",
+      "modality": "HANDWRITTEN_CURSIVE",
+      "role": "SEQUENCE_CONTINUATION",
+      "recipe_cluster": {
+        "recipe_id": "rec_mcs_sunday_pot_roast_gravy",
+        "sequence_position": 1,
+        "cluster_role": "card1_back",
+        "total_cards": 3,
+        "continuation_cue": "(See Card 2 Front ->)",
+        "dimension": "Multi-Card Narrative Sets",
+        "provenance": "Grandma's Cedar Box Pot Roast 3-Card Manuscript",
+        "historical_date": "1958",
+        "archive_series": "Multi-Part Culinary Manuscripts"
+      },
+      "physical_characteristics": {
+        "paper_tone": "RULED_INDEX",
+        "ruling_type": "STANDARD_RULED_BLUE",
+        "ink_type": "FOUNTAIN_PEN",
+        "artifacts": [
+          {
+            "artifact_type": "COFFEE_TEA_RING",
+            "quadrant": "TOP_RIGHT",
+            "severity": "MILD"
+          }
+        ]
+      },
+      "ground_truth_recipe": {
+        "recipe_id": "rec_mcs_sunday_pot_roast_gravy",
+        "title": "Grandma's All-Day Sunday Pot Roast & Root Vegetables",
+        "description": "3-card continuous heirloom recipe for slow-braised chuck roast with rich pan gravy.",
+        "yield_servings": "8 servings",
+        "prep_time": "30 mins",
+        "cook_time": "3 hrs 30 mins",
+        "total_time": "4 hrs",
+        "ingredients": [
+          "4 lbs boneless beef chuck roast, tied",
+          "2 tbsp vegetable oil",
+          "2 tsp coarse kosher salt & 1 tsp freshly cracked black pepper",
+          "2 large yellow onions, quartered",
+          "4 cloves garlic, smashed",
+          "2 cups rich beef bone broth",
+          "1 cup dry red wine",
+          "2 tbsp Worcestershire sauce",
+          "1 lb small red potatoes, halved",
+          "1 lb whole carrots, peeled and cut into 2-inch lengths",
+          "3 stalks celery, cut into chunks",
+          "3 tbsp all-purpose flour for gravy reduction"
+        ],
+        "directions": [
+          "1. Preheat oven to 300\u00b0F (150\u00b0C).",
+          "2. Season chuck roast aggressively on all surfaces with coarse salt and black pepper.",
+          "3. Heat oil in heavy cast-iron Dutch oven over high heat; sear roast 4-5 mins per side until deep mahogany crust develops.",
+          "4. Remove beef; add quartered onions and smashed garlic to pot, cooking 3 mins until fragrant.",
+          "5. Pour in red wine, scraping up browned fond from bottom of pot; add beef broth and Worcestershire sauce.",
+          "6. Return roast to pot, cover with tight-fitting lid, and braise at 300\u00b0F for 2 hours.",
+          "7. Scatter red potatoes, carrots, and celery around roast in pot, spooning braising juices over vegetables.",
+          "8. Cover and return to oven for 1 to 1 1/2 hours longer until beef is melt-in-the-mouth tender.",
+          "9. Transfer beef and vegetables to large warm serving platter; tent loosely with foil.",
+          "10. Skim fat from pot juices; bring to a simmer over medium heat, whisk in flour slurry, and reduce 5 mins until rich, velvety brown gravy forms."
+        ],
+        "tags": [
+          "Dinner",
+          "Beef",
+          "Roast",
+          "Heirloom",
+          "Multi-Card"
+        ],
+        "source_notes": "Multi-Card 3-Part Heirloom Pot Roast Manuscript (Grandma's 1958 Cedar Box)",
+        "card_ids": [
+          "rec_mcs_sunday_pot_roast_gravy_card1_front.jpg",
+          "rec_mcs_sunday_pot_roast_gravy_card1_back.jpg",
+          "rec_mcs_sunday_pot_roast_gravy_card2_front.jpg"
+        ],
+        "image_urls": [],
+        "created_at": null,
+        "updated_at": null
+      }
+    },
+    {
+      "card_id": "rec_mcs_sunday_pot_roast_gravy_card2_front.jpg",
+      "filename": "rec_mcs_sunday_pot_roast_gravy_card2_front.jpg",
+      "sha256_hash": "458599f60653f23c999f22ca465207dd113d5e9bd8fe3cde74c83db029538b55",
+      "modality": "HANDWRITTEN_CURSIVE",
+      "role": "SEQUENCE_CONTINUATION",
+      "recipe_cluster": {
+        "recipe_id": "rec_mcs_sunday_pot_roast_gravy",
+        "sequence_position": 2,
+        "cluster_role": "card2_front",
+        "total_cards": 3,
+        "continuation_cue": null,
+        "dimension": "Multi-Card Narrative Sets",
+        "provenance": "Grandma's Cedar Box Pot Roast 3-Card Manuscript",
+        "historical_date": "1958",
+        "archive_series": "Multi-Part Culinary Manuscripts"
+      },
+      "physical_characteristics": {
+        "paper_tone": "RULED_INDEX",
+        "ruling_type": "STANDARD_RULED_BLUE",
+        "ink_type": "FOUNTAIN_PEN",
+        "artifacts": [
+          {
+            "artifact_type": "TEAR_EDGE",
+            "quadrant": "EDGE_RIGHT",
+            "severity": "MILD"
+          }
+        ]
+      },
+      "ground_truth_recipe": {
+        "recipe_id": "rec_mcs_sunday_pot_roast_gravy",
+        "title": "Grandma's All-Day Sunday Pot Roast & Root Vegetables",
+        "description": "3-card continuous heirloom recipe for slow-braised chuck roast with rich pan gravy.",
+        "yield_servings": "8 servings",
+        "prep_time": "30 mins",
+        "cook_time": "3 hrs 30 mins",
+        "total_time": "4 hrs",
+        "ingredients": [
+          "4 lbs boneless beef chuck roast, tied",
+          "2 tbsp vegetable oil",
+          "2 tsp coarse kosher salt & 1 tsp freshly cracked black pepper",
+          "2 large yellow onions, quartered",
+          "4 cloves garlic, smashed",
+          "2 cups rich beef bone broth",
+          "1 cup dry red wine",
+          "2 tbsp Worcestershire sauce",
+          "1 lb small red potatoes, halved",
+          "1 lb whole carrots, peeled and cut into 2-inch lengths",
+          "3 stalks celery, cut into chunks",
+          "3 tbsp all-purpose flour for gravy reduction"
+        ],
+        "directions": [
+          "1. Preheat oven to 300\u00b0F (150\u00b0C).",
+          "2. Season chuck roast aggressively on all surfaces with coarse salt and black pepper.",
+          "3. Heat oil in heavy cast-iron Dutch oven over high heat; sear roast 4-5 mins per side until deep mahogany crust develops.",
+          "4. Remove beef; add quartered onions and smashed garlic to pot, cooking 3 mins until fragrant.",
+          "5. Pour in red wine, scraping up browned fond from bottom of pot; add beef broth and Worcestershire sauce.",
+          "6. Return roast to pot, cover with tight-fitting lid, and braise at 300\u00b0F for 2 hours.",
+          "7. Scatter red potatoes, carrots, and celery around roast in pot, spooning braising juices over vegetables.",
+          "8. Cover and return to oven for 1 to 1 1/2 hours longer until beef is melt-in-the-mouth tender.",
+          "9. Transfer beef and vegetables to large warm serving platter; tent loosely with foil.",
+          "10. Skim fat from pot juices; bring to a simmer over medium heat, whisk in flour slurry, and reduce 5 mins until rich, velvety brown gravy forms."
+        ],
+        "tags": [
+          "Dinner",
+          "Beef",
+          "Roast",
+          "Heirloom",
+          "Multi-Card"
+        ],
+        "source_notes": "Multi-Card 3-Part Heirloom Pot Roast Manuscript (Grandma's 1958 Cedar Box)",
+        "card_ids": [
+          "rec_mcs_sunday_pot_roast_gravy_card1_front.jpg",
+          "rec_mcs_sunday_pot_roast_gravy_card1_back.jpg",
+          "rec_mcs_sunday_pot_roast_gravy_card2_front.jpg"
+        ],
+        "image_urls": [],
+        "created_at": null,
+        "updated_at": null
+      }
+    },
+    {
+      "card_id": "rec_mcs_traditional_panettone_1955_card1_front.jpg",
+      "filename": "rec_mcs_traditional_panettone_1955_card1_front.jpg",
+      "sha256_hash": "9ebee1cb0c2d4c296daeca48d4dfcbc54e1390c25eb4061f4daf89adef03dfed",
+      "modality": "HANDWRITTEN_CURSIVE",
+      "role": "SEQUENCE_START",
+      "recipe_cluster": {
+        "recipe_id": "rec_mcs_traditional_panettone_1955",
+        "sequence_position": 0,
+        "cluster_role": "card1_front",
+        "total_cards": 4,
+        "continuation_cue": "(over to Card 1 Back ->)",
+        "dimension": "Multi-Card Narrative Sets",
+        "provenance": "Milanese Bakery Family Heirloom 4-Card Manuscript",
+        "historical_date": "1955",
+        "archive_series": "Multi-Part Culinary Manuscripts"
+      },
+      "physical_characteristics": {
+        "paper_tone": "AGED_YELLOW",
+        "ruling_type": "UNRULED_BLANK",
+        "ink_type": "FOUNTAIN_PEN",
+        "artifacts": [
+          {
+            "artifact_type": "OIL_GREASE_STAIN",
+            "quadrant": "TOP_RIGHT",
+            "severity": "MILD"
+          },
+          {
+            "artifact_type": "TAPE_RESIDUE_YELLOWED",
+            "quadrant": "TOP_LEFT",
+            "severity": "MILD"
+          }
+        ]
+      },
+      "ground_truth_recipe": {
+        "recipe_id": "rec_mcs_traditional_panettone_1955",
+        "title": "1955 Artisanal Milanese Holiday Panettone",
+        "description": "4-card traditional sourdough panettone recipe with multi-stage doughs and fruit curing.",
+        "yield_servings": "2 large panettoni (20 servings)",
+        "prep_time": "2 hrs",
+        "cook_time": "45 mins",
+        "total_time": "18 hrs",
+        "ingredients": [
+          "1 cup active sourdough starter (pasta madre)",
+          "4 1/2 cups Manitoba / high-protein bread flour",
+          "1 cup whole milk, lukewarm",
+          "1 cup unsalted European butter, softened",
+          "1 cup granulated sugar",
+          "6 large egg yolks",
+          "1 vanilla bean, split and scraped",
+          "1 tsp fine sea salt",
+          "1 1/2 cups golden raisins, rum-soaked",
+          "1 cup candied orange and citron peel, diced",
+          "1 tbsp honey and 1 orange zest",
+          "Melted butter for scoring cross"
+        ],
+        "directions": [
+          "1. Part 1 (Primo Impasto): Dissolve sourdough starter in lukewarm milk with 1 cup flour; proof 3 hours at 80\u00b0F until tripled.",
+          "2. Beat 3 egg yolks with 1/2 cup sugar; knead into proofed starter with 2 cups flour and 1/2 cup softened butter until smooth and elastic.",
+          "3. Cover dough tightly and let rise overnight in warm draft-free place (12 hours) until quadrupled in volume.",
+          "4. Part 2 (Secondo Impasto): Deflate first dough; knead in honey, orange zest, scraped vanilla bean, remaining 3 egg yolks, 1/2 cup sugar, and salt.",
+          "5. Gradually work in remaining 1 1/2 cups flour and remaining 1/2 cup softened butter until shiny dough forms windowpane.",
+          "6. Drain rum-soaked raisins and toss with candied citron; gently fold fruits evenly throughout dough.",
+          "7. Divide dough into 2 equal portions; shape into tight boules and place into tall 6-inch panettone paper molds.",
+          "8. Proof in warm humid area 4-6 hours until dough reaches 1/2 inch below mold rim.",
+          "9. Cut shallow cross in top of each dome with sharp razor; place pat of butter in center of cross.",
+          "10. Bake at 350\u00b0F (175\u00b0C) for 40-45 minutes until deep mahogany and internal temp reaches 190\u00b0F.",
+          "11. Part 3 (Curing & Hanging): Pierce bottom of each panettone with two long metal skewers; hang upside down suspended between chairs for 10 hours to prevent collapse."
+        ],
+        "tags": [
+          "Baking",
+          "Panettone",
+          "Holiday",
+          "Italian",
+          "Multi-Card",
+          "Heirloom"
+        ],
+        "source_notes": "4-Card Heirloom Milanese Holiday Panettone Archival Set (1955)",
+        "card_ids": [
+          "rec_mcs_traditional_panettone_1955_card1_front.jpg",
+          "rec_mcs_traditional_panettone_1955_card1_back.jpg",
+          "rec_mcs_traditional_panettone_1955_card2_front.jpg",
+          "rec_mcs_traditional_panettone_1955_card2_back.jpg"
+        ],
+        "image_urls": [],
+        "created_at": null,
+        "updated_at": null
+      }
+    },
+    {
+      "card_id": "rec_mcs_traditional_panettone_1955_card1_back.jpg",
+      "filename": "rec_mcs_traditional_panettone_1955_card1_back.jpg",
+      "sha256_hash": "bfe14427ffbc61e0d74e11d71dc9037d173e4df2e25212378eb34c633a73dbed",
+      "modality": "HANDWRITTEN_CURSIVE",
+      "role": "SEQUENCE_CONTINUATION",
+      "recipe_cluster": {
+        "recipe_id": "rec_mcs_traditional_panettone_1955",
+        "sequence_position": 1,
+        "cluster_role": "card1_back",
+        "total_cards": 4,
+        "continuation_cue": "(See Card 2 Front ->)",
+        "dimension": "Multi-Card Narrative Sets",
+        "provenance": "Milanese Bakery Family Heirloom 4-Card Manuscript",
+        "historical_date": "1955",
+        "archive_series": "Multi-Part Culinary Manuscripts"
+      },
+      "physical_characteristics": {
+        "paper_tone": "AGED_YELLOW",
+        "ruling_type": "UNRULED_BLANK",
+        "ink_type": "FOUNTAIN_PEN",
+        "artifacts": [
+          {
+            "artifact_type": "COFFEE_TEA_RING",
+            "quadrant": "TOP_RIGHT",
+            "severity": "MILD"
+          }
+        ]
+      },
+      "ground_truth_recipe": {
+        "recipe_id": "rec_mcs_traditional_panettone_1955",
+        "title": "1955 Artisanal Milanese Holiday Panettone",
+        "description": "4-card traditional sourdough panettone recipe with multi-stage doughs and fruit curing.",
+        "yield_servings": "2 large panettoni (20 servings)",
+        "prep_time": "2 hrs",
+        "cook_time": "45 mins",
+        "total_time": "18 hrs",
+        "ingredients": [
+          "1 cup active sourdough starter (pasta madre)",
+          "4 1/2 cups Manitoba / high-protein bread flour",
+          "1 cup whole milk, lukewarm",
+          "1 cup unsalted European butter, softened",
+          "1 cup granulated sugar",
+          "6 large egg yolks",
+          "1 vanilla bean, split and scraped",
+          "1 tsp fine sea salt",
+          "1 1/2 cups golden raisins, rum-soaked",
+          "1 cup candied orange and citron peel, diced",
+          "1 tbsp honey and 1 orange zest",
+          "Melted butter for scoring cross"
+        ],
+        "directions": [
+          "1. Part 1 (Primo Impasto): Dissolve sourdough starter in lukewarm milk with 1 cup flour; proof 3 hours at 80\u00b0F until tripled.",
+          "2. Beat 3 egg yolks with 1/2 cup sugar; knead into proofed starter with 2 cups flour and 1/2 cup softened butter until smooth and elastic.",
+          "3. Cover dough tightly and let rise overnight in warm draft-free place (12 hours) until quadrupled in volume.",
+          "4. Part 2 (Secondo Impasto): Deflate first dough; knead in honey, orange zest, scraped vanilla bean, remaining 3 egg yolks, 1/2 cup sugar, and salt.",
+          "5. Gradually work in remaining 1 1/2 cups flour and remaining 1/2 cup softened butter until shiny dough forms windowpane.",
+          "6. Drain rum-soaked raisins and toss with candied citron; gently fold fruits evenly throughout dough.",
+          "7. Divide dough into 2 equal portions; shape into tight boules and place into tall 6-inch panettone paper molds.",
+          "8. Proof in warm humid area 4-6 hours until dough reaches 1/2 inch below mold rim.",
+          "9. Cut shallow cross in top of each dome with sharp razor; place pat of butter in center of cross.",
+          "10. Bake at 350\u00b0F (175\u00b0C) for 40-45 minutes until deep mahogany and internal temp reaches 190\u00b0F.",
+          "11. Part 3 (Curing & Hanging): Pierce bottom of each panettone with two long metal skewers; hang upside down suspended between chairs for 10 hours to prevent collapse."
+        ],
+        "tags": [
+          "Baking",
+          "Panettone",
+          "Holiday",
+          "Italian",
+          "Multi-Card",
+          "Heirloom"
+        ],
+        "source_notes": "4-Card Heirloom Milanese Holiday Panettone Archival Set (1955)",
+        "card_ids": [
+          "rec_mcs_traditional_panettone_1955_card1_front.jpg",
+          "rec_mcs_traditional_panettone_1955_card1_back.jpg",
+          "rec_mcs_traditional_panettone_1955_card2_front.jpg",
+          "rec_mcs_traditional_panettone_1955_card2_back.jpg"
+        ],
+        "image_urls": [],
+        "created_at": null,
+        "updated_at": null
+      }
+    },
+    {
+      "card_id": "rec_mcs_traditional_panettone_1955_card2_front.jpg",
+      "filename": "rec_mcs_traditional_panettone_1955_card2_front.jpg",
+      "sha256_hash": "7f53d8055b9bb6ca97bd431aa835b3826877885a821d7ad4a968b9f93a90ad32",
+      "modality": "HANDWRITTEN_CURSIVE",
+      "role": "SEQUENCE_CONTINUATION",
+      "recipe_cluster": {
+        "recipe_id": "rec_mcs_traditional_panettone_1955",
+        "sequence_position": 2,
+        "cluster_role": "card2_front",
+        "total_cards": 4,
+        "continuation_cue": "(over to Card 2 Back ->)",
+        "dimension": "Multi-Card Narrative Sets",
+        "provenance": "Milanese Bakery Family Heirloom 4-Card Manuscript",
+        "historical_date": "1955",
+        "archive_series": "Multi-Part Culinary Manuscripts"
+      },
+      "physical_characteristics": {
+        "paper_tone": "AGED_YELLOW",
+        "ruling_type": "UNRULED_BLANK",
+        "ink_type": "FOUNTAIN_PEN",
+        "artifacts": []
+      },
+      "ground_truth_recipe": {
+        "recipe_id": "rec_mcs_traditional_panettone_1955",
+        "title": "1955 Artisanal Milanese Holiday Panettone",
+        "description": "4-card traditional sourdough panettone recipe with multi-stage doughs and fruit curing.",
+        "yield_servings": "2 large panettoni (20 servings)",
+        "prep_time": "2 hrs",
+        "cook_time": "45 mins",
+        "total_time": "18 hrs",
+        "ingredients": [
+          "1 cup active sourdough starter (pasta madre)",
+          "4 1/2 cups Manitoba / high-protein bread flour",
+          "1 cup whole milk, lukewarm",
+          "1 cup unsalted European butter, softened",
+          "1 cup granulated sugar",
+          "6 large egg yolks",
+          "1 vanilla bean, split and scraped",
+          "1 tsp fine sea salt",
+          "1 1/2 cups golden raisins, rum-soaked",
+          "1 cup candied orange and citron peel, diced",
+          "1 tbsp honey and 1 orange zest",
+          "Melted butter for scoring cross"
+        ],
+        "directions": [
+          "1. Part 1 (Primo Impasto): Dissolve sourdough starter in lukewarm milk with 1 cup flour; proof 3 hours at 80\u00b0F until tripled.",
+          "2. Beat 3 egg yolks with 1/2 cup sugar; knead into proofed starter with 2 cups flour and 1/2 cup softened butter until smooth and elastic.",
+          "3. Cover dough tightly and let rise overnight in warm draft-free place (12 hours) until quadrupled in volume.",
+          "4. Part 2 (Secondo Impasto): Deflate first dough; knead in honey, orange zest, scraped vanilla bean, remaining 3 egg yolks, 1/2 cup sugar, and salt.",
+          "5. Gradually work in remaining 1 1/2 cups flour and remaining 1/2 cup softened butter until shiny dough forms windowpane.",
+          "6. Drain rum-soaked raisins and toss with candied citron; gently fold fruits evenly throughout dough.",
+          "7. Divide dough into 2 equal portions; shape into tight boules and place into tall 6-inch panettone paper molds.",
+          "8. Proof in warm humid area 4-6 hours until dough reaches 1/2 inch below mold rim.",
+          "9. Cut shallow cross in top of each dome with sharp razor; place pat of butter in center of cross.",
+          "10. Bake at 350\u00b0F (175\u00b0C) for 40-45 minutes until deep mahogany and internal temp reaches 190\u00b0F.",
+          "11. Part 3 (Curing & Hanging): Pierce bottom of each panettone with two long metal skewers; hang upside down suspended between chairs for 10 hours to prevent collapse."
+        ],
+        "tags": [
+          "Baking",
+          "Panettone",
+          "Holiday",
+          "Italian",
+          "Multi-Card",
+          "Heirloom"
+        ],
+        "source_notes": "4-Card Heirloom Milanese Holiday Panettone Archival Set (1955)",
+        "card_ids": [
+          "rec_mcs_traditional_panettone_1955_card1_front.jpg",
+          "rec_mcs_traditional_panettone_1955_card1_back.jpg",
+          "rec_mcs_traditional_panettone_1955_card2_front.jpg",
+          "rec_mcs_traditional_panettone_1955_card2_back.jpg"
+        ],
+        "image_urls": [],
+        "created_at": null,
+        "updated_at": null
+      }
+    },
+    {
+      "card_id": "rec_mcs_traditional_panettone_1955_card2_back.jpg",
+      "filename": "rec_mcs_traditional_panettone_1955_card2_back.jpg",
+      "sha256_hash": "b2889535079d2a7157a0610625e72ae1ab34238aea85881dbcacf73bbf302008",
+      "modality": "HANDWRITTEN_CURSIVE",
+      "role": "SEQUENCE_CONTINUATION",
+      "recipe_cluster": {
+        "recipe_id": "rec_mcs_traditional_panettone_1955",
+        "sequence_position": 3,
+        "cluster_role": "card2_back",
+        "total_cards": 4,
+        "continuation_cue": null,
+        "dimension": "Multi-Card Narrative Sets",
+        "provenance": "Milanese Bakery Family Heirloom 4-Card Manuscript",
+        "historical_date": "1955",
+        "archive_series": "Multi-Part Culinary Manuscripts"
+      },
+      "physical_characteristics": {
+        "paper_tone": "AGED_YELLOW",
+        "ruling_type": "UNRULED_BLANK",
+        "ink_type": "FOUNTAIN_PEN",
+        "artifacts": [
+          {
+            "artifact_type": "TEAR_EDGE",
+            "quadrant": "EDGE_RIGHT",
+            "severity": "MILD"
+          }
+        ]
+      },
+      "ground_truth_recipe": {
+        "recipe_id": "rec_mcs_traditional_panettone_1955",
+        "title": "1955 Artisanal Milanese Holiday Panettone",
+        "description": "4-card traditional sourdough panettone recipe with multi-stage doughs and fruit curing.",
+        "yield_servings": "2 large panettoni (20 servings)",
+        "prep_time": "2 hrs",
+        "cook_time": "45 mins",
+        "total_time": "18 hrs",
+        "ingredients": [
+          "1 cup active sourdough starter (pasta madre)",
+          "4 1/2 cups Manitoba / high-protein bread flour",
+          "1 cup whole milk, lukewarm",
+          "1 cup unsalted European butter, softened",
+          "1 cup granulated sugar",
+          "6 large egg yolks",
+          "1 vanilla bean, split and scraped",
+          "1 tsp fine sea salt",
+          "1 1/2 cups golden raisins, rum-soaked",
+          "1 cup candied orange and citron peel, diced",
+          "1 tbsp honey and 1 orange zest",
+          "Melted butter for scoring cross"
+        ],
+        "directions": [
+          "1. Part 1 (Primo Impasto): Dissolve sourdough starter in lukewarm milk with 1 cup flour; proof 3 hours at 80\u00b0F until tripled.",
+          "2. Beat 3 egg yolks with 1/2 cup sugar; knead into proofed starter with 2 cups flour and 1/2 cup softened butter until smooth and elastic.",
+          "3. Cover dough tightly and let rise overnight in warm draft-free place (12 hours) until quadrupled in volume.",
+          "4. Part 2 (Secondo Impasto): Deflate first dough; knead in honey, orange zest, scraped vanilla bean, remaining 3 egg yolks, 1/2 cup sugar, and salt.",
+          "5. Gradually work in remaining 1 1/2 cups flour and remaining 1/2 cup softened butter until shiny dough forms windowpane.",
+          "6. Drain rum-soaked raisins and toss with candied citron; gently fold fruits evenly throughout dough.",
+          "7. Divide dough into 2 equal portions; shape into tight boules and place into tall 6-inch panettone paper molds.",
+          "8. Proof in warm humid area 4-6 hours until dough reaches 1/2 inch below mold rim.",
+          "9. Cut shallow cross in top of each dome with sharp razor; place pat of butter in center of cross.",
+          "10. Bake at 350\u00b0F (175\u00b0C) for 40-45 minutes until deep mahogany and internal temp reaches 190\u00b0F.",
+          "11. Part 3 (Curing & Hanging): Pierce bottom of each panettone with two long metal skewers; hang upside down suspended between chairs for 10 hours to prevent collapse."
+        ],
+        "tags": [
+          "Baking",
+          "Panettone",
+          "Holiday",
+          "Italian",
+          "Multi-Card",
+          "Heirloom"
+        ],
+        "source_notes": "4-Card Heirloom Milanese Holiday Panettone Archival Set (1955)",
+        "card_ids": [
+          "rec_mcs_traditional_panettone_1955_card1_front.jpg",
+          "rec_mcs_traditional_panettone_1955_card1_back.jpg",
+          "rec_mcs_traditional_panettone_1955_card2_front.jpg",
+          "rec_mcs_traditional_panettone_1955_card2_back.jpg"
+        ],
+        "image_urls": [],
+        "created_at": null,
+        "updated_at": null
+      }
+    },
+    {
       "card_id": "rec_sta_quick_chocolate_fudge_standalone.jpg",
       "filename": "rec_sta_quick_chocolate_fudge_standalone.jpg",
-      "sha256_hash": "06b8464f345e99cb90924576676a4103ac7847d8918e76c975ab308037c85f62",
+      "sha256_hash": "0817f2c38e76c3cbc306f400ffb82b813936fc3764e541146dd3eb751360b569",
       "modality": "HANDWRITTEN_CURSIVE",
       "role": "STANDALONE",
       "recipe_cluster": {
@@ -1615,7 +3781,11 @@
         "sequence_position": 0,
         "cluster_role": "standalone",
         "total_cards": 1,
-        "continuation_cue": null
+        "continuation_cue": null,
+        "dimension": "Standalone Single-Sided Cards",
+        "provenance": "Quick Confections Recipe Tin",
+        "historical_date": "1960",
+        "archive_series": "Quick Pantry Standalones"
       },
       "physical_characteristics": {
         "paper_tone": "RULED_INDEX",
@@ -1636,6 +3806,17 @@
             "artifact_type": "CORNER_DOG_EAR_FOLD",
             "quadrant": "BOTTOM_RIGHT",
             "severity": "MILD"
+          },
+          {
+            "artifact_type": "TEAR_EDGE",
+            "quadrant": "EDGE_RIGHT",
+            "severity": "MILD"
+          },
+          {
+            "artifact_type": "RUBBER_DATE_STAMP",
+            "quadrant": "BOTTOM_LEFT",
+            "severity": "MILD",
+            "description": "Vintage ink stamp: RECIPE CLUB 1974"
           }
         ]
       },
@@ -1679,7 +3860,7 @@
     {
       "card_id": "rec_sta_southern_pecan_pie_standalone.jpg",
       "filename": "rec_sta_southern_pecan_pie_standalone.jpg",
-      "sha256_hash": "436c098dbef6db6a9770092d4cff64f80f087bb7453dc45ff4546f11bb3912cc",
+      "sha256_hash": "bff37609640ce27522287ef5ac969253f7584c4da4c88ff72da1b7a4ba37d187",
       "modality": "HANDWRITTEN_CURSIVE",
       "role": "STANDALONE",
       "recipe_cluster": {
@@ -1687,7 +3868,11 @@
         "sequence_position": 0,
         "cluster_role": "standalone",
         "total_cards": 1,
-        "continuation_cue": null
+        "continuation_cue": null,
+        "dimension": "Standalone Single-Sided Cards",
+        "provenance": "Georgia Country Kitchen Kraft Paper Card",
+        "historical_date": "1965",
+        "archive_series": "Quick Pantry Standalones"
       },
       "physical_characteristics": {
         "paper_tone": "KRAFT_BROWN",
@@ -1700,8 +3885,13 @@
             "severity": "MILD"
           },
           {
-            "artifact_type": "TEAR_EDGE",
-            "quadrant": "EDGE_RIGHT",
+            "artifact_type": "COFFEE_TEA_RING",
+            "quadrant": "BOTTOM_LEFT",
+            "severity": "MODERATE"
+          },
+          {
+            "artifact_type": "CORNER_DOG_EAR_FOLD",
+            "quadrant": "BOTTOM_RIGHT",
             "severity": "MILD"
           }
         ]
@@ -1739,6 +3929,181 @@
         "source_notes": "Standalone Kraft Paper Card",
         "card_ids": [
           "rec_sta_southern_pecan_pie_standalone.jpg"
+        ],
+        "image_urls": [],
+        "created_at": null,
+        "updated_at": null
+      }
+    },
+    {
+      "card_id": "rec_sta_classic_banana_bread_standalone.jpg",
+      "filename": "rec_sta_classic_banana_bread_standalone.jpg",
+      "sha256_hash": "77a5fc5e129417afc7dd04f5ff6e5eb2c1368a50f3423dd98a6084c4b0f19501",
+      "modality": "HANDWRITTEN_CURSIVE",
+      "role": "STANDALONE",
+      "recipe_cluster": {
+        "recipe_id": "rec_sta_classic_banana_bread",
+        "sequence_position": 0,
+        "cluster_role": "standalone",
+        "total_cards": 1,
+        "continuation_cue": null,
+        "dimension": "Standalone Single-Sided Cards",
+        "provenance": "Midwestern School Bake Sale Grid Paper Card",
+        "historical_date": "1964",
+        "archive_series": "Quick Pantry Standalones"
+      },
+      "physical_characteristics": {
+        "paper_tone": "GRID_GRAPH",
+        "ruling_type": "UNRULED_BLANK",
+        "ink_type": "BLACK_BALLPOINT",
+        "artifacts": [
+          {
+            "artifact_type": "OIL_GREASE_STAIN",
+            "quadrant": "TOP_RIGHT",
+            "severity": "MILD"
+          },
+          {
+            "artifact_type": "COFFEE_TEA_RING",
+            "quadrant": "BOTTOM_LEFT",
+            "severity": "MODERATE"
+          },
+          {
+            "artifact_type": "CORNER_DOG_EAR_FOLD",
+            "quadrant": "BOTTOM_RIGHT",
+            "severity": "MILD"
+          },
+          {
+            "artifact_type": "TEAR_EDGE",
+            "quadrant": "EDGE_RIGHT",
+            "severity": "MILD"
+          },
+          {
+            "artifact_type": "RUBBER_DATE_STAMP",
+            "quadrant": "BOTTOM_LEFT",
+            "severity": "MILD",
+            "description": "Vintage ink stamp: RECIPE CLUB 1971"
+          }
+        ]
+      },
+      "ground_truth_recipe": {
+        "recipe_id": "rec_sta_classic_banana_bread",
+        "title": "Classic Moist Walnut Banana Bread",
+        "description": "Standalone single-card quick bread recipe written on grid graph paper.",
+        "yield_servings": "1 loaf (10 slices)",
+        "prep_time": "15 mins",
+        "cook_time": "60 mins",
+        "total_time": "1 hr 15 mins",
+        "ingredients": [
+          "3 very ripe bananas, mashed (about 1 1/2 cups)",
+          "1/3 cup melted unsalted butter",
+          "3/4 cup granulated sugar",
+          "1 large egg, beaten",
+          "1 tsp pure vanilla extract",
+          "1 tsp baking soda",
+          "Pinch of salt",
+          "1 1/2 cups all-purpose flour",
+          "1/2 cup toasted walnuts, chopped"
+        ],
+        "directions": [
+          "1. Preheat oven to 350\u00b0F; butter an 8x4-inch loaf pan.",
+          "2. In large bowl, mash ripe bananas with a fork until smooth; stir in melted butter.",
+          "3. Mix in sugar, beaten egg, and vanilla extract.",
+          "4. Sprinkle baking soda and salt over mixture; fold in flour until just combined.",
+          "5. Fold in chopped walnuts; pour batter into prepared pan.",
+          "6. Bake at 350\u00b0F for 55-60 minutes until golden brown and cake tester comes out clean."
+        ],
+        "tags": [
+          "Baking",
+          "Bread",
+          "Banana",
+          "Quick",
+          "Standalone"
+        ],
+        "source_notes": "Single-Sided Grid Graph Recipe Card (1964)",
+        "card_ids": [
+          "rec_sta_classic_banana_bread_standalone.jpg"
+        ],
+        "image_urls": [],
+        "created_at": null,
+        "updated_at": null
+      }
+    },
+    {
+      "card_id": "rec_sta_old_fashioned_lemonade_standalone.jpg",
+      "filename": "rec_sta_old_fashioned_lemonade_standalone.jpg",
+      "sha256_hash": "28a381ae91a0a16d7f2ee4eb8e649bce6a884ec620aa4c9851d5b9348338907c",
+      "modality": "TYPEWRITTEN",
+      "role": "STANDALONE",
+      "recipe_cluster": {
+        "recipe_id": "rec_sta_old_fashioned_lemonade",
+        "sequence_position": 0,
+        "cluster_role": "standalone",
+        "total_cards": 1,
+        "continuation_cue": null,
+        "dimension": "Standalone Single-Sided Cards",
+        "provenance": "County Fair Refreshment Stand Kraft Card",
+        "historical_date": "1955",
+        "archive_series": "Quick Pantry Standalones"
+      },
+      "physical_characteristics": {
+        "paper_tone": "KRAFT_BROWN",
+        "ruling_type": "UNRULED_BLANK",
+        "ink_type": "TYPEWRITER_RIBBON",
+        "artifacts": [
+          {
+            "artifact_type": "OIL_GREASE_STAIN",
+            "quadrant": "TOP_RIGHT",
+            "severity": "MILD"
+          },
+          {
+            "artifact_type": "CORNER_DOG_EAR_FOLD",
+            "quadrant": "BOTTOM_RIGHT",
+            "severity": "MILD"
+          },
+          {
+            "artifact_type": "TEAR_EDGE",
+            "quadrant": "EDGE_RIGHT",
+            "severity": "MILD"
+          },
+          {
+            "artifact_type": "TAPE_RESIDUE_YELLOWED",
+            "quadrant": "TOP_LEFT",
+            "severity": "MILD"
+          }
+        ]
+      },
+      "ground_truth_recipe": {
+        "recipe_id": "rec_sta_old_fashioned_lemonade",
+        "title": "Old-Fashioned Country Fair Lemonade",
+        "description": "Standalone kraft paper card with classic boiled simple syrup lemonade recipe.",
+        "yield_servings": "8 glasses (2 quarts)",
+        "prep_time": "15 mins",
+        "cook_time": "5 mins",
+        "total_time": "1 hr 20 mins",
+        "ingredients": [
+          "1 1/2 cups freshly squeezed lemon juice (from 6-8 large lemons)",
+          "1 1/4 cups granulated sugar",
+          "1 cup boiling water (for simple syrup)",
+          "5 cups ice-cold filtered water",
+          "Lemon wheels and fresh mint sprigs for garnish",
+          "Plenty of ice cubes"
+        ],
+        "directions": [
+          "1. In heatproof pitcher, stir sugar into 1 cup boiling water until completely dissolved to create simple syrup.",
+          "2. Strain fresh lemon juice to remove seeds and pulp; add to simple syrup in pitcher.",
+          "3. Stir in 5 cups cold filtered water; chill in refrigerator at least 1 hour.",
+          "4. Serve over ice with lemon slices and mint."
+        ],
+        "tags": [
+          "Beverage",
+          "Summer",
+          "Lemonade",
+          "Classic",
+          "Standalone"
+        ],
+        "source_notes": "Standalone Kraft Paper Country Fair Refreshment Card",
+        "card_ids": [
+          "rec_sta_old_fashioned_lemonade_standalone.jpg"
         ],
         "image_urls": [],
         "created_at": null,
