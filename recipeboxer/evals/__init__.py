@@ -23,6 +23,13 @@ from recipeboxer.evals.metrics import (
     validate_schema_conformity,
     word_error_rate,
 )
+from recipeboxer.evals.obfuscation import (
+    EvaluationObfuscator,
+    ObfuscatedCard,
+    ObfuscatedCardCorpus,
+    ObfuscationStrategy,
+    sanitize_image_exif,
+)
 _RUNNER_ATTRS = {
     "HISTORICAL_MODALITIES",
     "BenchmarkReport",
@@ -58,6 +65,12 @@ __all__ = [
     # Judge
     "RecipeJudge",
     "JudgeEvaluationResult",
+    # Obfuscation
+    "ObfuscatedCardCorpus",
+    "EvaluationObfuscator",
+    "ObfuscatedCard",
+    "ObfuscationStrategy",
+    "sanitize_image_exif",
     # Runner
     "BenchmarkRunner",
     "BenchmarkReport",
@@ -67,3 +80,4 @@ __all__ = [
     "get_card_historical_categories",
     "main",
 ]
+

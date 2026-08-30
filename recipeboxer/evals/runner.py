@@ -31,13 +31,16 @@ from recipeboxer.evals.metrics import (
     calculate_transcription_metrics,
     validate_schema_conformity,
 )
+from recipeboxer.evals.obfuscation import ObfuscatedCardCorpus, ObfuscationStrategy
 from recipeboxer.exporter.plan_to_eat import PlanToEatExporter
+
 from recipeboxer.extraction.extractor import GeminiRecipeExtractor
 from recipeboxer.models.correlation import CorrelationProposal, CorrelationResult
 from recipeboxer.models.domain import CardRole, VisualFingerprint
 from recipeboxer.models.recipe import RecipeSchema
-from recipeboxer.tools.card_generator import CardModality
+from recipeboxer.vision.router import CardModality
 from recipeboxer.vision.heuristics import calculate_heuristic_distance
+
 
 try:
     from tests.fixtures.loader import CardEntry, SampleCardCorpus, get_manifest_path, get_sample_card_dir
@@ -119,6 +122,10 @@ class BenchmarkReport(BaseModel):
         default_factory=lambda: {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
     )
     total_duration_seconds: float = 0.0
+    obfuscation_enabled: bool = Field(
+        default=True,
+        description="Whether card filenames and metadata were obfuscated during evaluation",
+    )
 
     def to_dict(self) -> Dict[str, Any]:
         """Serializes report to dictionary."""
@@ -138,9 +145,11 @@ class BenchmarkReport(BaseModel):
         lines.append(f"- **Target Model**: `{self.model_name}`")
         lines.append(f"- **Stage Filter**: `{self.stage_filter}`")
         lines.append(f"- **Modality Filter**: `{self.modality_filter or 'All Modalities'}`")
+        lines.append(f"- **Obfuscation**: `{'Active (Anti-Cheating Enabled)' if self.obfuscation_enabled else 'Disabled'}`")
         lines.append(f"- **Total Duration**: `{self.total_duration_seconds:.2f}s`")
         lines.append(f"")
         lines.append(f"---")
+
         lines.append(f"")
         lines.append(f"## 1. Executive Summary")
         lines.append(f"")
@@ -335,6 +344,8 @@ class BenchmarkRunner:
         modality: Optional[str] = None,
         judge_enabled: bool = True,
         mock_judge: bool = True,
+        obfuscate_filenames: bool = True,
+        obfuscation_strategy: ObfuscationStrategy = ObfuscationStrategy.DETERMINISTIC_SHA256,
         extractor: Optional[Any] = None,
         judge: Optional[Any] = None,
         optimizer: Optional[Any] = None,
@@ -350,6 +361,8 @@ class BenchmarkRunner:
             modality: Modality filter string (e.g. 'HANDWRITTEN_CURSIVE', 'MULTI_CARD').
             judge_enabled: Whether to run LLM-as-a-Judge semantic scoring.
             mock_judge: If True, uses deterministic offline judge mock.
+            obfuscate_filenames: If True, sanitizes filenames/metadata to opaque identifiers for anti-cheating.
+            obfuscation_strategy: Naming strategy for opaque identifiers.
             extractor: Optional custom RecipeExtractor instance.
             judge: Optional custom RecipeJudge instance.
             optimizer: Optional custom PairingOptimizer instance.
@@ -363,6 +376,8 @@ class BenchmarkRunner:
         self.modality_filter = modality
         self.judge_enabled = judge_enabled
         self.mock_judge = mock_judge
+        self.obfuscate_filenames = obfuscate_filenames
+        self.obfuscation_strategy = obfuscation_strategy
 
         self.corpus = SampleCardCorpus(
             corpus_dir=self.corpus_dir,
@@ -421,30 +436,63 @@ class BenchmarkRunner:
                 recipes_map[rec_id] = []
             recipes_map[rec_id].append(card)
 
+        if self.obfuscate_filenames:
+            with ObfuscatedCardCorpus(cards_to_eval, strategy=self.obfuscation_strategy) as obfuscator:
+                return await self._run_with_cards(cards_to_eval, recipes_map, obfuscator, start_time)
+        else:
+            return await self._run_with_cards(cards_to_eval, recipes_map, None, start_time)
+
+    async def _run_with_cards(
+        self,
+        cards_to_eval: List[CardEntry],
+        recipes_map: Dict[str, List[CardEntry]],
+        obfuscator: Optional[ObfuscatedCardCorpus],
+        start_time: float,
+    ) -> BenchmarkReport:
+        """Internal execution pass with optional active obfuscation."""
         # --------------------------------------------------------------------
         # 1. STAGE 1 & 2: CORRELATION & PAIRING BENCHMARK
         # --------------------------------------------------------------------
-        logger.info(f"Running pairing evaluation across {len(cards_to_eval)} cards...")
+        logger.info(
+            f"Running pairing evaluation across {len(cards_to_eval)} cards "
+            f"(obfuscation={'active' if obfuscator else 'disabled'})..."
+        )
         # Build ground-truth pairs and clusters
         gt_clusters: List[Set[str]] = []
         for rec_id, rcards in recipes_map.items():
             gt_clusters.append({c.card_id for c in rcards})
 
         # Run heuristic pairing proposals via PairingOptimizer
-        fingerprints = [
-            VisualFingerprint(
-                card_id=c.card_id,
-                image_path=str(c.file_path),
-                sha256_hash=c.sha256_hash or c.compute_sha256(),
-                role=c.role,
-                paper_tone=c.physical_characteristics.get("paper_tone"),
-                ruling_type=c.physical_characteristics.get("ruling_type"),
-                ink_type=c.physical_characteristics.get("ink_type"),
-            )
-            for c in cards_to_eval
-        ]
+        if obfuscator is not None:
+            fingerprints = [
+                VisualFingerprint(
+                    card_id=obf_card.obfuscated_id,
+                    image_path=str(obf_card.file_path),
+                    sha256_hash=obf_card.sha256_hash,
+                    role=obf_card.role,
+                    paper_tone=obf_card.physical_characteristics.get("paper_tone"),
+                    ruling_type=obf_card.physical_characteristics.get("ruling_type"),
+                    ink_type=obf_card.physical_characteristics.get("ink_type"),
+                )
+                for obf_card in obfuscator.obfuscated_cards
+            ]
+            raw_correlation_result = await self.optimizer.optimize(fingerprints)
+            correlation_result = obfuscator.map_correlation_result(raw_correlation_result)
+        else:
+            fingerprints = [
+                VisualFingerprint(
+                    card_id=c.card_id,
+                    image_path=str(c.file_path),
+                    sha256_hash=c.sha256_hash or c.compute_sha256(),
+                    role=c.role,
+                    paper_tone=c.physical_characteristics.get("paper_tone"),
+                    ruling_type=c.physical_characteristics.get("ruling_type"),
+                    ink_type=c.physical_characteristics.get("ink_type"),
+                )
+                for c in cards_to_eval
+            ]
+            correlation_result = await self.optimizer.optimize(fingerprints)
 
-        correlation_result = await self.optimizer.optimize(fingerprints)
         pairing_metrics = calculate_pairing_metrics(correlation_result, recipes_map)
 
         # --------------------------------------------------------------------
@@ -459,10 +507,17 @@ class BenchmarkRunner:
             back_card = sorted_cards[1] if len(sorted_cards) > 1 else None
             ref_recipe = front_card.ground_truth_recipe
 
+            if obfuscator is not None:
+                front_path = obfuscator.get_obfuscated_path(front_card.card_id)
+                back_path = obfuscator.get_obfuscated_path(back_card.card_id) if back_card else None
+            else:
+                front_path = front_card.file_path
+                back_path = back_card.file_path if back_card else None
+
             # Extraction
             ext_start = time.perf_counter()
             if self.stage in ("full", "extraction"):
-                hyp_recipe = await self.extractor.extract(front_card.file_path, back_card.file_path if back_card else None)
+                hyp_recipe = await self.extractor.extract(front_path, back_path)
             else:
                 hyp_recipe = ref_recipe  # In correlation-only mode, assume ground truth
 
@@ -585,6 +640,7 @@ class BenchmarkRunner:
             model_name=self.model_name,
             stage_filter=self.stage,
             modality_filter=self.modality_filter,
+            obfuscation_enabled=bool(obfuscator is not None),
             total_cards=len(cards_to_eval),
             total_recipes=num_recipes,
             pairing_metrics=pairing_metrics,
@@ -602,6 +658,7 @@ class BenchmarkRunner:
             total_token_usage=total_tokens,
             total_duration_seconds=round(total_elapsed, 2),
         )
+
 
     def run_sync(self) -> BenchmarkReport:
         """Synchronously executes the benchmark runner."""
@@ -683,6 +740,11 @@ def build_cli_parser() -> argparse.ArgumentParser:
         help="Output report format",
     )
     parser.add_argument(
+        "--no-obfuscate",
+        action="store_true",
+        help="Disable filename and metadata obfuscation during evaluation",
+    )
+    parser.add_argument(
         "-v",
         "--verbose",
         action="store_true",
@@ -711,7 +773,9 @@ def main(argv: Optional[List[str]] = None) -> int:
         modality=args.modality,
         judge_enabled=not args.no_judge,
         mock_judge=use_mock_judge,
+        obfuscate_filenames=not args.no_obfuscate,
     )
+
 
     try:
         report = runner.run_sync()

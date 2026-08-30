@@ -193,6 +193,13 @@ evals/reports/*
 *.db-shm
 *.sqlite3-wal
 *.sqlite3-shm
+*.recipeboxer
+scratch/
+*.tmp
+*.bak
+*.swp
+*~
+
 
 # Node / Frontend build artifacts & caches
 node_modules/

@@ -77,7 +77,7 @@ Transcribe this recipe clipping with strict focus on multi-column layout order a
 
 2. TITLE INFERENCE & GUESSING:
 - If the clipping has a clearly stated title, extract it cleanly without modification.
-- If the clipping has NO stated title, or if the header is cut off/missing: infer the most descriptive title from ingredients/context and ALWAYS append the suffix ' [GUESS]' (e.g. 'Quick Drop Biscuits [GUESS]') to flag for verification.
+- If the clipping has NO stated title, or if the header is cut off/missing: infer the most descriptive title from ingredients/context and ALWAYS append the suffix ' [GUESS]' (e.g. 'Savory Herb Frittata [GUESS]') to flag for verification.
 
 3. ANECDOTE, STORY & METADATA PRESERVATION:
 - Extract introductory culinary headnotes, promotional background anecdotes, and occasion notes into 'description'.
@@ -86,7 +86,7 @@ Transcribe this recipe clipping with strict focus on multi-column layout order a
 
 4. ADVERTISEMENT & COUPON EXCLUSION:
 - STRICTLY EXCLUDE: 'Clip and save', coupon offers, expiration dates, box top redemption addresses, magazine page numbers, publication dates, and unrelated ad sidebars.
-- Retain culinary product brand names (e.g. 'Crisco', 'Borden\\'s Eagle Brand') in title and source attribution notes.
+- Retain culinary product brand names (e.g. 'Sunburst Provisions', 'ValleyBrook Extracts') in title and source attribution notes.
 
 5. STRUCTURED OUTPUT:
 - Separate distinct ingredients into clean strings with quantities and units.

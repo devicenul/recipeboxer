@@ -1,61 +1,74 @@
-# Project: RecipeBoxer Corpus Expansion & Frontend Defect Resolution
+# Project: RecipeBoxer Integration Findings Resolution
 
 ## Architecture
-RecipeBoxer is an archival culinary document processing pipeline combining computer vision, physical substrate heuristics, multimodal semantic extraction, and a React frontend for ingestion, human-in-the-loop review, recipe editing, and multi-format export.
-
-- **Frontend Subsystem (`frontend/src/`)**: React 18 + TypeScript + Vite + Tailwind CSS + Lucide Icons. Manages application state, tabs (`ingest`, `hitl`, `recipes`, `export`), SSE connection (`useSSE`), and recipe review/editing.
-- **Corpus & Generator Subsystem (`recipeboxer/tools/`, `tests/fixtures/sample_cards/`)**: PIL-based high-resolution archival document synthesizer generating realistic recipe cards across 6 historical modalities with textures, aging, stamps, clippings, and ink physics. Ground truth stored in `manifest.json` and documented in `README.md`.
-- **Backend Correlation & Heuristics Subsystem (`recipeboxer/engine/`, `recipeboxer/heuristics/`)**: Substrate colorimetry (CIE L*a*b*), ruling lines, ink analysis, bleed-through detection, continuation heuristics, and DAG sequence chaining (`PairingOptimizer`).
-- **Extraction & Export Subsystem (`recipeboxer/pipeline/`, `recipeboxer/export/`)**: Isolated recipe transcription, preservation of attribution and provenance (`source_notes`, `description`), and 8 export formats (PlanToEat, Paprika, Markdown, Cooklang, JSON-LD, GoogleDocs, PDF, Docx).
+RecipeBoxer is a multimodal recipe digitization system comprising:
+- **Frontend**: React + TypeScript + Vite + Tailwind CSS (`frontend/`)
+- **Backend Core**: Python package `recipeboxer` (correlation, segmentation, extraction, ingestion)
+- **Evaluation & Benchmarks**: `recipeboxer/evals/` and `evals/run_benchmarks.py`
+- **Fixtures Corpus**: `tests/fixtures/sample_cards/` (48 images, 24 ground-truth recipes across 6 historical dimensions)
 
 ## Feature Inventory
 | # | Feature | Description | Milestone | Source |
 |---|---------|-------------|-----------|--------|
-| 1 | Single-fire Pipeline Completion Tab Transition | Ensure `App.tsx` transitions to `recipes` tab strictly once upon entering `COMPLETED` state using `completedSessionsRef` execution tracker. | M1 | ORIGINAL_REQUEST R1.1, R1.2 |
-| 2 | Stable Tab Switching Post-Completion | Fix auto-reversion defect so switching to Export, Ingest, HITL, or dialogs remains on target view without resetting on SSE reconnects/heartbeats. | M1 | ORIGINAL_REQUEST R1.1, R1.3 |
-| 3 | Proceed to Export Navigation Stability | In Recipe Editor, clicking Next -> Proceed to Export stays on Export view and preserves editor state without snapping back to Recipe 1. | M1 | ORIGINAL_REQUEST R1.1, R1.3 |
-| 4 | Corpus Expansion: Vintage Handwritten Cursive (1940s–1970s) | Add 2 new recipes (4 high-res front/back card scans) with fountain pen / ballpoint ink dynamics and paper aging. | M2 | ORIGINAL_REQUEST R2.1 |
-| 5 | Corpus Expansion: Typewritten & Stamped (1950s–1970s) | Add 2 new recipes (4 high-res front/back card scans) with typewriter ribbon wear, character bounce, and vintage club date stamps. | M2 | ORIGINAL_REQUEST R2.2 |
-| 6 | Corpus Expansion: Magazine Clippings & Package Labels (1960s–1980s) | Add 2 new recipes (4 high-res front/back card scans) with multi-column newsprint cutouts, glue boundaries, and tape residue. | M2 | ORIGINAL_REQUEST R2.3 |
-| 7 | Corpus Expansion: Stained / Damaged / Edge-Worn Substrates | Add 2 new recipes (4 high-res front/back card scans) with oil smudges, coffee rings, dog-ears, and torn edges. | M2 | ORIGINAL_REQUEST R2.4 |
-| 8 | Corpus Expansion: Multi-Card Narrative Sets | Add 2 new multi-card sets (one 3-card continuous sequence and one 4-card continuous sequence with explicit continuation cues; 7 cards total). | M2 | ORIGINAL_REQUEST R2.5 |
-| 9 | Corpus Expansion: Standalone Single-Sided Cards | Add 2 new single-sided standalone recipes (2 high-res card scans). | M2 | ORIGINAL_REQUEST R2.6 |
-| 10 | Card Generator Tool Update | Update `recipeboxer/tools/card_generator.py` with `ARCHIVAL_RECIPE_TEMPLATES` and deterministic generation logic for all 48 cards and manifest creation. | M2 | ORIGINAL_REQUEST R2 |
-| 11 | Ground Truth Manifest Synchronization | Update `tests/fixtures/sample_cards/manifest.json` with ground truth data, roles, SHA256 hashes, and provenance for all 48 cards across 24 recipes. | M2 | ORIGINAL_REQUEST R2, R3.1 |
-| 12 | Provenance & Licensing Documentation | Update `tests/fixtures/sample_cards/README.md` with complete provenance, public domain / CC0 licensing, and historical background for all 24 recipes. | M3 | ORIGINAL_REQUEST R3.2 |
-| 13 | Attribution Preservation & Display | Verify recipe attribution metadata (`source_notes`, `description`, dates, archive series) flows into frontend Recipe Editor and Export subsystems. | M3 | ORIGINAL_REQUEST R3.3 |
-| 14 | Generalization & Anti-Overfitting Verification | Ensure all heuristics evaluate physical document traits without hardcoded card ID bypasses; assert ground truth in tests while keeping production heuristics disciplined and well-calibrated. | M4 | ORIGINAL_REQUEST R4.1, Follow-up |
-| 15 | Multi-Card Sequence Chaining & Review Retention | Verify that 3-card and 4-card sets chain into sequence proposals, 0 cards are dropped from review queues, and strict content isolation is maintained. | M4 | ORIGINAL_REQUEST R4.2 |
-| 16 | Test Suite Regression & Count Updates | Update test assertions expecting 23 cards / 12 recipes to 48 cards / 24 recipes, ensuring 0 regressions across all existing tests. | M4 | ORIGINAL_REQUEST Verification |
-| 17 | Full End-to-End Suite Verification | Verify 100% pass across backend Pytest suite, frontend Vitest suite (`npm test -- --run`), and frontend production build (`npm run build`). | M5 | ORIGINAL_REQUEST Verification |
+| 1 | OS-Adaptive Path Detection & Placeholder | Ingestion path placeholder dynamically detects client OS (Windows, macOS, Linux) | M1 | ORIGINAL_REQUEST §R1 |
+| 2 | Model Prompt Filename Sanitization | Sanitize card filenames in multimodal prompts to prevent cheating on title/year/role | M2 | ORIGINAL_REQUEST §R2 |
+| 3 | Semantic Verifier Prompt Anonymization | Obfuscate card IDs in semantic continuity evaluation | M2 | ORIGINAL_REQUEST §R2 |
+| 4 | Offline Correlation Anti-Cheating | Remove filename substring/token matching from offline correlation fallbacks | M2 | ORIGINAL_REQUEST §R2 |
+| 5 | Modality Router Feature-Based Classification | Classify card modalities from visual/CV image features rather than filename substrings | M2 | ORIGINAL_REQUEST §R2 |
+| 6 | Obfuscation Ground-Truth Mapping | Bidirectional mapping between obfuscated IDs and original ground truth for scoring | M2 | ORIGINAL_REQUEST §R2 |
+| 7 | Authentic Historical Clipping Corpus | Public domain magazine ads, box recipes, can labels in sample_cards | M3 | ORIGINAL_REQUEST §R3 |
+| 8 | Clipping Manifest & Provenance Docs | Valid entries in manifest.json and historical CC0 provenance in README.md | M3 | ORIGINAL_REQUEST §R3 |
+| 9 | Corpus Validation in Benchmarks | Existing and new clipping fixtures verified in test_sample_card_corpus.py & evals | M3 | ORIGINAL_REQUEST §R3 |
+| 10 | Interactive GIS OAuth Popup (Docs Export) | google.accounts.oauth2.initTokenClient popup flow replacing manual token drawer | M1 | ORIGINAL_REQUEST §R4 |
+| 11 | Interactive GIS Authorization (Drive/Photos) | Connect account flow in SourceSelector & AlbumPickerModal with error handling | M1 | ORIGINAL_REQUEST §R4 |
+| 12 | GIS Token Client Mocking & Unit Tests | Comprehensive frontend test coverage for OAuth initialization, token grant, error | M1 | ORIGINAL_REQUEST §R4 |
+| 13 | Full E2E Test Suite & Adversarial Hardening | End-to-end integration and anti-cheating verification across all 4 tiers | M4 | ORIGINAL_REQUEST Acceptance Criteria |
 
 ## Milestones
 | # | Name | Scope | Dependencies | Status |
 |---|------|-------|-------------|--------|
-| M1 | Frontend Tab Navigation & Reversion Defect Fix | Fix `frontend/src/App.tsx` completion tracker ref, prevent SSE reconnect reversion, add vitest routing tests. | None | DONE |
-| M2 | Corpus Generator & Image Expansion (25 new cards / 12 new recipes across 6 dimensions) | Update `card_generator.py`, generate 25 new high-res cards (total 48 cards), update `manifest.json`. | None | DONE |
-| M3 | Attribution, Provenance & Metadata Subsystems | Update `README.md`, verify `source_notes` and provenance preservation across frontend/export. | M2 | DONE |
-| M4 | Generalization, Correlation Heuristics & Test Suite Updates | Verify physical traits heuristics, update test suite card count assertions, verify 3-card/4-card chaining. | M2 | DONE |
-| M5 | Full End-to-End Verification & Gate Hardening | Run complete backend pytest suite, frontend Vitest suite, and frontend build. | M1, M3, M4 | DONE |
-
-## Interface Contracts
-### Frontend `App.tsx` ↔ `useSSE.ts`
-- `App.tsx` tracks completed sessions via `completedSessionsRef = useRef<Set<string>>(new Set())`.
-- `handlePipelineCompleted(sessionId, status)` executes `setActiveTab('recipes')` and `fetchRecipes(...)` strictly once per unique completed session run.
-- Non-completed state events reset the session ID from `completedSessionsRef` to allow re-runs.
-
-### Card Generator ↔ `manifest.json` & Image Fixtures
-- Tool: `recipeboxer/tools/card_generator.py`
-- Output directory: `tests/fixtures/sample_cards/`
-- Manifest path: `tests/fixtures/sample_cards/manifest.json`
-- Each recipe entry defines: `recipe_id`, `title`, `dimension`, `provenance`, `source_notes`, `historical_date`, `archive_series`, `cards` array (with `filename`, `role`, `sha256`, `dimensions`), `ground_truth` (`ingredients`, `steps`, `servings`, `prep_time`, `cook_time`).
-
-### Heuristics ↔ Test Assertions
-- Ground truth test cases explicitly test expected matching from `manifest.json`.
-- Production heuristics in `recipeboxer/heuristics/` operate on extracted visual/textual features (CIE L*a*b* ΔE ≤ 5.0, ruling pitch, ink classification, continuation headers, sequence cues) without hardcoded card ID bypasses.
+| M1 | Frontend: OS-Adaptive Path & GIS OAuth Flow | frontend UI, utils (platform, googleAuth), components, tests | none | DONE |
+| M2 | Backend: Evaluation Filename Obfuscation | recipeboxer/evals/runner.py, obfuscation.py, models & evals tests | none | DONE |
+| M3 | Corpus: Authentic Clipping Fixtures & Docs | tests/fixtures/sample_cards/ manifest.json, README.md, tests | none | DONE |
+| M4 | Final E2E Suite & Regression | Frontend build/tests, backend pytest, benchmark evaluations, forensic audit | M1, M2, M3 | DONE |
 
 ## Code Layout
-- Frontend: `frontend/src/App.tsx`, `frontend/src/components/`, `frontend/tests/app_routing.test.tsx`
-- Generator Tool: `recipeboxer/tools/card_generator.py`
-- Test Fixtures: `tests/fixtures/sample_cards/*.png`, `tests/fixtures/sample_cards/manifest.json`, `tests/fixtures/sample_cards/README.md`
-- Backend Engine & Tests: `recipeboxer/engine/`, `recipeboxer/heuristics/`, `tests/test_sample_cards.py`, `tests/test_pipeline.py`, `tests/test_heuristics.py`, `tests/test_exporter.py`
+- `frontend/src/utils/platform.ts`: OS detection helper (`detectClientPlatform`, `getOsPathPlaceholder`)
+- `frontend/src/utils/googleAuth.ts`: GIS token client helper (`requestGoogleAccessToken`, `hasValidToken`)
+- `frontend/src/components/ingestion/SourceSelector.tsx`: Ingestion source selection UI with OS placeholder & GIS triggers
+- `frontend/src/components/ingestion/AlbumPickerModal.tsx`: Container/album selector with in-modal GIS sign-in
+- `frontend/src/components/export/GoogleDocsPreview.tsx`: Google Docs export preview with 1-click GIS auth
+- `recipeboxer/evals/obfuscation.py`: Filename/metadata obfuscation and ground-truth mapping engine
+- `recipeboxer/evals/runner.py`: Evaluation benchmark runner applying obfuscation layer
+- `recipeboxer/evals/dataset.py`: Benchmark dataset loader supporting opaque card IDs
+- `recipeboxer/ai/gemini.py` / `prompt_router.py`: Sanitized prompt generation and CV feature routing
+- `tests/fixtures/sample_cards/`: Authentic historical clipping card images, `manifest.json`, `README.md`
+- `tests/test_eval_obfuscation.py`: Anti-cheating verification test suite
+
+## Interface Contracts
+### `frontend/src/utils/platform.ts`
+```typescript
+export type ClientPlatform = 'windows' | 'macos' | 'linux';
+export function detectClientPlatform(nav?: Navigator): ClientPlatform;
+export function getOsPathPlaceholder(platform?: ClientPlatform): string;
+```
+
+### `frontend/src/utils/googleAuth.ts`
+```typescript
+export interface GoogleAuthOptions {
+  clientId?: string;
+  scope: string;
+  prompt?: string;
+}
+export function requestGoogleAccessToken(options: GoogleAuthOptions): Promise<string>;
+```
+
+### `recipeboxer/evals/obfuscation.py`
+```python
+class ObfuscatedCardCorpus:
+    def __init__(self, original_scan_dir: Path, target_dir: Optional[Path] = None): ...
+    def obfuscate_id(self, original_id: str) -> str: ...
+    def resolve_id(self, obfuscated_id: str) -> str: ...
+    def get_obfuscated_path(self, original_id: str) -> Path: ...
+    def map_proposals_to_ground_truth(self, proposals: List[PairingProposal]) -> List[PairingProposal]: ...
+```

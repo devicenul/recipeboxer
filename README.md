@@ -41,7 +41,7 @@ For in-depth architectural specifications, non-negotiable invariants, testing gu
 - [**`_agents/INVARIANTS.md`**](_agents/INVARIANTS.md): Non-negotiable architectural guardrails (SQLite WAL concurrency, Plan To Eat RFC 4180 CSV escaping, HITL async barrier semantics, Vite SPA static bundle contracts).
 - [**`_agents/TESTING_GUIDELINES.md`**](_agents/TESTING_GUIDELINES.md): Testing philosophy, 4-tier test pyramid, pytest & Vitest testing guides, fixtures, and regression checklists.
 - [**`_agents/EXTENDING_RECIPEBOXER.md`**](_agents/EXTENDING_RECIPEBOXER.md): Step-by-step developer extension guides with code examples for adding source providers, custom prompt branches, and export format serializers.
-- [**`ROADMAP.md`**](ROADMAP.md): Canonical project roadmap tracking completed milestones M1–M6 and future backlog items.
+- [**`ROADMAP.md`**](ROADMAP.md): Canonical project roadmap tracking completed milestones M1–M15 and prioritized future backlog items (Phase 9).
 - [**`SCRIPTS.md`**](SCRIPTS.md): Comprehensive script usage and troubleshooting guide for all POSIX and Windows scripts.
 
 ---

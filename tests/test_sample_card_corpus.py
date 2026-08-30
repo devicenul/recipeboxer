@@ -611,5 +611,61 @@ def test_multi_card_expanded_sequences_continuity(sample_card_corpus: SampleCard
     assert all(c.role == CardRole.SEQUENCE_CONTINUATION for c in panettone_cards[1:])
 
 
+def test_historical_clipping_specimens_provenance_and_traits(sample_card_corpus: SampleCardCorpus):
+    """Verify authentic historical clipping specimens (magazine, packaging box, can label) have complete metadata, dimensions, and traits."""
+    clipping_cards = sample_card_corpus.filter_by_modality(CardModality.PRINTED_CLIPPING)
+    assert len(clipping_cards) == 7, f"Expected 7 clipping cards, found {len(clipping_cards)}"
+
+    # 1. Specimen coverage checks:
+    # a. Vintage Magazine Advertisements/Clippings
+    magazine_ad_recipes = ["rec_clp_crisco_fried_chicken", "rec_clp_green_bean_casserole_1968"]
+    for rid in magazine_ad_recipes:
+        cluster = sample_card_corpus.get_recipe_cluster(rid)
+        assert len(cluster) == 2, f"Expected 2-card front/back pair for {rid}"
+        assert cluster[0].role == CardRole.SEQUENCE_START
+        assert cluster[1].role == CardRole.SEQUENCE_CONTINUATION
+
+    # b. Food Product Box Packaging
+    box_recipe_id = "rec_clp_toll_house_cookies_1975"
+    box_cluster = sample_card_corpus.get_recipe_cluster(box_recipe_id)
+    assert len(box_cluster) == 2
+    assert box_cluster[0].role == CardRole.SEQUENCE_START
+    assert box_cluster[1].role == CardRole.SEQUENCE_CONTINUATION
+
+    # c. Canned Goods Labels
+    can_label_id = "rec_clp_condensed_milk_pie_1962"
+    can_cluster = sample_card_corpus.get_recipe_cluster(can_label_id)
+    assert len(can_cluster) == 1
+    assert can_cluster[0].role == CardRole.STANDALONE
+
+    # 2. Detailed physical dimensions and traits validation across all clipping cards
+    for card in clipping_cards:
+        phys = card.physical_characteristics
+        assert "dimensions" in phys, f"Dimensions missing for {card.filename}"
+        dims = phys["dimensions"]
+        assert dims.get("width_mm") is not None and dims["width_mm"] > 0
+        assert dims.get("height_mm") is not None and dims["height_mm"] > 0
+        assert dims.get("aspect_ratio") is not None and dims["aspect_ratio"] > 0
+        assert dims.get("width_px") is not None and dims["width_px"] >= 400
+        assert dims.get("height_px") is not None and dims["height_px"] >= 300
+
+        # Physical traits
+        assert phys.get("paper_type"), f"Missing paper_type for {card.filename}"
+        assert phys.get("typography") or phys.get("font"), f"Missing typography/font for {card.filename}"
+        assert phys.get("condition"), f"Missing condition for {card.filename}"
+        assert phys.get("stains_creases") or len(phys.get("artifacts", [])) > 0, f"Missing stains/creases for {card.filename}"
+
+        # Ground truth recipe definitions
+        rec = card.ground_truth_recipe
+        assert rec.title and rec.title.strip() != "", f"Empty title in recipe for {card.filename}"
+        assert len(rec.ingredients) >= 3, f"Too few ingredients for {card.filename}"
+        assert len(rec.directions) >= 2, f"Too few directions for {card.filename}"
+        assert rec.yield_servings and rec.yield_servings.strip() != "", f"Missing yield for {card.filename}"
+        assert rec.prep_time and rec.prep_time.strip() != "", f"Missing prep_time for {card.filename}"
+        assert rec.cook_time is not None, f"Missing cook_time for {card.filename}"
+        assert rec.total_time and rec.total_time.strip() != "", f"Missing total_time for {card.filename}"
+
+
+
 
 

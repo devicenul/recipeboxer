@@ -62,7 +62,23 @@ class CardModality(str, Enum):
     HANDWRITTEN_CURSIVE = "HANDWRITTEN_CURSIVE"
     TYPEWRITTEN = "TYPEWRITTEN"
     PRINTED_CLIPPING = "PRINTED_CLIPPING"
+    PRINTED_CLIPPING_OR_LABEL = "PRINTED_CLIPPING_OR_LABEL"
     MIXED_MEDIA = "MIXED_MEDIA"
+
+    @classmethod
+    def normalize(cls, val: Any) -> CardModality:
+        """Normalizes string or enum value to canonical CardModality."""
+        if isinstance(val, CardModality):
+            return val
+        s = str(getattr(val, "value", val)).strip().upper()
+        if s in ("PRINTED_CLIPPING_OR_LABEL", "PRINTED_CLIPPING", "CLIPPING", "NEWSPRINT"):
+            return cls.PRINTED_CLIPPING_OR_LABEL
+        if s in ("TYPEWRITTEN", "TYPEWRITER", "TYPED"):
+            return cls.TYPEWRITTEN
+        if s in ("MIXED_MEDIA", "MIXED", "DAMAGED", "STAINED"):
+            return cls.MIXED_MEDIA
+        return cls.HANDWRITTEN_CURSIVE
+
 
 
 class DegradationLevel(str, Enum):

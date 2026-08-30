@@ -1,10 +1,19 @@
 import React, { useEffect, useState } from 'react';
-import { Search, Folder, Image as ImageIcon, Check, RefreshCw, AlertCircle } from 'lucide-react';
+import {
+  Search,
+  Folder,
+  Check,
+  RefreshCw,
+  AlertCircle,
+  LogIn,
+  Loader2,
+} from 'lucide-react';
 import { Modal } from '../common/Modal';
 import { Button } from '../common/Button';
 import { Badge } from '../common/Badge';
 import { SourceContainer } from '../../types/sources';
 import { api } from '../../utils/api';
+import { requestGoogleAccessToken, GOOGLE_SCOPES } from '../../utils/googleAuth';
 
 export interface AlbumPickerModalProps {
   isOpen: boolean;
@@ -25,6 +34,8 @@ export const AlbumPickerModal: React.FC<AlbumPickerModalProps> = ({
 }) => {
   const [containers, setContainers] = useState<SourceContainer[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
+  const [isAuthenticating, setIsAuthenticating] = useState<boolean>(false);
+  const [isAuthRequired, setIsAuthRequired] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [activeSelection, setActiveSelection] = useState<SourceContainer | null>(null);
@@ -36,20 +47,55 @@ export const AlbumPickerModal: React.FC<AlbumPickerModalProps> = ({
     try {
       const res = await api.listSourceContainers(providerId, { pageSize: 50 });
       setContainers(res.containers || []);
+      setIsAuthRequired(false);
       if (selectedContainerId) {
         const found = res.containers?.find((c) => c.id === selectedContainerId);
         if (found) setActiveSelection(found);
       }
     } catch (err: any) {
-      setError(err.message || `Failed to fetch containers from ${providerName}`);
+      const msg = err.message || `Failed to fetch containers from ${providerName}`;
+      setError(msg);
+      if (
+        (providerId === 'google_photos' || providerId === 'google_drive') &&
+        (msg.includes('401') ||
+          msg.toLowerCase().includes('unauthorized') ||
+          msg.toLowerCase().includes('auth') ||
+          msg.toLowerCase().includes('credential'))
+      ) {
+        setIsAuthRequired(true);
+      }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    setIsAuthenticating(true);
+    setError(null);
+    try {
+      const scope =
+        providerId === 'google_photos'
+          ? GOOGLE_SCOPES.PHOTOS_INGEST
+          : GOOGLE_SCOPES.DRIVE_INGEST;
+      const token = await requestGoogleAccessToken({ scope });
+      await api.connectSourceProvider(providerId, {
+        provider_id: providerId,
+        auth_token: token,
+      });
+      setIsAuthRequired(false);
+      await fetchContainers();
+    } catch (err: any) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setError(`Google authorization failed: ${msg}`);
+    } finally {
+      setIsAuthenticating(false);
     }
   };
 
   useEffect(() => {
     if (isOpen) {
       setActiveSelection(null);
+      setIsAuthRequired(false);
       fetchContainers();
       setSearchQuery('');
     }
@@ -66,6 +112,8 @@ export const AlbumPickerModal: React.FC<AlbumPickerModalProps> = ({
     }
   };
 
+  const isGoogleProvider = providerId === 'google_photos' || providerId === 'google_drive';
+
   return (
     <Modal
       isOpen={isOpen}
@@ -79,7 +127,7 @@ export const AlbumPickerModal: React.FC<AlbumPickerModalProps> = ({
           </Button>
           <Button
             variant="primary"
-            disabled={!activeSelection || loading}
+            disabled={!activeSelection || loading || isAuthenticating}
             onClick={handleConfirm}
             leftIcon={<Check className="w-4 h-4" />}
           >
@@ -101,6 +149,18 @@ export const AlbumPickerModal: React.FC<AlbumPickerModalProps> = ({
               className="w-full pl-9 pr-4 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
+          {isGoogleProvider && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleGoogleSignIn}
+              isLoading={isAuthenticating}
+              leftIcon={<LogIn className="w-4 h-4" />}
+              title="Connect / re-authenticate Google account"
+            >
+              Sign in with Google
+            </Button>
+          )}
           <Button
             variant="secondary"
             size="sm"
@@ -112,11 +172,52 @@ export const AlbumPickerModal: React.FC<AlbumPickerModalProps> = ({
           </Button>
         </div>
 
-        {/* Error Alert */}
+        {/* Error Alert / Interactive Reconnect Prompt */}
         {error && (
-          <div className="flex items-center gap-2 p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 rounded-lg text-xs text-rose-700 dark:text-rose-300">
-            <AlertCircle className="w-4 h-4 shrink-0" />
-            <span>{error}</span>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3.5 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 rounded-xl text-xs text-rose-800 dark:text-rose-200">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0 text-rose-600 dark:text-rose-400" />
+              <span>{error}</span>
+            </div>
+            {isGoogleProvider && (
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={handleGoogleSignIn}
+                isLoading={isAuthenticating}
+                leftIcon={<LogIn className="w-3.5 h-3.5" />}
+                className="shrink-0"
+              >
+                Sign in with Google
+              </Button>
+            )}
+          </div>
+        )}
+
+        {/* Unauthenticated Empty State Prompt */}
+        {isAuthRequired && containers.length === 0 && !loading && (
+          <div className="py-10 flex flex-col items-center justify-center gap-3 text-center p-6 border border-dashed border-slate-300 dark:border-slate-700 rounded-xl bg-slate-50/50 dark:bg-slate-900/50">
+            <LogIn className="w-10 h-10 text-blue-600 dark:text-blue-400 opacity-80" />
+            <h4 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+              Authorization Required
+            </h4>
+            <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm">
+              Please sign in with Google to grant RecipeBoxer permission to browse your {providerName} library.
+            </p>
+            <Button
+              variant="primary"
+              onClick={handleGoogleSignIn}
+              isLoading={isAuthenticating}
+              leftIcon={
+                isAuthenticating ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <LogIn className="w-4 h-4" />
+                )
+              }
+            >
+              Sign in with Google
+            </Button>
           </div>
         )}
 
@@ -126,7 +227,7 @@ export const AlbumPickerModal: React.FC<AlbumPickerModalProps> = ({
             <RefreshCw className="w-6 h-6 animate-spin text-blue-600" />
             <p className="text-sm">Loading containers from {providerName}...</p>
           </div>
-        ) : filteredContainers.length === 0 ? (
+        ) : filteredContainers.length === 0 && !isAuthRequired ? (
           <div className="py-12 text-center text-slate-500 dark:text-slate-400">
             <Folder className="w-10 h-10 mx-auto mb-2 opacity-40" />
             <p className="text-sm font-medium">No albums or folders found</p>

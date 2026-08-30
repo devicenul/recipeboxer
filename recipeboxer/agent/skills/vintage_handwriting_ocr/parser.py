@@ -136,10 +136,10 @@ Transcribe this recipe card with deep attention to historical handwriting nuance
 
 2. TITLE INFERENCE & GUESSING:
 - If the card has a clearly stated title, extract it cleanly without modification.
-- If the recipe has NO stated title, or if the title is missing, torn, illegible, or inferred from ingredients/context: infer the most descriptive title (e.g. 'Old-Fashioned Apple Crisp') and ALWAYS append the suffix ' [GUESS]' (e.g. 'Old-Fashioned Apple Crisp [GUESS]') to clearly flag it for user verification.
+- If the recipe has NO stated title, or if the title is missing, torn, illegible, or inferred from ingredients/context: infer the most descriptive title (e.g. 'Rustic Peach Cobbler') and ALWAYS append the suffix ' [GUESS]' (e.g. 'Rustic Peach Cobbler [GUESS]') to clearly flag it for user verification.
 
 3. ANECDOTE, STORY & METADATA PRESERVATION:
-- Extract family stories, personal memories, handwritten marginalia (e.g., 'Aunt Clara\\'s wedding cake 1942', 'Good for Sunday suppers'), vintage dates, and occasion notes into the 'description' field.
+- Extract family stories, personal memories, handwritten marginalia (e.g., 'Cousin Maeve\\'s birthday gathering 1931', 'Great for parish picnics'), vintage dates, and occasion notes into the 'description' field.
 - Extract author attribution, vintage dates, handwritten signatures, and heirloom provenance into 'source_notes'.
 - STRICT ISOLATION: NEVER place family stories, personal anecdotes, or marginalia into the 'ingredients' list or 'directions' steps — keep ingredients and directions strictly confined to culinary measurements, ingredients, and sequential preparation/cooking steps.
 

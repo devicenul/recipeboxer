@@ -221,7 +221,7 @@ describe('R5: Multi-Format Recipe Export Subsystem', () => {
   });
 
   describe('Google Docs Direct Publishing & OAuth Flow', () => {
-    it('handles direct doc creation with token and displays success link', async () => {
+    it('handles 1-click interactive GIS OAuth authorization and displays success link', async () => {
       // Mock global fetch for create-document
       const originalFetch = global.fetch;
       global.fetch = vi.fn().mockImplementation((url, init) => {
@@ -249,15 +249,9 @@ describe('R5: Multi-Format Recipe Export Subsystem', () => {
 
       expect(screen.getByText(/Direct Google Docs & Drive API Publishing/i)).toBeInTheDocument();
 
-      // Open token drawer
-      const tokenBtn = screen.getByRole('button', { name: /Token/i });
-      fireEvent.click(tokenBtn);
-
-      const tokenInput = screen.getByPlaceholderText(/ya29\./i);
-      fireEvent.change(tokenInput, { target: { value: 'ya29.a0Ac_test_token' } });
-
-      const createDocBtn = screen.getByRole('button', { name: /Create Doc/i });
-      fireEvent.click(createDocBtn);
+      // Click 1-click GIS OAuth export button
+      const exportBtn = screen.getByRole('button', { name: /Export directly to Google Docs/i });
+      fireEvent.click(exportBtn);
 
       // Wait for success alert and open link
       const successLink = await screen.findByRole('link', { name: /Open in Google Docs/i });

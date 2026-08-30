@@ -32,6 +32,7 @@ All roadmap items and milestones use standardized status tags:
 | **M12** | **Cloud & External Source Providers** | Unified `BaseSourceProvider` abstraction, Google Photos Library API connector with OAuth2 auto-refresh & album filtering, Google Drive folder selector, S3/GCS bucket connectors, REST source management endpoints, and React album picker UI. | `[x] Completed` |
 | **M13** | **Interactive UI Guided Tour, User Guide & MVP Packaging** | Accessible 6-step interactive onboarding tutorial overlay (`frontend/src/components/tutorial/`), complete multi-platform documentation and architecture walkthrough (`README.md`), CLI option verification (`--concurrency`), and standalone PyInstaller packaging verification. | `[x] Completed` |
 | **M14** | **Open-Ended N-Part Sequence Correlation & Model Modernization** | Clean-break deprecation of `front_card_id`/`back_card_id` across models and schemas; directed transition graph and DAG maximal path chaining ($N \ge 1$); dynamic SQLite `session_proposals` sequence migration; unified "Part 1 of N" HITL UI with drag-and-drop reordering, split, and merge; sequence-preserving multimodal extraction and 9 exporters; 1,660 passing tests. | `[x] Completed` |
+| **M15** | **Integration Findings Resolution & Eval Anti-Cheating Hardening** | Dynamic OS-adaptive folder import path placeholders (`C:\...`, `/Users/...`, `/home/...`), evaluation filename and metadata obfuscation/sanitization (`obfuscation.py`, `runner.py`) preventing LLM cheating, authentic public domain magazine/box/can label clippings added to corpus, and interactive Google Identity Services (GIS) OAuth popup authorization for Docs export and Drive/Photos ingestion; 1,592 pytest + 290 vitest tests passing. | `[x] Completed` |
 
 ---
 
@@ -57,6 +58,12 @@ All roadmap items and milestones use standardized status tags:
        │
        ▼
 [x] Phase 7: Open-Ended N-Part Sequence Correlation & Model Modernization
+       │
+       ▼
+[x] Phase 8: Integration Findings Resolution & Anti-Cheating Eval Hardening
+       │
+       ▼
+[ ] Phase 9: Multi-Session Project Persistence & Export Curation
 ```
 
 ---
@@ -188,6 +195,55 @@ All roadmap items and milestones use standardized status tags:
   - Multimodal transcription and all 9 recipe export formats preserve ordered card sequences.
 - [x] **Full Platform Test Suite Expansion**:
   - Expanded test suite to **1,660 passing tests** (1,442 backend pytest + 218 frontend Vitest across 20 suites) with 100% pass rate.
+
+---
+
+### Phase 8: Integration Findings Resolution & Anti-Cheating Eval Hardening
+*Production refinement & eval rigor: Resolve cross-platform runtime discrepancies, eliminate model evaluation cheating, curate authentic physical clippings, and implement 1-click interactive Google OAuth.*
+
+- [x] **OS-Adaptive Ingestion Path Placeholders (`frontend/src/utils/platform.ts`, `SourceSelector.tsx`)**:
+  - Dynamically detect host runtime environment (`navigator.userAgentData.platform` with fallback to `navigator.platform` / `userAgent`).
+  - Render native path semantics: Windows (`C:\Users\username\Documents\RecipeScans`), macOS (`/Users/username/Documents/RecipeScans`), and Linux/default (`/home/username/recipes`).
+- [x] **Evaluation Filename Obfuscation & Anti-Cheating Pipeline (`recipeboxer/evals/obfuscation.py`)**:
+  - Built `ObfuscatedCardCorpus` with deterministic SHA-256 and UUIDv4 identifier masking (`card_a7b8c9d0.jpg`), preventing models from using filenames, roles (`front`/`back`), dates, or recipe titles as evaluation shortcuts.
+  - Image EXIF metadata stripping (`sanitize_image_exif`) saving clean pixel buffers.
+  - Multimodal prompt sanitization in `recipeboxer/ai/gemini.py` stripping lexical ground truth clues.
+  - Bidirectional ground truth mapping preserving precision/recall/F1 scoring in `evals/run_benchmarks.py`.
+- [x] **Authentic Physical Clipping Fixtures (`tests/fixtures/sample_cards/`, `manifest.json`)**:
+  - Sourced and curated authentic public domain / CC0 historical specimens: magazine advertisements (Crisco Fried Chicken, Campbell's 1968 Green Bean Casserole), food packaging box cutouts (1975 Toll House Cookies), and canned goods labels (1962 Borden's Eagle Brand Pie).
+  - Registered ground truth physical dimensions, paper tones, printing methods, and full recipe metadata in `manifest.json`.
+  - Documented archive provenance (Library of Congress, Internet Archive, MSU Feeding America) in `tests/fixtures/sample_cards/README.md`.
+- [x] **Interactive Google Identity Services (GIS) OAuth Popup Flow (`frontend/src/utils/googleAuth.ts`)**:
+  - Wrapped `google.accounts.oauth2.initTokenClient` with `VITE_GOOGLE_CLIENT_ID` for Docs, Drive, and Photos scopes.
+  - Removed manual token input drawer in `GoogleDocsPreview.tsx`; replaced with 1-click "Export directly to Google Docs" GIS popup authorization.
+  - Added interactive "Connect Account" / "Sign in with Google" flows in `SourceSelector.tsx` and `AlbumPickerModal.tsx` for Google Drive and Google Photos ingestion with automatic token expiration and 401 re-auth handling.
+
+---
+
+### Phase 9: Multi-Session Project Persistence & Export Curation
+*Workflow continuity & publication polish: Enable iterative multi-session project building via `.recipeboxer` archives with incremental duplicate-skipping ingestion, and add configurable recipe re-ordering and categorised grouping for cookbook exports.*
+
+- [ ] **Portable Project State Persistence (`.recipeboxer` Project Archive)**:
+  - **Standardized Archive Format**: Define a portable, compressed `.recipeboxer` project archive (containing JSON metadata manifest + original high-resolution card scans with content-addressed SHA-256 digests).
+  - **Full State Retention**: Preserve matched card sequences, visual fingerprints, transcribed recipe schemas, human-in-the-loop review approvals, marginalia notes, and image-to-step bindings.
+  - **Export-Stage Project Save & Merge**:
+    - Allow users on the Export view to "Save Project As..." (`<name>.recipeboxer`) to store their work for future sessions.
+    - Enable "Merge into Existing Project..." to append current session recipes into an existing `.recipeboxer` archive, resolving duplicates and updating the combined collection before saving or exporting.
+- [ ] **Incremental Ingestion with Duplicate-Skipping**:
+  - **Project-Aware Ingestion**: Allow users at the Ingest stage to select an existing `.recipeboxer` file as a baseline when pointing to a local directory or cloud album.
+  - **Intelligent SHA-256 Skip**: Compute fast image hashes during directory/album scanning and compare against the project archive's registered cards; automatically skip previously processed scans.
+  - **Targeted Incremental Processing**: Only run OCR, fingerprinting, and correlation on newly detected scans, dramatically saving API tokens and processing time.
+  - **Automated Export Consolidation**: Seamlessly combine existing archive recipes with newly extracted recipes in the HITL and Export stages for consolidated editing and export.
+- [ ] **Configurable Multi-Format Recipe Ordering & Grouping (DOCX, PDF, Google Docs)**:
+  - **Interactive Reordering UI in Export Dialog**:
+    - Visual drag-and-drop list allowing manual reordering of recipes prior to export.
+  - **Categorical & Metadata Grouping Presets**:
+    - **By Culinary Category / Course**: Breakfast, Appetizers & Snacks, Drinks & Beverages, Main Courses, Side Dishes, Desserts, Baked Goods, Preserves.
+    - **By Attribution / Contributor**: Family member, heirloom tin collection, historical contributor, vintage era/decade.
+    - **By Arbitrary Tags**: Dietary attributes (Gluten-Free, Vegetarian), occasion, custom tags.
+    - **Alphabetical Ordering**: A–Z or Z–A by recipe title.
+  - **Cookbook Layout & Section Formatting**:
+    - Automatically generate formatted section divider pages and styled Tables of Contents in DOCX, printable PDF, and Google Docs cookbook exports reflecting the user's chosen grouping.
 
 ---
 

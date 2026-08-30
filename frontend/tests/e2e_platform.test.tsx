@@ -101,7 +101,7 @@ describe('RecipeBoxer Frontend E2E Platform Suite (Tiers 1–4)', () => {
         />
       );
 
-      const input = screen.getByPlaceholderText(/\/path\/to\/recipe\/scans/i);
+      const input = screen.getByLabelText(/Local Scans Directory Path/i);
       expect(input).toBeInTheDocument();
       expect(input).toHaveValue('/Users/chef/heirloom_scans');
 
@@ -481,7 +481,7 @@ describe('RecipeBoxer Frontend E2E Platform Suite (Tiers 1–4)', () => {
       const onSessionStarted = vi.fn();
       render(<SessionLauncher onSessionStarted={onSessionStarted} />);
 
-      const folderInput = screen.getByPlaceholderText(/\/path\/to\/recipe\/scans/i);
+      const folderInput = screen.getByLabelText(/Local Scans Directory Path/i);
       fireEvent.change(folderInput, { target: { value: '/scans/holiday_batch' } });
 
       const launchBtn = screen.getByRole('button', { name: /Launch Digitization Pipeline/i });

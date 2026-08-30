@@ -145,6 +145,25 @@ class SampleCardCorpus:
             ):
                 self._cards_by_id[key_variant] = entry
 
+            if entry.sha256_hash:
+                clean_sha = entry.sha256_hash.lower().strip()
+                self._cards_by_id[clean_sha] = entry
+                self._cards_by_id[f"card_{clean_sha[:8]}"] = entry
+                self._cards_by_id[f"card_{clean_sha[:8]}.jpg"] = entry
+                self._cards_by_id[f"card_{clean_sha[:8]}.png"] = entry
+                self._cards_by_id[f"card_{clean_sha[:8]}.jpeg"] = entry
+
+            # Deterministic SHA256 of filename/card_id (as used by ObfuscatedCardCorpus)
+            for raw_n in (fname, cid, Path(fname).name, Path(cid).name):
+                h = hashlib.sha256(raw_n.encode("utf-8")).hexdigest()[:8].lower()
+                self._cards_by_id[f"card_{h}"] = entry
+                self._cards_by_id[f"card_{h}.jpg"] = entry
+                self._cards_by_id[f"card_{h}.png"] = entry
+                self._cards_by_id[f"card_{h}.jpeg"] = entry
+
+
+
+
             rec_id = entry.recipe_cluster.get("recipe_id", "")
             if rec_id:
                 if rec_id not in self._cards_by_recipe:
@@ -170,17 +189,23 @@ class SampleCardCorpus:
         return iter(self.cards)
 
     def get_by_id(self, card_id: str) -> Optional[CardEntry]:
-        """Retrieves card entry by unique card_id, filename, or stem (case and delimiter-insensitive)."""
+        """Retrieves card entry by unique card_id, filename, SHA-256, or stem (case and delimiter-insensitive)."""
         if not card_id:
             return None
+        from recipeboxer.evals.obfuscation import resolve_active_obfuscation_id
+        resolved_orig = resolve_active_obfuscation_id(card_id)
+        if resolved_orig and resolved_orig != str(card_id).strip() and resolved_orig in self._cards_by_id:
+            return self._cards_by_id[resolved_orig]
+
         card_str = str(card_id).strip()
         stem = Path(card_str).stem
+
         norm_underscore = card_str.lower().replace("-", "_").replace(" ", "_")
         norm_hyphen = card_str.lower().replace("_", "-").replace(" ", "-")
         stem_norm_underscore = stem.lower().replace("-", "_").replace(" ", "_")
         stem_norm_hyphen = stem.lower().replace("_", "-").replace(" ", "-")
 
-        return (
+        found = (
             self._cards_by_id.get(card_str)
             or self._cards_by_id.get(card_str.lower())
             or self._cards_by_id.get(norm_underscore)
@@ -198,6 +223,20 @@ class SampleCardCorpus:
             or self._cards_by_id.get(stem_norm_underscore)
             or self._cards_by_id.get(stem_norm_hyphen)
         )
+        if found:
+            return found
+
+        # If card_id is a file path that exists, resolve by SHA-256
+        try:
+            p = Path(card_str)
+            if p.exists() and p.is_file():
+                calc_sha = hashlib.sha256(p.read_bytes()).hexdigest().lower()
+                return self._cards_by_id.get(calc_sha)
+        except Exception:
+            pass
+
+        return None
+
 
     def filter_by_modality(self, modality: Union[str, CardModality]) -> List[CardEntry]:
         """Filters cards matching a specific modality (case and delimiter-insensitive)."""

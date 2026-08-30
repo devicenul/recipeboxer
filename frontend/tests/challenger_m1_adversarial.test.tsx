@@ -529,7 +529,7 @@ describe('Milestone 1 Empirical Challenger Adversarial Tests (Frontend)', () => 
 
       render(<SessionLauncher onSessionStarted={onStarted} />);
 
-      const pathInput = screen.getByPlaceholderText('/path/to/recipe/scans');
+      const pathInput = screen.getByLabelText(/Local Scans Directory Path/i);
       fireEvent.change(pathInput, { target: { value: '/scans/vintage_box' } });
 
       const tagInput = screen.getByPlaceholderText('+ Add tag (press Enter)');

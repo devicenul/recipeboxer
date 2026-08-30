@@ -4,11 +4,10 @@ import {
   Upload,
   Camera,
   Cloud,
-  HardDrive,
   CheckCircle2,
   AlertCircle,
   Folder,
-  Layers,
+  Loader2,
 } from 'lucide-react';
 import { Dropzone } from '../common/Dropzone';
 import { Button } from '../common/Button';
@@ -16,6 +15,8 @@ import { Badge } from '../common/Badge';
 import { SourceConnectionStatus, SourceContainer } from '../../types/sources';
 import { AlbumPickerModal } from './AlbumPickerModal';
 import { api } from '../../utils/api';
+import { getOsPathPlaceholder } from '../../utils/platform';
+import { requestGoogleAccessToken, GOOGLE_SCOPES } from '../../utils/googleAuth';
 
 export const isDirectoryPickerSupported = (): boolean =>
   typeof window !== 'undefined' && typeof (window as any).showDirectoryPicker === 'function';
@@ -63,6 +64,8 @@ export const SourceSelector: React.FC<SourceSelectorProps> = ({
 }) => {
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [providerStatuses, setProviderStatuses] = useState<Record<string, SourceConnectionStatus>>({});
+  const [isConnecting, setIsConnecting] = useState<'google_photos' | 'google_drive' | null>(null);
+  const [authError, setAuthError] = useState<string | null>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
 
   const handleBrowseDirectory = async () => {
@@ -151,6 +154,51 @@ export const SourceSelector: React.FC<SourceSelectorProps> = ({
     };
   }, []);
 
+  const handleConnectProvider = async (providerId: 'google_photos' | 'google_drive') => {
+    setIsConnecting(providerId);
+    setAuthError(null);
+    try {
+      const scope =
+        providerId === 'google_photos'
+          ? GOOGLE_SCOPES.PHOTOS_INGEST
+          : GOOGLE_SCOPES.DRIVE_INGEST;
+      const token = await requestGoogleAccessToken({ scope });
+      const updated = await api.connectSourceProvider(providerId, {
+        provider_id: providerId,
+        auth_token: token,
+      });
+      setProviderStatuses((prev) => ({
+        ...prev,
+        [providerId]: updated || {
+          provider_id: providerId,
+          name: providerId === 'google_photos' ? 'Google Photos' : 'Google Drive',
+          description: '',
+          connected: true,
+          auth_required: false,
+          authenticated: true,
+          message: 'Connected',
+          capabilities: prev[providerId]?.capabilities || {
+            supports_containers: true,
+            supports_search: true,
+            supports_thumbnails: true,
+            supports_pagination: true,
+            supports_streaming: true,
+            requires_auth: true,
+          },
+        },
+      }));
+    } catch (err: any) {
+      setAuthError(
+        err.message ||
+          `Failed to authenticate ${
+            providerId === 'google_photos' ? 'Google Photos' : 'Google Drive'
+          }`
+      );
+    } finally {
+      setIsConnecting(null);
+    }
+  };
+
   const activeProviderForModal =
     sourceType === 'google_photos'
       ? 'google_photos'
@@ -172,7 +220,6 @@ export const SourceSelector: React.FC<SourceSelectorProps> = ({
   const currentStatus = providerStatuses[sourceType];
   const isConnected = currentStatus ? currentStatus.connected : true;
   const authRequired = currentStatus ? currentStatus.auth_required : false;
-  const statusMessage = currentStatus ? currentStatus.message : 'Ready';
 
   return (
     <div className="flex flex-col gap-5">
@@ -280,13 +327,15 @@ export const SourceSelector: React.FC<SourceSelectorProps> = ({
 
           {localMethod === 'folder' ? (
             <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-5 shadow-xs flex flex-col gap-3">
-              <label className="text-sm font-semibold text-slate-800 dark:text-slate-200">
+              <label htmlFor="local-scans-path" className="text-sm font-semibold text-slate-800 dark:text-slate-200">
                 Local Scans Directory Path
               </label>
               <div className="flex gap-2">
                 <input
+                  id="local-scans-path"
+                  aria-label="Local Scans Directory Path"
                   type="text"
-                  placeholder="/path/to/recipe/scans"
+                  placeholder={getOsPathPlaceholder()}
                   value={folderPath}
                   onChange={(e) => onFolderPathChange(e.target.value)}
                   disabled={disabled}
@@ -338,18 +387,44 @@ export const SourceSelector: React.FC<SourceSelectorProps> = ({
                 Google Photos Library Connection
               </span>
             </div>
-            {authRequired && !isConnected ? (
-              <Badge variant="warning" size="sm">
-                <AlertCircle className="w-3.5 h-3.5 mr-1" />
-                Auth Required
-              </Badge>
-            ) : (
-              <Badge variant="success" size="sm">
-                <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
-                Ready
-              </Badge>
-            )}
+            <div className="flex items-center gap-2">
+              {isConnecting === 'google_photos' ? (
+                <Badge variant="neutral" size="sm">
+                  <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />
+                  Connecting...
+                </Badge>
+              ) : authRequired && !isConnected ? (
+                <div className="flex items-center gap-2">
+                  <Badge variant="warning" size="sm">
+                    <AlertCircle className="w-3.5 h-3.5 mr-1" />
+                    Auth Required
+                  </Badge>
+                  <Button
+                    type="button"
+                    variant="primary"
+                    size="sm"
+                    onClick={() => handleConnectProvider('google_photos')}
+                    disabled={disabled || isConnecting !== null}
+                    aria-label="Connect Google Photos"
+                  >
+                    Connect Account
+                  </Button>
+                </div>
+              ) : (
+                <Badge variant="success" size="sm">
+                  <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
+                  Ready
+                </Badge>
+              )}
+            </div>
           </div>
+
+          {authError && (
+            <div className="p-3 rounded-lg bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 flex items-center gap-2 text-xs text-rose-800 dark:text-rose-200">
+              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+              <span className="flex-1">{authError}</span>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {/* Category Filter */}
@@ -456,37 +531,85 @@ export const SourceSelector: React.FC<SourceSelectorProps> = ({
           </div>
 
           {sourceType === 'google_drive' && (
-            <div className="flex flex-col gap-3">
-              <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                Target Google Drive Folder
-              </label>
-              {selectedContainer ? (
-                <div className="flex items-center justify-between p-3 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 rounded-lg">
-                  <div className="flex items-center gap-2">
-                    <Folder className="w-4 h-4 text-blue-600" />
-                    <span className="text-sm font-medium text-blue-900 dark:text-blue-200">
-                      {selectedContainer.name}
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => onSelectContainer(null)}
-                    className="text-xs text-blue-600 hover:text-blue-800 font-semibold"
-                  >
-                    Change Folder
-                  </button>
+            <div className="flex flex-col gap-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Cloud className="w-5 h-5 text-blue-600" />
+                  <span className="font-semibold text-sm text-slate-900 dark:text-slate-100">
+                    Google Drive Connection
+                  </span>
                 </div>
-              ) : (
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => setIsModalOpen(true)}
-                  disabled={disabled}
-                  leftIcon={<Folder className="w-4 h-4" />}
-                >
-                  Browse &amp; Select Google Drive Folder...
-                </Button>
+                <div className="flex items-center gap-2">
+                  {isConnecting === 'google_drive' ? (
+                    <Badge variant="neutral" size="sm">
+                      <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />
+                      Connecting...
+                    </Badge>
+                  ) : authRequired && !isConnected ? (
+                    <div className="flex items-center gap-2">
+                      <Badge variant="warning" size="sm">
+                        <AlertCircle className="w-3.5 h-3.5 mr-1" />
+                        Auth Required
+                      </Badge>
+                      <Button
+                        type="button"
+                        variant="primary"
+                        size="sm"
+                        onClick={() => handleConnectProvider('google_drive')}
+                        disabled={disabled || isConnecting !== null}
+                        aria-label="Connect Google Drive"
+                      >
+                        Connect Account
+                      </Button>
+                    </div>
+                  ) : (
+                    <Badge variant="success" size="sm">
+                      <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
+                      Ready
+                    </Badge>
+                  )}
+                </div>
+              </div>
+
+              {authError && (
+                <div className="p-3 rounded-lg bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 flex items-center gap-2 text-xs text-rose-800 dark:text-rose-200">
+                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                  <span className="flex-1">{authError}</span>
+                </div>
               )}
+
+              <div className="flex flex-col gap-3">
+                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                  Target Google Drive Folder
+                </label>
+                {selectedContainer ? (
+                  <div className="flex items-center justify-between p-3 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 rounded-lg">
+                    <div className="flex items-center gap-2">
+                      <Folder className="w-4 h-4 text-blue-600" />
+                      <span className="text-sm font-medium text-blue-900 dark:text-blue-200">
+                        {selectedContainer.name}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => onSelectContainer(null)}
+                      className="text-xs text-blue-600 hover:text-blue-800 font-semibold"
+                    >
+                      Change Folder
+                    </button>
+                  </div>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => setIsModalOpen(true)}
+                    disabled={disabled}
+                    leftIcon={<Folder className="w-4 h-4" />}
+                  >
+                    Browse &amp; Select Google Drive Folder...
+                  </Button>
+                )}
+              </div>
             </div>
           )}
 

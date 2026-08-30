@@ -24,6 +24,8 @@ from recipeboxer.config import Settings, get_settings
 from recipeboxer.ingestion.scanner import ScannedCard
 from recipeboxer.models.domain import CardRole, VisualFingerprint
 from recipeboxer.models.recipe import RecipeSchema
+from recipeboxer.ai.gemini import sanitize_prompt_card_id
+
 
 logger = logging.getLogger(__name__)
 
@@ -32,10 +34,10 @@ You are transcribing physical recipe cards (which may include front side, revers
 
 TITLE INFERENCE & GUESSING:
 - If the card has a clearly stated title, extract it cleanly without modification.
-- If the recipe has NO explicitly stated title, or if the title is missing, torn, illegible, or inferred/guessed from ingredients or context: infer the most descriptive title (e.g. 'Old-Fashioned Apple Crisp') and ALWAYS append the suffix ' [GUESS]' (e.g. 'Old-Fashioned Apple Crisp [GUESS]') to clearly flag it for user verification.
+- If the recipe has NO explicitly stated title, or if the title is missing, torn, illegible, or inferred/guessed from ingredients or context: infer the most descriptive title (e.g. 'Rustic Peach Cobbler') and ALWAYS append the suffix ' [GUESS]' (e.g. 'Rustic Peach Cobbler [GUESS]') to clearly flag it for user verification.
 
 ANECDOTE, STORY & METADATA PRESERVATION:
-- Extract family stories, handwritten marginalia (e.g., 'Aunt Clara\\'s wedding cake 1942', 'Good for Sunday suppers'), vintage dates, occasion notes, and personal memories into the 'description' field.
+- Extract family stories, handwritten marginalia (e.g., 'Cousin Maeve\\'s birthday gathering 1931', 'Great for parish picnics'), vintage dates, occasion notes, and personal memories into the 'description' field.
 - Extract author attribution, vintage dates, handwritten signatures, and cookbook or card provenance into 'source_notes'.
 - STRICT ISOLATION: NEVER place family stories, personal anecdotes, handwritten marginalia, or attribution notes into the 'ingredients' list or 'directions' steps — keep ingredients and directions strictly confined to culinary measurements, ingredients, and sequential preparation/cooking steps.
 
@@ -49,7 +51,7 @@ Carefully extract and format the following fields:
 7. Ingredients: An array of ingredient strings. Each string must be a single ingredient with quantity, unit, ingredient name, and prep notes (e.g. '2 cups all-purpose flour', '1/3 cup unsalted butter, softened'). If sub-recipe headers exist, include them formatted cleanly (e.g. 'For the Frosting:'). Strip leading bullets, asterisks, or dashes. STRICTLY EXCLUDE personal stories, marginalia, and notes.
 8. Directions: An array of sequential preparation and cooking steps. Each step must be clearly articulated. Numbers like '1. ', '2. ' will be automatically standardized, but preserve the natural sequential ordering. STRICTLY EXCLUDE personal anecdotes and marginalia.
 9. Tags: Categorical tags (e.g. ['Dessert', 'Baking', 'Cookies', 'Vintage']).
-10. Source Notes: Attribution, card author, vintage dates, handwritten provenance, or cookbook reference (e.g. 'Grandma Rose (1958) Recipe Box').
+10. Source Notes: Attribution, card author, vintage dates, handwritten provenance, or cookbook reference (e.g. 'Great-Uncle Arthur (1931) Recipe Box').
 
 When multiple images are provided (Front, Back, Continuation cards):
 - Merge all sides seamlessly into a single complete recipe in sequential order without duplication.
@@ -530,20 +532,11 @@ class GeminiRecipeExtractor:
 
         first_id = resolved_cards[0][2] if resolved_cards else front_id
         first_bytes = resolved_cards[0][0] if resolved_cards else front_bytes
+        first_path = resolved_cards[0][1] if resolved_cards else None
 
         if self.adaptive_thinking:
             try:
-                mod_input: Any = (
-                    first_id
-                    if (
-                        first_id
-                        and any(
-                            k in first_id.lower()
-                            for k in ("_vhc_", "_mcs_", "_sta_", "_typ_", "_clp_", "_dmg_")
-                        )
-                    )
-                    else first_bytes
-                )
+                mod_input: Any = first_bytes or first_path or first_id
                 mod_res = classify_card_modality(mod_input)
                 routed = route_prompt_for_modality(mod_res.modality)
                 system_instruction = routed.system_instruction
@@ -577,7 +570,8 @@ class GeminiRecipeExtractor:
                             "data": b64_c,
                         }
                     })
-                parts.append({"text": f"Image {idx + 1}: {role_label}: {c_id or f'card_{idx + 1}'}"})
+                sanitized_cid = sanitize_prompt_card_id(c_id, f"card_{idx + 1}")
+                parts.append({"text": f"Image {idx + 1}: {role_label}: {sanitized_cid}"})
         elif len(resolved_cards) == 2:
             # Front card
             c1_bytes, _, c1_id = resolved_cards[0]
@@ -589,7 +583,8 @@ class GeminiRecipeExtractor:
                         "data": b64_front,
                     }
                 })
-            parts.append({"text": f"Image A (Front Card): {c1_id or 'card_front'}"})
+            sanitized_c1 = sanitize_prompt_card_id(c1_id, "card_front")
+            parts.append({"text": f"Image A (Front Card): {sanitized_c1}"})
 
             # Back card
             c2_bytes, _, c2_id = resolved_cards[1]
@@ -601,7 +596,8 @@ class GeminiRecipeExtractor:
                         "data": b64_back,
                     }
                 })
-            parts.append({"text": f"Image B (Back Card): {c2_id or 'card_back'}"})
+            sanitized_c2 = sanitize_prompt_card_id(c2_id, "card_back")
+            parts.append({"text": f"Image B (Back Card): {sanitized_c2}"})
         elif len(resolved_cards) == 1:
             c1_bytes, _, c1_id = resolved_cards[0]
             if c1_bytes:
@@ -612,7 +608,9 @@ class GeminiRecipeExtractor:
                         "data": b64_front,
                     }
                 })
-            parts.append({"text": f"Image 1 (Front Card): {c1_id or 'card_front'}"})
+            sanitized_c1 = sanitize_prompt_card_id(c1_id, "card_front")
+            parts.append({"text": f"Image 1 (Front Card): {sanitized_c1}"})
+
 
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model_name}:generateContent?key={self.api_key}"
 

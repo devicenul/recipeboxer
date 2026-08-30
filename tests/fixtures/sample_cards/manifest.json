@@ -50,7 +50,14 @@
             "severity": "MILD",
             "description": "Yellowed cellophane tape residue"
           }
-        ]
+        ],
+        "dimensions": {
+          "width_px": 688,
+          "height_px": 452,
+          "width_mm": 127.0,
+          "height_mm": 83.4,
+          "aspect_ratio": 1.522
+        }
       },
       "ground_truth_recipe": {
         "recipe_id": "rec_vhc_apple_crisp_1948",
@@ -140,7 +147,14 @@
             "severity": "MILD",
             "description": "Mirrored tape adhesive discoloration"
           }
-        ]
+        ],
+        "dimensions": {
+          "width_px": 688,
+          "height_px": 452,
+          "width_mm": 127.0,
+          "height_mm": 83.4,
+          "aspect_ratio": 1.522
+        }
       },
       "ground_truth_recipe": {
         "recipe_id": "rec_vhc_apple_crisp_1948",
@@ -224,7 +238,14 @@
             "quadrant": "EDGE_RIGHT",
             "severity": "MODERATE"
           }
-        ]
+        ],
+        "dimensions": {
+          "width_px": 684,
+          "height_px": 444,
+          "width_mm": 127.0,
+          "height_mm": 82.4,
+          "aspect_ratio": 1.541
+        }
       },
       "ground_truth_recipe": {
         "recipe_id": "rec_vhc_rhubarb_pie_1965",
@@ -306,7 +327,14 @@
             "quadrant": "EDGE_LEFT",
             "severity": "MODERATE"
           }
-        ]
+        ],
+        "dimensions": {
+          "width_px": 684,
+          "height_px": 444,
+          "width_mm": 127.0,
+          "height_mm": 82.4,
+          "aspect_ratio": 1.541
+        }
       },
       "ground_truth_recipe": {
         "recipe_id": "rec_vhc_rhubarb_pie_1965",
@@ -394,7 +422,14 @@
             "severity": "MILD",
             "description": "Yellowed cellophane tape residue"
           }
-        ]
+        ],
+        "dimensions": {
+          "width_px": 692,
+          "height_px": 458,
+          "width_mm": 127.0,
+          "height_mm": 84.1,
+          "aspect_ratio": 1.511
+        }
       },
       "ground_truth_recipe": {
         "recipe_id": "rec_vhc_strawberry_rhubarb_jam_1954",
@@ -479,7 +514,14 @@
             "severity": "MILD",
             "description": "Mirrored tape adhesive discoloration"
           }
-        ]
+        ],
+        "dimensions": {
+          "width_px": 692,
+          "height_px": 458,
+          "width_mm": 127.0,
+          "height_mm": 84.1,
+          "aspect_ratio": 1.511
+        }
       },
       "ground_truth_recipe": {
         "recipe_id": "rec_vhc_strawberry_rhubarb_jam_1954",
@@ -575,7 +617,14 @@
             "severity": "MILD",
             "description": "Yellowed cellophane tape residue"
           }
-        ]
+        ],
+        "dimensions": {
+          "width_px": 686,
+          "height_px": 450,
+          "width_mm": 127.0,
+          "height_mm": 83.3,
+          "aspect_ratio": 1.524
+        }
       },
       "ground_truth_recipe": {
         "recipe_id": "rec_vhc_amish_cinnamon_bread_1973",
@@ -673,7 +722,14 @@
             "severity": "MILD",
             "description": "Mirrored tape adhesive discoloration"
           }
-        ]
+        ],
+        "dimensions": {
+          "width_px": 686,
+          "height_px": 450,
+          "width_mm": 127.0,
+          "height_mm": 83.3,
+          "aspect_ratio": 1.524
+        }
       },
       "ground_truth_recipe": {
         "recipe_id": "rec_vhc_amish_cinnamon_bread_1973",
@@ -760,7 +816,14 @@
             "severity": "MILD",
             "description": "Vintage ink stamp: RECIPE CLUB 1956"
           }
-        ]
+        ],
+        "dimensions": {
+          "width_px": 682,
+          "height_px": 444,
+          "width_mm": 127.0,
+          "height_mm": 82.7,
+          "aspect_ratio": 1.536
+        }
       },
       "ground_truth_recipe": {
         "recipe_id": "rec_typ_beef_stroganoff_1956",
@@ -840,7 +903,14 @@
             "quadrant": "TOP_LEFT",
             "severity": "MILD"
           }
-        ]
+        ],
+        "dimensions": {
+          "width_px": 682,
+          "height_px": 444,
+          "width_mm": 127.0,
+          "height_mm": 82.7,
+          "aspect_ratio": 1.536
+        }
       },
       "ground_truth_recipe": {
         "recipe_id": "rec_typ_beef_stroganoff_1956",
@@ -943,7 +1013,14 @@
             "severity": "MILD",
             "description": "Yellowed cellophane tape residue"
           }
-        ]
+        ],
+        "dimensions": {
+          "width_px": 688,
+          "height_px": 454,
+          "width_mm": 127.0,
+          "height_mm": 83.8,
+          "aspect_ratio": 1.515
+        }
       },
       "ground_truth_recipe": {
         "recipe_id": "rec_typ_tomato_soup_cake_1952",
@@ -1040,7 +1117,14 @@
             "severity": "MILD",
             "description": "Mirrored tape adhesive discoloration"
           }
-        ]
+        ],
+        "dimensions": {
+          "width_px": 688,
+          "height_px": 454,
+          "width_mm": 127.0,
+          "height_mm": 83.8,
+          "aspect_ratio": 1.515
+        }
       },
       "ground_truth_recipe": {
         "recipe_id": "rec_typ_tomato_soup_cake_1952",
@@ -1132,7 +1216,14 @@
             "severity": "MILD",
             "description": "Vintage ink stamp: BETTER HOMES CLUB OCT 1961"
           }
-        ]
+        ],
+        "dimensions": {
+          "width_px": 686,
+          "height_px": 450,
+          "width_mm": 127.0,
+          "height_mm": 83.3,
+          "aspect_ratio": 1.524
+        }
       },
       "ground_truth_recipe": {
         "recipe_id": "rec_typ_swedish_meatballs_1961",
@@ -1220,7 +1311,14 @@
             "quadrant": "TOP_LEFT",
             "severity": "MILD"
           }
-        ]
+        ],
+        "dimensions": {
+          "width_px": 686,
+          "height_px": 450,
+          "width_mm": 127.0,
+          "height_mm": 83.3,
+          "aspect_ratio": 1.524
+        }
       },
       "ground_truth_recipe": {
         "recipe_id": "rec_typ_swedish_meatballs_1961",
@@ -1308,7 +1406,14 @@
             "severity": "MILD",
             "description": "Vintage ink stamp: LADIES AUXILIARY 1958"
           }
-        ]
+        ],
+        "dimensions": {
+          "width_px": 686,
+          "height_px": 448,
+          "width_mm": 127.0,
+          "height_mm": 83.0,
+          "aspect_ratio": 1.531
+        }
       },
       "ground_truth_recipe": {
         "recipe_id": "rec_typ_lemon_chiffon_pie_1958",
@@ -1388,7 +1493,14 @@
             "quadrant": "TOP_LEFT",
             "severity": "MILD"
           }
-        ]
+        ],
+        "dimensions": {
+          "width_px": 686,
+          "height_px": 448,
+          "width_mm": 127.0,
+          "height_mm": 83.0,
+          "aspect_ratio": 1.531
+        }
       },
       "ground_truth_recipe": {
         "recipe_id": "rec_typ_lemon_chiffon_pie_1958",
@@ -1480,7 +1592,19 @@
             "severity": "MILD",
             "description": "Yellowed cellophane tape residue"
           }
-        ]
+        ],
+        "dimensions": {
+          "width_px": 698,
+          "height_px": 468,
+          "width_mm": 127.0,
+          "height_mm": 85.2,
+          "aspect_ratio": 1.491
+        },
+        "paper_type": "MAGAZINE_NEWSPRINT_ON_CARDSTOCK",
+        "typography": "PRINTED_TYPESET_SERIF_HEADLINE_SANS_BODY",
+        "font": "Bodoni Bold Display Headline, Helvetica Regular Body Typeset",
+        "condition": "AGED_VINTAGE_GOOD",
+        "stains_creases": "OIL_GREASE_STAIN_TOP_RIGHT_CORNER_DOG_EAR_TAPE_RESIDUE"
       },
       "ground_truth_recipe": {
         "recipe_id": "rec_clp_crisco_fried_chicken",
@@ -1563,7 +1687,19 @@
             "severity": "MILD",
             "description": "Mirrored tape adhesive discoloration"
           }
-        ]
+        ],
+        "dimensions": {
+          "width_px": 698,
+          "height_px": 468,
+          "width_mm": 127.0,
+          "height_mm": 85.2,
+          "aspect_ratio": 1.491
+        },
+        "paper_type": "MAGAZINE_NEWSPRINT_ON_CARDSTOCK",
+        "typography": "PRINTED_TYPESET_SERIF_HEADLINE_SANS_BODY",
+        "font": "Bodoni Bold Display Headline, Helvetica Regular Body Typeset",
+        "condition": "AGED_VINTAGE_GOOD",
+        "stains_creases": "MIRRORED_OIL_GREASE_STAIN_MIRRORED_TAPE_RESIDUE"
       },
       "ground_truth_recipe": {
         "recipe_id": "rec_clp_crisco_fried_chicken",
@@ -1639,7 +1775,19 @@
             "quadrant": "BOTTOM_RIGHT",
             "severity": "MILD"
           }
-        ]
+        ],
+        "dimensions": {
+          "width_px": 680,
+          "height_px": 440,
+          "width_mm": 127.0,
+          "height_mm": 82.2,
+          "aspect_ratio": 1.545
+        },
+        "paper_type": "GLOSSY_CAN_LABEL_STOCK_ON_CARDSTOCK",
+        "typography": "COMMERCIAL_LABEL_TYPESET_BOLD_HEADER",
+        "font": "Franklin Gothic Heavy Headline, Futura Medium Body",
+        "condition": "VINTAGE_GOOD",
+        "stains_creases": "OIL_GREASE_STAIN_TOP_RIGHT_CORNER_DOG_EAR_BOTTOM_RIGHT"
       },
       "ground_truth_recipe": {
         "recipe_id": "rec_clp_condensed_milk_pie_1962",
@@ -1725,7 +1873,19 @@
             "severity": "MILD",
             "description": "Yellowed cellophane tape residue"
           }
-        ]
+        ],
+        "dimensions": {
+          "width_px": 684,
+          "height_px": 446,
+          "width_mm": 127.0,
+          "height_mm": 82.8,
+          "aspect_ratio": 1.534
+        },
+        "paper_type": "PERIODICAL_MAGAZINE_AD_ON_CARDSTOCK",
+        "typography": "COMMERCIAL_AD_TYPESET_SERIF_HEADER",
+        "font": "Century Schoolbook Headline, Optima Sans Body",
+        "condition": "AGED_VINTAGE_FAIR",
+        "stains_creases": "OIL_GREASE_STAIN_COFFEE_RING_CORNER_DOG_EAR_TAPE_RESIDUE"
       },
       "ground_truth_recipe": {
         "recipe_id": "rec_clp_green_bean_casserole_1968",
@@ -1811,7 +1971,19 @@
             "severity": "MILD",
             "description": "Mirrored tape adhesive discoloration"
           }
-        ]
+        ],
+        "dimensions": {
+          "width_px": 684,
+          "height_px": 446,
+          "width_mm": 127.0,
+          "height_mm": 82.8,
+          "aspect_ratio": 1.534
+        },
+        "paper_type": "PERIODICAL_MAGAZINE_AD_ON_CARDSTOCK",
+        "typography": "COMMERCIAL_AD_TYPESET_SERIF_HEADER",
+        "font": "Century Schoolbook Headline, Optima Sans Body",
+        "condition": "AGED_VINTAGE_FAIR",
+        "stains_creases": "MIRRORED_OIL_GREASE_STAIN_MIRRORED_COFFEE_RING_MIRRORED_TAPE_RESIDUE"
       },
       "ground_truth_recipe": {
         "recipe_id": "rec_clp_green_bean_casserole_1968",
@@ -1897,7 +2069,19 @@
             "severity": "MILD",
             "description": "Yellowed cellophane tape residue"
           }
-        ]
+        ],
+        "dimensions": {
+          "width_px": 694,
+          "height_px": 462,
+          "width_mm": 127.0,
+          "height_mm": 84.6,
+          "aspect_ratio": 1.502
+        },
+        "paper_type": "PRODUCT_BOX_CARDBOARD_PACKAGING_CUTOUT",
+        "typography": "PACKAGING_TYPESET_CONDENSED_SANS",
+        "font": "Univers Bold Condensed Headline, Trade Gothic Body",
+        "condition": "VINTAGE_GOOD",
+        "stains_creases": "OIL_GREASE_STAIN_EDGE_TEAR_DATE_STAMP_TAPE_RESIDUE"
       },
       "ground_truth_recipe": {
         "recipe_id": "rec_clp_toll_house_cookies_1975",
@@ -1983,7 +2167,19 @@
             "severity": "MILD",
             "description": "Mirrored tape adhesive discoloration"
           }
-        ]
+        ],
+        "dimensions": {
+          "width_px": 694,
+          "height_px": 462,
+          "width_mm": 127.0,
+          "height_mm": 84.6,
+          "aspect_ratio": 1.502
+        },
+        "paper_type": "PRODUCT_BOX_CARDBOARD_PACKAGING_CUTOUT",
+        "typography": "PACKAGING_TYPESET_CONDENSED_SANS",
+        "font": "Univers Bold Condensed Headline, Trade Gothic Body",
+        "condition": "VINTAGE_GOOD",
+        "stains_creases": "MIRRORED_OIL_GREASE_STAIN_EDGE_TEAR_MIRRORED_TAPE_RESIDUE"
       },
       "ground_truth_recipe": {
         "recipe_id": "rec_clp_toll_house_cookies_1975",
@@ -2069,7 +2265,14 @@
             "quadrant": "TOP_RIGHT",
             "severity": "MILD"
           }
-        ]
+        ],
+        "dimensions": {
+          "width_px": 690,
+          "height_px": 456,
+          "width_mm": 127.0,
+          "height_mm": 83.9,
+          "aspect_ratio": 1.513
+        }
       },
       "ground_truth_recipe": {
         "recipe_id": "rec_dmg_moms_lasagna_1971",
@@ -2158,7 +2361,14 @@
             "quadrant": "TOP_LEFT",
             "severity": "MILD"
           }
-        ]
+        ],
+        "dimensions": {
+          "width_px": 690,
+          "height_px": 456,
+          "width_mm": 127.0,
+          "height_mm": 83.9,
+          "aspect_ratio": 1.513
+        }
       },
       "ground_truth_recipe": {
         "recipe_id": "rec_dmg_moms_lasagna_1971",
@@ -2240,7 +2450,14 @@
             "quadrant": "EDGE_RIGHT",
             "severity": "MILD"
           }
-        ]
+        ],
+        "dimensions": {
+          "width_px": 696,
+          "height_px": 464,
+          "width_mm": 127.0,
+          "height_mm": 84.7,
+          "aspect_ratio": 1.5
+        }
       },
       "ground_truth_recipe": {
         "recipe_id": "rec_dmg_butter_shortbread",
@@ -2320,7 +2537,14 @@
             "quadrant": "EDGE_RIGHT",
             "severity": "MODERATE"
           }
-        ]
+        ],
+        "dimensions": {
+          "width_px": 686,
+          "height_px": 448,
+          "width_mm": 127.0,
+          "height_mm": 83.0,
+          "aspect_ratio": 1.531
+        }
       },
       "ground_truth_recipe": {
         "recipe_id": "rec_dmg_buttermilk_pancakes_1969",
@@ -2405,7 +2629,14 @@
             "quadrant": "EDGE_LEFT",
             "severity": "MODERATE"
           }
-        ]
+        ],
+        "dimensions": {
+          "width_px": 686,
+          "height_px": 448,
+          "width_mm": 127.0,
+          "height_mm": 83.0,
+          "aspect_ratio": 1.531
+        }
       },
       "ground_truth_recipe": {
         "recipe_id": "rec_dmg_buttermilk_pancakes_1969",
@@ -2503,7 +2734,14 @@
             "severity": "MILD",
             "description": "Yellowed cellophane tape residue"
           }
-        ]
+        ],
+        "dimensions": {
+          "width_px": 682,
+          "height_px": 442,
+          "width_mm": 127.0,
+          "height_mm": 82.3,
+          "aspect_ratio": 1.543
+        }
       },
       "ground_truth_recipe": {
         "recipe_id": "rec_dmg_beef_bourguignon_1974",
@@ -2596,7 +2834,14 @@
             "severity": "MILD",
             "description": "Mirrored tape adhesive discoloration"
           }
-        ]
+        ],
+        "dimensions": {
+          "width_px": 682,
+          "height_px": 442,
+          "width_mm": 127.0,
+          "height_mm": 82.3,
+          "aspect_ratio": 1.543
+        }
       },
       "ground_truth_recipe": {
         "recipe_id": "rec_dmg_beef_bourguignon_1974",
@@ -2671,7 +2916,14 @@
             "quadrant": "TOP_RIGHT",
             "severity": "MILD"
           }
-        ]
+        ],
+        "dimensions": {
+          "width_px": 690,
+          "height_px": 456,
+          "width_mm": 127.0,
+          "height_mm": 83.9,
+          "aspect_ratio": 1.513
+        }
       },
       "ground_truth_recipe": {
         "recipe_id": "rec_mcs_turkey_stuffing_feast",
@@ -2749,7 +3001,14 @@
             "quadrant": "TOP_RIGHT",
             "severity": "MILD"
           }
-        ]
+        ],
+        "dimensions": {
+          "width_px": 690,
+          "height_px": 456,
+          "width_mm": 127.0,
+          "height_mm": 83.9,
+          "aspect_ratio": 1.513
+        }
       },
       "ground_truth_recipe": {
         "recipe_id": "rec_mcs_turkey_stuffing_feast",
@@ -2821,7 +3080,14 @@
         "paper_tone": "RULED_INDEX",
         "ruling_type": "STANDARD_RULED_BLUE",
         "ink_type": "FOUNTAIN_PEN",
-        "artifacts": []
+        "artifacts": [],
+        "dimensions": {
+          "width_px": 690,
+          "height_px": 456,
+          "width_mm": 127.0,
+          "height_mm": 83.9,
+          "aspect_ratio": 1.513
+        }
       },
       "ground_truth_recipe": {
         "recipe_id": "rec_mcs_turkey_stuffing_feast",
@@ -2899,7 +3165,14 @@
             "quadrant": "TOP_RIGHT",
             "severity": "MILD"
           }
-        ]
+        ],
+        "dimensions": {
+          "width_px": 692,
+          "height_px": 456,
+          "width_mm": 127.0,
+          "height_mm": 83.7,
+          "aspect_ratio": 1.518
+        }
       },
       "ground_truth_recipe": {
         "recipe_id": "rec_mcs_wedding_fruitcake_1942",
@@ -2978,7 +3251,14 @@
             "quadrant": "TOP_RIGHT",
             "severity": "MILD"
           }
-        ]
+        ],
+        "dimensions": {
+          "width_px": 692,
+          "height_px": 456,
+          "width_mm": 127.0,
+          "height_mm": 83.7,
+          "aspect_ratio": 1.518
+        }
       },
       "ground_truth_recipe": {
         "recipe_id": "rec_mcs_wedding_fruitcake_1942",
@@ -3051,7 +3331,14 @@
         "paper_tone": "AGED_YELLOW",
         "ruling_type": "UNRULED_BLANK",
         "ink_type": "FOUNTAIN_PEN",
-        "artifacts": []
+        "artifacts": [],
+        "dimensions": {
+          "width_px": 692,
+          "height_px": 456,
+          "width_mm": 127.0,
+          "height_mm": 83.7,
+          "aspect_ratio": 1.518
+        }
       },
       "ground_truth_recipe": {
         "recipe_id": "rec_mcs_wedding_fruitcake_1942",
@@ -3130,7 +3417,14 @@
             "quadrant": "EDGE_RIGHT",
             "severity": "MILD"
           }
-        ]
+        ],
+        "dimensions": {
+          "width_px": 692,
+          "height_px": 456,
+          "width_mm": 127.0,
+          "height_mm": 83.7,
+          "aspect_ratio": 1.518
+        }
       },
       "ground_truth_recipe": {
         "recipe_id": "rec_mcs_wedding_fruitcake_1942",
@@ -3219,7 +3513,14 @@
             "quadrant": "TOP_LEFT",
             "severity": "MILD"
           }
-        ]
+        ],
+        "dimensions": {
+          "width_px": 682,
+          "height_px": 444,
+          "width_mm": 127.0,
+          "height_mm": 82.7,
+          "aspect_ratio": 1.536
+        }
       },
       "ground_truth_recipe": {
         "recipe_id": "rec_mcs_sunday_pot_roast_gravy",
@@ -3300,7 +3601,14 @@
             "quadrant": "TOP_RIGHT",
             "severity": "MILD"
           }
-        ]
+        ],
+        "dimensions": {
+          "width_px": 682,
+          "height_px": 444,
+          "width_mm": 127.0,
+          "height_mm": 82.7,
+          "aspect_ratio": 1.536
+        }
       },
       "ground_truth_recipe": {
         "recipe_id": "rec_mcs_sunday_pot_roast_gravy",
@@ -3381,7 +3689,14 @@
             "quadrant": "EDGE_RIGHT",
             "severity": "MILD"
           }
-        ]
+        ],
+        "dimensions": {
+          "width_px": 682,
+          "height_px": 444,
+          "width_mm": 127.0,
+          "height_mm": 82.7,
+          "aspect_ratio": 1.536
+        }
       },
       "ground_truth_recipe": {
         "recipe_id": "rec_mcs_sunday_pot_roast_gravy",
@@ -3467,7 +3782,14 @@
             "quadrant": "TOP_LEFT",
             "severity": "MILD"
           }
-        ]
+        ],
+        "dimensions": {
+          "width_px": 682,
+          "height_px": 444,
+          "width_mm": 127.0,
+          "height_mm": 82.7,
+          "aspect_ratio": 1.536
+        }
       },
       "ground_truth_recipe": {
         "recipe_id": "rec_mcs_traditional_panettone_1955",
@@ -3551,7 +3873,14 @@
             "quadrant": "TOP_RIGHT",
             "severity": "MILD"
           }
-        ]
+        ],
+        "dimensions": {
+          "width_px": 682,
+          "height_px": 444,
+          "width_mm": 127.0,
+          "height_mm": 82.7,
+          "aspect_ratio": 1.536
+        }
       },
       "ground_truth_recipe": {
         "recipe_id": "rec_mcs_traditional_panettone_1955",
@@ -3629,7 +3958,14 @@
         "paper_tone": "AGED_YELLOW",
         "ruling_type": "UNRULED_BLANK",
         "ink_type": "FOUNTAIN_PEN",
-        "artifacts": []
+        "artifacts": [],
+        "dimensions": {
+          "width_px": 682,
+          "height_px": 444,
+          "width_mm": 127.0,
+          "height_mm": 82.7,
+          "aspect_ratio": 1.536
+        }
       },
       "ground_truth_recipe": {
         "recipe_id": "rec_mcs_traditional_panettone_1955",
@@ -3713,7 +4049,14 @@
             "quadrant": "EDGE_RIGHT",
             "severity": "MILD"
           }
-        ]
+        ],
+        "dimensions": {
+          "width_px": 682,
+          "height_px": 444,
+          "width_mm": 127.0,
+          "height_mm": 82.7,
+          "aspect_ratio": 1.536
+        }
       },
       "ground_truth_recipe": {
         "recipe_id": "rec_mcs_traditional_panettone_1955",
@@ -3818,7 +4161,14 @@
             "severity": "MILD",
             "description": "Vintage ink stamp: RECIPE CLUB 1974"
           }
-        ]
+        ],
+        "dimensions": {
+          "width_px": 686,
+          "height_px": 448,
+          "width_mm": 127.0,
+          "height_mm": 83.0,
+          "aspect_ratio": 1.531
+        }
       },
       "ground_truth_recipe": {
         "recipe_id": "rec_sta_quick_chocolate_fudge",
@@ -3894,7 +4244,14 @@
             "quadrant": "BOTTOM_RIGHT",
             "severity": "MILD"
           }
-        ]
+        ],
+        "dimensions": {
+          "width_px": 694,
+          "height_px": 462,
+          "width_mm": 127.0,
+          "height_mm": 84.6,
+          "aspect_ratio": 1.502
+        }
       },
       "ground_truth_recipe": {
         "recipe_id": "rec_sta_southern_pecan_pie",
@@ -3983,7 +4340,14 @@
             "severity": "MILD",
             "description": "Vintage ink stamp: RECIPE CLUB 1971"
           }
-        ]
+        ],
+        "dimensions": {
+          "width_px": 688,
+          "height_px": 450,
+          "width_mm": 127.0,
+          "height_mm": 83.1,
+          "aspect_ratio": 1.529
+        }
       },
       "ground_truth_recipe": {
         "recipe_id": "rec_sta_classic_banana_bread",
@@ -4070,7 +4434,14 @@
             "quadrant": "TOP_LEFT",
             "severity": "MILD"
           }
-        ]
+        ],
+        "dimensions": {
+          "width_px": 688,
+          "height_px": 450,
+          "width_mm": 127.0,
+          "height_mm": 83.1,
+          "aspect_ratio": 1.529
+        }
       },
       "ground_truth_recipe": {
         "recipe_id": "rec_sta_old_fashioned_lemonade",

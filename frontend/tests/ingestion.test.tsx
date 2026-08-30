@@ -259,7 +259,7 @@ describe('R2: Ingestion Controller & Session Manager', () => {
 
       render(<SessionLauncher onSessionStarted={onStarted} />);
 
-      const input = screen.getByPlaceholderText('/path/to/recipe/scans');
+      const input = screen.getByLabelText(/Local Scans Directory Path/i);
       fireEvent.change(input, { target: { value: '/valid/scans/folder' } });
 
       // Add a default tag

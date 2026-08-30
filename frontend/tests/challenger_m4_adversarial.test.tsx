@@ -119,15 +119,9 @@ describe('Milestone 4 Empirical Challenger Adversarial Tests (Frontend)', () => 
 
       render(<GoogleDocsPreview recipes={adversarialRecipes} sessionId="sess_oauth_fail" />);
 
-      // Open token drawer
-      const tokenBtn = screen.getByRole('button', { name: /Token/i });
-      fireEvent.click(tokenBtn);
-
-      const tokenInput = screen.getByPlaceholderText(/ya29\./i);
-      fireEvent.change(tokenInput, { target: { value: 'ya29.invalid_expired_token' } });
-
-      const createBtn = screen.getByRole('button', { name: /Create Doc/i });
-      fireEvent.click(createBtn);
+      // Click 1-click GIS export button
+      const exportBtn = screen.getByRole('button', { name: /Export directly to Google Docs/i });
+      fireEvent.click(exportBtn);
 
       // Verify error banner is rendered
       await waitFor(() => {
@@ -143,15 +137,9 @@ describe('Milestone 4 Empirical Challenger Adversarial Tests (Frontend)', () => 
 
       render(<GoogleDocsPreview recipes={adversarialRecipes} sessionId="sess_timeout" />);
 
-      // Open token drawer
-      const tokenBtn = screen.getByRole('button', { name: /Token/i });
-      fireEvent.click(tokenBtn);
-
-      const tokenInput = screen.getByPlaceholderText(/ya29\./i);
-      fireEvent.change(tokenInput, { target: { value: 'ya29.valid_token_network_err' } });
-
-      const createBtn = screen.getByRole('button', { name: /Create Doc/i });
-      fireEvent.click(createBtn);
+      // Click 1-click GIS export button
+      const exportBtn = screen.getByRole('button', { name: /Export directly to Google Docs/i });
+      fireEvent.click(exportBtn);
 
       await waitFor(() => {
         expect(screen.getByText(/Network connection timeout to Google Drive/i)).toBeInTheDocument();
