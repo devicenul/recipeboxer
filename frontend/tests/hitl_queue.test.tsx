@@ -23,8 +23,7 @@ describe('R3: Rapid HITL Queue & Candidate Drawer', () => {
   const mockProposals: CorrelationProposal[] = [
     {
       proposal_id: 'prop_001',
-      front_card_id: '01_cinnamon_rolls_front.jpg',
-      back_card_id: '02_cinnamon_rolls_back.jpg',
+      ordered_card_ids: ['01_cinnamon_rolls_front.jpg', '02_cinnamon_rolls_back.jpg'],
       heuristic_score: 0.90,
       semantic_score: 0.95,
       confidence: 0.935,
@@ -34,8 +33,7 @@ describe('R3: Rapid HITL Queue & Candidate Drawer', () => {
     },
     {
       proposal_id: 'prop_002',
-      front_card_id: '03_pie_crust_front.jpg',
-      back_card_id: null,
+      ordered_card_ids: ['03_pie_crust_front.jpg'],
       heuristic_score: 0.50,
       semantic_score: 0.10,
       confidence: 0.22,
@@ -195,7 +193,7 @@ describe('R3: Rapid HITL Queue & Candidate Drawer', () => {
       expect(screen.getByText('alt_back_01.jpg')).toBeInTheDocument();
       expect(screen.getByText('88%')).toBeInTheDocument();
 
-      const selectBtn = screen.getByRole('button', { name: /Select as Back/i });
+      const selectBtn = screen.getByRole('button', { name: /Select as Next Part|Select as Back/i });
       fireEvent.click(selectBtn);
       expect(onSelect).toHaveBeenCalledWith('alt_back_01.jpg');
     });
@@ -213,9 +211,9 @@ describe('R3: Rapid HITL Queue & Candidate Drawer', () => {
       );
 
       expect(screen.getByText(/3 cards attached/i)).toBeInTheDocument();
-      expect(screen.getByText('Front (Page 1)')).toBeInTheDocument();
-      expect(screen.getByText('Back (Page 2)')).toBeInTheDocument();
-      expect(screen.getByText('Part 3')).toBeInTheDocument();
+      expect(screen.getByText('Part 1 of 3')).toBeInTheDocument();
+      expect(screen.getByText('Part 2 of 3')).toBeInTheDocument();
+      expect(screen.getByText('Part 3 of 3')).toBeInTheDocument();
 
       // Click detach on page 3
       const detachBtns = screen.getAllByTitle('Detach from group');
@@ -224,3 +222,4 @@ describe('R3: Rapid HITL Queue & Candidate Drawer', () => {
     });
   });
 });
+

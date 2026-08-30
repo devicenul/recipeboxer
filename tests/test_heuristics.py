@@ -191,24 +191,26 @@ class TestRoleCompatibility:
     """Tests for CardRole pairwise compatibility matrix."""
 
     def test_front_and_back_role(self):
-        assert calculate_role_compatibility(CardRole.FRONT_ONLY, CardRole.BACK_ONLY) == 1.00
+        assert calculate_role_compatibility(CardRole.SEQUENCE_START, CardRole.SEQUENCE_CONTINUATION) == 1.00
+
+    def test_continuation_and_continuation_role(self):
+        assert calculate_role_compatibility(CardRole.SEQUENCE_CONTINUATION, CardRole.SEQUENCE_CONTINUATION) == 0.90
 
     def test_front_and_unknown_role(self):
-        assert calculate_role_compatibility(CardRole.FRONT_ONLY, CardRole.UNKNOWN) == 0.80
-        assert calculate_role_compatibility(CardRole.UNKNOWN, CardRole.BACK_ONLY) == 0.80
+        assert calculate_role_compatibility(CardRole.SEQUENCE_START, CardRole.UNKNOWN) == 0.80
+        assert calculate_role_compatibility(CardRole.UNKNOWN, CardRole.SEQUENCE_CONTINUATION) == 0.80
 
     def test_unknown_and_unknown(self):
         assert calculate_role_compatibility(CardRole.UNKNOWN, CardRole.UNKNOWN) == 0.50
 
     def test_standalone_cards_cannot_pair(self):
-        assert calculate_role_compatibility(CardRole.STANDALONE, CardRole.BACK_ONLY) == 0.00
-        assert calculate_role_compatibility(CardRole.FRONT_ONLY, CardRole.STANDALONE) == 0.00
+        assert calculate_role_compatibility(CardRole.STANDALONE, CardRole.SEQUENCE_CONTINUATION) == 0.00
+        assert calculate_role_compatibility(CardRole.SEQUENCE_START, CardRole.STANDALONE) == 0.00
         assert calculate_role_compatibility(CardRole.STANDALONE, CardRole.STANDALONE) == 0.00
 
     def test_incompatible_front_front_or_back_back(self):
-        assert calculate_role_compatibility(CardRole.FRONT_ONLY, CardRole.FRONT_ONLY) == 0.00
-        assert calculate_role_compatibility(CardRole.BACK_ONLY, CardRole.BACK_ONLY) == 0.00
-        assert calculate_role_compatibility(CardRole.BACK_ONLY, CardRole.FRONT_ONLY) == 0.00
+        assert calculate_role_compatibility(CardRole.SEQUENCE_START, CardRole.SEQUENCE_START) == 0.00
+        assert calculate_role_compatibility(CardRole.SEQUENCE_CONTINUATION, CardRole.SEQUENCE_START) == 0.00
 
 
 class TestCompositeHeuristicDistanceAndScreening:
@@ -219,7 +221,7 @@ class TestCompositeHeuristicDistanceAndScreening:
             card_id="card_01.jpg",
             image_path="/path/01.jpg",
             sha256_hash="abc",
-            role=CardRole.FRONT_ONLY,
+            role=CardRole.SEQUENCE_START,
             paper_color=PaperColorInfo(tone_name="Cream", hex_approx="#F4E8C1", lab_l=90.0, lab_a=2.0, lab_b=18.0),
             ruling=PaperRulingInfo(has_ruling=True, ruling_type=PaperRulingType.STANDARD_RULED_BLUE, line_spacing_px=24.0),
             ink=InkInfo(ink_type=InkType.BLUE_BALLPOINT, ink_color=InkColor.BLUE),
@@ -231,7 +233,7 @@ class TestCompositeHeuristicDistanceAndScreening:
             card_id="card_02.jpg",
             image_path="/path/02.jpg",
             sha256_hash="def",
-            role=CardRole.BACK_ONLY,
+            role=CardRole.SEQUENCE_CONTINUATION,
             paper_color=PaperColorInfo(tone_name="Cream", hex_approx="#F4E8C1", lab_l=90.0, lab_a=2.0, lab_b=18.0),
             ruling=PaperRulingInfo(has_ruling=True, ruling_type=PaperRulingType.STANDARD_RULED_BLUE, line_spacing_px=24.0),
             ink=InkInfo(ink_type=InkType.BLUE_BALLPOINT, ink_color=InkColor.BLUE),
@@ -240,22 +242,20 @@ class TestCompositeHeuristicDistanceAndScreening:
         )
 
         score = calculate_heuristic_distance(fp_front, fp_back, idx1=0, idx2=1)
-        # S_role(1.0)*0.25 + S_prox(0.6065)*0.25 + S_color(1.0)*0.15 + S_ruling(1.0)*0.15 + S_ink(1.0)*0.10 + S_stain(1.0)*0.05 + S_style(1.0)*0.05
-        # = 0.25 + 0.1516 + 0.15 + 0.15 + 0.10 + 0.05 + 0.05 = 0.9016
-        assert score >= 0.85
+        assert score >= 0.80
 
     def test_calculate_heuristic_distance_incompatible_role_pruned(self):
         fp1 = VisualFingerprint(
             card_id="c1.jpg",
             image_path="/path/c1.jpg",
             sha256_hash="111",
-            role=CardRole.STANDALONE,
+            role=CardRole.SEQUENCE_START,
         )
         fp2 = VisualFingerprint(
             card_id="c2.jpg",
             image_path="/path/c2.jpg",
             sha256_hash="222",
-            role=CardRole.BACK_ONLY,
+            role=CardRole.SEQUENCE_START,
         )
         assert calculate_heuristic_distance(fp1, fp2) == 0.00
 

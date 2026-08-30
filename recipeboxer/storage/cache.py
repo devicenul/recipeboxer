@@ -257,10 +257,16 @@ class FingerprintCache:
     def get_by_role(self, role: Union[CardRole, str]) -> List[VisualFingerprint]:
         """Retrieve all cached fingerprints matching a specific CardRole."""
         role_str = role.value if isinstance(role, CardRole) else str(role)
+        target_roles = [role_str]
+        if role_str in ("FRONT_ONLY", "SEQUENCE_START"):
+            target_roles = ["FRONT_ONLY", "SEQUENCE_START"]
+        elif role_str in ("BACK_ONLY", "SEQUENCE_CONTINUATION"):
+            target_roles = ["BACK_ONLY", "SEQUENCE_CONTINUATION"]
+        placeholders = ",".join("?" * len(target_roles))
         with self._lock:
             cur = self._conn.cursor()
             try:
-                cur.execute("SELECT json_data FROM fingerprints WHERE role = ? ORDER BY extracted_at ASC;", (role_str,))
+                cur.execute(f"SELECT json_data FROM fingerprints WHERE role IN ({placeholders}) ORDER BY extracted_at ASC;", tuple(target_roles))
                 rows = cur.fetchall()
             finally:
                 cur.close()

@@ -5,7 +5,7 @@ import json
 import zipfile
 import io
 from pathlib import Path
-from typing import AsyncGenerator
+from typing import Any, AsyncGenerator
 
 import httpx
 import pytest

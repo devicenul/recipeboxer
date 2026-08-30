@@ -20,11 +20,13 @@ export interface ProgressMetrics {
   total_scans: number;
   fingerprinted: number;
   proposals_generated: number;
-  approved_pairs: number;
+  approved_recipes?: number;
+  approved_pairs?: number;
   recipes_extracted: number;
   current_stage: string;
   percent_complete: number;
 }
+
 
 export interface TokenUsage {
   prompt_tokens: number;

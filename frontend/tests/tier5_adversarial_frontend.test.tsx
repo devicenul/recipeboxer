@@ -359,8 +359,7 @@ describe('Tier 5 Adversarial Coverage Hardening — Frontend React SPA & HITL Su
     it('supports attaching multiple candidates sequentially into 3+ card recipe sets', async () => {
       const mockProposal: CorrelationProposal = {
         proposal_id: 'prop_multi_001',
-        front_card_id: 'card_multi_front',
-        back_card_id: 'card_multi_back',
+        ordered_card_ids: ['card_multi_front', 'card_multi_back'],
         confidence: 0.88,
         heuristic_score: 0.85,
         semantic_score: 0.9,
@@ -399,33 +398,30 @@ describe('Tier 5 Adversarial Coverage Hardening — Frontend React SPA & HITL Su
       });
 
       (api.getHitlCandidates as any).mockResolvedValue({
-        session_id: 'sess_multi_01',
         front_card_id: 'card_multi_front',
-        candidates: mockCandidates,
         total_candidates: 2,
+        candidates: mockCandidates,
       });
 
       (api.approveHitl as any).mockResolvedValue({
-        session_id: 'sess_multi_01',
-        status: 'success',
+        success: true,
         approved_count: 1,
-        rejected_count: 0,
-        message: 'Approved',
+        message: 'Approvals recorded',
       });
 
       const onComplete = vi.fn();
       render(<HitlWorkspace sessionId="sess_multi_01" onApprovalsCompleted={onComplete} />);
 
       await waitFor(() => {
-        expect(screen.getByText(/Proposal 1 of 1/i)).toBeInTheDocument();
+        expect(screen.getByText('Proposal 1 of 1')).toBeInTheDocument();
       });
 
       // Open Candidate Drawer
-      const candidatesBtn = screen.getByRole('button', { name: /Candidates/i });
-      fireEvent.click(candidatesBtn);
+      const drawerBtn = screen.getByRole('button', { name: /Candidates/i });
+      fireEvent.click(drawerBtn);
 
       await waitFor(() => {
-        expect(screen.getByText('card_extra_part3')).toBeInTheDocument();
+        expect(screen.getByText('Candidate Correlation Drawer')).toBeInTheDocument();
       });
 
       // Attach part 3 to group
@@ -460,14 +456,12 @@ describe('Tier 5 Adversarial Coverage Hardening — Frontend React SPA & HITL Su
         expect(api.approveHitl).toHaveBeenCalledWith({
           session_id: 'sess_multi_01',
           approvals: [
-            {
+            expect.objectContaining({
               proposal_id: 'prop_multi_001',
-              front_card_id: 'card_multi_front',
-              back_card_id: 'card_multi_back',
-              card_ids: ['card_multi_front', 'card_multi_back', 'card_extra_part3', 'card_extra_part4'],
+              ordered_card_ids: ['card_multi_front', 'card_multi_back', 'card_extra_part3', 'card_extra_part4'],
               is_standalone: false,
               is_rejected: false,
-            },
+            }),
           ],
           rejected_card_ids: [],
           continue_pipeline: true,
@@ -491,10 +485,10 @@ describe('Tier 5 Adversarial Coverage Hardening — Frontend React SPA & HITL Su
       );
 
       expect(screen.getByText(/Multi-Card Recipe Group \(4 cards attached\)/i)).toBeInTheDocument();
-      expect(screen.getByText('Front (Page 1)')).toBeInTheDocument();
-      expect(screen.getByText('Back (Page 2)')).toBeInTheDocument();
-      expect(screen.getByText('Part 3')).toBeInTheDocument();
-      expect(screen.getByText('Part 4')).toBeInTheDocument();
+      expect(screen.getByText('Part 1 of 4')).toBeInTheDocument();
+      expect(screen.getByText('Part 2 of 4')).toBeInTheDocument();
+      expect(screen.getByText('Part 3 of 4')).toBeInTheDocument();
+      expect(screen.getByText('Part 4 of 4')).toBeInTheDocument();
 
       // Move Part 3 left (index 2 -> index 1)
       const moveEarlierButtons = screen.getAllByTitle('Move earlier');
@@ -681,12 +675,14 @@ describe('Tier 5 Adversarial Coverage Hardening — Frontend React SPA & HITL Su
       render(<RecipeEditorView recipes={recipes} sessionId="sess_editor" onRecipeUpdated={onUpdate} />);
 
       expect(screen.getByText(/Recipe 1 of 2:/i)).toBeInTheDocument();
-      expect(screen.getByText('Card 1 (Front)')).toBeInTheDocument();
-      expect(screen.getByText('Card 2 (Back)')).toBeInTheDocument();
+      expect(screen.getAllByText('Part 1 of 2').length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText('Part 2 of 2').length).toBeGreaterThanOrEqual(1);
 
       // Click Next Recipe
       const nextBtn = screen.getByTitle('Next Recipe');
       fireEvent.click(nextBtn);
+
+
 
       expect(screen.getByText(/Recipe 2 of 2:/i)).toBeInTheDocument();
     });

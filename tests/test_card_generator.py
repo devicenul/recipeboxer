@@ -277,9 +277,9 @@ def test_generate_multi_card_set_3_and_4_cards(sample_test_recipe: RecipeSchema)
     # 3-card set
     set_3 = gen.generate_multi_card_set(sample_test_recipe, num_cards=3)
     assert len(set_3) == 3
-    assert set_3[0].role == CardRole.FRONT_ONLY
-    assert set_3[1].role == CardRole.BACK_ONLY
-    assert set_3[2].role == CardRole.FRONT_ONLY
+    assert set_3[0].role == CardRole.SEQUENCE_START
+    assert set_3[1].role == CardRole.SEQUENCE_CONTINUATION
+    assert set_3[2].role == CardRole.SEQUENCE_CONTINUATION
     assert set_3[0].recipe_cluster["cluster_role"] == "card1_front"
     assert set_3[1].recipe_cluster["cluster_role"] == "card1_back"
     assert set_3[2].recipe_cluster["cluster_role"] == "card2_front"
@@ -287,7 +287,7 @@ def test_generate_multi_card_set_3_and_4_cards(sample_test_recipe: RecipeSchema)
     # 4-card set
     set_4 = gen.generate_multi_card_set(sample_test_recipe, num_cards=4)
     assert len(set_4) == 4
-    assert set_4[3].role == CardRole.BACK_ONLY
+    assert set_4[3].role == CardRole.SEQUENCE_CONTINUATION
     assert set_4[3].recipe_cluster["cluster_role"] == "card2_back"
 
 

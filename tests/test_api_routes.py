@@ -241,7 +241,7 @@ class TestAPIRoutes:
         assert res.status_code == 200
         data = res.json()
         assert data["session_id"] == sid
-        assert data["front_card_id"] == "front_1.jpg"
+        assert data["card_id"] == "front_1.jpg"
         assert len(data["candidates"]) == 2
         assert data["total_candidates"] == 2
         assert "score" in data["candidates"][0]
@@ -257,17 +257,15 @@ class TestAPIRoutes:
 
         decision_payload = {
             "proposal_id": "prop_01",
-            "front_card_id": "card_01.jpg",
-            "back_card_id": "card_02.jpg",
+            "ordered_card_ids": ["card_01.jpg", "card_02.jpg", "card_03.jpg"],
             "decision": "APPROVE",
-            "card_ids": ["card_01.jpg", "card_02.jpg", "card_03.jpg"],
         }
 
         res = await client.post(f"/api/hitl/decision?session_id={sid}", json=decision_payload)
         assert res.status_code == 200
         assert res.json()["success"] is True
         assert len(session.approvals) == 1
-        assert session.approvals[0].card_ids == ["card_01.jpg", "card_02.jpg", "card_03.jpg"]
+        assert session.approvals[0].ordered_card_ids == ["card_01.jpg", "card_02.jpg", "card_03.jpg"]
 
     # ------------------------------------------------------------------------
     # 4. Recipe CRUD Endpoints

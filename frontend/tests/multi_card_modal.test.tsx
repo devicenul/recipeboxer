@@ -66,10 +66,11 @@ describe('F2.1 & F2.2: Multi-Card Inspection Modal & Positional Sequence Control
     expect(screen.getByText(/Full-Resolution Split Canvas Comparison/i)).toBeInTheDocument();
 
     // Check positional role badges
-    expect(screen.getByText('#1 Front (Page 1)')).toBeInTheDocument();
-    expect(screen.getByText('#2 Continuation 1 / Back (Page 2)')).toBeInTheDocument();
-    expect(screen.getByText('#3 Continuation 2 (Page 3)')).toBeInTheDocument();
-    expect(screen.getByText('#4 Continuation 3 (Page 4)')).toBeInTheDocument();
+    expect(screen.getByText('#1 Part 1 of 4')).toBeInTheDocument();
+    expect(screen.getByText('#2 Part 2 of 4')).toBeInTheDocument();
+    expect(screen.getByText('#3 Part 3 of 4')).toBeInTheDocument();
+    expect(screen.getByText('#4 Part 4 of 4')).toBeInTheDocument();
+
 
     // Check card IDs rendered
     expect(screen.getAllByText('card_01_front.jpg').length).toBeGreaterThanOrEqual(1);
@@ -146,7 +147,7 @@ describe('F2.1 & F2.2: Multi-Card Inspection Modal & Positional Sequence Control
     ]);
   });
 
-  it('allows detaching continuation cards while preserving front card (index 0)', () => {
+  it('allows detaching cards in modal', () => {
     const onDetach = vi.fn();
 
     render(
@@ -161,11 +162,10 @@ describe('F2.1 & F2.2: Multi-Card Inspection Modal & Positional Sequence Control
     );
 
     const detachButtons = screen.getAllByTitle('Detach card from group');
-    // Front card has no detach button, so only 3 detach buttons exist (indexes 1, 2, 3)
-    expect(detachButtons.length).toBe(3);
+    expect(detachButtons.length).toBe(4);
 
-    // Detach card_03_cont1.jpg (index 2 in list -> index 1 in detachButtons)
-    fireEvent.click(detachButtons[1]);
+    // Detach card_03_cont1.jpg (index 2 in list -> index 2 in detachButtons)
+    fireEvent.click(detachButtons[2]);
     expect(onDetach).toHaveBeenCalledWith('card_03_cont1.jpg');
   });
 
@@ -255,9 +255,7 @@ describe('F2.1 & F2.2: Multi-Card Inspection Modal & Positional Sequence Control
   it('HitlWorkspace opens MultiCardInspectionModal, performs reordering, and submits approved multi-card sequence', async () => {
     const mockProposal: CorrelationProposal = {
       proposal_id: 'prop_multi_e2e',
-      front_card_id: 'card_01.jpg',
-      back_card_id: 'card_02.jpg',
-      card_ids: ['card_01.jpg', 'card_02.jpg', 'card_03.jpg'],
+      ordered_card_ids: ['card_01.jpg', 'card_02.jpg', 'card_03.jpg'],
       heuristic_score: 0.91,
       semantic_score: 0.94,
       confidence: 0.93,
@@ -323,9 +321,7 @@ describe('F2.1 & F2.2: Multi-Card Inspection Modal & Positional Sequence Control
         approvals: [
           expect.objectContaining({
             proposal_id: 'prop_multi_e2e',
-            front_card_id: 'card_03.jpg',
-            back_card_id: 'card_01.jpg',
-            card_ids: ['card_03.jpg', 'card_01.jpg', 'card_02.jpg'],
+            ordered_card_ids: ['card_03.jpg', 'card_01.jpg', 'card_02.jpg'],
           }),
         ],
         rejected_card_ids: [],
@@ -335,3 +331,4 @@ describe('F2.1 & F2.2: Multi-Card Inspection Modal & Positional Sequence Control
     });
   });
 });
+

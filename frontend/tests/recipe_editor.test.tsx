@@ -291,9 +291,11 @@ describe('R4: Recipe Transcription Review & Inline Editor', () => {
       );
 
       expect(screen.getByText(/Recipe 1 of 1/i)).toBeInTheDocument();
-      expect(screen.getByText('Card 1 (Front)')).toBeInTheDocument();
-      expect(screen.getByText('Card 2 (Back)')).toBeInTheDocument();
+      expect(screen.getAllByText('Part 1 of 2').length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText('Part 2 of 2').length).toBeGreaterThanOrEqual(1);
       expect(screen.getAllByDisplayValue("Grandma's Cinnamon Rolls").length).toBeGreaterThanOrEqual(1);
+
+
     });
   });
 });

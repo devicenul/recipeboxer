@@ -25,6 +25,7 @@ from recipeboxer.models.hitl import (
     CandidateListResponse,
     CandidateScoreBreakdown,
     CardPairApproval,
+    CardSequenceApproval,
     CorrelationCandidate,
     HITLDecision,
 )
@@ -68,6 +69,7 @@ __all__ = [
     # HITL
     "HITLDecision",
     "CardPairApproval",
+    "CardSequenceApproval",
     "ApprovalPayload",
     "CandidateScoreBreakdown",
     "CorrelationCandidate",

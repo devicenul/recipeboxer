@@ -122,7 +122,7 @@ class TestSessionStore:
         sid = "sess_to_delete"
         store.save_session(sid, state=PipelineState.COMPLETED)
         store.save_card(sid, card_id="card_1", image_path="/path/card1.jpg")
-        store.save_proposals(sid, [{"proposal_id": "prop_1", "front_card_id": "card_1"}])
+        store.save_proposals(sid, [{"proposal_id": "prop_1", "ordered_card_ids": ["card_1"]}])
 
         recipe = RecipeSchema(title="Test Recipe", ingredients=["1 cup Flour"], directions=["Bake."])
         store.save_recipe(sid, recipe)

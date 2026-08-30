@@ -105,7 +105,8 @@ class PlanToEatExporter:
         path.parent.mkdir(parents=True, exist_ok=True)
 
         csv_content = self.export_to_csv_string(recipes)
-        path.write_text(csv_content, encoding=self.encoding)
+        with path.open("w", newline="", encoding=self.encoding) as f:
+            f.write(csv_content)
         logger.info(f"Exported {len(recipes)} recipes to Plan To Eat CSV: {path}")
         return path
 

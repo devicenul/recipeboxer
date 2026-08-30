@@ -24,7 +24,7 @@ import httpx
 import pytest
 from httpx import ASGITransport
 from PIL import Image, ImageDraw, ImageFont
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 # Ensure project root is in sys.path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -46,10 +46,12 @@ from tests.fixtures.loader import (  # noqa: E402
 # ============================================================================
 
 class CardRole(str, Enum):
-    FRONT_ONLY = "FRONT_ONLY"
-    BACK_ONLY = "BACK_ONLY"
+    SEQUENCE_START = "SEQUENCE_START"
+    SEQUENCE_CONTINUATION = "SEQUENCE_CONTINUATION"
     STANDALONE = "STANDALONE"
     UNKNOWN = "UNKNOWN"
+    FRONT_ONLY = "SEQUENCE_START"
+    BACK_ONLY = "SEQUENCE_CONTINUATION"
 
 
 class PaperColorTone(str, Enum):
@@ -170,17 +172,71 @@ class VisualFingerprint(BaseModel):
     boundary_text: BoundaryText = Field(default_factory=BoundaryText)
     extracted_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
+    @field_validator("role", mode="before")
+    @classmethod
+    def normalize_role(cls, v: Any) -> CardRole:
+        if isinstance(v, str):
+            val = v.upper().strip().replace("-", "_").replace(" ", "_")
+            if val in ("FRONT_ONLY", "FRONT", "CARD1_FRONT", "START", "SEQUENCE_START"):
+                return CardRole.SEQUENCE_START
+            if val in ("BACK_ONLY", "BACK", "CARD1_BACK", "CONTINUATION", "SEQUENCE_CONTINUATION"):
+                return CardRole.SEQUENCE_CONTINUATION
+            if val in ("STANDALONE", "SINGLE", "SINGLE_SIDED"):
+                return CardRole.STANDALONE
+            if val in ("UNKNOWN", "NOISE", "TAB", "DIVIDER"):
+                return CardRole.UNKNOWN
+            try:
+                return CardRole(val)
+            except ValueError:
+                raise ValueError(f"Invalid CardRole: {v}")
+        return v
+
 
 class CorrelationProposal(BaseModel):
     proposal_id: str
-    front_card_id: str
-    back_card_id: Optional[str] = None
+    ordered_card_ids: List[str] = Field(default_factory=list)
+    part_count: int = 1
+    transition_scores: List[float] = Field(default_factory=list)
     heuristic_score: float = 0.0
     semantic_score: float = 0.0
     confidence: float = 0.0
     is_standalone: bool = False
     continuity_explanation: str = ""
-    recommended_action: str = "PAIR"  # "PAIR", "STANDALONE", "UNCERTAIN"
+    recommended_action: str = "SEQUENCE"
+
+    @property
+    def front_card_id(self) -> str:
+        return self.ordered_card_ids[0] if self.ordered_card_ids else ""
+
+    @property
+    def back_card_id(self) -> Optional[str]:
+        return self.ordered_card_ids[1] if len(self.ordered_card_ids) > 1 else None
+
+    @property
+    def card_ids(self) -> List[str]:
+        return self.ordered_card_ids
+
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_proposal_fields(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            if "ordered_card_ids" not in data or not data["ordered_card_ids"]:
+                cards: List[str] = []
+                if data.get("card_ids"):
+                    cards = list(data["card_ids"])
+                elif data.get("front_card_id"):
+                    cards = [str(data["front_card_id"])]
+                    if data.get("back_card_id"):
+                        cards.append(str(data["back_card_id"]))
+                if cards:
+                    data["ordered_card_ids"] = cards
+        return data
+
+    def model_post_init(self, __context: Any) -> None:
+        if self.ordered_card_ids and not self.part_count:
+            self.part_count = len(self.ordered_card_ids)
+        if len(self.ordered_card_ids) == 1 and not self.is_standalone:
+            self.is_standalone = True
 
 
 class CorrelationResult(BaseModel):
@@ -192,19 +248,61 @@ class HITLDecision(str, Enum):
     APPROVE = "APPROVE"
     REJECT = "REJECT"
     OVERRIDE = "OVERRIDE"
+    STANDALONE = "STANDALONE"
 
 
-class CardPairApproval(BaseModel):
+class CardSequenceApproval(BaseModel):
     proposal_id: str
-    front_card_id: str
-    back_card_id: Optional[str] = None
+    ordered_card_ids: List[str] = Field(default_factory=list)
     decision: HITLDecision = HITLDecision.APPROVE
+    is_standalone: Optional[bool] = False
+    is_rejected: Optional[bool] = False
+    reverse_roles: Optional[bool] = False
     notes: Optional[str] = None
+
+    @property
+    def front_card_id(self) -> str:
+        return self.ordered_card_ids[0] if self.ordered_card_ids else ""
+
+    @property
+    def back_card_id(self) -> Optional[str]:
+        return self.ordered_card_ids[1] if len(self.ordered_card_ids) > 1 else None
+
+    @property
+    def card_ids(self) -> List[str]:
+        return self.ordered_card_ids
+
+    @property
+    def additional_card_ids(self) -> List[str]:
+        return self.ordered_card_ids[2:] if len(self.ordered_card_ids) > 2 else []
+
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_approval_fields(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            if "ordered_card_ids" not in data or not data["ordered_card_ids"]:
+                cards: List[str] = []
+                if data.get("card_ids"):
+                    cards = list(data["card_ids"])
+                elif data.get("front_card_id"):
+                    if data.get("reverse_roles") and data.get("back_card_id"):
+                        cards = [str(data["back_card_id"]), str(data["front_card_id"])]
+                    else:
+                        cards = [str(data["front_card_id"])]
+                        if data.get("back_card_id"):
+                            cards.append(str(data["back_card_id"]))
+                if cards:
+                    data["ordered_card_ids"] = cards
+        return data
+
+
+CardPairApproval = CardSequenceApproval
 
 
 class ApprovalPayload(BaseModel):
     session_id: str
-    approvals: List[CardPairApproval]
+    approvals: List[CardSequenceApproval]
+    rejected_card_ids: List[str] = Field(default_factory=list)
     continue_pipeline: bool = True
 
 
@@ -220,6 +318,7 @@ class RecipeSchema(BaseModel):
     directions: List[str]
     tags: List[str] = Field(default_factory=list)
     source_notes: Optional[str] = ""
+    card_ids: List[str] = Field(default_factory=list)
 
 
 # ============================================================================
@@ -757,8 +856,9 @@ class MockGeminiClient:
 
         return CorrelationProposal(
             proposal_id=f"prop_{uuid.uuid4().hex[:8]}",
-            front_card_id=front_fp.card_id,
-            back_card_id=back_fp.card_id,
+            ordered_card_ids=[front_fp.card_id, back_fp.card_id],
+            part_count=2,
+            transition_scores=[confidence],
             heuristic_score=heuristic_score,
             semantic_score=semantic_score,
             confidence=confidence,
@@ -1013,12 +1113,16 @@ def compute_heuristic_visual_score(
     Follows authoritative 7-dimension formula from PROJECT.md & TEST_INFRA.md.
     """
     # 1. Role Score (Weight 0.25)
-    if front.role == CardRole.FRONT_ONLY and back.role == CardRole.BACK_ONLY:
+    f_role = front.role.value if hasattr(front.role, "value") else str(front.role)
+    b_role = back.role.value if hasattr(back.role, "value") else str(back.role)
+    if (f_role in ("SEQUENCE_START", "FRONT_ONLY", "FRONT") and b_role in ("SEQUENCE_CONTINUATION", "BACK_ONLY", "BACK")):
         s_role = 1.0
-    elif (front.role == CardRole.FRONT_ONLY and back.role == CardRole.UNKNOWN) or \
-         (front.role == CardRole.UNKNOWN and back.role == CardRole.BACK_ONLY):
+    elif (f_role in ("SEQUENCE_CONTINUATION", "BACK_ONLY", "BACK") and b_role in ("SEQUENCE_CONTINUATION", "BACK_ONLY", "BACK")):
+        s_role = 0.90
+    elif (f_role in ("SEQUENCE_START", "FRONT_ONLY", "FRONT") and b_role == "UNKNOWN") or \
+         (f_role == "UNKNOWN" and b_role in ("SEQUENCE_CONTINUATION", "BACK_ONLY", "BACK")):
         s_role = 0.8
-    elif front.role == CardRole.UNKNOWN and back.role == CardRole.UNKNOWN:
+    elif f_role == "UNKNOWN" and b_role == "UNKNOWN":
         s_role = 0.5
     else:
         # Immediate hard prune for incompatible roles
@@ -1238,44 +1342,46 @@ class PipelineSession:
 
             # Step 3: Correlation (Heuristic + Semantic)
             self.state = PipelineState.CORRELATING
-            fronts = [fp for fp in self.fingerprints.values() if fp.role == CardRole.FRONT_ONLY]
-            backs = [fp for fp in self.fingerprints.values() if fp.role == CardRole.BACK_ONLY]
-            standalones = [fp for fp in self.fingerprints.values() if fp.role == CardRole.STANDALONE]
-            unknowns = [fp for fp in self.fingerprints.values() if fp.role == CardRole.UNKNOWN]
+            starts = [fp for fp in self.fingerprints.values() if fp.role in (CardRole.SEQUENCE_START, "FRONT_ONLY", "FRONT", "SEQUENCE_START")]
+            conts = [fp for fp in self.fingerprints.values() if fp.role in (CardRole.SEQUENCE_CONTINUATION, "BACK_ONLY", "BACK", "SEQUENCE_CONTINUATION")]
+            standalones = [fp for fp in self.fingerprints.values() if fp.role in (CardRole.STANDALONE, "STANDALONE")]
+            unknowns = [fp for fp in self.fingerprints.values() if fp.role in (CardRole.UNKNOWN, "UNKNOWN")]
 
-            matched_backs = set()
-            for f in fronts:
+            matched_conts = set()
+            for s_fp in starts:
                 best_proposal = None
                 best_score = -1.0
-                for b in backs:
-                    if b.card_id in matched_backs:
+                for c_fp in conts:
+                    if c_fp.card_id in matched_conts:
                         continue
                     # Heuristic score
-                    idx_diff = 1 if abs(self.scanned_paths.index(Path(f.image_path)) - self.scanned_paths.index(Path(b.image_path))) == 1 else 3
-                    h_score = compute_heuristic_visual_score(f, b, idx_diff)
+                    idx_diff = 1 if abs(self.scanned_paths.index(Path(s_fp.image_path)) - self.scanned_paths.index(Path(c_fp.image_path))) == 1 else 3
+                    h_score = compute_heuristic_visual_score(s_fp, c_fp, idx_diff)
                     if h_score >= 0.40:
-                        proposal = await self.mock_client.verify_correlation(f, b, h_score)
+                        proposal = await self.mock_client.verify_correlation(s_fp, c_fp, h_score)
                         if proposal.confidence > best_score:
                             best_score = proposal.confidence
                             best_proposal = proposal
 
                 if best_proposal and best_proposal.confidence >= 0.50:
                     self.proposals.append(best_proposal)
-                    matched_backs.add(best_proposal.back_card_id)
+                    for cid in best_proposal.ordered_card_ids[1:]:
+                        matched_conts.add(cid)
                 else:
-                    self.unassigned_cards.append(f)
+                    self.unassigned_cards.append(s_fp)
 
-            # Add remaining backs to unassigned
-            for b in backs:
-                if b.card_id not in matched_backs:
-                    self.unassigned_cards.append(b)
+            # Add remaining conts to unassigned
+            for c_fp in conts:
+                if c_fp.card_id not in matched_conts:
+                    self.unassigned_cards.append(c_fp)
 
             # Add standalones to proposals
             for s in standalones:
                 self.proposals.append(CorrelationProposal(
                     proposal_id=f"prop_{uuid.uuid4().hex[:8]}",
-                    front_card_id=s.card_id,
-                    back_card_id=None,
+                    ordered_card_ids=[s.card_id],
+                    part_count=1,
+                    transition_scores=[],
                     heuristic_score=1.0,
                     semantic_score=1.0,
                     confidence=1.0,
@@ -1311,10 +1417,13 @@ class PipelineSession:
             for app_item in self.approved_items:
                 if app_item.decision == HITLDecision.REJECT:
                     continue
-                front_fp = self.fingerprints.get(app_item.front_card_id)
-                back_fp = self.fingerprints.get(app_item.back_card_id) if app_item.back_card_id else None
-                if front_fp:
+                ordered_cids = getattr(app_item, "ordered_card_ids", [])
+                ordered_fps = [self.fingerprints[cid] for cid in ordered_cids if cid in self.fingerprints]
+                if ordered_fps:
+                    front_fp = ordered_fps[0]
+                    back_fp = ordered_fps[1] if len(ordered_fps) > 1 else None
                     rec = await self.mock_client.extract_recipe(front_fp, back_fp)
+                    rec.card_ids = ordered_cids
                     self.extracted_recipes.append(rec)
                     self.progress_counts["extracted"] += 1
 
@@ -1323,6 +1432,8 @@ class PipelineSession:
             self.state = PipelineState.COMPLETED
 
         except Exception as exc:
+            import traceback
+            traceback.print_exc()
             self.state = PipelineState.FAILED
             self.error_message = str(exc)
 
@@ -1415,10 +1526,18 @@ def create_test_fastapi_app(mock_client: MockGeminiClient, test_cache: SQLiteFin
         if session.state != PipelineState.HITL_PENDING:
             raise HTTPException(status_code=400, detail=f"Pipeline state is '{session.state.value}', not 'HITL_PENDING'")
 
+        proposed_pairs_list = []
+        for p in session.proposals:
+            p_dump = p.model_dump()
+            if "front_card_id" not in p_dump and p.ordered_card_ids:
+                p_dump["front_card_id"] = p.ordered_card_ids[0]
+                p_dump["back_card_id"] = p.ordered_card_ids[1] if len(p.ordered_card_ids) > 1 else None
+            proposed_pairs_list.append(p_dump)
+
         return {
             "session_id": sid,
             "status": session.state.value,
-            "proposed_pairs": [p.model_dump() for p in session.proposals],
+            "proposed_pairs": proposed_pairs_list,
             "unassigned_cards": [u.model_dump() for u in session.unassigned_cards],
             "total_proposals": len(session.proposals),
             "total_unassigned": len(session.unassigned_cards),

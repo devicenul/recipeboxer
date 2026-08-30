@@ -42,7 +42,7 @@ class TestGeminiVisualExtractor:
         fp = await extractor.extract(img_path)
         assert isinstance(fp, VisualFingerprint)
         assert fp.card_id == "test_front.jpg"
-        assert fp.role == CardRole.FRONT_ONLY
+        assert fp.role == CardRole.SEQUENCE_START
         assert mock_client.call_count == 1
 
     @pytest.mark.asyncio
@@ -55,7 +55,7 @@ class TestGeminiVisualExtractor:
         extractor = GeminiVisualExtractor(api_key=None)
         fp = await extractor.extract(img_path)
 
-        assert fp.role == CardRole.FRONT_ONLY
+        assert fp.role == CardRole.SEQUENCE_START
         assert fp.paper_color.hex_approx.upper().startswith("#F6")
         assert fp.paper_color.lab_l > 80.0
         assert fp.ruling.has_ruling is True
@@ -115,22 +115,21 @@ class TestGeminiSemanticVerifier:
             card_id="01_cinnamon_rolls_front.jpg",
             image_path="/dummy/01.jpg",
             sha256_hash="111",
-            role=CardRole.FRONT_ONLY,
+            role=CardRole.SEQUENCE_START,
         )
         fp_b = VisualFingerprint(
             card_id="02_cinnamon_rolls_back.jpg",
             image_path="/dummy/02.jpg",
             sha256_hash="222",
-            role=CardRole.BACK_ONLY,
+            role=CardRole.SEQUENCE_CONTINUATION,
         )
 
         proposal = await verifier.verify_pair(fp_f, fp_b, heuristic_score=0.90)
-        assert proposal.front_card_id == "01_cinnamon_rolls_front.jpg"
-        assert proposal.back_card_id == "02_cinnamon_rolls_back.jpg"
+        assert proposal.ordered_card_ids == ["01_cinnamon_rolls_front.jpg", "02_cinnamon_rolls_back.jpg"]
         assert proposal.semantic_score > 0.90
         # Composite confidence = 0.30 * 0.90 + 0.70 * 0.96 = 0.27 + 0.672 = 0.942
         assert proposal.confidence >= 0.85
-        assert proposal.recommended_action == "PAIR"
+        assert proposal.recommended_action in ("PAIR", "SEQUENCE")
 
     @pytest.mark.asyncio
     async def test_semantic_verifier_custom_weights(self):
@@ -140,7 +139,7 @@ class TestGeminiSemanticVerifier:
             card_id="03_lemon_bars_front.jpg",
             image_path="/dummy/03.jpg",
             sha256_hash="333",
-            role=CardRole.FRONT_ONLY,
+            role=CardRole.SEQUENCE_START,
             boundary_text=BoundaryText(
                 first_line="Lemon Bars",
                 last_line="Filling: 4 eggs (over ->)",
@@ -151,7 +150,7 @@ class TestGeminiSemanticVerifier:
             card_id="04_lemon_bars_back.jpg",
             image_path="/dummy/04.jpg",
             sha256_hash="444",
-            role=CardRole.BACK_ONLY,
+            role=CardRole.SEQUENCE_CONTINUATION,
             boundary_text=BoundaryText(
                 first_line="(Directions cont)",
                 last_line="Bake 25 mins.",
@@ -161,7 +160,7 @@ class TestGeminiSemanticVerifier:
         proposal = await verifier.verify_pair(fp_f, fp_b, heuristic_score=0.80)
         # 0.50 * 0.80 + 0.50 * 0.95 = 0.40 + 0.475 = 0.875
         assert pytest.approx(proposal.confidence, abs=0.01) == 0.875
-        assert proposal.recommended_action == "PAIR"
+        assert proposal.recommended_action in ("PAIR", "SEQUENCE")
 
     @pytest.mark.asyncio
     async def test_semantic_verifier_offline_continuity_cues(self):
@@ -171,7 +170,7 @@ class TestGeminiSemanticVerifier:
             card_id="03_lemon_bars_front.jpg",
             image_path="/dummy/03.jpg",
             sha256_hash="333",
-            role=CardRole.FRONT_ONLY,
+            role=CardRole.SEQUENCE_START,
             boundary_text=BoundaryText(
                 first_line="Luscious Lemon Glaze Bars",
                 last_line="Filling: 4 large eggs (over ->)",
@@ -183,7 +182,7 @@ class TestGeminiSemanticVerifier:
             card_id="04_lemon_bars_back.jpg",
             image_path="/dummy/04.jpg",
             sha256_hash="444",
-            role=CardRole.BACK_ONLY,
+            role=CardRole.SEQUENCE_CONTINUATION,
             boundary_text=BoundaryText(
                 first_line="1. Preheat oven to 350F (Directions continued)",
                 last_line="Bake 25 mins until set.",
@@ -191,7 +190,7 @@ class TestGeminiSemanticVerifier:
         )
 
         proposal = await verifier.verify_pair(fp_f, fp_b, heuristic_score=0.85)
-        assert proposal.recommended_action == "PAIR"
+        assert proposal.recommended_action in ("PAIR", "SEQUENCE")
         assert proposal.semantic_score >= 0.90
         assert proposal.confidence >= 0.85
 
@@ -203,14 +202,14 @@ class TestGeminiSemanticVerifier:
             card_id="chocolate_cake_front.jpg",
             image_path="/dummy/f.jpg",
             sha256_hash="555",
-            role=CardRole.FRONT_ONLY,
+            role=CardRole.SEQUENCE_START,
             boundary_text=BoundaryText(first_line="Chocolate Cake", last_line="2 cups sugar"),
         )
         fp_b = VisualFingerprint(
             card_id="beef_stew_back.jpg",
             image_path="/dummy/b.jpg",
             sha256_hash="666",
-            role=CardRole.BACK_ONLY,
+            role=CardRole.SEQUENCE_CONTINUATION,
             boundary_text=BoundaryText(first_line="Brown beef chunks in pot", last_line="Simmer 2 hours."),
         )
 
@@ -221,7 +220,7 @@ class TestGeminiSemanticVerifier:
 
 
 class TestPairingOptimizer:
-    """Tests for bipartite global pairing assignment and result generation."""
+    """Tests for open-ended directed sequence correlation and clustering."""
 
     def test_optimizer_empty_input(self):
         optimizer = PairingOptimizer()
@@ -243,8 +242,8 @@ class TestPairingOptimizer:
         result = optimizer.optimize_proposals([fp_standalone], proposals=[])
         assert len(result.proposals) == 1
         prop = result.proposals[0]
-        assert prop.front_card_id == "05_fudge_standalone.jpg"
-        assert prop.back_card_id is None
+        assert prop.ordered_card_ids == ["05_fudge_standalone.jpg"]
+        assert prop.part_count == 1
         assert prop.is_standalone is True
         assert prop.recommended_action == "STANDALONE"
         assert len(result.unmatched_card_ids) == 0
@@ -253,29 +252,26 @@ class TestPairingOptimizer:
         """When Card A matches Card B with conf=0.95 and Card C with conf=0.70, A pairs with B."""
         optimizer = PairingOptimizer()
 
-        fp_a = VisualFingerprint(card_id="card_A_front.jpg", image_path="/a", sha256_hash="a", role=CardRole.FRONT_ONLY)
-        fp_b = VisualFingerprint(card_id="card_B_back.jpg", image_path="/b", sha256_hash="b", role=CardRole.BACK_ONLY)
-        fp_c = VisualFingerprint(card_id="card_C_back.jpg", image_path="/c", sha256_hash="c", role=CardRole.BACK_ONLY)
+        fp_a = VisualFingerprint(card_id="card_A_front.jpg", image_path="/a", sha256_hash="a", role=CardRole.SEQUENCE_START)
+        fp_b = VisualFingerprint(card_id="card_B_back.jpg", image_path="/b", sha256_hash="b", role=CardRole.SEQUENCE_CONTINUATION)
+        fp_c = VisualFingerprint(card_id="card_C_back.jpg", image_path="/c", sha256_hash="c", role=CardRole.SEQUENCE_CONTINUATION)
 
         prop_ab = CorrelationProposal(
             proposal_id="p1",
-            front_card_id="card_A_front.jpg",
-            back_card_id="card_B_back.jpg",
+            ordered_card_ids=["card_A_front.jpg", "card_B_back.jpg"],
             confidence=0.95,
-            recommended_action="PAIR",
+            recommended_action="SEQUENCE",
         )
         prop_ac = CorrelationProposal(
             proposal_id="p2",
-            front_card_id="card_A_front.jpg",
-            back_card_id="card_C_back.jpg",
+            ordered_card_ids=["card_A_front.jpg", "card_C_back.jpg"],
             confidence=0.70,
             recommended_action="UNCERTAIN",
         )
 
         result = optimizer.optimize_proposals([fp_a, fp_b, fp_c], [prop_ab, prop_ac])
         assert len(result.proposals) == 1
-        assert result.proposals[0].front_card_id == "card_A_front.jpg"
-        assert result.proposals[0].back_card_id == "card_B_back.jpg"
+        assert result.proposals[0].ordered_card_ids == ["card_A_front.jpg", "card_B_back.jpg"]
         # Card C was not matched to anything
         assert "card_C_back.jpg" in result.unmatched_card_ids
 
@@ -319,19 +315,19 @@ class TestPairingOptimizer:
 
         assert len(paired_proposals) == 2
         # Check Cinnamon Rolls pair
-        cinnamon_pair = next(p for p in paired_proposals if "cinnamon" in p.front_card_id)
-        assert "cinnamon" in cinnamon_pair.back_card_id
-        assert cinnamon_pair.recommended_action == "PAIR"
+        cinnamon_pair = next(p for p in paired_proposals if any("cinnamon" in cid for cid in p.ordered_card_ids))
+        assert any("back" in cid for cid in cinnamon_pair.ordered_card_ids)
+        assert cinnamon_pair.recommended_action in ("PAIR", "SEQUENCE")
         assert cinnamon_pair.confidence >= 0.85
 
         # Check Lemon Bars pair
-        lemon_pair = next(p for p in paired_proposals if "lemon" in p.front_card_id)
-        assert "lemon" in lemon_pair.back_card_id
-        assert lemon_pair.recommended_action == "PAIR"
+        lemon_pair = next(p for p in paired_proposals if any("lemon" in cid for cid in p.ordered_card_ids))
+        assert any("back" in cid for cid in lemon_pair.ordered_card_ids)
+        assert lemon_pair.recommended_action in ("PAIR", "SEQUENCE")
 
         # Check Standalones (Fudge, Pecan Pie)
         assert len(standalone_proposals) == 2
-        standalone_ids = {p.front_card_id for p in standalone_proposals}
+        standalone_ids = {p.ordered_card_ids[0] for p in standalone_proposals}
         assert any("fudge" in cid for cid in standalone_ids)
         assert any("pecan" in cid for cid in standalone_ids)
 

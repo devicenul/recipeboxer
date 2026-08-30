@@ -174,10 +174,11 @@ describe('RecipeBoxer Frontend E2E Platform Suite (Tiers 1–4)', () => {
 
       expect(screen.getByText(/Multi-Card Recipe Group/i)).toBeInTheDocument();
       expect(screen.getByText(/3 cards attached/i)).toBeInTheDocument();
-      expect(screen.getByText(/Front \(Page 1\)/i)).toBeInTheDocument();
-      expect(screen.getByText(/Back \(Page 2\)/i)).toBeInTheDocument();
-      expect(screen.getByText(/Part 3/i)).toBeInTheDocument();
+      expect(screen.getByText(/Part 1 of 3/i)).toBeInTheDocument();
+      expect(screen.getByText(/Part 2 of 3/i)).toBeInTheDocument();
+      expect(screen.getByText(/Part 3 of 3/i)).toBeInTheDocument();
     });
+
 
     // F2.2: Positional Drag/Reorder Controls
     it('T1.F2.2: supports positional reordering of card sequence via move controls', () => {
@@ -203,14 +204,14 @@ describe('RecipeBoxer Frontend E2E Platform Suite (Tiers 1–4)', () => {
       const onApprove = vi.fn();
       const proposal: CorrelationProposal = {
         proposal_id: 'prop_seq_01',
-        front_card_id: 'card_a',
-        back_card_id: 'card_b',
+        ordered_card_ids: ['card_a', 'card_b'],
         heuristic_score: 0.91,
         semantic_score: 0.91,
         confidence: 0.91,
         is_standalone: false,
         recommended_action: 'PAIR',
       };
+
 
       render(
         <RapidQueueCard
@@ -495,14 +496,14 @@ describe('RecipeBoxer Frontend E2E Platform Suite (Tiers 1–4)', () => {
       const onApprove = vi.fn();
       const proposal: CorrelationProposal = {
         proposal_id: 'prop_combo',
-        front_card_id: 'card_p1',
-        back_card_id: 'card_p2',
+        ordered_card_ids: ['card_p1', 'card_p2'],
         heuristic_score: 0.90,
         semantic_score: 0.90,
         confidence: 0.90,
         is_standalone: false,
         recommended_action: 'PAIR',
       };
+
 
       render(
         <RapidQueueCard

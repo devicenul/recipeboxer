@@ -3,39 +3,28 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import List, Optional
-from pydantic import BaseModel, Field
+from typing import Any, Dict, List, Optional
+from pydantic import BaseModel, Field, model_validator
 
 
 class HITLDecision(str, Enum):
-    """Human reviewer decision for a proposed card pairing."""
-    APPROVE = "APPROVE"          # Accept proposed pairing as-is
-    REJECT = "REJECT"            # Reject pairing (do not extract as recipe)
-    OVERRIDE = "OVERRIDE"        # Human manual pairing / reassignment of back card
+    """Human reviewer decision for a proposed card sequence."""
+    APPROVE = "APPROVE"          # Accept proposed sequence as-is
+    REJECT = "REJECT"            # Reject sequence (do not extract as recipe)
+    OVERRIDE = "OVERRIDE"        # Human manual sequence reordering or assignment
     STANDALONE = "STANDALONE"    # Designated as a single-sided standalone recipe
 
 
-class CardPairApproval(BaseModel):
-    """Individual human review decision on a correlation proposal."""
+class CardSequenceApproval(BaseModel):
+    """Individual human review decision on an ordered sequence proposal."""
     proposal_id: str = Field(
         ...,
         description="ID of the proposal being approved, rejected, or overridden",
     )
-    front_card_id: str = Field(
+    ordered_card_ids: List[str] = Field(
         ...,
-        description="Card ID of front card",
-    )
-    back_card_id: Optional[str] = Field(
-        default=None,
-        description="Card ID of assigned back card, or None for standalone recipe",
-    )
-    card_ids: Optional[List[str]] = Field(
-        default=None,
-        description="Complete list of card IDs for multi-card grouping (e.g. 3+ card sets)",
-    )
-    additional_card_ids: Optional[List[str]] = Field(
-        default=None,
-        description="Optional additional back card IDs for multi-part recipe sets",
+        min_length=1,
+        description="Authoritative ordered list of card IDs for this recipe sequence",
     )
     decision: HITLDecision = Field(
         default=HITLDecision.APPROVE,
@@ -51,12 +40,55 @@ class CardPairApproval(BaseModel):
     )
     reverse_roles: Optional[bool] = Field(
         default=False,
-        description="Flag indicating front and back card roles should be reversed",
+        description="Legacy flag for front/back role reversal",
     )
     notes: Optional[str] = Field(
         default=None,
         description="Optional human reviewer notes or corrections",
     )
+
+    @property
+    def front_card_id(self) -> str:
+        return self.ordered_card_ids[0] if self.ordered_card_ids else ""
+
+    @property
+    def back_card_id(self) -> Optional[str]:
+        return self.ordered_card_ids[1] if len(self.ordered_card_ids) > 1 else None
+
+    @property
+    def card_ids(self) -> List[str]:
+        return self.ordered_card_ids
+
+    @property
+    def additional_card_ids(self) -> List[str]:
+        return self.ordered_card_ids[2:] if len(self.ordered_card_ids) > 2 else []
+
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_approval_fields(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            if "ordered_card_ids" not in data or not data["ordered_card_ids"]:
+                cards: List[str] = []
+                if data.get("card_ids"):
+                    cards = list(data["card_ids"])
+                elif data.get("front_card_id"):
+                    if data.get("reverse_roles") and data.get("back_card_id"):
+                        cards = [str(data["back_card_id"]), str(data["front_card_id"])]
+                    else:
+                        cards = [str(data["front_card_id"])]
+                        if data.get("back_card_id"):
+                            cards.append(str(data["back_card_id"]))
+                    if data.get("additional_card_ids"):
+                        for cid in data["additional_card_ids"]:
+                            if cid not in cards:
+                                cards.append(str(cid))
+                if cards:
+                    data["ordered_card_ids"] = cards
+        return data
+
+
+# Backward-compatible clean-break alias
+CardPairApproval = CardSequenceApproval
 
 
 class ApprovalPayload(BaseModel):
@@ -65,7 +97,7 @@ class ApprovalPayload(BaseModel):
         ...,
         description="ID of the pipeline session being reviewed",
     )
-    approvals: List[CardPairApproval] = Field(
+    approvals: List[CardSequenceApproval] = Field(
         default_factory=list,
         description="List of approved, overridden, or standalone card configurations",
     )
@@ -116,7 +148,7 @@ class CandidateScoreBreakdown(BaseModel):
 
 
 class CorrelationCandidate(BaseModel):
-    """Ranked alternate candidate back card for the candidate drawer."""
+    """Ranked alternate candidate card for the candidate drawer."""
     candidate_card_id: str = Field(
         ...,
         description="Card ID of the candidate matching card",
@@ -157,9 +189,13 @@ class CandidateListResponse(BaseModel):
         ...,
         description="Target pipeline session ID",
     )
-    front_card_id: str = Field(
+    card_id: str = Field(
         ...,
-        description="Target front card ID being correlated",
+        description="Target card ID being extended or correlated",
+    )
+    front_card_id: Optional[str] = Field(
+        default=None,
+        description="Legacy alias for card_id",
     )
     candidates: List[CorrelationCandidate] = Field(
         default_factory=list,
@@ -170,3 +206,20 @@ class CandidateListResponse(BaseModel):
         description="Total number of candidates evaluated",
     )
 
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_candidate_response(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            if "card_id" not in data and "front_card_id" in data:
+                data["card_id"] = data["front_card_id"]
+            if "front_card_id" not in data and "card_id" in data:
+                data["front_card_id"] = data["card_id"]
+        return data
+
+    def model_post_init(self, __context: Any) -> None:
+        if not self.front_card_id and self.card_id:
+            self.front_card_id = self.card_id
+
+    @property
+    def preceding_card_id(self) -> str:
+        return self.card_id

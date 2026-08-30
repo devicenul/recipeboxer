@@ -29,37 +29,43 @@ export interface CorrelationCandidate {
 
 export interface CandidateListResponse {
   session_id: string;
-  front_card_id: string;
+  card_id?: string;
+  preceding_card_id?: string;
+  front_card_id?: string;
   candidates: CorrelationCandidate[];
   total_candidates: number;
 }
 
 export interface CorrelationProposal {
   proposal_id: string;
-  front_card_id: string;
-  back_card_id?: string | null;
-  card_ids?: string[];
+  ordered_card_ids: string[];
   heuristic_score: number;
   semantic_score: number;
   confidence: number;
   is_standalone: boolean;
   continuity_explanation?: string;
   recommended_action: string;
-}
-
-export interface CardPairApproval {
-  proposal_id?: string;
-  front_card_id: string;
+  front_card_id?: string;
   back_card_id?: string | null;
   card_ids?: string[];
+}
+
+export interface HitlApproval {
+  proposal_id?: string;
+  ordered_card_ids: string[];
   is_standalone?: boolean;
   is_rejected?: boolean;
+  front_card_id?: string;
+  back_card_id?: string | null;
+  card_ids?: string[];
   reverse_roles?: boolean;
 }
 
+export type CardPairApproval = HitlApproval;
+
 export interface ApprovalPayload {
   session_id: string;
-  approvals: CardPairApproval[];
+  approvals: HitlApproval[];
   rejected_card_ids: string[];
   continue_pipeline?: boolean;
 }
@@ -75,8 +81,10 @@ export interface ApprovalResponse {
 export interface HitlPendingResponse {
   session_id: string;
   status: string;
-  proposed_pairs: CorrelationProposal[];
+  proposals?: CorrelationProposal[];
+  proposed_pairs?: CorrelationProposal[];
   unassigned_cards: any[];
   total_proposals: number;
   total_unassigned: number;
 }
+

@@ -42,10 +42,19 @@ export const RapidQueueCard: React.FC<RapidQueueCardProps> = ({
 }) => {
   const viewer = useImageViewer();
 
-  const frontImageUrl = api.getCardImageUrl(proposal.front_card_id, sessionId);
-  const backImageUrl = proposal.back_card_id
-    ? api.getCardImageUrl(proposal.back_card_id, sessionId)
-    : null;
+  const sequence = (groupedCardIds && groupedCardIds.length > 0)
+    ? groupedCardIds
+    : (proposal.ordered_card_ids && proposal.ordered_card_ids.length > 0)
+    ? proposal.ordered_card_ids
+    : [proposal.front_card_id, proposal.back_card_id].filter(Boolean) as string[];
+
+  const totalParts = sequence.length || (proposal.is_standalone ? 1 : 2);
+  const part1Id = sequence[0] || proposal.front_card_id || '';
+  const part2Id = sequence[1] || proposal.back_card_id || null;
+
+  const part1ImageUrl = part1Id ? api.getCardImageUrl(part1Id, sessionId) : null;
+  const part2ImageUrl = part2Id ? api.getCardImageUrl(part2Id, sessionId) : null;
+  const isStandalone = !part2Id || proposal.is_standalone || totalParts === 1;
 
   return (
     <div className="flex flex-col gap-4">
@@ -92,13 +101,13 @@ export const RapidQueueCard: React.FC<RapidQueueCardProps> = ({
 
       {/* Dual Card Comparison Viewport */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 min-h-[420px]">
-        {/* Left: Front Card */}
+        {/* Left: Part 1 */}
         <div className="flex flex-col gap-2">
           <CardViewerCanvas
-            imageUrl={frontImageUrl}
-            cardId={proposal.front_card_id}
-            label="FRONT SCAN"
-            roleBadge="Page 1 / Front"
+            imageUrl={part1ImageUrl}
+            cardId={part1Id}
+            label={totalParts > 1 ? `PART 1 OF ${totalParts}` : 'PART 1 OF 1'}
+            roleBadge={`Part 1 of ${totalParts}`}
             transform={viewer.transformFront}
             filters={viewer.filtersFront}
             onPan={(dx, dy) => viewer.pan(dx, dy, 'front')}
@@ -106,18 +115,18 @@ export const RapidQueueCard: React.FC<RapidQueueCardProps> = ({
           />
         </div>
 
-        {/* Right: Proposed Back Card / Standalone */}
+        {/* Right: Part 2 / Standalone Placeholder */}
         <div className="flex flex-col gap-2">
           <CardViewerCanvas
-            imageUrl={backImageUrl}
-            cardId={proposal.back_card_id}
-            label="PROPOSED BACK SCAN"
-            roleBadge={proposal.back_card_id ? 'Page 2 / Back' : undefined}
+            imageUrl={part2ImageUrl}
+            cardId={part2Id || undefined}
+            label={part2Id ? `PART 2 OF ${totalParts}` : 'STANDALONE RECIPE'}
+            roleBadge={part2Id ? `Part 2 of ${totalParts}` : undefined}
             transform={viewer.transformBack}
             filters={viewer.filtersBack}
             onPan={(dx, dy) => viewer.pan(dx, dy, 'back')}
             onWheelZoom={(delta) => (delta > 0 ? viewer.zoomIn('back') : viewer.zoomOut('back'))}
-            isStandalonePlaceholder={!proposal.back_card_id || proposal.is_standalone}
+            isStandalonePlaceholder={isStandalone}
           />
         </div>
       </div>
@@ -165,11 +174,11 @@ export const RapidQueueCard: React.FC<RapidQueueCardProps> = ({
           <HotkeyBadge hotkey="S" className="bg-blue-800 text-white border-blue-700" />
         </button>
 
-        {/* 3. Reverse Roles */}
+        {/* 3. Reverse Roles / Sequence */}
         <button
           type="button"
           onClick={onReverse}
-          disabled={!proposal.back_card_id}
+          disabled={totalParts <= 1}
           className="flex items-center justify-center gap-2 p-3 bg-purple-600 hover:bg-purple-700 text-white font-semibold text-xs rounded-xl shadow-md transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <ArrowLeftRight className="w-4 h-4" />
@@ -202,3 +211,4 @@ export const RapidQueueCard: React.FC<RapidQueueCardProps> = ({
     </div>
   );
 };
+

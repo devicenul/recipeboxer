@@ -1,7 +1,9 @@
-"""Global Pairing Optimizer for two-stage front/back card correlation.
+"""Open-ended N-part sequence correlation engine and graph clustering for RecipeBoxer.
 
-Solves bipartite assignment across screened and verified candidate card pairs to
-generate clean CorrelationProposals and identify standalone or unmatched cards.
+Constructs directed transition probability graphs P(C_i -> C_j) across visual fingerprints,
+evaluating substrate colorimetry, ruling, ink, mirrored physical stains, scan sequence proximity,
+explicit sequential header progression, and semantic continuation. Chains transitions into
+maximal ordered multi-card sequences (N >= 1) for human review.
 """
 
 from __future__ import annotations
@@ -20,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 
 class PairingOptimizer:
-    """Solves optimal global card assignment for recipe digitization jobs."""
+    """Solves open-ended directed sequence correlation and clustering for recipe digitization."""
 
     def __init__(
         self,
@@ -30,7 +32,7 @@ class PairingOptimizer:
         """Initialize PairingOptimizer.
 
         Args:
-            min_pair_confidence: Minimum composite confidence required to accept a pair proposal.
+            min_pair_confidence: Minimum transition confidence required to link adjacent cards.
             verifier: Optional GeminiSemanticVerifier instance for two-stage correlation.
         """
         self.settings = get_settings()
@@ -52,12 +54,8 @@ class PairingOptimizer:
         Returns:
             CorrelationResult with finalized proposals and unmatched cards.
         """
-        all_card_ids = [fp.card_id for fp in fingerprints]
-        fp_by_id = {fp.card_id: fp for fp in fingerprints}
-
-        # 1. Generate candidate proposals if not provided
         if candidate_proposals is None:
-            # Stage 1: Heuristic screening
+            # Stage 1: Directed heuristic screening
             screened_pairs = screen_candidate_pairs(
                 fingerprints,
                 threshold=self.settings.heuristic_screen_threshold,
@@ -73,14 +71,14 @@ class PairingOptimizer:
         fingerprints: List[VisualFingerprint],
         proposals: List[CorrelationProposal],
     ) -> CorrelationResult:
-        """Optimizes card pairings from a list of verified candidate proposals.
+        """Chains verified candidate transitions into maximal ordered N-card sequence proposals.
 
         Args:
             fingerprints: List of all VisualFingerprint items in the dataset.
-            proposals: Candidate CorrelationProposal items.
+            proposals: Candidate CorrelationProposal items (pairwise or multi-card).
 
         Returns:
-            CorrelationResult containing assigned pairs, standalones, and unmatched cards.
+            CorrelationResult containing assigned sequences, standalones, and unmatched cards.
         """
         fp_by_id: Dict[str, VisualFingerprint] = {fp.card_id: fp for fp in fingerprints}
         assigned_card_ids: Set[str] = set()
@@ -90,29 +88,113 @@ class PairingOptimizer:
         # Sort candidate proposals descending by composite confidence score
         sorted_proposals = sorted(proposals, key=lambda p: p.confidence, reverse=True)
 
-        # 1. Greedy Bipartite Matching for Front/Back Pairs
+        # 1. First absorb any already-formed multi-part sequences (N >= 3)
         for prop in sorted_proposals:
-            f_id = prop.front_card_id
-            b_id = prop.back_card_id
+            if len(prop.ordered_card_ids) >= 3 and prop.confidence >= self.min_pair_confidence and prop.recommended_action != "REJECT":
+                if not any(cid in assigned_card_ids for cid in prop.ordered_card_ids):
+                    for cid in prop.ordered_card_ids:
+                        assigned_card_ids.add(cid)
+                    final_proposals.append(prop)
 
-            if not b_id:
-                # Standalone proposal already packaged
+        # 2. Directed Transition Graph Chaining for pairwise transitions
+        # Graph adjacency: next_hop[u] = (v, transition_score, heuristic_score, semantic_score, explanation)
+        next_hop: Dict[str, Tuple[str, float, float, float, str]] = {}
+        prev_hop: Dict[str, str] = {}
+
+        def would_create_cycle(start_node: str, end_node: str) -> bool:
+            """Checks if adding edge start_node -> end_node creates a directed cycle."""
+            curr = end_node
+            visited = set()
+            while curr in next_hop and curr not in visited:
+                visited.add(curr)
+                if curr == start_node:
+                    return True
+                curr = next_hop[curr][0]
+            return curr == start_node
+
+        for prop in sorted_proposals:
+            if len(prop.ordered_card_ids) != 2:
                 continue
 
-            if f_id in assigned_card_ids or b_id in assigned_card_ids:
-                # One of the cards was already matched to a higher-confidence pair
+            u, v = prop.ordered_card_ids[0], prop.ordered_card_ids[1]
+
+            if u in assigned_card_ids or v in assigned_card_ids:
                 continue
 
             if prop.confidence < self.min_pair_confidence or prop.recommended_action == "REJECT":
-                # Does not meet minimum confidence threshold
                 continue
 
-            # Accept this front/back pairing
-            assigned_card_ids.add(f_id)
-            assigned_card_ids.add(b_id)
-            final_proposals.append(prop)
+            # Ensure u has no outgoing link and v has no incoming link
+            if u in next_hop or v in prev_hop:
+                continue
 
-        # 2. Package STANDALONE cards
+            # Prevent cycles
+            if would_create_cycle(u, v):
+                continue
+
+            # Accept directed transition link u -> v
+            h_score = getattr(prop, "heuristic_score", prop.confidence)
+            s_score = getattr(prop, "semantic_score", prop.confidence)
+            expl = getattr(prop, "continuity_explanation", "Sequential continuation")
+            next_hop[u] = (v, prop.confidence, h_score, s_score, expl)
+            prev_hop[v] = u
+
+        # 3. Assemble maximal linear paths [C_1, C_2, ..., C_N]
+        # Start nodes have out-degree > 0 and in-degree == 0
+        all_graph_nodes = set(next_hop.keys()) | set(prev_hop.keys())
+        start_nodes = [node for node in next_hop.keys() if node not in prev_hop]
+
+        # In case of disconnected cycles (should not happen with would_create_cycle), pick any
+        visited_nodes: Set[str] = set()
+
+        for start in start_nodes:
+            if start in visited_nodes:
+                continue
+
+            chain_ids: List[str] = [start]
+            visited_nodes.add(start)
+            t_scores: List[float] = []
+            h_scores: List[float] = []
+            s_scores: List[float] = []
+            explanations: List[str] = []
+
+            curr = start
+            while curr in next_hop:
+                nxt, conf, h_s, s_s, exp = next_hop[curr]
+                if nxt in visited_nodes:
+                    break
+                chain_ids.append(nxt)
+                visited_nodes.add(nxt)
+                t_scores.append(conf)
+                h_scores.append(h_s)
+                s_scores.append(s_s)
+                if exp:
+                    explanations.append(exp)
+                curr = nxt
+
+            for cid in chain_ids:
+                assigned_card_ids.add(cid)
+
+            avg_conf = sum(t_scores) / len(t_scores) if t_scores else 0.85
+            avg_h = sum(h_scores) / len(h_scores) if h_scores else 0.85
+            avg_s = sum(s_scores) / len(s_scores) if s_scores else 0.85
+            full_expl = " | ".join(explanations) if explanations else f"Connected {len(chain_ids)}-card sequence."
+
+            seq_proposal = CorrelationProposal(
+                proposal_id=f"prop_{uuid.uuid4().hex[:8]}",
+                ordered_card_ids=chain_ids,
+                part_count=len(chain_ids),
+                transition_scores=t_scores,
+                heuristic_score=round(avg_h, 4),
+                semantic_score=round(avg_s, 4),
+                confidence=round(avg_conf, 4),
+                is_standalone=False,
+                continuity_explanation=full_expl,
+                recommended_action="SEQUENCE",
+            )
+            final_proposals.append(seq_proposal)
+
+        # 4. Package STANDALONE cards (single-card self-contained recipes)
         for fp in fingerprints:
             card_id = fp.card_id
             if card_id in assigned_card_ids:
@@ -122,8 +204,9 @@ class PairingOptimizer:
             if role_str == "STANDALONE":
                 standalone_prop = CorrelationProposal(
                     proposal_id=f"prop_{uuid.uuid4().hex[:8]}",
-                    front_card_id=card_id,
-                    back_card_id=None,
+                    ordered_card_ids=[card_id],
+                    part_count=1,
+                    transition_scores=[],
                     heuristic_score=0.0,
                     semantic_score=0.0,
                     confidence=fp.role_confidence,
@@ -134,7 +217,7 @@ class PairingOptimizer:
                 final_proposals.append(standalone_prop)
                 assigned_card_ids.add(card_id)
 
-        # 3. Collect Unmatched Cards (e.g. UNKNOWN noise tabs, unpartnered fronts or backs)
+        # 5. Collect Unmatched Cards
         for fp in fingerprints:
             card_id = fp.card_id
             if card_id not in assigned_card_ids:

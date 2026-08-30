@@ -593,17 +593,21 @@ def _extract_pairs_from_input(
 
         for item in raw_input:
             if isinstance(item, CorrelationProposal):
-                f = _canonical_card_id(item.front_card_id)
-                b = _canonical_card_id(item.back_card_id)
-                if item.is_standalone or not b:
-                    if f:
-                        standalone_cards.add(f)
-                        full_clusters.append({f})
-                else:
-                    if f and b:
-                        pair = tuple(sorted([f, b]))
+                cards = [_canonical_card_id(x) for x in item.ordered_card_ids if x]
+                cards = [x for x in cards if x is not None]
+                if item.is_standalone or len(cards) == 1:
+                    if cards:
+                        standalone_cards.add(cards[0])
+                        full_clusters.append({cards[0]})
+                elif len(cards) == 2:
+                    pair = tuple(sorted([cards[0], cards[1]]))
+                    pair_links.add(pair)
+                    full_clusters.append(set(cards))
+                elif len(cards) >= 3:
+                    full_clusters.append(set(cards))
+                    for idx in range(len(cards) - 1):
+                        pair = tuple(sorted([cards[idx], cards[idx + 1]]))
                         pair_links.add(pair)
-                        full_clusters.append({f, b})
 
             elif isinstance(item, (set, list, tuple)):
                 items = [_canonical_card_id(x) for x in item if x]

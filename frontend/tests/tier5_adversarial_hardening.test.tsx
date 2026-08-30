@@ -245,8 +245,7 @@ describe('Tier 5 Adversarial Hardening — Frontend Test Suite', () => {
   describe('Area 2: Multi-Card HITL Modal & Sequence Ordering', () => {
     const mockProposal: CorrelationProposal = {
       proposal_id: 'prop_multi_8',
-      front_card_id: 'card_feast_01',
-      back_card_id: 'card_feast_02',
+      ordered_card_ids: ['card_feast_01', 'card_feast_02'],
       confidence: 0.95,
       heuristic_score: 0.9,
       semantic_score: 0.98,
@@ -301,11 +300,11 @@ describe('Tier 5 Adversarial Hardening — Frontend Test Suite', () => {
       );
 
       // Verify all 5 cards rendered
-      expect(screen.getByText(/Front \(Page 1\)/i)).toBeDefined();
-      expect(screen.getByText(/Back \(Page 2\)/i)).toBeDefined();
-      expect(screen.getByText(/Part 3/i)).toBeDefined();
-      expect(screen.getByText(/Part 4/i)).toBeDefined();
-      expect(screen.getByText(/Part 5/i)).toBeDefined();
+      expect(screen.getByText(/Part 1 of 5/i)).toBeDefined();
+      expect(screen.getByText(/Part 2 of 5/i)).toBeDefined();
+      expect(screen.getByText(/Part 3 of 5/i)).toBeDefined();
+      expect(screen.getByText(/Part 4 of 5/i)).toBeDefined();
+      expect(screen.getByText(/Part 5 of 5/i)).toBeDefined();
 
       // Test Move Right
       const moveRightButtons = screen.getAllByTitle(/Move later/i);
@@ -368,12 +367,13 @@ describe('Tier 5 Adversarial Hardening — Frontend Test Suite', () => {
           approvals: expect.arrayContaining([
             expect.objectContaining({
               proposal_id: 'prop_multi_8',
-              card_ids: expect.arrayContaining(['card_feast_01', 'card_feast_02', 'card_feast_03']),
+              ordered_card_ids: expect.arrayContaining(['card_feast_01', 'card_feast_02', 'card_feast_03']),
             }),
           ]),
         })
       );
     });
+
   });
 
   // =========================================================================
@@ -414,13 +414,14 @@ describe('Tier 5 Adversarial Hardening — Frontend Test Suite', () => {
       expect(screen.getByText(/Recipe 1 of 2/i)).toBeDefined();
       expect(screen.getByText(/Grandma Rose's Apple Crisp \[GUESS\]/i)).toBeDefined();
 
-      // Multi-card tabs rendered (Front and Back)
-      const backCardTab = screen.getByRole('button', { name: /Card 2 \(Back\)/i });
+      // Multi-card tabs rendered (Part 1 and Part 2)
+      const backCardTab = screen.getByRole('button', { name: /Part 2 of 2/i });
       expect(backCardTab).toBeDefined();
 
-      // Click Card 2 tab -> image url updates
+      // Click Part 2 tab -> image url updates
       fireEvent.click(backCardTab);
       expect(api.getCardImageUrl).toHaveBeenCalledWith('card_crisp_back', 'sess_editor_test');
+
     });
 
     it('triggers workflow navigation confirmation dialog on clicking Next on the last recipe', async () => {

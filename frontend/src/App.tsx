@@ -58,10 +58,12 @@ export const AppContent: React.FC = () => {
       total_scans: 0,
       fingerprinted: 0,
       proposals_generated: 0,
+      approved_recipes: 0,
       approved_pairs: 0,
       recipes_extracted: 0,
       current_stage: 'Idle',
       percent_complete: 0,
+
     },
     token_usage: {
       prompt_tokens: 0,

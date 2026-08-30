@@ -209,8 +209,9 @@ class GeminiSemanticVerifier:
 
             return CorrelationProposal(
                 proposal_id=f"prop_{uuid.uuid4().hex[:8]}",
-                front_card_id=front_fp.card_id,
-                back_card_id=back_fp.card_id,
+                ordered_card_ids=[front_fp.card_id, back_fp.card_id],
+                part_count=2,
+                transition_scores=[composite],
                 heuristic_score=heuristic_score,
                 semantic_score=semantic_score,
                 confidence=composite,
@@ -260,7 +261,7 @@ class GeminiSemanticVerifier:
                 f"Strong semantic continuity detected: front card ends with continuation cue/ingredients, "
                 f"back card continues with numbered baking steps. Common topic: {', '.join(token_overlap) or f_clean or 'Recipe Flow'}."
             )
-            action = "PAIR"
+            action = "SEQUENCE"
         elif heuristic_score >= 0.60:
             semantic_score = 0.65
             explanation = "Moderate visual and structural continuity. Recommended for review."
@@ -282,8 +283,9 @@ class GeminiSemanticVerifier:
 
         return CorrelationProposal(
             proposal_id=f"prop_{uuid.uuid4().hex[:8]}",
-            front_card_id=front_fp.card_id,
-            back_card_id=back_fp.card_id,
+            ordered_card_ids=[front_fp.card_id, back_fp.card_id],
+            part_count=2,
+            transition_scores=[composite],
             heuristic_score=heuristic_score,
             semantic_score=semantic_score,
             confidence=composite,

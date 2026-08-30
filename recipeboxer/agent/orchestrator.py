@@ -247,32 +247,16 @@ class RecipeBoxerAgent:
 
                 # Resolve authoritative ordered card sequence
                 ordered_card_ids: List[str] = []
-                if approval.card_ids:
+                if getattr(approval, "ordered_card_ids", None):
+                    ordered_card_ids = list(approval.ordered_card_ids)
+                elif getattr(approval, "card_ids", None):
                     ordered_card_ids = list(approval.card_ids)
-                else:
-                    if getattr(approval, "reverse_roles", False) and approval.back_card_id:
-                        ordered_card_ids = [approval.back_card_id, approval.front_card_id]
-                    else:
-                        ordered_card_ids = [approval.front_card_id]
-                        if approval.back_card_id:
-                            ordered_card_ids.append(approval.back_card_id)
-                    if getattr(approval, "additional_card_ids", None):
-                        for cid in approval.additional_card_ids:
-                            if cid not in ordered_card_ids:
-                                ordered_card_ids.append(cid)
 
                 ordered_fps = [
                     session.fingerprints[cid]
                     for cid in ordered_card_ids
                     if cid in session.fingerprints
                 ]
-
-                if not ordered_fps:
-                    front_fp = session.fingerprints.get(approval.front_card_id)
-                    if front_fp:
-                        ordered_fps = [front_fp]
-                        if approval.back_card_id and approval.back_card_id in session.fingerprints:
-                            ordered_fps.append(session.fingerprints[approval.back_card_id])
 
                 if not ordered_fps:
                     logger.warning(
@@ -537,36 +521,29 @@ class RecipeBoxerAgent:
         if session.recipe_extractor_fn:
             try:
                 sig = inspect.signature(session.recipe_extractor_fn)
-                if len(sig.parameters) == 1 and len(ordered_fps) > 2:
+                if len(sig.parameters) == 1:
                     res = session.recipe_extractor_fn(ordered_fps)
                 else:
                     res = session.recipe_extractor_fn(primary_front, primary_back)
             except Exception:
-                res = session.recipe_extractor_fn(primary_front, primary_back)
+                res = session.recipe_extractor_fn(ordered_fps)
             recipe = await res if asyncio.iscoroutine(res) else res
-        elif session.mock_client and hasattr(session.mock_client, "extract_cards") and len(ordered_fps) > 2:
+        elif session.mock_client and hasattr(session.mock_client, "extract_cards"):
             recipe = await session.mock_client.extract_cards(ordered_fps)
         elif session.mock_client and hasattr(session.mock_client, "extract_recipe"):
             try:
                 recipe = await session.mock_client.extract_recipe(primary_front, primary_back)
             except Exception:
                 recipe = await session.mock_client.extract_recipe(ordered_fps)
-        elif hasattr(self.recipe_extractor, "extract_cards") and len(ordered_fps) > 2:
+        elif hasattr(self.recipe_extractor, "extract_cards"):
             recipe = await self.recipe_extractor.extract_cards(ordered_fps)
         elif hasattr(self.recipe_extractor, "extract"):
-            if len(ordered_fps) > 2:
-                recipe = await self.recipe_extractor.extract(ordered_fps)
-            else:
-                recipe = await self.recipe_extractor.extract(primary_front, primary_back)
+            recipe = await self.recipe_extractor.extract(ordered_fps)
         elif hasattr(self.recipe_extractor, "extract_recipe"):
             recipe = await self.recipe_extractor.extract_recipe(primary_front, primary_back)
         elif callable(self.recipe_extractor):
             try:
-                res = (
-                    self.recipe_extractor(ordered_fps)
-                    if len(ordered_fps) > 2
-                    else self.recipe_extractor(primary_front, primary_back)
-                )
+                res = self.recipe_extractor(ordered_fps)
             except TypeError:
                 res = self.recipe_extractor(primary_front, primary_back)
             recipe = await res if asyncio.iscoroutine(res) else res

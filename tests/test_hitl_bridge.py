@@ -78,8 +78,7 @@ class TestHITLBridge:
         approvals = [
             CardPairApproval(
                 proposal_id=p.proposal_id,
-                front_card_id=p.front_card_id,
-                back_card_id=p.back_card_id,
+                ordered_card_ids=p.ordered_card_ids,
                 decision=HITLDecision.APPROVE,
             )
             for p in session.proposals
@@ -205,19 +204,17 @@ class TestHITLBridge:
         approvals = [
             CardPairApproval(
                 proposal_id=p1.proposal_id,
-                front_card_id=p1.front_card_id,
-                back_card_id=None,  # Override to standalone
+                ordered_card_ids=[p1.ordered_card_ids[0]],  # Override to standalone
                 decision=HITLDecision.OVERRIDE,
             ),
             CardPairApproval(
                 proposal_id=p2.proposal_id,
-                front_card_id=p2.front_card_id,
-                back_card_id=p2.back_card_id,
+                ordered_card_ids=p2.ordered_card_ids,
                 decision=HITLDecision.REJECT,
             ),
         ]
 
-        session.submit_approval(approvals, rejected_card_ids=[p2.front_card_id])
+        session.submit_approval(approvals, rejected_card_ids=p2.ordered_card_ids)
         await task
 
         assert session.state == PipelineState.COMPLETED

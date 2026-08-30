@@ -5,16 +5,35 @@ from __future__ import annotations
 import re
 from datetime import datetime, timezone
 from enum import Enum
-from typing import List, Optional, Union
+from typing import Any, List, Optional, Union
 from pydantic import BaseModel, Field, field_validator
 
 
 class CardRole(str, Enum):
-    """Functional role of a scanned recipe card."""
-    FRONT_ONLY = "FRONT_ONLY"
-    BACK_ONLY = "BACK_ONLY"
+    """Functional role or sequence position marker of a scanned recipe card."""
+    SEQUENCE_START = "SEQUENCE_START"
+    SEQUENCE_CONTINUATION = "SEQUENCE_CONTINUATION"
     STANDALONE = "STANDALONE"
     UNKNOWN = "UNKNOWN"
+
+    @classmethod
+    def _missing_(cls, value: object) -> Optional[CardRole]:
+        if isinstance(value, str):
+            val = value.upper().strip().replace("-", "_").replace(" ", "_")
+            if val in ("FRONT_ONLY", "FRONT", "START", "SEQUENCE_START", "CARD1_FRONT"):
+                return cls.SEQUENCE_START
+            if val in ("BACK_ONLY", "BACK", "CONTINUATION", "SEQUENCE_CONTINUATION", "CARD1_BACK"):
+                return cls.SEQUENCE_CONTINUATION
+            if val in ("STANDALONE", "SINGLE", "SINGLE_SIDED"):
+                return cls.STANDALONE
+            if val in ("UNKNOWN", "NOISE", "TAB", "DIVIDER"):
+                return cls.UNKNOWN
+        return None
+
+
+# Backward compatibility aliases
+CardRole.FRONT_ONLY = CardRole.SEQUENCE_START  # type: ignore[attr-defined]
+CardRole.BACK_ONLY = CardRole.SEQUENCE_CONTINUATION  # type: ignore[attr-defined]
 
 
 class PaperColorTone(str, Enum):
@@ -255,6 +274,27 @@ class VisualFingerprint(BaseModel):
         le=1.0,
         description="Confidence score of role classification",
     )
+
+    @field_validator("role", mode="before")
+    @classmethod
+    def normalize_role(cls, v: Any) -> Any:
+        if v is None:
+            return CardRole.UNKNOWN
+        if isinstance(v, CardRole):
+            return v
+        v_str = str(getattr(v, "value", v)).strip().upper()
+        if v_str in ("FRONT_ONLY", "FRONT", "START", "SEQUENCE_START"):
+            return CardRole.SEQUENCE_START
+        if v_str in ("BACK_ONLY", "BACK", "CONTINUATION", "SEQUENCE_CONTINUATION"):
+            return CardRole.SEQUENCE_CONTINUATION
+        if v_str in ("STANDALONE", "SINGLE"):
+            return CardRole.STANDALONE
+        if v_str in ("UNKNOWN", "NOISE"):
+            return CardRole.UNKNOWN
+        try:
+            return CardRole(v_str)
+        except ValueError:
+            raise ValueError(f"Invalid CardRole: {v}")
     paper_color: PaperColorInfo = Field(default_factory=PaperColorInfo)
     ruling: PaperRulingInfo = Field(default_factory=PaperRulingInfo)
     ink: InkInfo = Field(default_factory=InkInfo)

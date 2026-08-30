@@ -105,12 +105,24 @@ class SessionStore:
                 CREATE TABLE IF NOT EXISTS session_proposals (
                     session_id TEXT NOT NULL,
                     proposal_id TEXT NOT NULL,
-                    front_card_id TEXT NOT NULL,
-                    back_card_id TEXT,
+                    ordered_card_ids TEXT NOT NULL,
                     json_data TEXT,
                     PRIMARY KEY (session_id, proposal_id)
                 );
             """)
+            cur.execute("PRAGMA table_info(session_proposals);")
+            cols = [row[1] for row in cur.fetchall()]
+            if cols and ("front_card_id" in cols or "ordered_card_ids" not in cols):
+                cur.execute("DROP TABLE session_proposals;")
+                cur.execute("""
+                    CREATE TABLE session_proposals (
+                        session_id TEXT NOT NULL,
+                        proposal_id TEXT NOT NULL,
+                        ordered_card_ids TEXT NOT NULL,
+                        json_data TEXT,
+                        PRIMARY KEY (session_id, proposal_id)
+                    );
+                """)
             cur.execute("CREATE INDEX IF NOT EXISTS idx_session_props_sid ON session_proposals(session_id);")
 
             # 4. Session Recipes table
@@ -543,8 +555,16 @@ class SessionStore:
             try:
                 for p in proposals:
                     prop_id = getattr(p, "proposal_id", None) or (p.get("proposal_id") if isinstance(p, dict) else str(p))
-                    f_id = getattr(p, "front_card_id", None) or (p.get("front_card_id") if isinstance(p, dict) else "")
-                    b_id = getattr(p, "back_card_id", None) or (p.get("back_card_id") if isinstance(p, dict) else None)
+                    raw_cards = getattr(p, "ordered_card_ids", None)
+                    if raw_cards is None and isinstance(p, dict):
+                        raw_cards = p.get("ordered_card_ids") or p.get("card_ids")
+                        if not raw_cards and p.get("front_card_id"):
+                            raw_cards = [p["front_card_id"]]
+                            if p.get("back_card_id"):
+                                raw_cards.append(p["back_card_id"])
+                    if raw_cards is None:
+                        raw_cards = []
+                    cards_str = json.dumps(list(raw_cards)) if isinstance(raw_cards, (list, tuple)) else str(raw_cards)
 
                     if hasattr(p, "model_dump_json"):
                         j_str = p.model_dump_json()
@@ -554,13 +574,12 @@ class SessionStore:
                         j_str = "{}"
 
                     cur.execute("""
-                        INSERT INTO session_proposals (session_id, proposal_id, front_card_id, back_card_id, json_data)
-                        VALUES (?, ?, ?, ?, ?)
+                        INSERT INTO session_proposals (session_id, proposal_id, ordered_card_ids, json_data)
+                        VALUES (?, ?, ?, ?)
                         ON CONFLICT(session_id, proposal_id) DO UPDATE SET
-                            front_card_id = excluded.front_card_id,
-                            back_card_id = excluded.back_card_id,
+                            ordered_card_ids = excluded.ordered_card_ids,
                             json_data = excluded.json_data;
-                    """, (session_id, str(prop_id), str(f_id), str(b_id) if b_id else None, j_str))
+                    """, (session_id, str(prop_id), cards_str, j_str))
             finally:
                 cur.close()
 

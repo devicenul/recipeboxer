@@ -146,11 +146,12 @@ export const ProgressDashboard: React.FC<ProgressDashboardProps> = ({
         </div>
 
         <div className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 flex flex-col">
-          <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Approved Pairs</span>
+          <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Approved Recipes</span>
           <span className="text-xl font-bold text-emerald-600 dark:text-emerald-400 font-mono mt-1">
-            {progress.approved_pairs}
+            {progress.approved_recipes ?? progress.approved_pairs ?? 0}
           </span>
         </div>
+
 
         <div className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 flex flex-col">
           <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Recipes Extracted</span>

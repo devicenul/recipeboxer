@@ -1003,7 +1003,7 @@ class SyntheticCardGenerator:
             card_id=f_id,
             filename=f_id,
             modality=modality,
-            role=CardRole.FRONT_ONLY,
+            role=CardRole.SEQUENCE_START,
             recipe_cluster={
                 "recipe_id": rec_id,
                 "sequence_position": 0,
@@ -1025,7 +1025,7 @@ class SyntheticCardGenerator:
             card_id=b_id,
             filename=b_id,
             modality=modality,
-            role=CardRole.BACK_ONLY,
+            role=CardRole.SEQUENCE_CONTINUATION,
             recipe_cluster={
                 "recipe_id": rec_id,
                 "sequence_position": 1,
@@ -1155,7 +1155,7 @@ class SyntheticCardGenerator:
         cards: List[GeneratedCard] = []
         cluster_roles = ["card1_front", "card1_back", "card2_front", "card2_back"][:num_cards]
         card_roles = [
-            CardRole.FRONT_ONLY if i % 2 == 0 else CardRole.BACK_ONLY
+            CardRole.SEQUENCE_START if i == 0 else CardRole.SEQUENCE_CONTINUATION
             for i in range(num_cards)
         ]
 

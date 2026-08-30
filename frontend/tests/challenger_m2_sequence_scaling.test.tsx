@@ -51,9 +51,9 @@ describe('Empirical Challenger: Multi-Card Sequence Scaling & Reordering Stress 
       );
 
       expect(screen.getByText('Multi-Card Inspection & Sequencing (3 Cards)')).toBeInTheDocument();
-      expect(screen.getByText('#1 Front (Page 1)')).toBeInTheDocument();
-      expect(screen.getByText('#2 Continuation 1 / Back (Page 2)')).toBeInTheDocument();
-      expect(screen.getByText('#3 Continuation 2 (Page 3)')).toBeInTheDocument();
+      expect(screen.getByText('#1 Part 1 of 3')).toBeInTheDocument();
+      expect(screen.getByText('#2 Part 2 of 3')).toBeInTheDocument();
+      expect(screen.getByText('#3 Part 3 of 3')).toBeInTheDocument();
     });
 
     it('correctly reverses 3-card sequence to [c3_3, c3_2, c3_1]', () => {
@@ -108,18 +108,16 @@ describe('Empirical Challenger: Multi-Card Sequence Scaling & Reordering Stress 
       );
 
       const detachBtns = screen.getAllByTitle('Detach card from group');
-      expect(detachBtns.length).toBe(2); // card 2 and card 3
+      expect(detachBtns.length).toBe(3);
 
-      fireEvent.click(detachBtns[0]); // detach c3_2
+      fireEvent.click(detachBtns[1]); // detach c3_2
       expect(onDetach).toHaveBeenCalledWith('c3_2.jpg');
     });
 
     it('approves a 3-card sequence in HitlWorkspace with custom order', async () => {
       const mockProposal: CorrelationProposal = {
         proposal_id: 'prop_3card',
-        front_card_id: 'c3_1.jpg',
-        back_card_id: 'c3_2.jpg',
-        card_ids: cards3,
+        ordered_card_ids: cards3,
         heuristic_score: 0.9,
         semantic_score: 0.9,
         confidence: 0.9,
@@ -178,9 +176,7 @@ describe('Empirical Challenger: Multi-Card Sequence Scaling & Reordering Stress 
           approvals: [
             expect.objectContaining({
               proposal_id: 'prop_3card',
-              front_card_id: 'c3_3.jpg',
-              back_card_id: 'c3_2.jpg',
-              card_ids: ['c3_3.jpg', 'c3_2.jpg', 'c3_1.jpg'],
+              ordered_card_ids: ['c3_3.jpg', 'c3_2.jpg', 'c3_1.jpg'],
               is_standalone: false,
               is_rejected: false,
             }),
@@ -207,10 +203,10 @@ describe('Empirical Challenger: Multi-Card Sequence Scaling & Reordering Stress 
       );
 
       expect(screen.getByText('Multi-Card Inspection & Sequencing (4 Cards)')).toBeInTheDocument();
-      expect(screen.getByText('#1 Front (Page 1)')).toBeInTheDocument();
-      expect(screen.getByText('#2 Continuation 1 / Back (Page 2)')).toBeInTheDocument();
-      expect(screen.getByText('#3 Continuation 2 (Page 3)')).toBeInTheDocument();
-      expect(screen.getByText('#4 Continuation 3 (Page 4)')).toBeInTheDocument();
+      expect(screen.getByText('#1 Part 1 of 4')).toBeInTheDocument();
+      expect(screen.getByText('#2 Part 2 of 4')).toBeInTheDocument();
+      expect(screen.getByText('#3 Part 3 of 4')).toBeInTheDocument();
+      expect(screen.getByText('#4 Part 4 of 4')).toBeInTheDocument();
     });
 
     it('reverses 4-card sequence to [c4_4, c4_3, c4_2, c4_1]', () => {
@@ -254,9 +250,7 @@ describe('Empirical Challenger: Multi-Card Sequence Scaling & Reordering Stress 
     it('approves a 4-card sequence in HitlWorkspace and verifies API payload', async () => {
       const mockProposal: CorrelationProposal = {
         proposal_id: 'prop_4card',
-        front_card_id: 'c4_1.jpg',
-        back_card_id: 'c4_2.jpg',
-        card_ids: cards4,
+        ordered_card_ids: cards4,
         heuristic_score: 0.88,
         semantic_score: 0.92,
         confidence: 0.9,
@@ -310,9 +304,7 @@ describe('Empirical Challenger: Multi-Card Sequence Scaling & Reordering Stress 
           approvals: [
             expect.objectContaining({
               proposal_id: 'prop_4card',
-              front_card_id: 'c4_4.jpg',
-              back_card_id: 'c4_3.jpg',
-              card_ids: ['c4_4.jpg', 'c4_3.jpg', 'c4_2.jpg', 'c4_1.jpg'],
+              ordered_card_ids: ['c4_4.jpg', 'c4_3.jpg', 'c4_2.jpg', 'c4_1.jpg'],
               is_standalone: false,
             }),
           ],
@@ -417,22 +409,21 @@ describe('Empirical Challenger: Multi-Card Sequence Scaling & Reordering Stress 
       );
 
       expect(screen.getByText('Multi-Card Inspection & Sequencing (8 Cards)')).toBeInTheDocument();
-      expect(screen.getByText('#1 Front (Page 1)')).toBeInTheDocument();
-      expect(screen.getByText('#2 Continuation 1 / Back (Page 2)')).toBeInTheDocument();
-      expect(screen.getByText('#3 Continuation 2 (Page 3)')).toBeInTheDocument();
-      expect(screen.getByText('#4 Continuation 3 (Page 4)')).toBeInTheDocument();
-      expect(screen.getByText('#5 Continuation 4 (Page 5)')).toBeInTheDocument();
-      expect(screen.getByText('#6 Continuation 5 (Page 6)')).toBeInTheDocument();
-      expect(screen.getByText('#7 Continuation 6 (Page 7)')).toBeInTheDocument();
-      expect(screen.getByText('#8 Continuation 7 (Page 8)')).toBeInTheDocument();
+      expect(screen.getByText('#1 Part 1 of 8')).toBeInTheDocument();
+      expect(screen.getByText('#2 Part 2 of 8')).toBeInTheDocument();
+      expect(screen.getByText('#3 Part 3 of 8')).toBeInTheDocument();
+      expect(screen.getByText('#4 Part 4 of 8')).toBeInTheDocument();
+      expect(screen.getByText('#5 Part 5 of 8')).toBeInTheDocument();
+      expect(screen.getByText('#6 Part 6 of 8')).toBeInTheDocument();
+      expect(screen.getByText('#7 Part 7 of 8')).toBeInTheDocument();
+      expect(screen.getByText('#8 Part 8 of 8')).toBeInTheDocument();
 
       const selects = screen.getAllByLabelText(/Position rank for/i);
       expect(selects.length).toBe(8);
-      // Each select should have 8 options
       const firstSelectOptions = selects[0].querySelectorAll('option');
       expect(firstSelectOptions.length).toBe(8);
-      expect(firstSelectOptions[0].textContent).toBe('Pos 1 of 8');
-      expect(firstSelectOptions[7].textContent).toBe('Pos 8 of 8');
+      expect(firstSelectOptions[0].textContent).toBe('Part 1 of 8');
+      expect(firstSelectOptions[7].textContent).toBe('Part 8 of 8');
     });
 
     it('fully reverses 8-card sequence to [c8_8, c8_7, c8_6, c8_5, c8_4, c8_3, c8_2, c8_1]', () => {
@@ -533,9 +524,7 @@ describe('Empirical Challenger: Multi-Card Sequence Scaling & Reordering Stress 
     it('approves an 8-card reversed sequence in HitlWorkspace and verifies full 8-card payload to api.approveHitl', async () => {
       const mockProposal: CorrelationProposal = {
         proposal_id: 'prop_8card',
-        front_card_id: 'c8_1.jpg',
-        back_card_id: 'c8_2.jpg',
-        card_ids: cards8,
+        ordered_card_ids: cards8,
         heuristic_score: 0.95,
         semantic_score: 0.95,
         confidence: 0.95,
@@ -593,9 +582,7 @@ describe('Empirical Challenger: Multi-Card Sequence Scaling & Reordering Stress 
           approvals: [
             expect.objectContaining({
               proposal_id: 'prop_8card',
-              front_card_id: 'c8_8.jpg',
-              back_card_id: 'c8_7.jpg',
-              card_ids: [
+              ordered_card_ids: [
                 'c8_8.jpg',
                 'c8_7.jpg',
                 'c8_6.jpg',

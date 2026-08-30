@@ -103,12 +103,13 @@ describe('Milestone 3 Empirical Challenger: Recipe Editor UX & Tag Intelligence'
         />
       );
 
-      // Shows Card 1 and Card 2 tab buttons
-      const card1Tab = screen.getByRole('button', { name: /Card 1 \(Front\)/i });
-      const card2Tab = screen.getByRole('button', { name: /Card 2 \(Back\)/i });
+      // Shows Part 1 and Part 2 tab buttons
+      const card1Tab = screen.getByRole('button', { name: /Part 1 of 2/i });
+      const card2Tab = screen.getByRole('button', { name: /Part 2 of 2/i });
 
       expect(card1Tab).toBeInTheDocument();
       expect(card2Tab).toBeInTheDocument();
+
 
       // Initial active card is Card 1
       let img = screen.getByRole('img');

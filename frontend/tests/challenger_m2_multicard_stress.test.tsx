@@ -27,7 +27,7 @@ describe('Empirical Challenger: Milestone 2 Multi-Card UI & Workflow Deep Stress
   const cards5 = ['card_01.jpg', 'card_02.jpg', 'card_03.jpg', 'card_04.jpg', 'card_05.jpg'];
 
   describe('1. MultiCardInspectionModal Edge Cases & Boundary Behaviors', () => {
-    it('handles 2-card sets with correct "Front (Page 1)" and "Back (Page 2)" badges', () => {
+    it('handles 2-card sets with correct "Part 1 of 2" and "Part 2 of 2" badges', () => {
       render(
         <MultiCardInspectionModal
           isOpen={true}
@@ -39,8 +39,8 @@ describe('Empirical Challenger: Milestone 2 Multi-Card UI & Workflow Deep Stress
         />
       );
 
-      expect(screen.getByText('#1 Front (Page 1)')).toBeInTheDocument();
-      expect(screen.getByText('#2 Back (Page 2)')).toBeInTheDocument();
+      expect(screen.getByText('#1 Part 1 of 2')).toBeInTheDocument();
+      expect(screen.getByText('#2 Part 2 of 2')).toBeInTheDocument();
     });
 
     it('handles 5-card sets with continuation badges up to Page 5', () => {
@@ -55,12 +55,13 @@ describe('Empirical Challenger: Milestone 2 Multi-Card UI & Workflow Deep Stress
         />
       );
 
-      expect(screen.getByText('#1 Front (Page 1)')).toBeInTheDocument();
-      expect(screen.getByText('#2 Continuation 1 / Back (Page 2)')).toBeInTheDocument();
-      expect(screen.getByText('#3 Continuation 2 (Page 3)')).toBeInTheDocument();
-      expect(screen.getByText('#4 Continuation 3 (Page 4)')).toBeInTheDocument();
-      expect(screen.getByText('#5 Continuation 4 (Page 5)')).toBeInTheDocument();
+      expect(screen.getByText('#1 Part 1 of 5')).toBeInTheDocument();
+      expect(screen.getByText('#2 Part 2 of 5')).toBeInTheDocument();
+      expect(screen.getByText('#3 Part 3 of 5')).toBeInTheDocument();
+      expect(screen.getByText('#4 Part 4 of 5')).toBeInTheDocument();
+      expect(screen.getByText('#5 Part 5 of 5')).toBeInTheDocument();
     });
+
 
     it('enforces boundary disable checks on arrows: index 0 cannot move left, index 4 cannot move right', () => {
       const onReorder = vi.fn();
@@ -147,7 +148,7 @@ describe('Empirical Challenger: Milestone 2 Multi-Card UI & Workflow Deep Stress
       ]);
     });
 
-    it('detaches middle and last continuation cards, but front card has no detach button', () => {
+    it('detaches middle and last cards in 5-card set', () => {
       const onDetach = vi.fn();
       render(
         <MultiCardInspectionModal
@@ -161,16 +162,17 @@ describe('Empirical Challenger: Milestone 2 Multi-Card UI & Workflow Deep Stress
       );
 
       const detachButtons = screen.getAllByTitle('Detach card from group');
-      expect(detachButtons.length).toBe(4); // 4 continuation cards
+      expect(detachButtons.length).toBe(5);
 
-      // Detach card_03 (index 2 -> detachButtons[1])
-      fireEvent.click(detachButtons[1]);
+      // Detach card_03 (index 2 -> detachButtons[2])
+      fireEvent.click(detachButtons[2]);
       expect(onDetach).toHaveBeenCalledWith('card_03.jpg');
 
-      // Detach card_05 (index 4 -> detachButtons[3])
-      fireEvent.click(detachButtons[3]);
+      // Detach card_05 (index 4 -> detachButtons[4])
+      fireEvent.click(detachButtons[4]);
       expect(onDetach).toHaveBeenCalledWith('card_05.jpg');
     });
+
 
     it('handles drag-and-drop drop on same target index cleanly without dispatching redundant changes', () => {
       const onReorder = vi.fn();
@@ -266,9 +268,7 @@ describe('Empirical Challenger: Milestone 2 Multi-Card UI & Workflow Deep Stress
     it('suppresses rapid-queue keyboard hotkeys while inspection modal is open and closes on Escape', async () => {
       const mockProposal: CorrelationProposal = {
         proposal_id: 'prop_multi_5card',
-        front_card_id: 'card_01.jpg',
-        back_card_id: 'card_02.jpg',
-        card_ids: cards5,
+        ordered_card_ids: cards5,
         heuristic_score: 0.95,
         semantic_score: 0.96,
         confidence: 0.95,
@@ -318,9 +318,7 @@ describe('Empirical Challenger: Milestone 2 Multi-Card UI & Workflow Deep Stress
     it('approves a 5-card custom ordered sequence from modal and submits to api.approveHitl', async () => {
       const mockProposal: CorrelationProposal = {
         proposal_id: 'prop_multi_commit',
-        front_card_id: 'card_01.jpg',
-        back_card_id: 'card_02.jpg',
-        card_ids: cards5,
+        ordered_card_ids: cards5,
         heuristic_score: 0.92,
         semantic_score: 0.95,
         confidence: 0.93,
@@ -382,9 +380,7 @@ describe('Empirical Challenger: Milestone 2 Multi-Card UI & Workflow Deep Stress
           approvals: [
             expect.objectContaining({
               proposal_id: 'prop_multi_commit',
-              front_card_id: 'card_05.jpg',
-              back_card_id: 'card_04.jpg',
-              card_ids: ['card_05.jpg', 'card_04.jpg', 'card_03.jpg', 'card_02.jpg', 'card_01.jpg'],
+              ordered_card_ids: ['card_05.jpg', 'card_04.jpg', 'card_03.jpg', 'card_02.jpg', 'card_01.jpg'],
             }),
           ],
           rejected_card_ids: [],
@@ -394,4 +390,5 @@ describe('Empirical Challenger: Milestone 2 Multi-Card UI & Workflow Deep Stress
       });
     });
   });
+
 });

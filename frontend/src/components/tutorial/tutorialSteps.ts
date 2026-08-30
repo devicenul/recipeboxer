@@ -42,21 +42,21 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     stepNumber: 2,
     totalSteps: 6,
     title: 'Rapid HITL Queue & Hotkeys',
-    badge: 'Step 2 of 6: Pairing Queue',
+    badge: 'Step 2 of 6: Sequence Queue',
     targetTab: 'hitl',
     targetSelector: '[data-tour="rapid-queue"]',
     description:
-      'Review proposed front and back card pairings at lightning speed. Use single-key hotkeys for instantaneous decision-making without touching the mouse.',
+      'Review proposed card sequences (Part 1 of N) at lightning speed. Use single-key hotkeys for instantaneous decision-making without touching the mouse.',
     hotkeys: [
-      { key: 'Space', label: 'Approve Pair' },
+      { key: 'Space', label: 'Approve Sequence' },
       { key: 'S', label: 'Mark as Standalone' },
-      { key: 'B', label: 'Reverse Front / Back' },
+      { key: 'B', label: 'Reverse Sequence' },
       { key: 'X', label: 'Reject Scan' },
       { key: 'Tab', label: 'Open Candidate Drawer' },
     ],
     highlights: [
       'Fast single-keystroke approvals with zero UI lag',
-      'Instant front/back swap with visual orientation update',
+      'Instant sequence inversion (Part 1 of N) with visual orientation update',
       'Mark single-sided cards or discard non-recipe artifacts',
     ],
     iconName: 'GitMerge',
@@ -73,11 +73,12 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
       'Inspect AI correlation candidate rankings with visual confidence scores. When a recipe spans 3 or 4 cards, attach additional cards directly into multi-part recipe groups with custom sequence reordering.',
     highlights: [
       'Visual confidence scoring for top alternate pairing candidates',
-      '3+ part recipe grouping (Card 1 Front, Card 1 Back, Card 2 Front, Card 2 Back)',
+      '3+ part recipe grouping (Part 1 of N, Part 2 of N, Part 3 of N)',
       'Interactive card tray with drag/button reordering and detach capabilities',
     ],
     iconName: 'LayoutGrid',
   },
+
   {
     id: 'image-inspection-tools',
     stepNumber: 4,

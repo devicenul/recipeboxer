@@ -899,9 +899,9 @@ class TestPhysicalHeuristicsMathematicalRigor:
         assert calculate_role_compatibility(CardRole.STANDALONE, CardRole.UNKNOWN) == 0.00
         assert calculate_role_compatibility(CardRole.FRONT_ONLY, CardRole.STANDALONE) == 0.00
 
-        # Incompatible front/front, back/back, or inverted back/front
+        # Incompatible front/front, inverted back/front; continuation+continuation is 0.90 for N-part chaining
         assert calculate_role_compatibility(CardRole.FRONT_ONLY, CardRole.FRONT_ONLY) == 0.00
-        assert calculate_role_compatibility(CardRole.BACK_ONLY, CardRole.BACK_ONLY) == 0.00
+        assert calculate_role_compatibility(CardRole.BACK_ONLY, CardRole.BACK_ONLY) == 0.90
         assert calculate_role_compatibility(CardRole.BACK_ONLY, CardRole.FRONT_ONLY) == 0.00
 
     def test_role_pruning_forces_heuristic_distance_zero(self):

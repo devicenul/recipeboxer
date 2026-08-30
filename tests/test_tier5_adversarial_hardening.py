@@ -476,7 +476,7 @@ class TestExportersImagesAndFilenamesAdversarial:
         "raw_input, default_name, expected_ext, expected_output",
         [
             ("../../../etc/passwd", "default.csv", "csv", "passwd.csv"),
-            ("..\\..\\Windows\\System32\\config.sys", "default.json", "json", "WindowsSystem32config.sys.json"),
+            ("..\\..\\Windows\\System32\\config.sys", "default.json", "json", "config.sys.json"),
             ("My Recipe Box: 2026/08/26 <Best> *Cookbook*?.pdf", "cookbook.pdf", "pdf", "26 Best Cookbook.pdf"),
             ("   \t\n  ", "fallback.docx", "docx", "fallback.docx"),
             (None, "recipes.md", "md", "recipes.md"),

@@ -931,10 +931,19 @@ async def get_hitl_pending(
         else:
             unassigned_dump.append({"card_id": str(u)})
 
+    proposed_pairs_list = []
+    for p in session.proposals:
+        p_dump = p.model_dump()
+        if "front_card_id" not in p_dump and p.ordered_card_ids:
+            p_dump["front_card_id"] = p.ordered_card_ids[0]
+            p_dump["back_card_id"] = p.ordered_card_ids[1] if len(p.ordered_card_ids) > 1 else None
+        proposed_pairs_list.append(p_dump)
+
     return {
         "session_id": session.session_id,
         "status": session.state.value,
-        "proposed_pairs": [p.model_dump() for p in session.proposals],
+        "proposals": [p.model_dump() for p in session.proposals],
+        "proposed_pairs": proposed_pairs_list,
         "unassigned_cards": unassigned_dump,
         "total_proposals": len(session.proposals),
         "total_unassigned": len(session.unassigned_cards),
@@ -945,12 +954,12 @@ async def get_hitl_pending(
     "/hitl/candidates",
     response_model=CandidateListResponse,
     status_code=status.HTTP_200_OK,
-    summary="Rank Alternate Back Card Candidates for Drawer",
+    summary="Rank Alternate Card Candidates for Drawer",
 )
 async def get_hitl_candidates(
     session_id: Optional[str] = Query(None, description="Session ID"),
-    card_id: Optional[str] = Query(None, description="Front Card ID"),
-    front_card_id: Optional[str] = Query(None, description="Front Card ID alias"),
+    card_id: Optional[str] = Query(None, description="Target Card ID"),
+    front_card_id: Optional[str] = Query(None, description="Target Card ID alias"),
     manager: SessionManager = Depends(get_manager),
     store: SessionStore = Depends(get_store),
 ) -> CandidateListResponse:
@@ -974,10 +983,13 @@ async def get_hitl_candidates(
 
     candidates: List[CorrelationCandidate] = []
 
-    # Check proposals for existing pairings with this front card
-    existing_proposals = {
-        p.back_card_id: p for p in (session.proposals if session else []) if p.front_card_id == target_card_id and p.back_card_id
-    }
+    # Check proposals for existing sequences containing this card
+    existing_proposals: Dict[str, CorrelationProposal] = {}
+    for p in (session.proposals if session else []):
+        if target_card_id in p.ordered_card_ids:
+            for other_id in p.ordered_card_ids:
+                if other_id != target_card_id:
+                    existing_proposals[other_id] = p
 
     # Iterate candidate cards
     all_cand_ids = [cid for cid in fingerprints.keys() if cid != target_card_id]
@@ -1060,7 +1072,7 @@ async def get_hitl_candidates(
 
     return CandidateListResponse(
         session_id=sid,
-        front_card_id=target_card_id,
+        card_id=target_card_id,
         candidates=candidates,
         total_candidates=len(candidates),
     )
@@ -1398,7 +1410,8 @@ def sanitize_export_filename(
         return default_name
 
     # Strip path components and directory names
-    clean = os.path.basename(str(filename).strip())
+    raw = str(filename).strip().replace("\\", "/")
+    clean = os.path.basename(raw)
 
     # Remove illegal characters (\ / : * ? " < > | and control chars)
     clean = re.sub(r'[\/\\:\*\?"<>\|\x00-\x1f\x7f]', '', clean)

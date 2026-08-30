@@ -302,15 +302,15 @@ class GeminiVisualExtractor:
             tone_name = "Cream"
 
         # Determine role from filename or layout
-        if "front" in fname:
-            role = CardRole.FRONT_ONLY
+        if "front" in fname or "part1" in fname or "card1" in fname or "pt1" in fname:
+            role = CardRole.SEQUENCE_START
             role_conf = 0.95
             first_line = "Recipe Title & Ingredients"
             last_line = "Continue on back (over ->)"
             has_cue = True
             is_cutoff = True
-        elif "back" in fname:
-            role = CardRole.BACK_ONLY
+        elif "back" in fname or "part2" in fname or "card2" in fname or "part3" in fname or "part4" in fname or "pt2" in fname:
+            role = CardRole.SEQUENCE_CONTINUATION
             role_conf = 0.95
             first_line = "(Directions continued)"
             last_line = "Bake and serve completely."

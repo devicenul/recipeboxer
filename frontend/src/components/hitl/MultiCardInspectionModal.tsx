@@ -109,9 +109,7 @@ export const MultiCardInspectionModal: React.FC<MultiCardInspectionModalProps> =
   };
 
   const getRoleBadge = (idx: number, total: number) => {
-    if (idx === 0) return 'Front (Page 1)';
-    if (idx === 1) return total === 2 ? 'Back (Page 2)' : 'Continuation 1 / Back (Page 2)';
-    return `Continuation ${idx} (Page ${idx + 1})`;
+    return `Part ${idx + 1} of ${total}`;
   };
 
   // Responsive grid columns based on card count
@@ -241,7 +239,7 @@ export const MultiCardInspectionModal: React.FC<MultiCardInspectionModalProps> =
                       >
                         {cardIds.map((_, optIdx) => (
                           <option key={optIdx} value={optIdx}>
-                            Pos {optIdx + 1} of {cardIds.length}
+                            Part {optIdx + 1} of {cardIds.length}
                           </option>
                         ))}
                       </select>
@@ -271,18 +269,16 @@ export const MultiCardInspectionModal: React.FC<MultiCardInspectionModalProps> =
                       <ArrowRight className="w-3.5 h-3.5" />
                     </button>
 
-                    {/* Detach Card Action (for continuation cards) */}
-                    {idx > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => onDetach(cid)}
-                        className="p-1 rounded-md text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/50 cursor-pointer ml-1"
-                        title="Detach card from group"
-                        aria-label={`Detach ${cid} from group`}
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    )}
+                    {/* Detach Card Action */}
+                    <button
+                      type="button"
+                      onClick={() => onDetach(cid)}
+                      className="p-1 rounded-md text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/50 cursor-pointer ml-1"
+                      title="Detach card from group"
+                      aria-label={`Detach ${cid} from group`}
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
                   </div>
                 </div>
 
@@ -312,3 +308,4 @@ export const MultiCardInspectionModal: React.FC<MultiCardInspectionModalProps> =
     </Modal>
   );
 };
+

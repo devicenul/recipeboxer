@@ -431,43 +431,107 @@ def calculate_role_compatibility(
     role1: Union[CardRole, str, None],
     role2: Union[CardRole, str, None],
 ) -> float:
-    """Computes functional role pairing compatibility for ordered pair (candidate_front, candidate_back).
+    """Computes functional role pairing compatibility for directed pair (C_i -> C_j).
 
     Compatibility Rules:
-    - (FRONT_ONLY, BACK_ONLY) -> 1.00 (Ideal front/back pair)
-    - (FRONT_ONLY, UNKNOWN)   -> 0.80 (Likely back is unclassified)
-    - (UNKNOWN, BACK_ONLY)   -> 0.80 (Likely front is unclassified)
-    - (UNKNOWN, UNKNOWN)     -> 0.50 (Uncertain)
-    - (STANDALONE, *)        -> 0.00 (Single-sided card, do not pair)
-    - (*, STANDALONE)        -> 0.00 (Single-sided card, do not pair)
-    - (FRONT_ONLY, FRONT_ONLY)-> 0.00 (Two front sides cannot pair)
-    - (BACK_ONLY, BACK_ONLY)  -> 0.00 (Two back sides cannot pair)
-    - (BACK_ONLY, FRONT_ONLY) -> 0.00 (Inverted order)
+    - (SEQUENCE_START, SEQUENCE_CONTINUATION) -> 1.00 (Ideal start to continuation)
+    - (SEQUENCE_CONTINUATION, SEQUENCE_CONTINUATION) -> 0.90 (Valid multi-part sequence continuation N >= 3)
+    - (SEQUENCE_START, UNKNOWN)   -> 0.80 (Likely continuation is unclassified)
+    - (UNKNOWN, SEQUENCE_CONTINUATION) -> 0.80 (Likely start is unclassified)
+    - (SEQUENCE_CONTINUATION, UNKNOWN) -> 0.70 (Continuation to unclassified)
+    - (UNKNOWN, UNKNOWN)          -> 0.50 (Uncertain)
+    - (STANDALONE, *)             -> 0.00 (Single-sided card, do not chain)
+    - (*, STANDALONE)             -> 0.00 (Single-sided card, do not chain)
+    - (SEQUENCE_CONTINUATION, SEQUENCE_START) -> 0.00 (Inverted sequence flow)
+    - (SEQUENCE_START, SEQUENCE_START) -> 0.00 (Two sequence starts cannot chain)
 
     Args:
-        role1: Role of first (candidate front) card.
-        role2: Role of second (candidate back) card.
+        role1: Role of first (preceding) card.
+        role2: Role of second (following) card.
 
     Returns:
         Compatibility score in [0.0, 1.0].
     """
-    r1 = _get_enum_str(role1) or "UNKNOWN"
-    r2 = _get_enum_str(role2) or "UNKNOWN"
+    def _norm(r: Any) -> str:
+        s = _get_enum_str(r) or "UNKNOWN"
+        if s in ("FRONT_ONLY", "FRONT", "START", "SEQUENCE_START"):
+            return "SEQUENCE_START"
+        if s in ("BACK_ONLY", "BACK", "CONTINUATION", "SEQUENCE_CONTINUATION"):
+            return "SEQUENCE_CONTINUATION"
+        if s in ("STANDALONE", "SINGLE"):
+            return "STANDALONE"
+        return "UNKNOWN"
+
+    r1 = _norm(role1)
+    r2 = _norm(role2)
 
     if r1 == "STANDALONE" or r2 == "STANDALONE":
         return 0.00
 
-    if r1 == "FRONT_ONLY" and r2 == "BACK_ONLY":
+    if r1 == "SEQUENCE_START" and r2 == "SEQUENCE_CONTINUATION":
         return 1.00
 
-    if (r1 == "FRONT_ONLY" and r2 == "UNKNOWN") or (r1 == "UNKNOWN" and r2 == "BACK_ONLY"):
+    if r1 == "SEQUENCE_CONTINUATION" and r2 == "SEQUENCE_CONTINUATION":
+        return 0.90
+
+    if (r1 == "SEQUENCE_START" and r2 == "UNKNOWN") or (r1 == "UNKNOWN" and r2 == "SEQUENCE_CONTINUATION"):
         return 0.80
+
+    if r1 == "SEQUENCE_CONTINUATION" and r2 == "UNKNOWN":
+        return 0.70
 
     if r1 == "UNKNOWN" and r2 == "UNKNOWN":
         return 0.50
 
-    # Incompatible combinations
+    # Incompatible combinations (e.g. START + START, CONTINUATION + START)
     return 0.00
+
+
+def calculate_sequential_header_score(
+    fp1: VisualFingerprint,
+    fp2: VisualFingerprint,
+) -> float:
+    """Detects sequential header and step progression between two cards (e.g. Part 1 -> Part 2, Card 1 -> Card 2).
+
+    Args:
+        fp1: Preceding card visual fingerprint.
+        fp2: Following card visual fingerprint.
+
+    Returns:
+        Header and continuation score in [0.0, 1.0].
+    """
+    import re
+
+    t1 = ""
+    t2 = ""
+    if fp1.boundary_text:
+        t1 = f"{fp1.boundary_text.first_line} {fp1.boundary_text.last_line}".lower()
+    if fp2.boundary_text:
+        t2 = f"{fp2.boundary_text.first_line} {fp2.boundary_text.last_line}".lower()
+
+    # Check for Part N / Card N / Page N progression
+    m1 = re.search(r"(?:part|card|page|pt|p\.)\s*([0-9]+)", t1) or re.search(r"(?:part|card|page|pt|p\.)\s*([0-9]+)", fp1.card_id.lower())
+    m2 = re.search(r"(?:part|card|page|pt|p\.)\s*([0-9]+)", t2) or re.search(r"(?:part|card|page|pt|p\.)\s*([0-9]+)", fp2.card_id.lower())
+    if m1 and m2:
+        try:
+            num1 = int(m1.group(1))
+            num2 = int(m2.group(1))
+            if num2 == num1 + 1:
+                return 1.00
+            elif num2 > num1:
+                return 0.85
+            else:
+                return 0.10
+        except ValueError:
+            pass
+
+    score = 0.50
+    if fp1.boundary_text and (fp1.boundary_text.has_continuation_symbol or fp1.boundary_text.is_cut_off_mid_sentence):
+        score += 0.25
+    if fp2.boundary_text and any(k in fp2.boundary_text.first_line.lower() for k in ("cont", "direct", "step", "bake", "over", "part 2", "card 2")):
+        score += 0.25
+
+    return round(min(1.0, score), 4)
 
 
 def calculate_heuristic_distance(
@@ -477,22 +541,22 @@ def calculate_heuristic_distance(
     idx2: int = 1,
     total_cards: Optional[int] = None,
 ) -> float:
-    """Calculates composite Stage 1 heuristic similarity score between two cards.
+    """Calculates composite Stage 1 directed heuristic transition score P(C1 -> C2).
 
     Evaluates:
-    - S_role   (25%): Role compatibility (FRONT/BACK/UNKNOWN)
+    - S_role   (20%): Role/Sequence compatibility
     - S_prox   (25%): Sequential scan distance decay
-    - S_color  (15%): CIELAB perceptual substrate color match
+    - S_color  (15%): CIELAB perceptual substrate color match (Delta E <= 5.0)
     - S_ruling (15%): Ruling grid / spacing similarity
     - S_ink    (10%): Pen type and ink color match
     - S_stain  (5%):  Mirrored physical grease/oil bleed-through
-    - S_style  (5%):  Card boundary and physical style match
+    - S_hdr    (10%): Explicit sequential header and narrative continuation
 
     If S_role is 0.0, the pair is immediately pruned (score = 0.0).
 
     Args:
-        fp1: VisualFingerprint of candidate front card.
-        fp2: VisualFingerprint of candidate back card.
+        fp1: VisualFingerprint of candidate preceding card.
+        fp2: VisualFingerprint of candidate following card.
         idx1: Scan sequence index of fp1.
         idx2: Scan sequence index of fp2.
         total_cards: Optional total card count.
@@ -509,34 +573,29 @@ def calculate_heuristic_distance(
     s_ruling = calculate_ruling_similarity(fp1.ruling, fp2.ruling)
     s_ink = calculate_ink_similarity(fp1.ink, fp2.ink)
     s_stain = calculate_stain_similarity(fp1.artifacts, fp2.artifacts)
-
-    # Style & boundary continuity cue
-    s_style = 0.50
-    if fp1.boundary_text and fp2.boundary_text:
-        if fp1.boundary_text.has_continuation_symbol or fp1.boundary_text.is_cut_off_mid_sentence:
-            s_style += 0.30
-        if "cont" in fp2.boundary_text.first_line.lower() or "direct" in fp2.boundary_text.first_line.lower():
-            s_style += 0.20
-    s_style = min(1.00, s_style)
+    s_hdr = calculate_sequential_header_score(fp1, fp2)
 
     composite = (
-        0.25 * s_role
+        0.20 * s_role
         + 0.25 * s_prox
         + 0.15 * s_color
         + 0.15 * s_ruling
         + 0.10 * s_ink
         + 0.05 * s_stain
-        + 0.05 * s_style
+        + 0.10 * s_hdr
     )
 
     return round(max(0.0, min(1.0, composite)), 4)
+
+
+calculate_transition_score = calculate_heuristic_distance
 
 
 def screen_candidate_pairs(
     fingerprints: List[VisualFingerprint],
     threshold: Optional[float] = None,
 ) -> List[Tuple[VisualFingerprint, VisualFingerprint, float]]:
-    """Screens all pairwise card combinations and returns candidate front/back pairs.
+    """Screens all pairwise card combinations and returns candidate directed pairs.
 
     Filters out pairs below the threshold (default 0.50 from Settings), and sorts
     candidates in descending order of heuristic score.
@@ -559,7 +618,6 @@ def screen_candidate_pairs(
 
     for i in range(n):
         fp1 = fingerprints[i]
-        # Prune standalone cards as front candidates
         r1 = _get_enum_str(fp1.role)
         if r1 == "STANDALONE":
             continue

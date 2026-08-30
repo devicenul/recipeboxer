@@ -8,10 +8,12 @@ import {
 import {
   HitlPendingResponse,
   CandidateListResponse,
+  HitlApproval,
   CardPairApproval,
   ApprovalPayload,
   ApprovalResponse,
 } from '../types/hitl';
+
 import { RecipeSchema } from '../types/recipe';
 import {
   SourceConnectionStatus,

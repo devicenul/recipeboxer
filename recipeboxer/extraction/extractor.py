@@ -263,14 +263,14 @@ class GeminiRecipeExtractor:
                                     card_id=front_id or "card_front",
                                     image_path=front_path or "/memory/card_front.jpg",
                                     sha256_hash=hashlib.sha256(front_bytes or b"").hexdigest(),
-                                    role=CardRole.FRONT_ONLY if len(cards_list) > 1 else CardRole.STANDALONE,
+                                    role=CardRole.SEQUENCE_START if len(cards_list) > 1 else CardRole.STANDALONE,
                                 )
                                 adapted_back = (
                                     VisualFingerprint(
                                         card_id=back_id or "card_back",
                                         image_path=back_path or "/memory/card_back.jpg",
                                         sha256_hash=hashlib.sha256(back_bytes or b"").hexdigest(),
-                                        role=CardRole.BACK_ONLY,
+                                        role=CardRole.SEQUENCE_CONTINUATION,
                                     )
                                     if len(cards_list) > 1
                                     else None

@@ -38,6 +38,12 @@ RecipeBoxer is a full-stack platform for digitizing, transcribing, correlating, 
 | F5.3 | Customizable Export Filenames | Present editable suggested filename modal before initiating download across all 9 export formats. | M4 | ORIGINAL_REQUEST §R5 |
 | F5.4 | Tag Serialization Across Formats | Enforce tag serialization compliance in Plan To Eat CSV (Col 8), Schema.org keywords, Markdown/Cooklang frontmatter, Paprika. | M4 | ORIGINAL_REQUEST §R5 |
 | F6.1 | Full Automated Verification | Pass 100% pytest (`./test.sh`) and frontend vitest (`npm test -- --run`) across all new and existing features. | M5 | ORIGINAL_REQUEST §Acceptance Criteria |
+| F7.1 | Clean-Break Domain Model & Schema Modernization | Remove binary `front_card_id`/`back_card_id` and `FRONT`/`BACK` role enums across Python models (`domain.py`, `correlation.py`, `hitl.py`, `session.py`) and TypeScript types (`hitl.ts`, `domain.ts`, `pipeline.ts`). Adopt canonical `ordered_card_ids: List[str]` and ordinal `part_index`/`total_parts`. | M6 | ORIGINAL_REQUEST §R2 |
+| F7.2 | Open-Ended N-Part Sequence Correlation Engine | Directed transition graph and maximal path chaining evaluating physical $\Delta E$, scan proximity, ruling, ink, stain bleed-through reflection, "Part N" headers, and semantic continuation for $N \ge 1$ cards. | M7 | ORIGINAL_REQUEST §R3 |
+| F7.3 | REST API, SQLite SessionStore & SSE Alignment | Update SQLite `session_proposals` table schema with dynamic migration, FastAPI endpoints (`/api/hitl/*`), and SSE telemetry to consume and emit `ordered_card_ids`. | M8 | ORIGINAL_REQUEST §R4 |
+| F7.4 | Unified "Part 1 ... N" HITL Workflow & UI | Render cards uniformly as "Part 1 of N", "Part 2 of N", etc. across `HitlWorkspace`, `RapidQueueCard`, `MultiCardGrouping`, `MultiCardInspectionModal`, `CandidateDrawer`, and `RecipeEditorView` with drag-and-drop reordering, split, and merge. | M9 | ORIGINAL_REQUEST §R5 |
+| F7.5 | Multimodal Extraction & Exporter Sequence Preservation | Transcribe ordered $N$-card image sequences in exact positional order and serialize card references uniformly across all 9 export formats. | M10 | ORIGINAL_REQUEST §R6 |
+| F7.6 | Full-Stack Platform & Adversarial Verification | 100% pass across all 1,442 backend pytest tests (Tiers 1-5) and 218 frontend Vitest tests with zero regressions. | M11 | ORIGINAL_REQUEST §Acceptance Criteria |
 
 ---
 
@@ -49,7 +55,13 @@ RecipeBoxer is a full-stack platform for digitizing, transcribing, correlating, 
 | M2 | Multi-Card (>2 Cards) HITL Workflow & Ordering | Full-size modal / split canvas view for 3+ cards, drag/reorder positional sequence controls, backend sequence preservation & merging. | M1 | DONE |
 | M3 | Recipe Editor UX & Extraction Intelligence | Card images in review pane (`/api/cards/{card_id}/image`), last-recipe navigation confirmation dialog, inline tag editing, ` [GUESS]` title flagging, anecdote & marginalia preservation. | M1 | DONE |
 | M4 | Exporters, Google Docs OAuth, Images & Filenames | Google Docs OAuth 2.0 & direct doc creation, high-res embedded scans in PDF & DOCX with proportional scaling, customizable export filenames modal, universal tag serialization. | M1, M3 | DONE |
-| M5 | Final Verification & Adversarial Coverage Hardening | 100% E2E test pass (Tiers 1-4) and Tier 5 adversarial coverage hardening. | M1, M2, M3, M4 | PLANNED |
+| M5 | Final Verification & Adversarial Coverage Hardening | 100% E2E test pass (Tiers 1-4) and Tier 5 adversarial coverage hardening; sign-off verified. | M1, M2, M3, M4 | DONE |
+| M6 | Clean-Break Domain Model & Schema Modernization | Canonical `ordered_card_ids: List[str]` across models, SQLite dynamic table migration, TypeScript interfaces. | M5 | DONE |
+| M7 | Open-Ended N-Part Sequence Correlation Engine | Directed transition graph ($\Delta E$, scan proximity, ruling, ink, stains, headers, semantics) and maximal path chaining. | M6 | DONE |
+| M8 | REST API, SQLite SessionStore & SSE Alignment | FastAPI routes (`/api/hitl/*`, `/api/cards/*`), SQLite JSON array persistence, SSE telemetry stream. | M6, M7 | DONE |
+| M9 | Unified "Part 1 ... N" HITL Workflow & UI | "Part 1 of N" badging, drag-and-drop positional reordering, modal inspection, sequence reversal, split/merge. | M6, M8 | DONE |
+| M10 | Multimodal Extraction & Exporter Sequence Preservation | Multimodal extraction prompt sequencing and 9 export format sequence serialization. | M6, M7, M8 | DONE |
+| M11 | Final Verification & Adversarial Coverage Hardening | 100% pass on 1,442 backend pytest tests (Tiers 1-5) and 218 frontend Vitest tests, zero regressions. | M6, M7, M8, M9, M10 | DONE |
 
 ---
 
@@ -66,9 +78,9 @@ RecipeBoxer is a full-stack platform for digitizing, transcribing, correlating, 
 - **Behavior**: Emits `state_change`, `progress`, `hitl_ready`, `recipe_extracted`, `completed`, `failed`, `cancelled`, and `: ping` heartbeat every 10s. Never abruptly disconnects; stays open with heartbeats.
 - **Frontend Hook**: `useSSE({ sessionId, enabled })` with ref-stabilized event handlers (`callbacksRef.current`) and exponential reconnect backoff.
 
-### HITL Multi-Card Review ↔ Correlation Merger
-- **Approval Payload**: `CardPairApproval(proposal_id=..., front_card_id=..., back_card_id=..., card_ids=['c1', 'c2', 'c3', 'c4'], decision='APPROVE')`
-- **Orchestrator Contract**: `orchestrator._extract_single_recipe` resolves `ordered_card_ids = approval.card_ids or [front, back, ...]`, maps to `ordered_fps`, and invokes `extractor.extract_cards(ordered_fps)`.
+### HITL Sequence Review ↔ Correlation Merger & Extraction
+- **Approval Payload**: `ApprovalPayload(session_id=..., approvals=[CardSequenceApproval(proposal_id=..., ordered_card_ids=['c1', 'c2', 'c3', 'c4'], decision='APPROVE')], rejected_card_ids=[])`
+- **Orchestrator Contract**: `orchestrator._extract_single_recipe` resolves `ordered_card_ids = approval.ordered_card_ids`, maps to `ordered_fps`, and invokes `extractor.extract_cards(ordered_fps)`.
 - **Recipe Association**: `recipe.card_ids = ordered_card_ids`, `recipe.image_urls = ["/api/cards/{cid}/image?session_id=..." for cid in ordered_card_ids]`.
 
 ### Recipe Editor ↔ Navigation & Tags

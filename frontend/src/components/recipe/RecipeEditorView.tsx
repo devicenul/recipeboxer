@@ -143,7 +143,7 @@ export const RecipeEditorView: React.FC<RecipeEditorViewProps> = ({
                   }`}
                 >
                   <ImageIcon className="w-3.5 h-3.5" />
-                  <span>Card {idx + 1} ({idx === 0 ? 'Front' : idx === 1 ? 'Back' : `Part ${idx + 1}`})</span>
+                  <span>Part {idx + 1} of {cardIds.length}</span>
                 </button>
               ))}
             </div>
@@ -155,16 +155,17 @@ export const RecipeEditorView: React.FC<RecipeEditorViewProps> = ({
               cardId={activeCardId}
               label={
                 cardIds.length > 1
-                  ? `Card ${selectedCardIndex + 1} of ${cardIds.length}`
+                  ? `Part ${selectedCardIndex + 1} of ${cardIds.length}`
                   : 'Original Scanned Card'
               }
-              roleBadge={selectedCardIndex === 0 ? 'Front Scan' : selectedCardIndex === 1 ? 'Back Scan' : undefined}
+              roleBadge={cardIds.length > 1 ? `Part ${selectedCardIndex + 1} of ${cardIds.length}` : undefined}
               transform={viewer.transformFront}
               filters={viewer.filtersFront}
               onPan={(dx, dy) => viewer.pan(dx, dy, 'front')}
               onWheelZoom={(delta) => (delta > 0 ? viewer.zoomIn('front') : viewer.zoomOut('front'))}
             />
           </div>
+
         </div>
 
         {/* Right Pane: Rich Structured Recipe Form */}

@@ -536,7 +536,7 @@ class BenchmarkRunner:
                 mod_card_ids = {c.card_id for cards in mod_gt_recipes.values() for c in cards}
                 mod_proposals = [
                     p for p in correlation_result.proposals
-                    if p.front_card_id in mod_card_ids or (p.back_card_id and p.back_card_id in mod_card_ids)
+                    if any(cid in mod_card_ids for cid in p.ordered_card_ids)
                 ]
                 mod_pairing = calculate_pairing_metrics(mod_proposals, mod_gt_recipes)
 

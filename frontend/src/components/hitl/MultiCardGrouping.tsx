@@ -105,9 +105,7 @@ export const MultiCardGrouping: React.FC<MultiCardGroupingProps> = ({
 
       <div className="flex items-center gap-3 overflow-x-auto pb-2 pt-1">
         {cardIds.map((cid, idx) => {
-          const isFront = idx === 0;
-          const isBack = idx === 1;
-          const roleLabel = isFront ? 'Front (Page 1)' : isBack ? 'Back (Page 2)' : `Part ${idx + 1}`;
+          const roleLabel = `Part ${idx + 1} of ${cardIds.length}`;
           const imgUrl = api.getCardImageUrl(cid, sessionId);
           const isDragging = draggedIndex === idx;
           const isDragOver = dragOverIndex === idx;
@@ -179,16 +177,14 @@ export const MultiCardGrouping: React.FC<MultiCardGroupingProps> = ({
                   >
                     <ArrowRight className="w-3.5 h-3.5" />
                   </button>
-                  {!isFront && (
-                    <button
-                      type="button"
-                      onClick={() => onDetach(cid)}
-                      className="p-1 rounded text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-slate-200 dark:hover:bg-slate-700 cursor-pointer ml-auto"
-                      title="Detach from group"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => onDetach(cid)}
+                    className="p-1 rounded text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-slate-200 dark:hover:bg-slate-700 cursor-pointer ml-auto"
+                    title="Detach from group"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
                 </div>
               </div>
             </div>
@@ -198,4 +194,5 @@ export const MultiCardGrouping: React.FC<MultiCardGroupingProps> = ({
     </div>
   );
 };
+
 

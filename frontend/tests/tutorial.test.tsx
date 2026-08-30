@@ -99,19 +99,20 @@ describe('R1: "First Run" Interactive Guided UI Tutorial Subsystem', () => {
         />
       );
 
-      expect(screen.getByText('Step 2 of 6: Pairing Queue')).toBeInTheDocument();
+      expect(screen.getByText('Step 2 of 6: Sequence Queue')).toBeInTheDocument();
       expect(screen.getByText('Rapid HITL Queue & Hotkeys')).toBeInTheDocument();
 
       // Hotkey badges
       expect(screen.getByText('Space')).toBeInTheDocument();
-      expect(screen.getByText('Approve Pair')).toBeInTheDocument();
+      expect(screen.getByText('Approve Sequence')).toBeInTheDocument();
       expect(screen.getByText('S')).toBeInTheDocument();
       expect(screen.getByText('Mark as Standalone')).toBeInTheDocument();
       expect(screen.getByText('B')).toBeInTheDocument();
-      expect(screen.getByText('Reverse Front / Back')).toBeInTheDocument();
+      expect(screen.getByText('Reverse Sequence')).toBeInTheDocument();
       expect(screen.getByText('X')).toBeInTheDocument();
       expect(screen.getByText('Reject Scan')).toBeInTheDocument();
       expect(screen.getByText('Tab')).toBeInTheDocument();
+
 
       // Back button should be visible on Step 2
       expect(screen.getByTestId('tutorial-back-btn')).toBeInTheDocument();
@@ -461,7 +462,8 @@ describe('R1: "First Run" Interactive Guided UI Tutorial Subsystem', () => {
       await act(async () => {
         fireEvent.click(screen.getByTestId('tutorial-next-btn'));
       });
-      expect(screen.getByText('Step 2 of 6: Pairing Queue')).toBeInTheDocument();
+      expect(screen.getByText('Step 2 of 6: Sequence Queue')).toBeInTheDocument();
+
 
       // Step 2 to Step 3 (HITL tab)
       await act(async () => {

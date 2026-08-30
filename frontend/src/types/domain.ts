@@ -1,9 +1,10 @@
 export enum CardRole {
-  FRONT_ONLY = "FRONT_ONLY",
-  BACK_ONLY = "BACK_ONLY",
   STANDALONE = "STANDALONE",
+  SEQUENCE_START = "SEQUENCE_START",
+  SEQUENCE_CONTINUATION = "SEQUENCE_CONTINUATION",
   UNKNOWN = "UNKNOWN",
 }
+
 
 export enum PaperColorTone {
   WHITE = "White",

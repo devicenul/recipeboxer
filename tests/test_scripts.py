@@ -95,6 +95,7 @@ SPEC_FILE = PROJECT_ROOT / "recipeboxer.spec"
 # 1. POSIX SETUP SCRIPT TESTS (setup.sh)
 # ============================================================================
 
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX bash script tests require a POSIX environment")
 class TestSetupShPOSIX:
     """Test suite for setup.sh on macOS and Linux platforms."""
 
@@ -219,6 +220,7 @@ class TestSetupShPOSIX:
 # 2. POSIX RUN SCRIPT TESTS (run.sh)
 # ============================================================================
 
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX bash script tests require a POSIX environment")
 class TestRunShPOSIX:
     """Test suite for run.sh execution script on macOS and Linux platforms."""
 
@@ -740,6 +742,7 @@ class TestPythonVersionDetectionLogic:
 # 8. POSIX BUILD SCRIPT TESTS (build.sh)
 # ============================================================================
 
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX bash script tests require a POSIX environment")
 class TestBuildShPOSIX:
     """Test suite for build.sh packaging script on macOS and Linux platforms."""
 
@@ -1135,6 +1138,7 @@ class TestPackagingArtifactsAndExecution:
 # 12. POSIX TEST SCRIPT TESTS (test.sh)
 # ============================================================================
 
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX bash script tests require a POSIX environment")
 class TestTestShPOSIX:
     """Test suite for test.sh test execution script on macOS and Linux platforms."""
 

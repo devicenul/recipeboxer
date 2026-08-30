@@ -39,12 +39,12 @@ from recipeboxer.models.recipe import RecipeSchema
 
 def test_card_role_enum():
     """Verify CardRole enum values and validation."""
-    assert CardRole.FRONT_ONLY == "FRONT_ONLY"
-    assert CardRole.BACK_ONLY == "BACK_ONLY"
+    assert CardRole.SEQUENCE_START == "SEQUENCE_START"
+    assert CardRole.SEQUENCE_CONTINUATION == "SEQUENCE_CONTINUATION"
     assert CardRole.STANDALONE == "STANDALONE"
     assert CardRole.UNKNOWN == "UNKNOWN"
 
-    assert CardRole("FRONT_ONLY") == CardRole.FRONT_ONLY
+    assert CardRole("SEQUENCE_START") == CardRole.SEQUENCE_START
     with pytest.raises(ValueError):
         CardRole("INVALID_ROLE")
 
@@ -138,7 +138,7 @@ def test_visual_fingerprint_full_roundtrip():
         card_id="card_001.jpg",
         image_path="/scans/card_001.jpg",
         sha256_hash="e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-        role=CardRole.FRONT_ONLY,
+        role=CardRole.SEQUENCE_START,
         role_confidence=0.97,
         paper_color=PaperColorInfo(
             tone_name="Aged Cream",
@@ -172,13 +172,13 @@ def test_visual_fingerprint_full_roundtrip():
 
     json_str = fp.model_dump_json()
     assert "card_001.jpg" in json_str
-    assert "FRONT_ONLY" in json_str
+    assert "SEQUENCE_START" in json_str
     assert "#F4E8C1" in json_str
 
     deserialized = VisualFingerprint.model_validate_json(json_str)
     assert deserialized.card_id == fp.card_id
     assert deserialized.sha256_hash == fp.sha256_hash
-    assert deserialized.role == CardRole.FRONT_ONLY
+    assert deserialized.role == CardRole.SEQUENCE_START
     assert deserialized.role_confidence == 0.97
     assert deserialized.paper_color.hex_approx == "#F4E8C1"
     assert len(deserialized.artifacts) == 1
@@ -194,23 +194,24 @@ def test_correlation_proposal_and_result():
     """Verify CorrelationProposal and CorrelationResult structures and bounds."""
     proposal = CorrelationProposal(
         proposal_id="prop_001",
-        front_card_id="card_01.jpg",
-        back_card_id="card_02.jpg",
+        ordered_card_ids=["card_01.jpg", "card_02.jpg"],
+        part_count=2,
         heuristic_score=0.88,
         semantic_score=0.95,
         confidence=0.929,
         is_standalone=False,
         continuity_explanation="Ingredients and directions continue cleanly.",
-        recommended_action="PAIR",
+        recommended_action="SEQUENCE",
     )
     assert proposal.confidence == 0.929
-    assert proposal.recommended_action == "PAIR"
+    assert proposal.part_count == 2
+    assert proposal.recommended_action == "SEQUENCE"
 
     # Test confidence bounds
     with pytest.raises(ValidationError):
         CorrelationProposal(
             proposal_id="p",
-            front_card_id="f",
+            ordered_card_ids=["f"],
             confidence=1.5,  # le=1.0
         )
 
@@ -226,8 +227,7 @@ def test_hitl_approval_models():
     """Verify HITL models and ApprovalPayload serialization."""
     approval = CardPairApproval(
         proposal_id="prop_001",
-        front_card_id="card_01.jpg",
-        back_card_id="card_02.jpg",
+        ordered_card_ids=["card_01.jpg", "card_02.jpg"],
         decision=HITLDecision.APPROVE,
         notes="Looks perfect",
     )

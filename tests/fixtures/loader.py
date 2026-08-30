@@ -95,7 +95,15 @@ class SampleCardCorpus:
             try:
                 role = CardRole(role_raw)
             except ValueError:
-                role = CardRole(str(role_raw).upper())
+                r_up = str(role_raw).upper().strip()
+                if r_up in ("FRONT_ONLY", "FRONT", "START", "SEQUENCE_START"):
+                    role = CardRole.SEQUENCE_START
+                elif r_up in ("BACK_ONLY", "BACK", "CONTINUATION", "SEQUENCE_CONTINUATION"):
+                    role = CardRole.SEQUENCE_CONTINUATION
+                elif r_up in ("STANDALONE", "SINGLE"):
+                    role = CardRole.STANDALONE
+                else:
+                    role = CardRole.UNKNOWN
 
             rec_raw = card_data.get("ground_truth_recipe", {})
             try:
@@ -201,7 +209,20 @@ class SampleCardCorpus:
         """Filters cards matching a specific role (case and delimiter-insensitive)."""
         role_str = role.value if isinstance(role, CardRole) else str(role)
         role_norm = role_str.upper().strip().replace("-", "_").replace(" ", "_")
-        return [c for c in self.cards if c.role.value.upper().replace("-", "_").replace(" ", "_") == role_norm]
+        if role_norm in ("FRONT_ONLY", "FRONT", "START", "SEQUENCE_START"):
+            target_role = CardRole.SEQUENCE_START
+        elif role_norm in ("BACK_ONLY", "BACK", "CONTINUATION", "SEQUENCE_CONTINUATION"):
+            target_role = CardRole.SEQUENCE_CONTINUATION
+        elif role_norm in ("STANDALONE", "SINGLE"):
+            target_role = CardRole.STANDALONE
+        elif role_norm in ("UNKNOWN", "NOISE"):
+            target_role = CardRole.UNKNOWN
+        else:
+            try:
+                target_role = CardRole(role_norm)
+            except ValueError:
+                return []
+        return [c for c in self.cards if c.role == target_role]
 
     def get_recipe_cluster(self, recipe_id: str) -> List[CardEntry]:
         """Returns all card entries belonging to a given recipe cluster in sequence order (case and delimiter-insensitive)."""
@@ -219,13 +240,12 @@ class SampleCardCorpus:
         return sorted(cluster, key=lambda c: c.recipe_cluster.get("sequence_position", 0))
 
     def get_pairs(self) -> List[Tuple[CardEntry, CardEntry]]:
-        """Returns all two-sided front/back card pairs."""
+        """Returns all two-sided card pairs."""
         pairs: List[Tuple[CardEntry, CardEntry]] = []
         for rec_id, cards in self._cards_by_recipe.items():
             if len(cards) == 2:
                 sorted_cards = sorted(cards, key=lambda c: c.recipe_cluster.get("sequence_position", 0))
-                if sorted_cards[0].role == CardRole.FRONT_ONLY and sorted_cards[1].role == CardRole.BACK_ONLY:
-                    pairs.append((sorted_cards[0], sorted_cards[1]))
+                pairs.append((sorted_cards[0], sorted_cards[1]))
         return pairs
 
     def get_multi_card_sets(self) -> Dict[str, List[CardEntry]]:

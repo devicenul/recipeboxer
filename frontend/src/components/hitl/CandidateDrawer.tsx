@@ -6,7 +6,8 @@ import { formatScorePercent } from '../../utils/formatters';
 export interface CandidateDrawerProps {
   isOpen: boolean;
   onClose: () => void;
-  frontCardId: string;
+  selectedCardId?: string;
+  frontCardId?: string;
   candidates: CorrelationCandidate[];
   currentBackCardId?: string | null;
   groupedCardIds?: string[];
@@ -18,6 +19,7 @@ export interface CandidateDrawerProps {
 export const CandidateDrawer: React.FC<CandidateDrawerProps> = ({
   isOpen,
   onClose,
+  selectedCardId,
   frontCardId,
   candidates,
   currentBackCardId,
@@ -27,6 +29,8 @@ export const CandidateDrawer: React.FC<CandidateDrawerProps> = ({
   isLoading = false,
 }) => {
   if (!isOpen) return null;
+
+  const displayCardId = selectedCardId || frontCardId || '';
 
   return (
     <div className="fixed inset-0 z-50 overflow-hidden">
@@ -46,7 +50,7 @@ export const CandidateDrawer: React.FC<CandidateDrawerProps> = ({
                 <span>Candidate Correlation Drawer</span>
               </h3>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                Front card: <strong className="font-mono text-slate-800 dark:text-slate-200">{frontCardId}</strong>
+                Selected Card: <strong className="font-mono text-slate-800 dark:text-slate-200">{displayCardId}</strong>
               </p>
             </div>
             <button
@@ -156,7 +160,7 @@ export const CandidateDrawer: React.FC<CandidateDrawerProps> = ({
                         }`}
                       >
                         {isCurrentBack ? <Check className="w-3.5 h-3.5" /> : null}
-                        <span>{isCurrentBack ? 'Active Back Card' : 'Select as Back'}</span>
+                        <span>{isCurrentBack ? 'Active Next Part' : 'Select as Next Part'}</span>
                       </button>
 
                       <button
@@ -168,7 +172,7 @@ export const CandidateDrawer: React.FC<CandidateDrawerProps> = ({
                             ? 'bg-purple-600 text-white cursor-default'
                             : 'bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300 hover:bg-purple-200 dark:hover:bg-purple-900'
                         }`}
-                        title="Add as additional part to multi-card recipe"
+                        title="Attach as Next Part (Part N+1)"
                       >
                         <Plus className="w-3.5 h-3.5" />
                         <span>{isGrouped ? 'Attached' : 'Attach'}</span>
@@ -184,3 +188,4 @@ export const CandidateDrawer: React.FC<CandidateDrawerProps> = ({
     </div>
   );
 };
+

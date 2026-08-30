@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { CheckCircle2, AlertCircle, Loader2, ArrowRight, RefreshCw, Layers } from 'lucide-react';
-import { CorrelationProposal, CardPairApproval, CorrelationCandidate } from '../../types/hitl';
+import { CorrelationProposal, HitlApproval, CardPairApproval, CorrelationCandidate } from '../../types/hitl';
 import { RapidQueueCard } from './RapidQueueCard';
 import { CandidateDrawer } from './CandidateDrawer';
 import { MultiCardInspectionModal } from './MultiCardInspectionModal';
@@ -19,9 +19,9 @@ export const HitlWorkspace: React.FC<HitlWorkspaceProps> = ({
 }) => {
   const [proposals, setProposals] = useState<CorrelationProposal[]>([]);
   const [currentIndex, setCurrentIndex] = useState<number>(0);
-  const [approvals, setApprovals] = useState<CardPairApproval[]>([]);
+  const [approvals, setApprovals] = useState<HitlApproval[]>([]);
   const [rejectedCardIds, setRejectedCardIds] = useState<string[]>([]);
-  const [multiCardGroups, setMultiCardGroups] = useState<Record<string, string[]>>({}); // front_card_id -> string[]
+  const [multiCardGroups, setMultiCardGroups] = useState<Record<string, string[]>>({}); // proposal_id -> string[]
 
   const [isDrawerOpen, setIsDrawerOpen] = useState<boolean>(false);
   const [isInspectionModalOpen, setIsInspectionModalOpen] = useState<boolean>(false);
@@ -38,21 +38,34 @@ export const HitlWorkspace: React.FC<HitlWorkspaceProps> = ({
     setError(null);
     try {
       const res = await api.getHitlPending(sessionId);
-      setProposals(res.proposed_pairs || []);
+      const rawProposals = res.proposals || res.proposed_pairs || [];
+      const normalizedProposals: CorrelationProposal[] = rawProposals.map((p) => {
+        let orderedIds: string[] = [];
+        if (p.ordered_card_ids && p.ordered_card_ids.length > 0) {
+          orderedIds = [...p.ordered_card_ids];
+        } else if (p.card_ids && p.card_ids.length > 0) {
+          orderedIds = [...p.card_ids];
+        } else {
+          orderedIds = [
+            p.front_card_id,
+            ...(p.back_card_id ? [p.back_card_id] : []),
+          ].filter(Boolean) as string[];
+        }
+        return {
+          ...p,
+          ordered_card_ids: orderedIds,
+        };
+      });
+
+      setProposals(normalizedProposals);
       setCurrentIndex(0);
       setApprovals([]);
       setRejectedCardIds([]);
 
       // Initialize multi-card groups
       const initialGroups: Record<string, string[]> = {};
-      (res.proposed_pairs || []).forEach((p) => {
-        const ids = [p.front_card_id];
-        if (p.back_card_id) ids.push(p.back_card_id);
-        if (p.card_ids && p.card_ids.length > 0) {
-          initialGroups[p.front_card_id] = p.card_ids;
-        } else {
-          initialGroups[p.front_card_id] = ids;
-        }
+      normalizedProposals.forEach((p) => {
+        initialGroups[p.proposal_id] = p.ordered_card_ids;
       });
       setMultiCardGroups(initialGroups);
     } catch (err: any) {
@@ -69,12 +82,15 @@ export const HitlWorkspace: React.FC<HitlWorkspaceProps> = ({
   }, [sessionId, fetchProposals]);
 
   const currentProposal = proposals[currentIndex] || null;
+  const currentGroup = currentProposal
+    ? multiCardGroups[currentProposal.proposal_id] || currentProposal.ordered_card_ids || []
+    : [];
 
   // 2. Fetch candidate drawer cards when drawer opened
-  const fetchCandidates = useCallback(async (frontId: string) => {
+  const fetchCandidates = useCallback(async (cardId: string) => {
     setLoadingCandidates(true);
     try {
-      const res = await api.getHitlCandidates(frontId, sessionId);
+      const res = await api.getHitlCandidates(cardId, sessionId);
       setCandidates(res.candidates || []);
     } catch (err: any) {
       setCandidates([]);
@@ -86,10 +102,11 @@ export const HitlWorkspace: React.FC<HitlWorkspaceProps> = ({
   const handleToggleDrawer = useCallback(() => {
     if (!currentProposal) return;
     if (!isDrawerOpen) {
-      fetchCandidates(currentProposal.front_card_id);
+      const primaryCardId = currentGroup[0] || (currentProposal.ordered_card_ids && currentProposal.ordered_card_ids[0]) || '';
+      fetchCandidates(primaryCardId);
     }
     setIsDrawerOpen((prev) => !prev);
-  }, [currentProposal, isDrawerOpen, fetchCandidates]);
+  }, [currentProposal, currentGroup, isDrawerOpen, fetchCandidates]);
 
   // Advance queue helper
   const advanceQueue = useCallback(() => {
@@ -105,131 +122,166 @@ export const HitlWorkspace: React.FC<HitlWorkspaceProps> = ({
   // Actions
   const handleApprove = useCallback(() => {
     if (!currentProposal) return;
-    const group = multiCardGroups[currentProposal.front_card_id] || [
-      currentProposal.front_card_id,
-      ...(currentProposal.back_card_id ? [currentProposal.back_card_id] : []),
-    ];
+    const group = multiCardGroups[currentProposal.proposal_id] || currentProposal.ordered_card_ids || [];
 
-    const approval: CardPairApproval = {
+    const approval: HitlApproval = {
       proposal_id: currentProposal.proposal_id,
-      front_card_id: group[0] || currentProposal.front_card_id,
-      back_card_id: group[1] || currentProposal.back_card_id || null,
-      card_ids: group.length > 2 ? group : undefined,
+      ordered_card_ids: group,
+      front_card_id: group[0],
+      back_card_id: group[1] || null,
+      card_ids: group,
       is_standalone: group.length === 1 || currentProposal.is_standalone,
       is_rejected: false,
     };
 
-    setApprovals((prev) => [...prev.filter((a) => a.front_card_id !== approval.front_card_id), approval]);
+    setApprovals((prev) => [
+      ...prev.filter((a) => a.proposal_id !== approval.proposal_id),
+      approval,
+    ]);
     advanceQueue();
   }, [currentProposal, multiCardGroups, advanceQueue]);
 
   const handleStandalone = useCallback(() => {
     if (!currentProposal) return;
-    const approval: CardPairApproval = {
+    const group = multiCardGroups[currentProposal.proposal_id] || currentProposal.ordered_card_ids || [];
+    const standaloneId = group[0] || (currentProposal.ordered_card_ids && currentProposal.ordered_card_ids[0]) || '';
+    const approval: HitlApproval = {
       proposal_id: currentProposal.proposal_id,
-      front_card_id: currentProposal.front_card_id,
+      ordered_card_ids: [standaloneId],
+      front_card_id: standaloneId,
       back_card_id: null,
-      card_ids: [currentProposal.front_card_id],
+      card_ids: [standaloneId],
       is_standalone: true,
       is_rejected: false,
     };
 
-    setApprovals((prev) => [...prev.filter((a) => a.front_card_id !== approval.front_card_id), approval]);
+    setApprovals((prev) => [
+      ...prev.filter((a) => a.proposal_id !== approval.proposal_id),
+      approval,
+    ]);
     advanceQueue();
-  }, [currentProposal, advanceQueue]);
+  }, [currentProposal, multiCardGroups, advanceQueue]);
 
   const handleReverse = useCallback(() => {
-    if (!currentProposal || !currentProposal.back_card_id) return;
-    // Swap front and back in current proposal
-    const swappedFront = currentProposal.back_card_id;
-    const swappedBack = currentProposal.front_card_id;
+    if (!currentProposal) return;
+    const group = multiCardGroups[currentProposal.proposal_id] || currentProposal.ordered_card_ids || [];
+    if (group.length <= 1) return;
+    const reversedGroup = [...group].reverse();
 
     setProposals((prev) => {
       const copy = [...prev];
       copy[currentIndex] = {
         ...copy[currentIndex],
-        front_card_id: swappedFront,
-        back_card_id: swappedBack,
+        ordered_card_ids: reversedGroup,
+        front_card_id: reversedGroup[0],
+        back_card_id: reversedGroup[1] || null,
       };
       return copy;
     });
 
-    setMultiCardGroups((prev) => {
-      const oldGroup = prev[currentProposal.front_card_id] || [swappedFront, swappedBack];
-      const newGroup = [oldGroup[1], oldGroup[0], ...oldGroup.slice(2)];
-      return {
-        ...prev,
-        [swappedFront]: newGroup,
-      };
-    });
-  }, [currentProposal, currentIndex]);
+    setMultiCardGroups((prev) => ({
+      ...prev,
+      [currentProposal.proposal_id]: reversedGroup,
+    }));
+  }, [currentProposal, currentIndex, multiCardGroups]);
 
   const handleReject = useCallback(() => {
     if (!currentProposal) return;
-    const idsToReject = [currentProposal.front_card_id];
-    if (currentProposal.back_card_id) idsToReject.push(currentProposal.back_card_id);
-
-    setRejectedCardIds((prev) => Array.from(new Set([...prev, ...idsToReject])));
+    const group = multiCardGroups[currentProposal.proposal_id] || currentProposal.ordered_card_ids || [];
+    setRejectedCardIds((prev) => Array.from(new Set([...prev, ...group])));
     advanceQueue();
-  }, [currentProposal, advanceQueue]);
+  }, [currentProposal, multiCardGroups, advanceQueue]);
 
   // Drawer actions
   const handleSelectCandidateAsBack = useCallback((candId: string) => {
     if (!currentProposal) return;
+    setMultiCardGroups((prev) => {
+      const group = prev[currentProposal.proposal_id] || currentProposal.ordered_card_ids || [];
+      const newGroup = group.length > 0
+        ? [group[0], candId, ...group.slice(2).filter((id) => id !== candId)]
+        : [candId];
+      return {
+        ...prev,
+        [currentProposal.proposal_id]: newGroup,
+      };
+    });
+
     setProposals((prev) => {
       const copy = [...prev];
+      const group = copy[currentIndex].ordered_card_ids || [];
+      const newGroup = group.length > 0
+        ? [group[0], candId, ...group.slice(2).filter((id) => id !== candId)]
+        : [candId];
       copy[currentIndex] = {
         ...copy[currentIndex],
+        ordered_card_ids: newGroup,
         back_card_id: candId,
         is_standalone: false,
       };
       return copy;
-    });
-
-    setMultiCardGroups((prev) => {
-      const group = prev[currentProposal.front_card_id] || [currentProposal.front_card_id];
-      const newGroup = [group[0], candId, ...group.slice(2).filter((id) => id !== candId)];
-      return {
-        ...prev,
-        [currentProposal.front_card_id]: newGroup,
-      };
     });
   }, [currentProposal, currentIndex]);
 
   const handleAttachCandidateToGroup = useCallback((candId: string) => {
     if (!currentProposal) return;
     setMultiCardGroups((prev) => {
-      const group = prev[currentProposal.front_card_id] || [
-        currentProposal.front_card_id,
-        ...(currentProposal.back_card_id ? [currentProposal.back_card_id] : []),
-      ];
+      const group = prev[currentProposal.proposal_id] || currentProposal.ordered_card_ids || [];
       if (group.includes(candId)) return prev;
       return {
         ...prev,
-        [currentProposal.front_card_id]: [...group, candId],
+        [currentProposal.proposal_id]: [...group, candId],
       };
     });
-  }, [currentProposal]);
+
+    setProposals((prev) => {
+      const copy = [...prev];
+      const group = copy[currentIndex].ordered_card_ids || [];
+      if (!group.includes(candId)) {
+        copy[currentIndex] = {
+          ...copy[currentIndex],
+          ordered_card_ids: [...group, candId],
+        };
+      }
+      return copy;
+    });
+  }, [currentProposal, currentIndex]);
 
   const handleReorderGroup = useCallback((newOrder: string[]) => {
     if (!currentProposal) return;
     setMultiCardGroups((prev) => ({
       ...prev,
-      [currentProposal.front_card_id]: newOrder,
+      [currentProposal.proposal_id]: newOrder,
     }));
-  }, [currentProposal]);
+    setProposals((prev) => {
+      const copy = [...prev];
+      copy[currentIndex] = {
+        ...copy[currentIndex],
+        ordered_card_ids: newOrder,
+      };
+      return copy;
+    });
+  }, [currentProposal, currentIndex]);
 
   const handleDetachCard = useCallback((cardId: string) => {
     if (!currentProposal) return;
     setMultiCardGroups((prev) => {
-      const group = prev[currentProposal.front_card_id] || [];
+      const group = prev[currentProposal.proposal_id] || currentProposal.ordered_card_ids || [];
       const updated = group.filter((id) => id !== cardId);
       return {
         ...prev,
-        [currentProposal.front_card_id]: updated,
+        [currentProposal.proposal_id]: updated,
       };
     });
-  }, [currentProposal]);
+    setProposals((prev) => {
+      const copy = [...prev];
+      const group = copy[currentIndex].ordered_card_ids || [];
+      copy[currentIndex] = {
+        ...copy[currentIndex],
+        ordered_card_ids: group.filter((id) => id !== cardId),
+      };
+      return copy;
+    });
+  }, [currentProposal, currentIndex]);
 
   // Keyboard shortcut integration
   useKeyboard({
@@ -286,7 +338,6 @@ export const HitlWorkspace: React.FC<HitlWorkspaceProps> = ({
   }
 
   const isQueueComplete = currentIndex >= proposals.length;
-  const currentGroup = currentProposal ? multiCardGroups[currentProposal.front_card_id] || [] : [];
 
   return (
     <div className="flex flex-col gap-6" data-tour="rapid-queue">
@@ -369,9 +420,10 @@ export const HitlWorkspace: React.FC<HitlWorkspaceProps> = ({
         <CandidateDrawer
           isOpen={isDrawerOpen}
           onClose={() => setIsDrawerOpen(false)}
-          frontCardId={currentProposal.front_card_id}
+          frontCardId={currentGroup[0] || currentProposal.ordered_card_ids?.[0] || ''}
+          selectedCardId={currentGroup[0] || currentProposal.ordered_card_ids?.[0] || ''}
           candidates={candidates}
-          currentBackCardId={currentProposal.back_card_id}
+          currentBackCardId={currentGroup[1] || null}
           groupedCardIds={currentGroup}
           onSelectCandidateAsBack={handleSelectCandidateAsBack}
           onAttachCandidateToGroup={handleAttachCandidateToGroup}
@@ -391,15 +443,19 @@ export const HitlWorkspace: React.FC<HitlWorkspaceProps> = ({
           onDetach={handleDetachCard}
           onApprove={(orderedIds) => {
             handleReorderGroup(orderedIds);
-            const approval: CardPairApproval = {
+            const approval: HitlApproval = {
               proposal_id: currentProposal.proposal_id,
-              front_card_id: orderedIds[0] || currentProposal.front_card_id,
+              ordered_card_ids: orderedIds,
+              front_card_id: orderedIds[0],
               back_card_id: orderedIds[1] || null,
-              card_ids: orderedIds.length > 2 ? orderedIds : (orderedIds.length > 1 ? orderedIds : undefined),
+              card_ids: orderedIds,
               is_standalone: orderedIds.length === 1 || currentProposal.is_standalone,
               is_rejected: false,
             };
-            setApprovals((prev) => [...prev.filter((a) => a.front_card_id !== approval.front_card_id), approval]);
+            setApprovals((prev) => [
+              ...prev.filter((a) => a.proposal_id !== approval.proposal_id),
+              approval,
+            ]);
             setIsInspectionModalOpen(false);
             advanceQueue();
           }}
@@ -408,3 +464,4 @@ export const HitlWorkspace: React.FC<HitlWorkspaceProps> = ({
     </div>
   );
 };
+

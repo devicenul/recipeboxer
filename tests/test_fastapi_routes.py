@@ -2,7 +2,7 @@
 
 import asyncio
 from pathlib import Path
-from typing import AsyncGenerator
+from typing import Any, AsyncGenerator
 
 import httpx
 import pytest
@@ -221,8 +221,7 @@ class TestFastAPIRoutes:
         approvals = [
             {
                 "proposal_id": p["proposal_id"],
-                "front_card_id": p["front_card_id"],
-                "back_card_id": p["back_card_id"],
+                "ordered_card_ids": p.get("ordered_card_ids", [p.get("front_card_id")]),
                 "decision": "APPROVE",
             }
             for p in proposals

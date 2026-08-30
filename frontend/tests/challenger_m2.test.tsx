@@ -258,15 +258,16 @@ describe('Empirical Challenger Test Suite — Milestone 2 Frontend React + TypeS
       );
 
       expect(screen.getByText(/4 cards attached/i)).toBeInTheDocument();
-      expect(screen.getByText('Front (Page 1)')).toBeInTheDocument();
-      expect(screen.getByText('Back (Page 2)')).toBeInTheDocument();
-      expect(screen.getByText('Part 3')).toBeInTheDocument();
-      expect(screen.getByText('Part 4')).toBeInTheDocument();
+      expect(screen.getByText('Part 1 of 4')).toBeInTheDocument();
+      expect(screen.getByText('Part 2 of 4')).toBeInTheDocument();
+      expect(screen.getByText('Part 3 of 4')).toBeInTheDocument();
+      expect(screen.getByText('Part 4 of 4')).toBeInTheDocument();
       expect(screen.getByText('#1')).toBeInTheDocument();
       expect(screen.getByText('#2')).toBeInTheDocument();
       expect(screen.getByText('#3')).toBeInTheDocument();
       expect(screen.getByText('#4')).toBeInTheDocument();
     });
+
 
     it('handles card reordering boundaries (left at 0 disabled, right at N-1 disabled) and valid swaps', () => {
       const onReorder = vi.fn();
@@ -302,19 +303,17 @@ describe('Empirical Challenger Test Suite — Milestone 2 Frontend React + TypeS
       render(<MultiCardGrouping cardIds={cards} onReorder={vi.fn()} onDetach={onDetach} />);
 
       const detachBtns = screen.getAllByTitle('Detach from group');
-      // Front card has no detach button, so only 2 detach buttons exist (for back_02 and part_03)
-      expect(detachBtns.length).toBe(2);
+      expect(detachBtns.length).toBe(3);
 
-      // Detach part_03 (the second detach button)
-      fireEvent.click(detachBtns[1]);
+      // Detach part_03 (the third detach button)
+      fireEvent.click(detachBtns[2]);
       expect(onDetach).toHaveBeenCalledWith('part_03.jpg');
     });
 
     it('HitlWorkspace full workflow: attaches candidates to 3+ card group, reverses roles, and approves multi-card payload', async () => {
       const mockProposal: CorrelationProposal = {
         proposal_id: 'prop_multi_01',
-        front_card_id: 'card_1_front.jpg',
-        back_card_id: 'card_2_back.jpg',
+        ordered_card_ids: ['card_1_front.jpg', 'card_2_back.jpg'],
         heuristic_score: 0.92,
         semantic_score: 0.88,
         confidence: 0.90,
@@ -420,9 +419,7 @@ describe('Empirical Challenger Test Suite — Milestone 2 Frontend React + TypeS
           approvals: [
             expect.objectContaining({
               proposal_id: 'prop_multi_01',
-              front_card_id: 'card_2_back.jpg',
-              back_card_id: 'card_1_front.jpg',
-              card_ids: ['card_2_back.jpg', 'card_1_front.jpg', 'card_3_part.jpg', 'card_4_part.jpg'],
+              ordered_card_ids: ['card_4_part.jpg', 'card_3_part.jpg', 'card_2_back.jpg', 'card_1_front.jpg'],
               is_standalone: false,
               is_rejected: false,
             }),
@@ -433,6 +430,8 @@ describe('Empirical Challenger Test Suite — Milestone 2 Frontend React + TypeS
         expect(onCompleted).toHaveBeenCalled();
       });
     });
+
+
   });
 
   // =========================================================================
