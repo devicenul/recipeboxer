@@ -1,13 +1,16 @@
-# TEST_READY: RecipeBoxer E2E Test Suite Sign-off
+# TEST_READY: RecipeBoxer Full-Stack Test Suite Sign-off
 
 ## Overview
-The comprehensive, requirement-driven, opaque-box E2E test suite for **RecipeBoxer** covering Features **F1.1 through F5.4** across **Tiers 1–4** is fully implemented, verified, and passing at 100%.
+The comprehensive, requirement-driven, opaque-box test suite for **RecipeBoxer** covering Features **F1.1 through F7.6** across **Tiers 1–5** (including adversarial stress and empirical challenger suites) is fully implemented, verified, and passing at 100%.
 
 - **Test Infrastructure Document**: `TEST_INFRA.md`
 - **Backend Platform E2E Suite**: `tests/test_e2e_platform.py` (165 tests)
 - **Frontend Platform E2E Suite**: `frontend/tests/e2e_platform.test.tsx` (28 tests)
-- **Total Backend Tests in Project**: **1,329 passed** (100% pass)
-- **Total Frontend Tests in Project**: **145 passed** across 14 test files (100% pass)
+- **Backend Adversarial Hardening Suite**: `tests/test_tier5_adversarial_hardening.py` (32 tests)
+- **Frontend Adversarial Hardening Suite**: `frontend/tests/tier5_adversarial_hardening.test.tsx` (25 tests)
+- **Total Backend Tests in Project**: **1,442 passed**, 48 skipped (win32 bash scripts), 0 failures (100% pass)
+- **Total Frontend Tests in Project**: **218 passed** across 20 test suites with 0 TypeScript errors (100% pass)
+- **Total Full-Stack Tests**: **1,660 passed**
 
 ---
 
@@ -17,7 +20,7 @@ The comprehensive, requirement-driven, opaque-box E2E test suite for **RecipeBox
 ```bash
 ./test.sh
 ```
-**Result**: 1,329 passed in 51.98s
+**Result**: 1,442 passed, 48 skipped in 54.21s
 
 ### 2. Isolated Platform Backend E2E Suite
 ```bash
@@ -29,7 +32,7 @@ The comprehensive, requirement-driven, opaque-box E2E test suite for **RecipeBox
 ```bash
 cd frontend && npm test -- --run
 ```
-**Result**: 14 test files passed, 145 tests passed in 10.59s
+**Result**: 20 test files passed, 218 tests passed in 11.45s
 
 ### 4. Isolated Platform Frontend E2E Suite
 ```bash

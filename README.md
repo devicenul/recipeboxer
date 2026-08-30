@@ -11,10 +11,10 @@ RecipeBoxer transforms disorganized shoe boxes, albums, and binders of vintage h
 ### Core Capabilities
 
 - **Multi-Modal Substrate Fingerprinting**: Extracts paper color centroids in CIELAB space ($\Delta E$), paper stock texture, ruled lines, ink characteristics, and horizontally mirrored stain bleed-through using Gemini 3.7 / 2.5 multimodal models.
-- **Two-Stage Card Correlation Engine**:
+- **Open-Ended N-Part Sequence Correlation Engine**:
   - *Stage 1 (Visual & Physical Screening)*: High-speed heuristic pruning based on CIELAB $\Delta E$, scan proximity decay, paper ruling, and stain symmetry.
-  - *Stage 2 (Deep Semantic Reasoning & Assignment)*: Continuity reasoning evaluating narrative recipe flow across card faces combined with a global greedy bipartite matching optimizer.
-- **Asynchronous HITL (Human-in-the-Loop) Review**: Real-time Server-Sent Events (SSE) telemetry paired with a keyboard-driven Rapid Review Queue (`Space`, `S`, `B`, `X`, `Tab`), slide-out alternate candidate ranking drawer, and 3+ card multi-part recipe grouping trays.
+  - *Stage 2 (Directed Semantic Reasoning & Sequence Chaining)*: Evaluates narrative continuity across card transitions and constructs a directed transition graph with maximal DAG path chaining to automatically correlate multi-card recipes ($N \ge 1$).
+- **Asynchronous HITL (Human-in-the-Loop) Review**: Real-time Server-Sent Events (SSE) telemetry paired with a keyboard-driven Rapid Review Queue (`Space`, `S`, `B`, `X`, `Tab`), slide-out alternate candidate ranking drawer, and unified "Part 1 of N" sequence reordering, splitting, and merging.
 - **Split-Screen Recipe Editor & Image Inspection**: Side-by-side verification with 50/50 split-screen layout, synchronized pan and zoom (up to 400%), 90° lossless rotation, and adaptive image enhancement filters (brightness, contrast, negative inversion) for faded pencil and aged cursive.
 - **Pluggable Ingestion Sources**: Ingest from local filesystem folders, drag-and-drop multipart uploads, Google Photos albums with OAuth2 auto-refresh, and Cloud Drive / Object Storage (Google Drive, AWS S3, Google Cloud Storage).
 - **9-Format Recipe Export Matrix**:
@@ -123,13 +123,13 @@ RecipeBoxer provides an intuitive 4-stage pipeline for digitizing physical card 
 - **Dynamic Thinking Budget**: Enable extended reasoning tokens (1,024–4,096 tokens) for degraded cursive and faint pencil cards.
 
 ### 2. Rapid HITL Queue & Hotkey Review
-When two-sided card pairings have ambiguous visual or semantic confidence scores, the pipeline pauses for human review:
-- **`Space`**: **Approve Pair** — confirms the front/back card assignment and advances the queue.
-- **`S`**: **Standalone Card** — marks the card as a single-sided standalone recipe.
-- **`B`**: **Reverse Pair** — swaps front and back card roles.
+When card sequences have ambiguous visual or semantic confidence scores, the pipeline pauses for human review:
+- **`Space`**: **Approve Sequence** — confirms the proposed "Part 1 ... Part N" sequence and advances the queue.
+- **`S`**: **Standalone Card** — marks the card as an independent single-part recipe.
+- **`B`**: **Invert Sequence** — reverses the order of the card sequence.
 - **`X`**: **Reject Scan** — discards non-recipe cards, blank backs, or blurry scans.
-- **`Tab`**: **Candidate Drawer** — opens the ranked candidate drawer to select alternate back matches.
-- **3+ Multi-Card Sets**: Attach additional cards to create 3-card or 4-card recipe groups with custom sequence reordering.
+- **`Tab`**: **Candidate Drawer** — opens the ranked candidate drawer to inspect or select alternate sequence matches.
+- **Sequence Controls ("Part 1 ... N")**: Drag-and-drop cards to reorder sequence positions, split cards into separate recipes, or merge adjacent proposals into multi-card sets.
 
 ### 3. Split-Screen Recipe Editor & Image Inspection
 - **Side-by-Side Verification**: 50/50 view displaying the original card scan carousel on the left and the editable recipe form on the right.
@@ -222,24 +222,24 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 ---
 
 ## Automated Testing & Quality Assurance
-
+ 
 RecipeBoxer maintains a comprehensive multi-tier test pyramid:
-
+ 
 ```bash
-# Run full backend pytest suite (1,130 tests across 29 modules)
+# Run full backend pytest suite (1,442 tests across Tiers 1–5 and challenger suites)
 ./test.sh
-
-# Run frontend Vitest suite (102 tests across 12 test suites)
+ 
+# Run frontend Vitest suite (218 tests across 20 test suites)
 cd frontend && npm test -- --run && cd ..
-
-# Run end-to-end 4-tier integration test suite
-pytest tests/test_e2e_4tier_suite.py -v
-
+ 
+# Run end-to-end platform integration test suite
+pytest tests/test_e2e_platform.py -v
+ 
 # Run Tier 5 adversarial hardening and concurrency tests
-pytest tests/test_tier5_adversarial_coverage.py -v
-
-# Run standalone script cross-platform verification tests
-pytest tests/test_scripts.py -v
+pytest tests/test_tier5_adversarial_hardening.py -v
+ 
+# Run empirical challenger sequence correlation tests
+pytest tests/test_challenger_1_full_empirical.py -v
 ```
 
 For complete documentation on testing conventions, mock harnesses, and writing new tests, see [**`_agents/TESTING_GUIDELINES.md`**](_agents/TESTING_GUIDELINES.md).

@@ -10,8 +10,8 @@ Welcome to the **RecipeBoxer** developer and AI agent guidance repository. This 
 
 The platform combines:
 1. **Multi-Modal Visual Fingerprinting**: Physical substrate analysis (CIELAB color, ruling patterns, card stock, ink medium, stain bleed-through) using Google Gemini 2.5 Flash.
-2. **Two-Stage Card Correlation**: Fast heuristic screening ($\Delta E$ color distance, scan proximity decay, horizontally mirrored stain bleed-through) followed by Gemini multimodal semantic continuity reasoning and greedy bipartite assignment.
-3. **Asynchronous HITL Review Pipeline**: A non-blocking cooperative async barrier where low-confidence or ambiguous card pairings pause for human verification, candidate replacement, multi-card grouping (3+ cards), or rejection.
+2. **Open-Ended N-Part Sequence Correlation**: Fast physical heuristic screening ($\Delta E$ color distance, scan proximity decay, ruling, horizontally mirrored stain bleed-through) followed by Gemini multimodal semantic continuity reasoning and maximal DAG sequence path chaining for recipes of arbitrary length ($N \ge 1$).
+3. **Asynchronous HITL Review Pipeline**: A non-blocking cooperative async barrier where ambiguous card sequences pause for human verification, candidate replacement, sequence reordering ("Part 1 ... N"), splitting, or rejection.
 4. **Structured Recipe Transcription**: Multimodal transcription into validated Pydantic `RecipeSchema` objects with standardized numbering, clean ingredients, and tag deduplication.
 5. **Multi-Format Exporters**: RFC 4180-compliant 9-column CSV for Plan To Eat, Schema.org Recipe JSON-LD with ISO 8601 duration strings, and standard JSON formats.
 6. **Embedded React 18+ TypeScript SPA**: A modern single-page application built with Vite and Tailwind CSS, featuring real-time Server-Sent Events (SSE), split-screen recipe editing, an interactive pan/zoom/filter card canvas, and static distribution directly inside FastAPI.
@@ -58,7 +58,7 @@ The platform combines:
 │   ├── storage/                # SQLite WAL caches (FingerprintCache, SessionStore)
 │   ├── vision/                 # Visual fingerprinting, heuristics, and CIELAB color math
 │   ├── ingestion/              # Card scanning, validation, and parallel/batch runners
-│   ├── correlation/            # Two-stage correlation verifier & bipartite optimizer
+│   ├── correlation/            # Directed sequence transition verifier & path chaining optimizer
 │   ├── extraction/             # Multimodal recipe transcription into RecipeSchema
 │   ├── exporter/               # Plan To Eat CSV, Schema.org JSON-LD, and JSON serializers
 │   └── api/                    # FastAPI REST routes, SSE events, and SPA static hosting
@@ -93,12 +93,12 @@ The platform combines:
 .\setup.ps1
 ```
 
-### 2. Running Automated Tests (1,232 Passing Tests)
+### 2. Running Automated Tests (1,660 Passing Tests)
 ```bash
-# Run all Python backend tests (1,130 tests)
+# Run all Python backend tests (1,442 tests across Tiers 1–5 and challenger suites)
 ./test.sh
 
-# Run all Frontend Vitest tests (102 tests)
+# Run all Frontend Vitest tests (218 tests across 20 suites)
 cd frontend && npm test -- --run
 
 # Run both in sequence

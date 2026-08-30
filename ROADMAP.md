@@ -31,6 +31,7 @@ All roadmap items and milestones use standardized status tags:
 | **M11** | **Archival Document Generation & Extended Exporters** | Google Docs batch update archival exporter with card scan embedding, offline OpenXML DOCX & printable PDF cookbook generators, Obsidian Markdown with YAML frontmatter, Cooklang (`.cook`), Paprika (`.paprikarecipes`), FastAPI export endpoints, and React frontend export UI integration. | `[x] Completed` |
 | **M12** | **Cloud & External Source Providers** | Unified `BaseSourceProvider` abstraction, Google Photos Library API connector with OAuth2 auto-refresh & album filtering, Google Drive folder selector, S3/GCS bucket connectors, REST source management endpoints, and React album picker UI. | `[x] Completed` |
 | **M13** | **Interactive UI Guided Tour, User Guide & MVP Packaging** | Accessible 6-step interactive onboarding tutorial overlay (`frontend/src/components/tutorial/`), complete multi-platform documentation and architecture walkthrough (`README.md`), CLI option verification (`--concurrency`), and standalone PyInstaller packaging verification. | `[x] Completed` |
+| **M14** | **Open-Ended N-Part Sequence Correlation & Model Modernization** | Clean-break deprecation of `front_card_id`/`back_card_id` across models and schemas; directed transition graph and DAG maximal path chaining ($N \ge 1$); dynamic SQLite `session_proposals` sequence migration; unified "Part 1 of N" HITL UI with drag-and-drop reordering, split, and merge; sequence-preserving multimodal extraction and 9 exporters; 1,660 passing tests. | `[x] Completed` |
 
 ---
 
@@ -53,6 +54,9 @@ All roadmap items and milestones use standardized status tags:
        │
        ▼
 [x] Phase 6: Comprehensive User Guide, Guided UI Tutorial & MVP Release
+       │
+       ▼
+[x] Phase 7: Open-Ended N-Part Sequence Correlation & Model Modernization
 ```
 
 ---
@@ -162,7 +166,28 @@ All roadmap items and milestones use standardized status tags:
   - Step-by-step multi-platform setup instructions (macOS, Linux, Windows PowerShell / CMD).
   - Troubleshooting FAQ: API key configuration (`GEMINI_API_KEY`), quota management with slow-batch pacing, port binding, and cache management.
 - [x] **Initial MVP Release & Pre-Built Binary Packaging**:
-  - Tag initial MVP release and publish cross-platform standalone binaries (`macOS`, `Linux`, `Windows`).
+   - Tag initial MVP release and publish cross-platform standalone binaries (`macOS`, `Linux`, `Windows`).
+
+---
+
+### Phase 7: Open-Ended N-Part Sequence Correlation & Model Modernization
+*Generalization & sequence intelligence: Eliminate rigid binary front/back pairing in favor of open-ended directed sequence clustering and unified "Part 1 ... N" HITL review.*
+
+- [x] **Clean-Break Domain Model & Schema Modernization**:
+  - Removed legacy binary `front_card_id`/`back_card_id` and `FRONT`/`BACK` constraints across backend models (`domain.py`, `correlation.py`, `hitl.py`, `session.py`) and frontend TypeScript types (`domain.ts`, `hitl.ts`, `pipeline.ts`).
+  - Standardized on canonical `ordered_card_ids: List[str]` and ordinal `part_index` / `total_parts` representation.
+- [x] **Directed Sequence Correlation & Maximal DAG Path Chaining**:
+  - Replaced bipartite matching with a directed transition graph evaluating pairwise directed compatibility ($\Delta E$, scan proximity, ruling, ink, mirrored stains, sequential "Part N" headers, and semantic continuation) with cycle prevention for sequences of length $N \ge 1$.
+- [x] **REST API, SSE Telemetry & SQLite SessionStore Alignment**:
+  - Dynamic SQLite schema migration of `session_proposals` to `ordered_card_ids TEXT NOT NULL`.
+  - Updated FastAPI endpoints (`/api/hitl/*`, `/api/pipeline/*`, `/api/recipes/*`) and SSE events to transmit sequence arrays.
+- [x] **Unified "Part 1 ... N" HITL Workflow & UI**:
+  - Rebranded all review cards, candidate drawers, and modals from "Front/Back" to "Part 1 of N", "Part 2 of N", etc.
+  - Added drag-and-drop positional reordering, sequence inversion, and split/merge controls.
+- [x] **Sequence-Preserved Multimodal Extraction & Exporters**:
+  - Multimodal transcription and all 9 recipe export formats preserve ordered card sequences.
+- [x] **Full Platform Test Suite Expansion**:
+  - Expanded test suite to **1,660 passing tests** (1,442 backend pytest + 218 frontend Vitest across 20 suites) with 100% pass rate.
 
 ---
 
@@ -174,7 +199,7 @@ When contributing to RecipeBoxer or updating this roadmap:
    - Change the item's tag from `[ ] Planned` to `[~] In Progress`.
    - Ensure the feature is tracked in the active sprint or dispatch briefing.
 2. **Completing an Item**:
-   - Ensure all associated unit, boundary, pairwise, and integration tests pass (preserving the 100% test pass rate across all 1,232+ tests).
+   - Ensure all associated unit, boundary, pairwise, and integration tests pass (preserving the 100% test pass rate across all 1,660+ tests).
    - Change the item's tag from `[~] In Progress` to `[x] Completed`.
 3. **Adding New Proposals**:
    - Add new proposals under the appropriate backlog section using the `[ ] Planned` tag.

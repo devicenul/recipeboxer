@@ -86,9 +86,9 @@ The Human-in-the-Loop review transition at Stage 4 must pause the background pip
 4. **Input Focus Trapping (Frontend)**:
    - Global review shortcuts (`Space`, `Enter`, `S`, `B`, `X`, `M`, `Tab`, `Escape`) registered by `useKeyboard` **MUST** be suppressed whenever `document.activeElement` or `event.target` is an editable element (`INPUT`, `TEXTAREA`, `SELECT`, or `isContentEditable`).
    - Typing recipe notes, ingredient quantities, or search queries must never trigger unintended queue decisions.
-5. **Multi-Card Grouping Support (3+ Cards)**:
-   - Multi-card recipe groups are represented as `CardPairApproval.card_ids: List[str]`.
-   - Front card is `group[0]`, primary back is `group[1]`, and continuations are `group[2:]`. The backend extraction pipeline must merge text from all grouped cards into a single coherent `RecipeSchema`.
+5. **Ordered Sequence Approvals ("Part 1 ... N")**:
+   - Recipe card sequences are represented canonically as `CardSequenceApproval.ordered_card_ids: List[str]` (`CardPairApproval` retained as alias).
+   - Cards are indexed ordinally as Part 1 (`ordered_card_ids[0]`), Part 2 (`ordered_card_ids[1]`), ..., Part N. The backend multimodal extraction pipeline transcribes card images in strict positional sequence order and merges them into a single coherent `RecipeSchema`. Single-sided cards are represented as single-element sequences (`len(ordered_card_ids) == 1`).
 
 ---
 

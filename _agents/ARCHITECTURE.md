@@ -125,10 +125,10 @@ The execution runtime is managed by the Google Antigravity Agent pattern in `rec
   - Checks `FingerprintCache` by SHA-256 digest. If present, returns cached fingerprint immediately with zero API cost.
   - If missing, extracts paper color, ruling, ink medium, physical stains, boundary text, and card role.
 
-#### Stage 3: Two-Stage Correlation (`PipelineState.CORRELATING`)
-- **Stage 1 Heuristic Screening** (`vision/heuristics.py`): Performs pairwise combinatorial evaluation using physical distance metrics. Prunes incompatible pairs exceeding the distance threshold ($S_{\text{heur}} < 0.50$).
-- **Stage 2 Semantic Continuity Verification** (`correlation/semantic.py`): High-potential candidate pairs are sent to `GeminiSemanticVerifier` for multimodal semantic verification, assessing syntactic flow, recipe identity, and culinary logic.
-- **Global Assignment** (`correlation/optimizer.py`): `PairingOptimizer` computes composite confidence scores and solves the assignment problem using a greedy bipartite matching algorithm. Unpaired cards are designated as `STANDALONE` or isolated in `unmatched_card_ids`.
+#### Stage 3: Open-Ended N-Part Sequence Correlation (`PipelineState.CORRELATING`)
+- **Stage 1 Heuristic Screening** (`vision/heuristics.py`): Evaluates pairwise directed transition compatibility using physical substrate distance metrics ($\Delta E$ color, paper ruling, scan proximity decay, horizontally mirrored stain bleed-through).
+- **Stage 2 Semantic Continuity Verification** (`correlation/semantic.py`): Candidate card transitions are evaluated with `GeminiSemanticVerifier` for multimodal syntactic flow, recipe identity, and culinary logic.
+- **Global Sequence Chaining** (`correlation/optimizer.py`): `PairingOptimizer` constructs a directed transition graph and finds maximal directed path chains subject to DAG constraints. This automatically proposes single-card ($N=1$), two-part ($N=2$), and multi-card ($N \ge 3$) recipe sequences without artificial front/back partitioning. Unpaired cards remain standalone single-part sequences.
 
 #### Stage 4: Human-in-the-Loop Barrier (`PipelineState.HITL_PENDING`)
 - The pipeline transitions to `HITL_PENDING` and calls `await session.pause_for_hitl()`.
@@ -237,8 +237,7 @@ CREATE TABLE IF NOT EXISTS session_cards (
 CREATE TABLE IF NOT EXISTS session_proposals (
     session_id TEXT NOT NULL,
     proposal_id TEXT NOT NULL,
-    front_card_id TEXT NOT NULL,
-    back_card_id TEXT,
+    ordered_card_ids TEXT NOT NULL,
     json_data TEXT,
     PRIMARY KEY (session_id, proposal_id)
 );
@@ -297,9 +296,9 @@ The correlation engine evaluates card pairs through a two-stage hybrid process:
 
 #### Stage 2: Multimodal Semantic Verification & Composite Confidence
 Screened pairs ($S_{\text{heur}} \ge 0.50$) undergo semantic analysis via `GeminiSemanticVerifier` ($S_{\text{sem}}$). The overall pair confidence is calculated as:
-$$\text{Confidence} = 0.30 \cdot S_{\text{heur}} + 0.70 \cdot S_{\text{sem}}$$
+$$\text{Transition Score}(u \to v) = 0.30 \cdot S_{\text{heur}}(u \to v) + 0.70 \cdot S_{\text{sem}}(u \to v)$$
 
-`PairingOptimizer` executes a greedy bipartite matching algorithm over all candidates, selecting non-conflicting pairs with composite confidence $\ge 0.50$.
+`PairingOptimizer` constructs a directed transition graph with cycle prevention and executes a maximal DAG path chaining algorithm, aggregating non-conflicting directed transitions into coherent ordered sequences ("Part 1 ... Part N") with confidence $\ge 0.50$. Standalone cards are preserved as single-part sequences.
 
 ---
 
@@ -493,10 +492,10 @@ RecipeBoxer includes a comprehensive evaluation and continuous regression harnes
 ---
 
 ## 5. Summary of System Statistics & Testing Verification
-
-- **Full-Stack Test Coverage**: **1,228 tests passing (100% pass rate)**
-  - **1,126 backend Pytest unit, boundary, integration, and E2E tests** (including 4-tier testing pyramid).
-  - **102 frontend Vitest component tests**.
+ 
+- **Full-Stack Test Coverage**: **1,660 tests passing (100% pass rate)**
+  - **1,442 backend Pytest unit, boundary, integration, E2E, and adversarial stress tests** (including 5-tier testing pyramid and challenger suites).
+  - **218 frontend Vitest component and workflow tests** across 20 test suites.
 - **Supported Export Formats**: 9 Formats (Plan To Eat CSV, Schema.org JSON-LD, Google Docs, DOCX, PDF, Obsidian MD, Cooklang, Paprika, Raw JSON).
 - **Supported Source Providers**: 4 Providers (Local Directory/Uploads, Google Photos API, Google Drive, S3/GCS Object Storage).
 - **Embedded Static Bundle**: Compiled directly into `recipeboxer/api/static/` for zero-dependency standalone execution.
