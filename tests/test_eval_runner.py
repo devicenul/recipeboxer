@@ -481,14 +481,14 @@ class TestCLIInterface:
         parser = build_cli_parser()
         args = parser.parse_args([
             "--stage", "correlation",
-            "--model", "gemini-3.7-pro",
+            "--model", "gemini-3.1-pro",
             "--modality", "HANDWRITTEN_CURSIVE",
             "--mock-judge",
             "-f", "json",
             "-o", "/tmp/reports",
         ])
         assert args.stage == "correlation"
-        assert args.model == "gemini-3.7-pro"
+        assert args.model == "gemini-3.1-pro"
         assert args.modality == "HANDWRITTEN_CURSIVE"
         assert args.mock_judge is True
         assert args.format == "json"

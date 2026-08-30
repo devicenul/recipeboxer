@@ -363,6 +363,46 @@ describe('R2: Ingestion Controller & Session Manager', () => {
       expect(screen.getByText('20,624')).toBeInTheDocument(); // total tokens
       expect(screen.getByText('45s')).toBeInTheDocument(); // elapsed
     });
+
+    it('renders active extraction progress panel with pulse indicator, dynamic counter, sub-bar, and auto-transition notice during EXTRACTING state', () => {
+      const extractingStatus: PipelineStatus = {
+        session_id: 'sess_extracting_001',
+        status: PipelineState.EXTRACTING,
+        mode: IngestionMode.PARALLEL,
+        progress: {
+          total_scans: 10,
+          fingerprinted: 10,
+          proposals_generated: 4,
+          approved_recipes: 4,
+          recipes_extracted: 2,
+          current_stage: 'Extracting',
+          percent_complete: 72.5,
+        },
+        token_usage: {
+          prompt_tokens: 24000,
+          candidates_tokens: 6500,
+          thinking_tokens: 0,
+          total_tokens: 30500,
+        },
+        elapsed_seconds: 52,
+      };
+
+      render(<ProgressDashboard status={extractingStatus} />);
+
+      // Heading with active transcription indicator
+      expect(screen.getByText('Multimodal Recipe Extraction in Progress')).toBeInTheDocument();
+
+      // Dynamic counter: Recipe 3 of 4 (currently on 3rd after 2 extracted)
+      expect(screen.getByText('Recipe 3 of 4')).toBeInTheDocument();
+
+      // Secondary sub-bar label and percentage (2/4 = 50%)
+      expect(screen.getByText('Extraction Stage Progress')).toBeInTheDocument();
+      expect(screen.getByText('50%')).toBeInTheDocument();
+
+      // Completed recipes count and auto-transition notice
+      expect(screen.getByText(/Completed recipes:/i)).toBeInTheDocument();
+      expect(screen.getByText('Auto-transitioning to Recipe Editor upon completion...')).toBeInTheDocument();
+    });
   });
 
   describe('SessionHistoryTable', () => {

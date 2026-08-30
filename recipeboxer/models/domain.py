@@ -20,13 +20,26 @@ class CardRole(str, Enum):
     def _missing_(cls, value: object) -> Optional[CardRole]:
         if isinstance(value, str):
             val = value.upper().strip().replace("-", "_").replace(" ", "_")
-            if val in ("FRONT_ONLY", "FRONT", "START", "SEQUENCE_START", "CARD1_FRONT"):
+            if val in (
+                "FRONT_ONLY", "FRONT", "START", "SEQUENCE_START",
+                "CARD1_FRONT", "PART1_FRONT", "PT1_FRONT", "01_FRONT", "PART1", "PT1", "CARD1",
+            ):
                 return cls.SEQUENCE_START
-            if val in ("BACK_ONLY", "BACK", "CONTINUATION", "SEQUENCE_CONTINUATION", "CARD1_BACK"):
+            if val in (
+                "BACK_ONLY", "BACK", "CONTINUATION", "SEQUENCE_CONTINUATION",
+                "CARD1_BACK", "CARD2_FRONT", "CARD2_BACK", "CARD3_FRONT", "CARD3_BACK",
+                "CARD4_FRONT", "CARD4_BACK",
+                "PART2", "PART3", "PART4", "PART5",
+                "PT2", "PT3", "PT4", "PT5",
+                "PART2_FRONT", "PART2_BACK", "PART3_FRONT", "PART3_BACK",
+                "PT2_FRONT", "PT2_BACK", "PT3_FRONT", "PT3_BACK",
+                "02_FRONT", "02_BACK", "03_FRONT", "03_BACK", "04_FRONT", "04_BACK",
+                "02", "03", "04",
+            ) or any(val.startswith(p) for p in ("CARD2", "CARD3", "CARD4", "PART2", "PART3", "PART4", "PT2", "PT3", "PT4")):
                 return cls.SEQUENCE_CONTINUATION
             if val in ("STANDALONE", "SINGLE", "SINGLE_SIDED"):
                 return cls.STANDALONE
-            if val in ("UNKNOWN", "NOISE", "TAB", "DIVIDER"):
+            if val in ("UNKNOWN", "NOISE", "TAB", "DIVIDER", "BLANK"):
                 return cls.UNKNOWN
         return None
 
@@ -282,17 +295,12 @@ class VisualFingerprint(BaseModel):
             return CardRole.UNKNOWN
         if isinstance(v, CardRole):
             return v
-        v_str = str(getattr(v, "value", v)).strip().upper()
-        if v_str in ("FRONT_ONLY", "FRONT", "START", "SEQUENCE_START"):
-            return CardRole.SEQUENCE_START
-        if v_str in ("BACK_ONLY", "BACK", "CONTINUATION", "SEQUENCE_CONTINUATION"):
-            return CardRole.SEQUENCE_CONTINUATION
-        if v_str in ("STANDALONE", "SINGLE"):
-            return CardRole.STANDALONE
-        if v_str in ("UNKNOWN", "NOISE"):
-            return CardRole.UNKNOWN
+        v_str = str(getattr(v, "value", v)).strip()
+        role = CardRole._missing_(v_str)
+        if role is not None:
+            return role
         try:
-            return CardRole(v_str)
+            return CardRole(v_str.upper())
         except ValueError:
             raise ValueError(f"Invalid CardRole: {v}")
     paper_color: PaperColorInfo = Field(default_factory=PaperColorInfo)

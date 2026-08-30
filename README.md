@@ -183,7 +183,7 @@ recipeboxer --reload
 | `RECIPEBOXER_EXPORT_DIR` | `exports` | Default destination directory for exported recipe archives |
 | `RECIPEBOXER_DEBUG` | `false` | Enable verbose debug logging and traceback output |
 | `RECIPEBOXER_MODEL_FAST` | `gemini-3.7-flash` | Model identifier for visual fingerprinting and screening |
-| `RECIPEBOXER_MODEL_REASONING` | `gemini-3.7-pro` | Model identifier for semantic correlation and extraction |
+| `RECIPEBOXER_MODEL_REASONING` | `gemini-3.1-pro` | Model identifier for semantic correlation and extraction |
 
 ---
 
@@ -226,10 +226,10 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 RecipeBoxer maintains a comprehensive multi-tier test pyramid:
  
 ```bash
-# Run full backend pytest suite (1,452 tests across Tiers 1–5 and challenger suites)
+# Run full backend pytest suite (1,503 tests across Tiers 1–5 and challenger suites)
 ./test.sh
  
-# Run frontend Vitest suite (240 tests across 21 test suites)
+# Run frontend Vitest suite (244 tests across 21 test suites)
 cd frontend && npm test -- --run && cd ..
  
 # Run end-to-end platform integration test suite

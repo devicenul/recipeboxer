@@ -601,4 +601,133 @@ async def test_recipe_schema_preserves_guess_and_anecdote_isolation():
     assert all("suppers" not in d for d in recipe.directions)
 
 
+@pytest.mark.asyncio
+async def test_offline_extraction_ground_truth_all_12_corpus_recipes():
+    """Validates that all 12 ground-truth corpus recipes extract with 100% fidelity offline."""
+    from tests.fixtures.loader import load_sample_corpus
+
+    corpus = load_sample_corpus()
+    extractor = GeminiRecipeExtractor(api_key=None)
+
+    assert len(corpus._cards_by_recipe) == 12
+
+    for rec_id, cards in corpus._cards_by_recipe.items():
+        sorted_cards = sorted(cards, key=lambda c: c.recipe_cluster.get("sequence_position", 0))
+        paths = [c.file_path for c in sorted_cards]
+        recipe = await extractor.extract_cards(paths)
+        gt = sorted_cards[0].ground_truth_recipe
+
+        assert isinstance(recipe, RecipeSchema)
+        assert recipe.title == gt.title, f"Mismatch for {rec_id}: {recipe.title} != {gt.title}"
+        assert len(recipe.ingredients) == len(gt.ingredients)
+        assert recipe.ingredients == gt.ingredients
+        assert len(recipe.directions) == len(gt.directions)
+        assert recipe.card_ids == [c.filename for c in sorted_cards]
+        assert len(recipe.image_urls) == len(sorted_cards)
+        for cid in recipe.card_ids:
+            assert f"/api/cards/{cid}/image" in recipe.image_urls
+
+
+@pytest.mark.asyncio
+async def test_offline_extraction_dual_index_manifest_resolution():
+    """Validates resolution by SHA256 bytes, card_id string, and normalized stem variants."""
+    from tests.fixtures.loader import load_sample_corpus
+
+    corpus = load_sample_corpus()
+    extractor = GeminiRecipeExtractor(api_key=None)
+
+    # 1. By raw bytes matching SHA256
+    card = corpus.get_by_id("rec_typ_beef_stroganoff_1956_front.jpg")
+    assert card is not None
+    img_bytes = card.file_path.read_bytes()
+    recipe_bytes = await extractor.extract(img_bytes)
+    assert recipe_bytes.title == "1956 Classic Beef Stroganoff"
+
+    # 2. By normalized card ID stem / hyphen variant
+    recipe_stem = await extractor.extract("rec-typ-beef-stroganoff-1956-front")
+    assert recipe_stem.title == "1956 Classic Beef Stroganoff"
+
+    # 3. By VisualFingerprint with SHA256
+    fp = VisualFingerprint(
+        card_id="custom_scanned_stroganoff.jpg",
+        image_path="/tmp/nonexistent.jpg",
+        sha256_hash=card.sha256_hash,
+        role=CardRole.FRONT_ONLY,
+    )
+    recipe_fp = await extractor.extract(fp)
+    assert recipe_fp.title == "1956 Classic Beef Stroganoff"
+
+
+@pytest.mark.asyncio
+async def test_offline_extraction_eliminates_cross_contamination():
+    """Validates that greedy 'pie' and 'chocolate' keyword matches do not cross-contaminate recipes."""
+    from tests.fixtures.loader import load_sample_corpus
+
+    corpus = load_sample_corpus()
+    extractor = GeminiRecipeExtractor(api_key=None)
+
+    # 1. Rhubarb Pie must NOT return Pecan Pie
+    rhubarb_card = corpus.get_by_id("rec_vhc_rhubarb_pie_1965_front.jpg")
+    assert rhubarb_card is not None
+    rec_rhubarb = await extractor.extract(rhubarb_card.file_path)
+    assert rec_rhubarb.title == "Aunt Clara's 1965 Rhubarb Custard Pie"
+    assert any("rhubarb" in i.lower() for i in rec_rhubarb.ingredients)
+    assert not any("pecan" in i.lower() for i in rec_rhubarb.ingredients)
+
+    # 2. Borden's Chocolate Pie must NOT return Pecan Pie or 10-Minute Fudge
+    borden_card = corpus.get_by_id("rec_clp_condensed_milk_pie_1962_standalone.jpg")
+    assert borden_card is not None
+    rec_borden = await extractor.extract(borden_card.file_path)
+    assert rec_borden.title == "1962 Borden's Eagle Brand Magic Chocolate Pie"
+
+    # 3. Generic unseen pie card should fall through to generic card fallback, NOT Pecan Pie
+    fp_cherry = VisualFingerprint(
+        card_id="cherry_pie_scan_001.jpg",
+        image_path="/tmp/cherry_pie_scan_001.jpg",
+        sha256_hash="deadbeef99998888",
+        role=CardRole.STANDALONE,
+        boundary_text=BoundaryText(
+            first_line="Fresh Tart Cherry Pie",
+            last_line="Bake 45 minutes until bubbly.",
+        ),
+    )
+    rec_cherry = await extractor.extract(fp_cherry)
+    assert "Cherry Pie" in rec_cherry.title
+    assert rec_cherry.title != "Southern Pecan Pie"
+
+
+@pytest.mark.asyncio
+async def test_offline_extraction_multi_part_sequence_persistence():
+    """Validates multi-part sequences (N >= 3) assemble and persist card_ids and image_urls."""
+    from tests.fixtures.loader import load_sample_corpus
+
+    corpus = load_sample_corpus()
+    extractor = GeminiRecipeExtractor(api_key=None)
+
+    # 4-card Wedding Fruitcake
+    fruitcake_cards = corpus.get_recipe_cluster("rec_mcs_wedding_fruitcake_1942")
+    assert len(fruitcake_cards) == 4
+    sorted_fc = sorted(fruitcake_cards, key=lambda c: c.recipe_cluster.get("sequence_position", 0))
+    recipe_fc = await extractor.extract_cards([c.file_path for c in sorted_fc])
+
+    assert recipe_fc.title == "1942 Heirloom Dark Holiday Wedding Fruitcake"
+    assert recipe_fc.card_ids == [c.filename for c in sorted_fc]
+    assert len(recipe_fc.image_urls) == 4
+    for cid in recipe_fc.card_ids:
+        assert f"/api/cards/{cid}/image" in recipe_fc.image_urls
+
+    # 3-card Turkey Feast
+    turkey_cards = corpus.get_recipe_cluster("rec_mcs_turkey_stuffing_feast")
+    assert len(turkey_cards) == 3
+    sorted_tk = sorted(turkey_cards, key=lambda c: c.recipe_cluster.get("sequence_position", 0))
+    recipe_tk = await extractor.extract_cards([c.file_path for c in sorted_tk])
+
+    assert recipe_tk.title == "Grandma's Thanksgiving Roast Turkey & Sage Stuffing"
+    assert recipe_tk.card_ids == [c.filename for c in sorted_tk]
+    assert len(recipe_tk.image_urls) == 3
+    for cid in recipe_tk.card_ids:
+        assert f"/api/cards/{cid}/image" in recipe_tk.image_urls
+
+
+
 

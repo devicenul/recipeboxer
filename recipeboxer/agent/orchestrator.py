@@ -6,6 +6,7 @@ import asyncio
 import logging
 import os
 import time
+import uuid
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Union
 
@@ -22,6 +23,7 @@ from recipeboxer.ingestion.runner import (
     IngestionRunner,
 )
 from recipeboxer.ingestion.scanner import ScannedCard, scan_card_directory
+from recipeboxer.models.correlation import CorrelationProposal, CorrelationResult
 from recipeboxer.models.domain import CardRole, VisualFingerprint
 from recipeboxer.models.hitl import CardPairApproval, HITLDecision
 from recipeboxer.models.pipeline import (
@@ -210,9 +212,29 @@ class RecipeBoxerAgent:
                 session.end_time = time.monotonic()
                 return
 
-            session.proposals = correlation_result.proposals
-            session.unmatched_card_ids = correlation_result.unmatched_card_ids
-            # Store unassigned cards as VisualFingerprints
+            session.proposals = list(correlation_result.proposals)
+            session.unmatched_card_ids = list(correlation_result.unmatched_card_ids)
+
+            # Package any remaining unmatched cards into standalone proposals for the review queue
+            assigned_ids = {cid for p in session.proposals for cid in p.ordered_card_ids}
+            for cid in correlation_result.unmatched_card_ids:
+                if cid not in assigned_ids and cid in session.fingerprints:
+                    fp = session.fingerprints[cid]
+                    unmatched_proposal = CorrelationProposal(
+                        proposal_id=f"prop_{uuid.uuid4().hex[:8]}",
+                        ordered_card_ids=[cid],
+                        part_count=1,
+                        transition_scores=[],
+                        heuristic_score=0.0,
+                        semantic_score=0.0,
+                        confidence=fp.role_confidence,
+                        is_standalone=True,
+                        continuity_explanation="Unmatched card presented as standalone candidate for human review.",
+                        recommended_action="STANDALONE",
+                    )
+                    session.proposals.append(unmatched_proposal)
+                    assigned_ids.add(cid)
+
             session.unassigned_cards = [
                 session.fingerprints[cid]
                 for cid in correlation_result.unmatched_card_ids
@@ -234,6 +256,8 @@ class RecipeBoxerAgent:
             # -------------------------------------------------------------
             session.state = PipelineState.EXTRACTING
             recipes: List[RecipeSchema] = []
+            session.recipes = []
+            session.progress_metrics.extracted = 0
 
             for approval in session.approvals:
                 if session.is_cancelled:
@@ -298,7 +322,8 @@ class RecipeBoxerAgent:
                             recipe.tags = RecipeSchema.clean_and_deduplicate_tags(combined_tags)
 
                         recipes.append(recipe)
-                        session.progress_metrics.extracted += 1
+                        session.recipes.append(recipe)
+                        session.progress_metrics.extracted = len(session.recipes)
                 except Exception as exc:
                     logger.error(
                         f"[{session.session_id}] Recipe extraction failed for {ordered_card_ids}: {exc}"

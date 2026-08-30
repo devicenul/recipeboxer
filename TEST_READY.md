@@ -8,9 +8,9 @@ The comprehensive, requirement-driven, opaque-box test suite for **RecipeBoxer**
 - **Frontend Platform E2E Suite**: `frontend/tests/e2e_platform.test.tsx` (28 tests)
 - **Backend Adversarial Hardening Suite**: `tests/test_tier5_adversarial_hardening.py` (32 tests)
 - **Frontend Adversarial Hardening Suite**: `frontend/tests/tier5_adversarial_hardening.test.tsx` (25 tests)
-- **Total Backend Tests in Project**: **1,452 passed**, 46 skipped (win32 bash scripts), 0 failures (100% pass)
-- **Total Frontend Tests in Project**: **240 passed** across 21 test suites with 0 TypeScript errors (100% pass)
-- **Total Full-Stack Tests**: **1,692 passed**
+- **Total Backend Tests in Project**: **1,503 passed**, 46 skipped (win32 bash scripts), 0 failures (100% pass)
+- **Total Frontend Tests in Project**: **244 passed** across 21 test suites with 0 TypeScript errors (100% pass)
+- **Total Full-Stack Tests**: **1,747 passed**
 
 ---
 
@@ -20,7 +20,7 @@ The comprehensive, requirement-driven, opaque-box test suite for **RecipeBoxer**
 ```bash
 ./test.sh
 ```
-**Result**: 1,452 passed, 46 skipped in 64.44s
+**Result**: 1,503 passed, 46 skipped in 66.30s
 
 ### 2. Isolated Platform Backend E2E Suite
 ```bash
@@ -32,7 +32,7 @@ The comprehensive, requirement-driven, opaque-box test suite for **RecipeBoxer**
 ```bash
 cd frontend && npm test -- --run
 ```
-**Result**: 21 test files passed, 240 tests passed in 10.41s
+**Result**: 21 test files passed, 244 tests passed in 12.19s
 
 ### 4. Isolated Platform Frontend E2E Suite
 ```bash

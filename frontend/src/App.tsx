@@ -116,18 +116,33 @@ export const AppContent: React.FC = () => {
     enabled: !!sessionId,
     onStateChange: (status) => {
       setCurrentStatus(status);
+      if (status.session_id && status.session_id !== 'none' && !sessionId) {
+        setSessionId(status.session_id);
+      }
       if (status.status === PipelineState.HITL_PENDING) {
         setPendingHitlCount(status.progress.proposals_generated || 1);
         setActiveTab('hitl');
       } else if (status.status === PipelineState.COMPLETED) {
         setPendingHitlCount(0);
-        fetchRecipes(sessionId);
+        setActiveTab('recipes');
+        fetchRecipes(status.session_id || sessionId);
       }
     },
     onProgress: (status) => {
       setCurrentStatus(status);
+      if (status.session_id && status.session_id !== 'none' && !sessionId) {
+        setSessionId(status.session_id);
+      }
+      if (status.status === PipelineState.COMPLETED) {
+        setPendingHitlCount(0);
+        setActiveTab('recipes');
+        fetchRecipes(status.session_id || sessionId);
+      }
     },
     onHitlReady: (data) => {
+      if (data.session_id && !sessionId) {
+        setSessionId(data.session_id);
+      }
       setPendingHitlCount(data.proposals_count || 1);
       setActiveTab('hitl');
     },
@@ -142,7 +157,12 @@ export const AppContent: React.FC = () => {
     },
     onCompleted: (status) => {
       setCurrentStatus(status);
-      fetchRecipes(sessionId);
+      if (status.session_id && status.session_id !== 'none' && !sessionId) {
+        setSessionId(status.session_id);
+      }
+      setPendingHitlCount(0);
+      setActiveTab('recipes');
+      fetchRecipes(status.session_id || sessionId);
     },
   });
 

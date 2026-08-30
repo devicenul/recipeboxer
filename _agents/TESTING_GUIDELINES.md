@@ -15,7 +15,7 @@ The RecipeBoxer quality assurance framework is built upon four core principles:
 3. **100% Offline Testability**:
    All test suites run completely offline without an active internet connection or live `GEMINI_API_KEY`, using high-fidelity offline simulators (`MockGeminiClient` in `tests/conftest.py` and mock API handlers in `frontend/src/utils/api.ts`).
 4. **Zero Regression Policy**:
-   The repository maintains **1,692 passing automated tests** (1,452 Python pytest tests across Tiers 1–5 + 240 Frontend Vitest tests across 21 suites). Every code change must preserve 100% pass rates across all test suites.
+   The repository maintains **1,747 passing automated tests** (1,503 Python pytest tests across Tiers 1–5 + 244 Frontend Vitest tests across 21 suites). Every code change must preserve 100% pass rates across all test suites.
 
 ---
 
@@ -239,8 +239,8 @@ npx vitest run tests/tier5_adversarial_frontend.test.tsx
 
 Before committing code or submitting a handoff report, verify:
 
-- [ ] `./test.sh` passes with **1,452 passing tests** (0 failures, 0 errors across Tiers 1–5).
-- [ ] `cd frontend && npm test -- --run` passes with **240 passing tests** across 21 test files.
+- [ ] `./test.sh` passes with **1,503 passing tests** (0 failures, 0 errors across Tiers 1–5).
+- [ ] `cd frontend && npm test -- --run` passes with **244 passing tests** across 21 test files.
 - [ ] No hardcoded bypasses or artificial mock logic were added to production source files.
 - [ ] Any newly created feature is covered by corresponding Tier 1 and Tier 2 tests.
 - [ ] All modified files conform to formatting standards.

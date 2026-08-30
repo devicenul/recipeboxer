@@ -893,8 +893,8 @@ describe('Tier 5 Adversarial Coverage Hardening — Frontend React SPA & HITL Su
 
       // Change model select
       const modelSelect = screen.getByRole('combobox');
-      fireEvent.change(modelSelect, { target: { value: 'gemini-3.7-pro' } });
-      expect(onChange).toHaveBeenCalledWith({ ...config, model: 'gemini-3.7-pro' });
+      fireEvent.change(modelSelect, { target: { value: 'gemini-3.1-pro' } });
+      expect(onChange).toHaveBeenCalledWith({ ...config, model: 'gemini-3.1-pro' });
     });
 
     it('handles drag-and-drop file selection in Dropzone component', () => {

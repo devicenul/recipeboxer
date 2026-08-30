@@ -1274,13 +1274,13 @@ class TestTier1And2DeepVerification:
         cfg = {
             "default_model": "gemini-3.7-flash",
             "fingerprint_model": "gemini-2.5-flash",
-            "correlation_model": "gemini-3.7-pro",
+            "correlation_model": "gemini-3.1-pro",
             "extraction_model": "gemini-3.7-flash-thinking",
             "thinking_mode": True,
             "thinking_budget_tokens": 4096,
         }
         assert cfg["fingerprint_model"] == "gemini-2.5-flash"
-        assert cfg["correlation_model"] == "gemini-3.7-pro"
+        assert cfg["correlation_model"] == "gemini-3.1-pro"
         assert cfg["extraction_model"] == "gemini-3.7-flash-thinking"
         assert cfg["thinking_budget_tokens"] == 4096
 

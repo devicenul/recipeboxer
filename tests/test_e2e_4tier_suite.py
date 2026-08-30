@@ -499,10 +499,10 @@ class TestTier1FeatureCoverage:
         """F5.5: Ingestion configuration stores model selector options accurately."""
         config = IngestionConfig(
             folder_path="/tmp/test",
-            model="gemini-3.7-pro",
+            model="gemini-3.1-pro",
             max_concurrency=6,
         )
-        assert config.model == "gemini-3.7-pro"
+        assert config.model == "gemini-3.1-pro"
         assert config.max_concurrency == 6
 
     # ------------------------------------------------------------------------

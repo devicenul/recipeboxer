@@ -386,3 +386,49 @@ async def test_multi_card_hitl_approval_sequence_preservation(
     assert extracted.image_urls[1] == f"/api/cards/{custom_order[1]}/image?session_id=sess_multi_card_order"
     assert extracted.image_urls[2] == f"/api/cards/{custom_order[2]}/image?session_id=sess_multi_card_order"
 
+
+@pytest.mark.asyncio
+async def test_incremental_recipe_extraction_progress(
+    synthetic_card_deck: SyntheticDeckInfo,
+    mock_gemini_client: MockGeminiClient,
+    test_cache: SQLiteFingerprintCache,
+):
+    """Verifies that session.recipes and progress_metrics.extracted are updated incrementally per recipe in Stage 5."""
+    session = PipelineSession(
+        session_id="sess_incremental_extract",
+        config=PipelineStartRequest(
+            scans_dir=str(synthetic_card_deck.directory),
+            mode=IngestionMode.PARALLEL,
+            max_concurrency=4,
+        ),
+        cache=test_cache,
+        extractor=mock_gemini_client,
+        mock_client=mock_gemini_client,
+    )
+
+    task = asyncio.create_task(session.run())
+
+    for _ in range(100):
+        if session.state == PipelineState.HITL_PENDING:
+            break
+        await asyncio.sleep(0.02)
+
+    assert session.state == PipelineState.HITL_PENDING
+    assert len(session.proposals) >= 2
+
+    approvals = [
+        CardPairApproval(
+            proposal_id=p.proposal_id,
+            ordered_card_ids=p.ordered_card_ids,
+            decision=HITLDecision.APPROVE,
+        )
+        for p in session.proposals
+    ]
+    session.submit_approval(approvals)
+
+    await task
+    assert session.state == PipelineState.COMPLETED
+    assert len(session.recipes) == len(approvals)
+    assert session.progress_metrics.extracted == len(session.recipes)
+
+

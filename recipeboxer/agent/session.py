@@ -71,6 +71,27 @@ class PipelineSession:
         else:
             self.config = config
 
+        if self.config:
+            cfg_model = getattr(self.config, "model", None)
+            if isinstance(self.config, dict) and not cfg_model:
+                cfg_model = self.config.get("model")
+            if cfg_model:
+                self.settings = self.settings.model_copy(update={"default_model": str(cfg_model)})
+
+            for stage_field in ("fingerprint_model", "correlation_model", "extraction_model"):
+                val = getattr(self.config, stage_field, None)
+                if isinstance(self.config, dict) and not val:
+                    val = self.config.get(stage_field)
+                if val:
+                    self.settings = self.settings.model_copy(update={stage_field: str(val)})
+
+            for opt_field in ("thinking_mode", "thinking_budget_tokens", "max_concurrency", "slow_batch_size", "slow_batch_interval_seconds"):
+                val = getattr(self.config, opt_field, None)
+                if isinstance(self.config, dict) and val is None:
+                    val = self.config.get(opt_field)
+                if val is not None:
+                    self.settings = self.settings.model_copy(update={opt_field: val})
+
         self.state: PipelineState = PipelineState.IDLE
 
         # Storage & Subsystems (for dependency injection / overrides)

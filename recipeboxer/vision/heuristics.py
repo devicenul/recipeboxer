@@ -509,21 +509,62 @@ def calculate_sequential_header_score(
     if fp2.boundary_text:
         t2 = f"{fp2.boundary_text.first_line} {fp2.boundary_text.last_line}".lower()
 
-    # Check for Part N / Card N / Page N progression
-    m1 = re.search(r"(?:part|card|page|pt|p\.)\s*([0-9]+)", t1) or re.search(r"(?:part|card|page|pt|p\.)\s*([0-9]+)", fp1.card_id.lower())
-    m2 = re.search(r"(?:part|card|page|pt|p\.)\s*([0-9]+)", t2) or re.search(r"(?:part|card|page|pt|p\.)\s*([0-9]+)", fp2.card_id.lower())
+    fn1 = fp1.card_id.lower()
+    fn2 = fp2.card_id.lower()
+
+    # Pattern match (card_num, side) or part_num across filename or boundary text
+    m1 = (
+        re.search(r"card\s*([0-9]+)[_\s]*(front|back)?", fn1)
+        or re.search(r"part\s*([0-9]+)[_\s]*(front|back)?", fn1)
+        or re.search(r"pt\s*([0-9]+)[_\s]*(front|back)?", fn1)
+        or re.search(r"(?:part|card|page|pt|p\.)\s*([0-9]+)", t1)
+    )
+    m2 = (
+        re.search(r"card\s*([0-9]+)[_\s]*(front|back)?", fn2)
+        or re.search(r"part\s*([0-9]+)[_\s]*(front|back)?", fn2)
+        or re.search(r"pt\s*([0-9]+)[_\s]*(front|back)?", fn2)
+        or re.search(r"(?:part|card|page|pt|p\.)\s*([0-9]+)", t2)
+    )
+
     if m1 and m2:
         try:
-            num1 = int(m1.group(1))
-            num2 = int(m2.group(1))
-            if num2 == num1 + 1:
+            c1 = int(m1.group(1))
+            c2 = int(m2.group(1))
+            s1 = m1.group(2) if (len(m1.groups()) > 1 and m1.group(2)) else ("back" if "back" in fn1 else "front")
+            s2 = m2.group(2) if (len(m2.groups()) > 1 and m2.group(2)) else ("back" if "back" in fn2 else "front")
+
+            # 1. Front -> Back of the same physical card (e.g. Card 1 Front -> Card 1 Back)
+            if c1 == c2 and s1 == "front" and s2 == "back":
                 return 1.00
-            elif num2 > num1:
-                return 0.85
-            else:
-                return 0.10
-        except ValueError:
+
+            # 2. Back of Card N -> Front of Card N+1 (e.g. Card 1 Back -> Card 2 Front)
+            if c2 == c1 + 1 and s1 == "back" and s2 == "front":
+                return 1.00
+
+            # 3. Single-sided parts advance without front/back (e.g. Part 1 -> Part 2, Page 1 -> Page 2)
+            if c2 == c1 + 1 and s1 == "front" and s2 == "front" and "front" not in fn1 and "front" not in fn2 and "back" not in fn1 and "back" not in fn2:
+                return 1.00
+
+            # 4. Front-to-front skip across cards (e.g. Card 1 Front -> Card 2 Front)
+            if c2 == c1 + 1 and s1 == "front" and s2 == "front":
+                return 0.50
+
+            # 5. Same card part continuation with side progression
+            if c2 == c1 + 1 and s1 == "back" and s2 == "back":
+                return 0.50
+
+            # 6. Non-contiguous forward progression (e.g. Card 1 Front -> Card 2 Back)
+            if c2 > c1:
+                return 0.50
+
+            # Reverse sequence / back-to-front reversal or same card back-to-front
+            return 0.10
+        except (ValueError, IndexError):
             pass
+
+    # Simple front -> back transition (e.g. apple_crisp_front.jpg -> apple_crisp_back.jpg)
+    if "front" in fn1 and "back" in fn2 and "back" not in fn1:
+        return 1.00
 
     score = 0.50
     if fp1.boundary_text and (fp1.boundary_text.has_continuation_symbol or fp1.boundary_text.is_cut_off_mid_sentence):

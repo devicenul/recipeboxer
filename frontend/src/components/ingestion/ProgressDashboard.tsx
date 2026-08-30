@@ -192,6 +192,64 @@ export const ProgressDashboard: React.FC<ProgressDashboardProps> = ({
         </div>
       )}
 
+      {/* Active Extraction Progress Panel for EXTRACTING state */}
+      {state === PipelineState.EXTRACTING && (() => {
+        const totalApproved =
+          (progress.approved_recipes ?? progress.approved_pairs ?? 0) ||
+          (progress.proposals_generated > 0 ? progress.proposals_generated : 0) ||
+          (progress.total_scans > 0 ? progress.total_scans : 1);
+        const extractedCount = progress.recipes_extracted || 0;
+        const currentRecipeNumber = Math.min(extractedCount + 1, Math.max(1, totalApproved));
+        const extractionPercent = Math.min(100, Math.round((extractedCount / Math.max(1, totalApproved)) * 100));
+
+        return (
+          <div className="p-4 sm:p-5 bg-blue-50/80 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/80 rounded-xl flex flex-col gap-3.5 shadow-xs">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <span className="relative flex h-3 w-3">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-blue-600" />
+                </span>
+                <h3 className="text-sm font-bold text-blue-950 dark:text-blue-100 flex items-center gap-2">
+                  Multimodal Recipe Extraction in Progress
+                </h3>
+              </div>
+              <div className="flex items-center gap-2 font-mono text-xs font-bold text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/60 px-2.5 py-1 rounded-md border border-blue-200 dark:border-blue-800">
+                <span>Recipe {currentRecipeNumber} of {totalApproved}</span>
+              </div>
+            </div>
+
+            {/* Dynamic Secondary Extraction Progress Sub-bar */}
+            <div className="flex flex-col gap-1.5">
+              <div className="w-full bg-blue-100 dark:bg-blue-900/40 h-2.5 rounded-full overflow-hidden p-0.5 border border-blue-200 dark:border-blue-800">
+                <div
+                  className="h-full bg-gradient-to-r from-blue-500 to-indigo-600 rounded-full transition-all duration-300 shadow-sm"
+                  style={{ width: `${extractionPercent}%` }}
+                />
+              </div>
+              <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 font-mono">
+                <span>Extraction Stage Progress</span>
+                <span>{extractionPercent}%</span>
+              </div>
+            </div>
+
+            {/* Completed Recipe Count & Auto-Transition Notice */}
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-blue-200/60 dark:border-blue-800/60 text-xs text-blue-800 dark:text-blue-300">
+              <div className="flex items-center gap-1.5 font-medium">
+                <span>Completed recipes:</span>
+                <strong className="font-bold font-mono text-blue-950 dark:text-blue-100">
+                  {extractedCount}
+                </strong>
+                <span>of {totalApproved}</span>
+              </div>
+              <span className="text-[11px] text-blue-600/90 dark:text-blue-400 italic">
+                Auto-transitioning to Recipe Editor upon completion...
+              </span>
+            </div>
+          </div>
+        );
+      })()}
+
       {state === PipelineState.COMPLETED && (
         <div className="flex items-center justify-between p-4 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-xl">
           <div className="text-xs text-emerald-800 dark:text-emerald-300">

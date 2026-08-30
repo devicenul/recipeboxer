@@ -302,34 +302,48 @@ class GeminiVisualExtractor:
             tone_name = "Cream"
 
         # Determine role from filename or layout
-        if "front" in fname or "part1" in fname or "card1" in fname or "pt1" in fname:
-            role = CardRole.SEQUENCE_START
-            role_conf = 0.95
-            first_line = "Recipe Title & Ingredients"
-            last_line = "Continue on back (over ->)"
-            has_cue = True
-            is_cutoff = True
-        elif "back" in fname or "part2" in fname or "card2" in fname or "part3" in fname or "part4" in fname or "pt2" in fname:
-            role = CardRole.SEQUENCE_CONTINUATION
-            role_conf = 0.95
-            first_line = "(Directions continued)"
-            last_line = "Bake and serve completely."
-            has_cue = False
-            is_cutoff = False
-        elif "standalone" in fname or "single" in fname:
-            role = CardRole.STANDALONE
-            role_conf = 0.95
-            first_line = "Standalone Recipe Title"
-            last_line = "Bake until set. Yield: 12 servings."
-            has_cue = False
-            is_cutoff = False
-        elif "noise" in fname or "divider" in fname or "blank" in fname or "tab" in fname:
+        if any(k in fname for k in ("noise", "divider", "blank", "tab")):
             role = CardRole.UNKNOWN
             role_conf = 0.50
             first_line = "Category Tab / Noise Card"
             last_line = "End of section."
             has_cue = False
             is_cutoff = False
+        elif any(k in fname for k in ("standalone", "single")):
+            role = CardRole.STANDALONE
+            role_conf = 0.95
+            first_line = "Standalone Recipe Title"
+            last_line = "Bake until set. Yield: 12 servings."
+            has_cue = False
+            is_cutoff = False
+        elif (
+            "back" in fname
+            or "rear" in fname
+            or "verso" in fname
+            or any(f"card{i}" in fname for i in range(2, 10))
+            or any(f"part{i}" in fname for i in range(2, 10))
+            or any(f"pt{i}" in fname for i in range(2, 10))
+            or any(f"0{i}_" in fname for i in range(2, 10))
+        ):
+            role = CardRole.SEQUENCE_CONTINUATION
+            role_conf = 0.95
+            first_line = "(Directions continued)"
+            last_line = "Bake and serve completely."
+            has_cue = False
+            is_cutoff = False
+        elif (
+            "front" in fname
+            or "part1" in fname
+            or "card1" in fname
+            or "pt1" in fname
+            or "01_" in fname
+        ):
+            role = CardRole.SEQUENCE_START
+            role_conf = 0.95
+            first_line = "Recipe Title & Ingredients"
+            last_line = "Continue on back (over ->)"
+            has_cue = True
+            is_cutoff = True
         else:
             role = CardRole.STANDALONE
             role_conf = 0.80

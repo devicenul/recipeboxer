@@ -248,18 +248,32 @@ class GeminiSemanticVerifier:
             "cont" in b_first or "direct" in b_first or "step" in b_first or "bake" in b_first
         )
 
-        # Keyword overlap in identifiers (e.g. cinnamon_rolls, lemon_bars)
-        f_clean = f_name.replace("front", "").replace("back", "").replace("01_", "").replace("02_", "").replace("03_", "").replace("04_", "").strip("._ ")
-        b_clean = b_name.replace("front", "").replace("back", "").replace("01_", "").replace("02_", "").replace("03_", "").replace("04_", "").strip("._ ")
-        f_tokens = set(re.findall(r"\w+", f_clean))
-        b_tokens = set(re.findall(r"\w+", b_clean))
-        token_overlap = f_tokens.intersection(b_tokens) - {"jpg", "jpeg", "png"}
+        # Clean tokens by splitting on non-alphanumeric characters
+        f_raw_tokens = set(re.findall(r"[a-zA-Z0-9]+", f_name))
+        b_raw_tokens = set(re.findall(r"[a-zA-Z0-9]+", b_name))
 
-        if (f_clean and f_clean == b_clean) or len(token_overlap) > 0 or (has_cue and has_cont_header) or (is_cutoff and has_cont_header):
+        # Stopwords & boilerplate prefixes that must NOT be used for recipe correlation
+        STOP_TOKENS = {
+            "rec", "clp", "dmg", "mcs", "sta", "typ", "vhc",
+            "card1", "card2", "card3", "card4", "card",
+            "part1", "part2", "part3", "part4", "part",
+            "pt1", "pt2", "pt3", "pt4", "pt",
+            "front", "back", "standalone", "single",
+            "jpg", "jpeg", "png",
+            "1942", "1948", "1952", "1956", "1962", "1965", "1971",
+            "01", "02", "03", "04", "05", "06", "07", "08", "09", "10",
+        }
+
+        f_recipe_tokens = f_raw_tokens - STOP_TOKENS
+        b_recipe_tokens = b_raw_tokens - STOP_TOKENS
+        token_overlap = f_recipe_tokens.intersection(b_recipe_tokens)
+
+        # Strong semantic continuity ONLY if substantive recipe identity tokens match
+        if len(token_overlap) > 0:
             semantic_score = 0.95
             explanation = (
                 f"Strong semantic continuity detected: front card ends with continuation cue/ingredients, "
-                f"back card continues with numbered baking steps. Common topic: {', '.join(token_overlap) or f_clean or 'Recipe Flow'}."
+                f"back card continues with numbered baking steps. Common topic: {', '.join(sorted(token_overlap))}."
             )
             action = "SEQUENCE"
         elif heuristic_score >= 0.60:

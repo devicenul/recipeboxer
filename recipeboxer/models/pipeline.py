@@ -74,6 +74,10 @@ class PipelineStartRequest(BaseModel):
     max_concurrency: Optional[int] = Field(default=None, ge=1, le=50, description="Override for max concurrent tasks")
     slow_batch_size: Optional[int] = Field(default=None, ge=1, le=20, description="Override for slow batch chunk size")
     slow_batch_interval_seconds: Optional[float] = Field(default=None, ge=0.0, description="Override for interval between batches")
+    model: Optional[str] = Field(
+        default="gemini-3.7-flash",
+        description="Gemini multimodal model identifier (e.g. gemini-3.7-flash, gemini-3.1-pro)",
+    )
     fingerprint_model: Optional[str] = Field(default=None)
     correlation_model: Optional[str] = Field(default=None)
     extraction_model: Optional[str] = Field(default=None)
