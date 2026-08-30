@@ -1803,4 +1803,108 @@ async def export_google_docs(
         return data
 
 
+# ============================================================================
+# 8. System & Native Directory Browsing
+# ============================================================================
+
+class BrowseDirectoryRequest(BaseModel):
+    initial_dir: Optional[str] = Field(default=None, description="Starting directory path for folder browser dialog")
+    title: Optional[str] = Field(default="Select Recipe Scans Directory", description="Dialog window title")
+
+
+class BrowseDirectoryResponse(BaseModel):
+    path: Optional[str] = Field(default=None, description="Selected absolute directory path")
+    canceled: bool = Field(default=False, description="Whether the folder browser was closed or canceled without selection")
+    success: bool = Field(default=True, description="Whether the dialog ran successfully")
+    error: Optional[str] = Field(default=None, description="Error message if dialog invocation failed")
+
+
+@router.post(
+    "/system/browse-directory",
+    response_model=BrowseDirectoryResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Open Native System Folder Browser Dialog",
+)
+@router.post(
+    "/browse/directory",
+    response_model=BrowseDirectoryResponse,
+    status_code=status.HTTP_200_OK,
+    include_in_schema=False,
+)
+async def browse_directory(
+    payload: Optional[BrowseDirectoryRequest] = None,
+) -> BrowseDirectoryResponse:
+    """Invokes native Windows / OS folder picker dialog to select an absolute directory path."""
+    raw_initial = payload.initial_dir if payload else None
+    initial_dir = raw_initial.strip() if isinstance(raw_initial, str) and raw_initial.strip() else None
+    raw_title = payload.title if payload else None
+    title = raw_title.strip() if isinstance(raw_title, str) and raw_title.strip() else "Select Recipe Scans Directory"
+
+    def _open_native_dialog() -> tuple[Optional[str], bool, bool, Optional[str]]:
+        root = None
+        try:
+            import tkinter as tk
+            from tkinter import filedialog
+
+            root = tk.Tk()
+            root.withdraw()
+            try:
+                root.wm_attributes("-topmost", 1)
+            except Exception:
+                pass
+            try:
+                root.focus_force()
+            except Exception:
+                pass
+
+            start_path = initial_dir if initial_dir and os.path.isdir(initial_dir) else os.getcwd()
+            selected = filedialog.askdirectory(
+                parent=root,
+                initialdir=start_path,
+                title=title,
+                mustexist=True,
+            )
+            if selected:
+                resolved = str(Path(selected).resolve())
+                return resolved, False, True, None
+            else:
+                return None, True, True, None
+        except Exception as exc:
+            logger.warning(f"Native folder dialog invocation error: {exc}")
+            return None, False, False, str(exc)
+        finally:
+            if root is not None:
+                try:
+                    root.destroy()
+                except Exception:
+                    pass
+
+    loop = asyncio.get_running_loop()
+    path, canceled, success, error = await loop.run_in_executor(None, _open_native_dialog)
+    return BrowseDirectoryResponse(
+        path=path,
+        canceled=canceled,
+        success=success,
+        error=error,
+    )
+
+
+@router.get(
+    "/system/browse-directory",
+    response_model=BrowseDirectoryResponse,
+    include_in_schema=False,
+)
+@router.get(
+    "/browse/directory",
+    response_model=BrowseDirectoryResponse,
+    include_in_schema=False,
+)
+async def browse_directory_get(
+    initial_dir: Optional[str] = Query(default=None),
+    title: Optional[str] = Query(default=None),
+) -> BrowseDirectoryResponse:
+    return await browse_directory(BrowseDirectoryRequest(initial_dir=initial_dir, title=title))
+
+
+
 

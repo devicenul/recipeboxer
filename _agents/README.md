@@ -93,12 +93,12 @@ The platform combines:
 .\setup.ps1
 ```
 
-### 2. Running Automated Tests (1,660 Passing Tests)
+### 2. Running Automated Tests (1,692 Passing Tests)
 ```bash
-# Run all Python backend tests (1,442 tests across Tiers 1–5 and challenger suites)
+# Run all Python backend tests (1,452 tests across Tiers 1–5 and challenger suites)
 ./test.sh
 
-# Run all Frontend Vitest tests (218 tests across 20 suites)
+# Run all Frontend Vitest tests (240 tests across 21 suites)
 cd frontend && npm test -- --run
 
 # Run both in sequence

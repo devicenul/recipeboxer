@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Layers, X, ArrowLeft, ArrowRight, Maximize2, GripVertical } from 'lucide-react';
 import { api } from '../../utils/api';
+import { CardHoverPreview } from '../common/CardHoverPreview';
 
 export interface MultiCardGroupingProps {
   cardIds: string[];
@@ -126,26 +127,34 @@ export const MultiCardGrouping: React.FC<MultiCardGroupingProps> = ({
                   : 'border-slate-200 dark:border-slate-700'
               }`}
             >
-              {/* Thumbnail (Click to open full inspection) */}
-              <div
-                onClick={() => onOpenInspectionModal?.()}
-                className={`w-16 h-20 bg-slate-200 dark:bg-slate-900 rounded-lg overflow-hidden border border-slate-300 dark:border-slate-700 relative ${
-                  onOpenInspectionModal ? 'cursor-pointer hover:opacity-90 hover:ring-2 hover:ring-purple-400/50' : ''
-                }`}
-                title={onOpenInspectionModal ? 'Click to inspect in full-size modal' : cid}
+              {/* Thumbnail (Click to open full inspection, Hover for 2.0s magnification) */}
+              <CardHoverPreview
+                cardId={cid}
+                imageUrl={imgUrl}
+                title={`Attached Card: ${cid}`}
+                subtitle={`${roleLabel} | Sequential Recipe Deck`}
+                enabled={draggedIndex === null}
               >
-                <img
-                  src={imgUrl}
-                  alt={cid}
-                  className="w-full h-full object-cover"
-                  onError={(e) => {
-                    (e.target as HTMLElement).style.display = 'none';
-                  }}
-                />
-                <span className="absolute bottom-1 right-1 px-1 py-0.5 text-[9px] font-bold rounded bg-black/70 text-white">
-                  #{idx + 1}
-                </span>
-              </div>
+                <div
+                  onClick={() => onOpenInspectionModal?.()}
+                  className={`w-16 h-20 bg-slate-200 dark:bg-slate-900 rounded-lg overflow-hidden border border-slate-300 dark:border-slate-700 relative ${
+                    onOpenInspectionModal ? 'cursor-pointer hover:opacity-90 hover:ring-2 hover:ring-purple-400/50' : ''
+                  }`}
+                  title={onOpenInspectionModal ? 'Click to inspect in full-size modal' : cid}
+                >
+                  <img
+                    src={imgUrl}
+                    alt={cid}
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      (e.target as HTMLElement).style.display = 'none';
+                    }}
+                  />
+                  <span className="absolute bottom-1 right-1 px-1 py-0.5 text-[9px] font-bold rounded bg-black/70 text-white">
+                    #{idx + 1}
+                  </span>
+                </div>
+              </CardHoverPreview>
 
               {/* Info & Actions */}
               <div className="flex flex-col justify-between h-20 min-w-[90px]">

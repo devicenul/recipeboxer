@@ -226,10 +226,10 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 RecipeBoxer maintains a comprehensive multi-tier test pyramid:
  
 ```bash
-# Run full backend pytest suite (1,442 tests across Tiers 1–5 and challenger suites)
+# Run full backend pytest suite (1,452 tests across Tiers 1–5 and challenger suites)
 ./test.sh
  
-# Run frontend Vitest suite (218 tests across 20 test suites)
+# Run frontend Vitest suite (240 tests across 21 test suites)
 cd frontend && npm test -- --run && cd ..
  
 # Run end-to-end platform integration test suite

@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { UploadCloud, Image as ImageIcon, X } from 'lucide-react';
+import { CardHoverPreview } from './CardHoverPreview';
 
 export interface DropzoneProps {
   files: File[];
@@ -102,27 +103,36 @@ export const Dropzone: React.FC<DropzoneProps> = ({
           </div>
           <div className="max-h-36 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 pr-1">
             {files.map((file, idx) => (
-              <div
+              <CardHoverPreview
                 key={`${file.name}-${idx}`}
-                className="flex items-center justify-between p-2 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-xs shadow-xs group"
+                cardId={file.name}
+                file={file}
+                title={file.name}
+                subtitle={`Size: ${(file.size / 1024).toFixed(1)} KB | Type: ${file.type || 'Image'}`}
+                className="w-full"
               >
-                <div className="flex items-center gap-1.5 min-w-0">
-                  <ImageIcon className="w-4 h-4 text-slate-400 shrink-0" />
-                  <span className="truncate text-slate-700 dark:text-slate-300" title={file.name}>
-                    {file.name}
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    removeFile(idx);
-                  }}
-                  className="text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 p-0.5"
+                <div
+                  className="flex items-center justify-between p-2 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-xs shadow-xs group w-full cursor-pointer hover:border-slate-300 dark:hover:border-slate-700"
                 >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              </div>
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <ImageIcon className="w-4 h-4 text-slate-400 shrink-0" />
+                    <span className="truncate text-slate-700 dark:text-slate-300" title={file.name}>
+                      {file.name}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      removeFile(idx);
+                    }}
+                    className="text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 p-0.5"
+                    title="Remove scan"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </CardHoverPreview>
             ))}
           </div>
         </div>

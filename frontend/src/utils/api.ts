@@ -56,6 +56,13 @@ export async function fetchJson<T>(url: string, options: RequestInit = {}): Prom
 
 export const api = {
   // 1. Pipeline Start & Ingestion
+  async browseDirectory(initialDir?: string): Promise<{ path: string | null; canceled: boolean; success: boolean; error?: string }> {
+    return fetchJson<{ path: string | null; canceled: boolean; success: boolean; error?: string }>('/api/system/browse-directory', {
+      method: 'POST',
+      body: JSON.stringify({ initial_dir: initialDir || '' }),
+    });
+  },
+
   async startPipeline(payload: PipelineStartRequest): Promise<PipelineStartResponse> {
     return fetchJson<PipelineStartResponse>('/api/pipeline/start', {
       method: 'POST',

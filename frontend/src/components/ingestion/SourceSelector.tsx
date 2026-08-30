@@ -66,6 +66,22 @@ export const SourceSelector: React.FC<SourceSelectorProps> = ({
   const folderInputRef = useRef<HTMLInputElement>(null);
 
   const handleBrowseDirectory = async () => {
+    if (disabled) return;
+    try {
+      const res = await api.browseDirectory(folderPath);
+      if (res && res.success) {
+        if (res.canceled) {
+          return;
+        }
+        if (res.path) {
+          onFolderPathChange(res.path);
+          return;
+        }
+      }
+    } catch {
+      // Fallback gracefully to browser directory picker if native backend browse fails/is unsupported
+    }
+
     if (isDirectoryPickerSupported()) {
       try {
         const dirHandle = await (window as any).showDirectoryPicker({ mode: 'read' });
@@ -110,6 +126,7 @@ export const SourceSelector: React.FC<SourceSelectorProps> = ({
         onUploadedFilesChange(imageFiles);
       }
     }
+    e.target.value = '';
   };
 
   useEffect(() => {
