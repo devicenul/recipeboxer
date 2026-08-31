@@ -31,10 +31,14 @@ class IngestionMode(str, Enum):
 class ProgressMetrics(BaseModel):
     """Granular counter metrics for pipeline stages."""
     total_scans: int = Field(default=0, ge=0)
+    skipped_cards: int = Field(default=0, ge=0, description="Cards skipped due to matching baseline SHA-256")
+    newly_processed_cards: int = Field(default=0, ge=0, description="New cards requiring vision & extraction")
     fingerprinted: int = Field(default=0, ge=0)
     proposals: int = Field(default=0, ge=0)
     approved: int = Field(default=0, ge=0)
     extracted: int = Field(default=0, ge=0)
+    baseline_recipes_count: int = Field(default=0, ge=0, description="Inherited baseline recipes count")
+    current_stage: Optional[str] = Field(default=None, description="Active stage label")
     percent_complete: float = Field(default=0.0, ge=0.0, le=100.0)
 
 
@@ -62,6 +66,14 @@ class PipelineStartRequest(BaseModel):
     """Request schema for POST /api/pipeline/start."""
     scans_dir: Optional[str] = Field(default=None, description="Filesystem directory containing recipe card scans")
     directory_path: Optional[str] = Field(default=None, description="Alias for scans_dir")
+    baseline_project_path: Optional[str] = Field(
+        default=None,
+        description="Filesystem path to baseline .recipeboxer project archive for duplicate skipping",
+    )
+    baseline_session_id: Optional[str] = Field(
+        default=None,
+        description="Existing session ID in SQLite store to use as baseline for duplicate skipping",
+    )
     default_tags: List[str] = Field(
         default_factory=list,
         description="Initial batch default tags to apply to all recipes scanned in this session",
@@ -106,7 +118,8 @@ class PipelineStartRequest(BaseModel):
             elif not self.scans_dir and self.directory_path:
                 self.scans_dir = self.directory_path
             elif not self.scans_dir and not self.directory_path:
-                raise ValueError("scans_dir or directory_path must be provided")
+                if not self.baseline_project_path and not self.baseline_session_id:
+                    raise ValueError("scans_dir or directory_path must be provided")
             if not self.directory_path and self.scans_dir:
                 self.directory_path = self.scans_dir
 

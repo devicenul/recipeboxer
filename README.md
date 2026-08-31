@@ -27,6 +27,9 @@ RecipeBoxer transforms disorganized shoe boxes, albums, and binders of vintage h
   7. **Cooklang (`.cook`)**: Plain-text culinary markup with `@ingredient{}`, `#cookware{}`, and `~timer{}` step annotations.
   8. **Paprika (`.paprikarecipes`)**: Compressed gzip archives containing recipe JSON and base64-encoded card photos for 1-click Paprika app import.
   9. **Raw JSON**: Complete lossless `RecipeSchema` JSON array backup.
+- **Portable Project State Persistence (`.recipeboxer` Archives)**: Portable, compressed project archive container storing full session manifests (card sequences, fingerprints, recipes, HITL review decisions, marginalia notes) alongside original card scans with content-addressed SHA-256 digests. Supports export-view "Save Project As..." and "Merge into Existing Project...".
+- **Incremental Ingestion with Duplicate-Skipping**: Baseline archive selection during ingestion; streaming SHA-256 card hashing automatically skips previously processed cards during OCR, fingerprinting, and correlation, preserving API quotas while seamlessly merging baseline recipes.
+- **Configurable Multi-Format Recipe Ordering & Grouping**: Interactive drag-and-drop recipe reordering with 5 categorical grouping presets (Course, Contributor, Tags, Alphabetical, Custom) generating formatted section divider pages and styled Tables of Contents with right-aligned dot leaders across DOCX, PDF, Google Docs, and Markdown cookbook exports.
 - **"First Run" Interactive UI Guided Tour**: Accessible 6-step onboarding walkthrough overlay built directly into the React frontend with keyboard controls and localStorage persistence.
 - **Cross-Platform Tooling & Standalone Distribution**: Native bootstrap, execution, testing, and PyInstaller packaging scripts for macOS, Linux, and Windows.
 
@@ -41,7 +44,7 @@ For in-depth architectural specifications, non-negotiable invariants, testing gu
 - [**`_agents/INVARIANTS.md`**](_agents/INVARIANTS.md): Non-negotiable architectural guardrails (SQLite WAL concurrency, Plan To Eat RFC 4180 CSV escaping, HITL async barrier semantics, Vite SPA static bundle contracts).
 - [**`_agents/TESTING_GUIDELINES.md`**](_agents/TESTING_GUIDELINES.md): Testing philosophy, 4-tier test pyramid, pytest & Vitest testing guides, fixtures, and regression checklists.
 - [**`_agents/EXTENDING_RECIPEBOXER.md`**](_agents/EXTENDING_RECIPEBOXER.md): Step-by-step developer extension guides with code examples for adding source providers, custom prompt branches, and export format serializers.
-- [**`ROADMAP.md`**](ROADMAP.md): Canonical project roadmap tracking completed milestones M1–M15 and prioritized future backlog items (Phase 9).
+- [**`ROADMAP.md`**](ROADMAP.md): Canonical project roadmap tracking completed milestones M1–M16 and prioritized future backlog items (Phase 10).
 - [**`SCRIPTS.md`**](SCRIPTS.md): Comprehensive script usage and troubleshooting guide for all POSIX and Windows scripts.
 
 ---
@@ -62,7 +65,7 @@ For in-depth architectural specifications, non-negotiable invariants, testing gu
 # 1. Bootstrap environment and install backend + frontend dependencies
 ./setup.sh
 
-# 2. Run the automated test suites (1,232+ tests: 1,130 Python pytest + 102 Frontend Vitest)
+# 2. Run the automated test suites (2,205+ tests: 1,848 Python pytest + 357 Frontend Vitest)
 ./test.sh
 cd frontend && npm test -- --run && cd ..
 
@@ -79,7 +82,7 @@ cd frontend && npm test -- --run && cd ..
 # 1. Bootstrap environment and install backend + frontend dependencies
 .\setup.ps1
 
-# 2. Run the automated test suites
+# 2. Run the automated test suites (2,205+ tests: 1,848 Python pytest + 357 Frontend Vitest)
 .\test.ps1
 cd frontend; npm test -- --run; cd ..
 

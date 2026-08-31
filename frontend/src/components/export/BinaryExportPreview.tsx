@@ -3,7 +3,7 @@ import { FileText, Download, CheckCircle, Sparkles } from 'lucide-react';
 import { RecipeSchema } from '../../types/recipe';
 
 export interface BinaryExportPreviewProps {
-  format: 'docx' | 'pdf' | 'paprika';
+  format: 'docx' | 'pdf' | 'paprika' | 'project';
   recipes: RecipeSchema[];
   onDownload: () => void;
 }
@@ -51,6 +51,19 @@ export const BinaryExportPreview: React.FC<BinaryExportPreviewProps> = ({
       ],
       tag: 'Mobile & Desktop App Archive',
       color: 'text-amber-600 dark:text-amber-400',
+    },
+    project: {
+      title: '.recipeboxer Project Archive',
+      desc: 'Standardized, compressed ZIP project container preserving complete session state: manifest JSON, visual fingerprints, correlation proposals, transcribed recipes, step bindings, marginalia, and original card scan image assets.',
+      features: [
+        'Complete lossless session snapshot (manifest.json + assets/scans/)',
+        'Content-addressed SHA-256 image scans with zero duplicate storage',
+        'Preserves visual fingerprints, paper color, ink, stains, and boundary text',
+        'Retains HITL review decisions, sequence ordering, and reviewer notes',
+        '100% portable across machines, collaborators, and cloud environments',
+      ],
+      tag: 'Portable Project State Container',
+      color: 'text-emerald-600 dark:text-emerald-400',
     },
   }[format];
 

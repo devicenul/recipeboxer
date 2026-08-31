@@ -1,15 +1,18 @@
 /**
- * Initiates browser download from backend binary export endpoints (/api/export/...).
+ * Initiates browser download from backend binary export endpoints (/api/export/...) with curation support.
  */
+
+import { ExportCurationOptions } from '../types/export';
+
 export async function downloadFromApiEndpoint(
   endpoint: string,
-  params: Record<string, string | undefined> = {},
+  params: Record<string, string | boolean | undefined> = {},
   fallbackFilename: string
 ): Promise<void> {
   const query = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) {
     if (value !== undefined && value !== null && value !== '') {
-      query.set(key, value);
+      query.set(key, String(value));
     }
   }
 
@@ -35,14 +38,69 @@ export async function downloadFromApiEndpoint(
   }
 }
 
-export function downloadDocx(sessionId?: string, filename = 'recipeboxer_cookbook.docx'): void {
-  downloadFromApiEndpoint('/api/export/docx', { session_id: sessionId, filename }, filename);
+export function downloadDocx(
+  sessionId?: string,
+  filename = 'recipeboxer_cookbook.docx',
+  curation?: ExportCurationOptions
+): void {
+  downloadFromApiEndpoint(
+    '/api/export/docx',
+    {
+      session_id: sessionId,
+      filename,
+      recipe_order: curation?.recipe_order?.join(','),
+      grouping_preset: curation?.grouping_preset,
+      include_section_dividers: curation?.include_section_dividers,
+      include_toc: curation?.include_toc,
+      toc_title: curation?.toc_title,
+    },
+    filename
+  );
 }
 
-export function downloadPdf(sessionId?: string, filename = 'recipeboxer_cookbook.pdf'): void {
-  downloadFromApiEndpoint('/api/export/pdf', { session_id: sessionId, filename }, filename);
+export function downloadPdf(
+  sessionId?: string,
+  filename = 'recipeboxer_cookbook.pdf',
+  curation?: ExportCurationOptions
+): void {
+  downloadFromApiEndpoint(
+    '/api/export/pdf',
+    {
+      session_id: sessionId,
+      filename,
+      recipe_order: curation?.recipe_order?.join(','),
+      grouping_preset: curation?.grouping_preset,
+      include_section_dividers: curation?.include_section_dividers,
+      include_toc: curation?.include_toc,
+      toc_title: curation?.toc_title,
+    },
+    filename
+  );
 }
 
-export function downloadPaprika(sessionId?: string, filename = 'recipeboxer_export.paprikarecipes'): void {
-  downloadFromApiEndpoint('/api/export/paprika', { session_id: sessionId, filename }, filename);
+export function downloadPaprika(
+  sessionId?: string,
+  filename = 'recipeboxer_export.paprikarecipes',
+  curation?: ExportCurationOptions
+): void {
+  downloadFromApiEndpoint(
+    '/api/export/paprika',
+    {
+      session_id: sessionId,
+      filename,
+      recipe_order: curation?.recipe_order?.join(','),
+      grouping_preset: curation?.grouping_preset,
+      include_section_dividers: curation?.include_section_dividers,
+      include_toc: curation?.include_toc,
+      toc_title: curation?.toc_title,
+    },
+    filename
+  );
+}
+
+export function downloadProjectArchive(
+  sessionId?: string,
+  filename = 'recipeboxer_project.recipeboxer'
+): void {
+  downloadFromApiEndpoint('/api/project/export', { session_id: sessionId, filename }, filename);
 }

@@ -8,9 +8,11 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
+import re
 from typing import Any, Callable, Dict, List, Optional, Union
 import yaml
 
+from recipeboxer.exporter.curation import CuratedCookbook, CuratedSection, GroupingPreset
 from recipeboxer.models.recipe import RecipeSchema
 
 logger = logging.getLogger(__name__)
@@ -154,11 +156,66 @@ class MarkdownExporter:
         recipes: Union[RecipeSchema, List[RecipeSchema]],
         use_wikilinks: bool = True,
         image_resolver: Optional[Callable[[str], Optional[Union[str, Path, bytes]]]] = None,
+        curation: Optional[CuratedCookbook] = None,
     ) -> str:
-        """Serializes single recipe or list of recipes into formatted Markdown string."""
-        recipe_list = [recipes] if isinstance(recipes, RecipeSchema) else list(recipes)
-        if not recipe_list:
+        """Serializes single recipe, list of recipes, or CuratedCookbook into formatted Markdown string."""
+        if curation:
+            recipe_list = curation.all_recipes
+        else:
+            recipe_list = [recipes] if isinstance(recipes, RecipeSchema) else list(recipes)
+
+        if not recipe_list and not curation:
             return ""
+
+        if curation:
+            parts: List[str] = []
+
+            # 1. Table of Contents
+            if curation.include_toc and curation.total_recipe_count > 0:
+                toc_lines: List[str] = [
+                    f"# {curation.toc_title or 'Table of Contents'}",
+                    "",
+                ]
+                show_sec_headers = len(curation.sections) > 1 or curation.grouping_preset != GroupingPreset.NONE
+                for sec in curation.sections:
+                    if show_sec_headers:
+                        toc_lines.append(f"## {sec.title}")
+                        toc_lines.append("")
+                    for rec in sec.recipes:
+                        title_text = rec.title or "Untitled Recipe"
+                        if use_wikilinks:
+                            toc_lines.append(f"- [[#{title_text}]]")
+                        else:
+                            slug = re.sub(r"[^a-zA-Z0-9\-_]+", "-", title_text.lower()).strip("-")
+                            toc_lines.append(f"- [{title_text}](#{slug})")
+                    toc_lines.append("")
+                parts.append("\n".join(toc_lines).strip())
+
+            # 2. Sections and Recipes
+            for sec in curation.sections:
+                show_divider = bool(
+                    curation.include_section_dividers
+                    and (len(curation.sections) > 1 or curation.grouping_preset != GroupingPreset.NONE)
+                )
+                if show_divider:
+                    div_lines: List[str] = [
+                        f"# {sec.title}",
+                        "",
+                    ]
+                    if sec.subtitle:
+                        div_lines.append(f"*{sec.subtitle}*")
+                        div_lines.append("")
+                    parts.append("\n".join(div_lines).strip())
+
+                for rec in sec.recipes:
+                    rec_md = self.export_single_recipe(
+                        rec,
+                        use_wikilinks=use_wikilinks,
+                        image_resolver=image_resolver,
+                    )
+                    parts.append(rec_md)
+
+            return "\n\n---\n\n".join(parts) + "\n"
 
         if len(recipe_list) == 1:
             return self.export_single_recipe(
@@ -183,6 +240,7 @@ class MarkdownExporter:
         output_path: Union[str, Path],
         use_wikilinks: bool = True,
         image_resolver: Optional[Callable[[str], Optional[Union[str, Path, bytes]]]] = None,
+        curation: Optional[CuratedCookbook] = None,
     ) -> Path:
         """Writes Obsidian Markdown to file on disk."""
         path = Path(output_path).resolve()
@@ -191,9 +249,10 @@ class MarkdownExporter:
             recipes,
             use_wikilinks=use_wikilinks,
             image_resolver=image_resolver,
+            curation=curation,
         )
         path.write_text(content, encoding=self.encoding)
-        count = 1 if isinstance(recipes, RecipeSchema) else len(recipes)
+        count = curation.total_recipe_count if curation else (1 if isinstance(recipes, RecipeSchema) else len(recipes))
         logger.info(f"Exported {count} recipe(s) to Markdown: {path}")
         return path
 
@@ -202,12 +261,14 @@ class MarkdownExporter:
         recipes: Union[RecipeSchema, List[RecipeSchema]],
         use_wikilinks: bool = True,
         image_resolver: Optional[Callable[[str], Optional[Union[str, Path, bytes]]]] = None,
+        curation: Optional[CuratedCookbook] = None,
     ) -> bytes:
         """Serializes recipes into UTF-8 encoded bytes."""
         return self.export_to_markdown_string(
             recipes,
             use_wikilinks=use_wikilinks,
             image_resolver=image_resolver,
+            curation=curation,
         ).encode(self.encoding)
 
 
@@ -215,10 +276,13 @@ def export_recipes_to_markdown(
     recipes: Union[RecipeSchema, List[RecipeSchema]],
     use_wikilinks: bool = True,
     image_resolver: Optional[Callable[[str], Optional[Union[str, Path, bytes]]]] = None,
+    curation: Optional[CuratedCookbook] = None,
 ) -> str:
     """Convenience helper to export recipes as Obsidian Markdown string."""
     return MarkdownExporter().export_to_markdown_string(
         recipes,
         use_wikilinks=use_wikilinks,
         image_resolver=image_resolver,
+        curation=curation,
     )
+

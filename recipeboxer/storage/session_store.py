@@ -326,6 +326,19 @@ class SessionStore:
         row = self.get_session(session_id)
         if not row:
             return None
+
+        config_dict: Dict[str, Any] = {}
+        try:
+            config_dict = json.loads(row.get("config_json") or "{}")
+        except Exception:
+            pass
+
+        metrics_dict: Dict[str, Any] = {}
+        try:
+            metrics_dict = json.loads(row.get("metrics_json") or "{}")
+        except Exception:
+            pass
+
         return SessionSummary(
             session_id=row["session_id"],
             folder_path=row.get("folder_path"),
@@ -333,8 +346,11 @@ class SessionStore:
             created_at=row["created_at"],
             updated_at=row.get("updated_at"),
             card_count=row.get("card_count", 0),
+            skipped_cards=metrics_dict.get("skipped_cards", 0),
             recipe_count=row.get("recipe_count", 0),
             mode=row.get("mode"),
+            baseline_project_path=config_dict.get("baseline_project_path"),
+            baseline_session_id=config_dict.get("baseline_session_id"),
             error=row.get("error_message"),
         )
 
@@ -376,7 +392,11 @@ class SessionStore:
             token_usage=tokens,
             elapsed_seconds=progress.elapsed_seconds if hasattr(progress, "elapsed_seconds") else 0.0,
             card_count=len(cards) if cards else row.get("card_count", 0),
+            skipped_cards=progress.skipped_cards,
             recipe_count=len(recipes) if recipes else row.get("recipe_count", 0),
+            baseline_recipes_count=progress.baseline_recipes_count,
+            baseline_project_path=config.get("baseline_project_path"),
+            baseline_session_id=config.get("baseline_session_id"),
             cards=cards,
             proposals=proposals,
             recipes=recipes,
@@ -399,6 +419,17 @@ class SessionStore:
         summaries: List[SessionSummary] = []
         for r in rows:
             rd = dict(r)
+            cfg: Dict[str, Any] = {}
+            try:
+                cfg = json.loads(rd.get("config_json") or "{}")
+            except Exception:
+                pass
+            met: Dict[str, Any] = {}
+            try:
+                met = json.loads(rd.get("metrics_json") or "{}")
+            except Exception:
+                pass
+
             summaries.append(
                 SessionSummary(
                     session_id=rd["session_id"],
@@ -407,8 +438,11 @@ class SessionStore:
                     created_at=rd["created_at"],
                     updated_at=rd.get("updated_at"),
                     card_count=rd.get("card_count", 0),
+                    skipped_cards=met.get("skipped_cards", 0),
                     recipe_count=rd.get("recipe_count", 0),
                     mode=rd.get("mode"),
+                    baseline_project_path=cfg.get("baseline_project_path"),
+                    baseline_session_id=cfg.get("baseline_session_id"),
                     error=rd.get("error_message"),
                 )
             )

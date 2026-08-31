@@ -24,18 +24,23 @@ import {
   getEnvGoogleClientId,
   hasGoogleClientId,
 } from '../../utils/googleAuth';
+import { CuratedCookbook, ExportCurationOptions } from '../../types/export';
 import { Button } from '../common/Button';
 
 export interface GoogleDocsPreviewProps {
   recipes: RecipeSchema[];
   sessionId?: string;
   customFilename?: string;
+  curation?: CuratedCookbook;
+  curationOptions?: ExportCurationOptions;
 }
 
 export const GoogleDocsPreview: React.FC<GoogleDocsPreviewProps> = ({
   recipes,
   sessionId,
   customFilename,
+  curation,
+  curationOptions,
 }) => {
   const [copiedHtml, setCopiedHtml] = useState(false);
   const [copiedJson, setCopiedJson] = useState(false);
@@ -59,7 +64,7 @@ export const GoogleDocsPreview: React.FC<GoogleDocsPreviewProps> = ({
       ? `RecipeBoxer - ${recipes[0].title}`
       : 'RecipeBoxer Archival Cookbook';
 
-  const htmlContent = generateGoogleDocsHtml(recipes, documentTitle);
+  const htmlContent = generateGoogleDocsHtml(recipes, documentTitle, curation);
 
   // Sync client ID states on mount or change
   useEffect(() => {

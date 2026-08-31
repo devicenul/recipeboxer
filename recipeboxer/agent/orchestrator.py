@@ -77,15 +77,99 @@ class RecipeBoxerAgent:
         """Alias for run_in_background."""
         return self.run_in_background(session)
 
+    def _load_baseline(
+        self, session: PipelineSession
+    ) -> Tuple[Optional[Any], Dict[str, Any], List[RecipeSchema]]:
+        """Loads baseline manifest, card hashes, and existing recipes for incremental duplicate skipping."""
+        baseline_path = (
+            session.baseline_project_path
+            or getattr(session.config, "baseline_project_path", None)
+            or (session.config.get("baseline_project_path") if isinstance(session.config, dict) else None)
+        )
+        baseline_sid = (
+            session.baseline_session_id
+            or getattr(session.config, "baseline_session_id", None)
+            or (session.config.get("baseline_session_id") if isinstance(session.config, dict) else None)
+        )
+
+        if not baseline_path and not baseline_sid:
+            return None, {}, []
+
+        baseline_cards_by_hash: Dict[str, Any] = {}
+        baseline_recipes: List[RecipeSchema] = []
+        manifest_obj: Optional[Any] = None
+
+        if baseline_path:
+            p = Path(baseline_path)
+            if not p.exists() or not p.is_file():
+                raise FileNotFoundError(f"Baseline .recipeboxer project archive not found: '{baseline_path}'")
+
+            import zipfile
+            from recipeboxer.storage.archive import validate_archive_manifest
+
+            try:
+                with zipfile.ZipFile(p, "r") as zf:
+                    if "manifest.json" not in zf.namelist():
+                        raise ValueError(f"Archive '{baseline_path}' is missing required 'manifest.json'")
+                    manifest_bytes = zf.read("manifest.json")
+                    manifest_obj = validate_archive_manifest(manifest_bytes)
+            except Exception as exc:
+                raise ValueError(f"Failed to read baseline archive '{baseline_path}': {exc}") from exc
+
+            for c in manifest_obj.cards:
+                if c.sha256_hash:
+                    baseline_cards_by_hash[c.sha256_hash.lower()] = c
+
+            for r in manifest_obj.recipes:
+                baseline_recipes.append(
+                    RecipeSchema(
+                        recipe_id=r.recipe_id,
+                        title=r.title,
+                        description=r.description,
+                        yield_servings=r.yield_servings,
+                        prep_time=r.prep_time,
+                        cook_time=r.cook_time,
+                        total_time=r.total_time,
+                        ingredients=r.ingredients,
+                        directions=r.directions,
+                        tags=r.tags,
+                        source_notes=r.source_notes,
+                        card_ids=r.card_ids,
+                        image_urls=r.image_urls,
+                        created_at=r.created_at,
+                        updated_at=r.updated_at,
+                    )
+                )
+
+        elif baseline_sid:
+            from recipeboxer.storage.session_store import SessionStore
+            store = SessionStore(self.settings.cache_db_path)
+            detail = store.get_session_detail(baseline_sid)
+            if detail is None:
+                raise ValueError(f"Baseline session '{baseline_sid}' not found in database.")
+
+            for c in detail.cards:
+                c_hash = c.get("sha256_hash") if isinstance(c, dict) else getattr(c, "sha256_hash", None)
+                if c_hash:
+                    baseline_cards_by_hash[str(c_hash).lower()] = c
+
+            baseline_recipes = list(detail.recipes)
+
+        return manifest_obj, baseline_cards_by_hash, baseline_recipes
+
     async def run_pipeline(self, session: PipelineSession) -> None:
         """Executes all stages of the RecipeBoxer pipeline sequentially."""
         try:
             # -------------------------------------------------------------
-            # Stage 1: Ingestion & Scanning
+            # Stage 1: Ingestion, Baseline Loading & Duplicate Partitioning
             # -------------------------------------------------------------
             session.state = PipelineState.INGESTING
 
-            cards = session.cards
+            manifest_obj, baseline_cards_by_hash, baseline_recipes = self._load_baseline(session)
+            session.baseline_manifest = manifest_obj
+            session.baseline_recipes = list(baseline_recipes)
+
+            cards = list(session.cards)
             if not cards:
                 # Check for remote source provider
                 src_provider = getattr(session.config, "source_provider", None)
@@ -143,200 +227,277 @@ class RecipeBoxerAgent:
                     if not cards:
                         raise ValueError(f"No supported recipe card image scans found in '{scans_dir}'")
 
+            effective_cache = session.cache or self.cache
+
+            # Partition cards into skipped duplicate cards vs new cards
+            skipped_cards: List[ScannedCard] = []
+            new_cards: List[ScannedCard] = []
+
+            for card in cards:
+                card_hash = card.sha256_hash.lower() if card.sha256_hash else ""
+                if card_hash and card_hash in baseline_cards_by_hash:
+                    skipped_cards.append(card)
+                    base_c = baseline_cards_by_hash[card_hash]
+
+                    fp = getattr(base_c, "fingerprint", None)
+                    if fp is None and isinstance(base_c, dict):
+                        fp = base_c.get("fingerprint") or base_c.get("metadata")
+
+                    if fp is not None:
+                        if isinstance(fp, dict):
+                            fp = VisualFingerprint.model_validate(fp)
+                        else:
+                            fp = fp.model_copy()
+                        fp.card_id = card.card_id
+                        fp.image_path = str(card.file_path)
+                        session.fingerprints[card.card_id] = fp
+                        if effective_cache:
+                            try:
+                                effective_cache.put(fp)
+                            except Exception:
+                                pass
+                    else:
+                        cached_fp = effective_cache.get_by_hash(card_hash) if effective_cache else None
+                        if cached_fp:
+                            cached_fp = cached_fp.model_copy()
+                            cached_fp.card_id = card.card_id
+                            cached_fp.image_path = str(card.file_path)
+                            session.fingerprints[card.card_id] = cached_fp
+                else:
+                    new_cards.append(card)
+
             session.cards = cards
             session.scanned_paths = [Path(c.file_path) for c in cards]
+            session.skipped_cards = skipped_cards
+            session.new_cards = new_cards
             session.progress_metrics.total_scans = len(cards)
-
-            if session.is_cancelled:
-                session.state = PipelineState.CANCELLED
-                session.end_time = time.monotonic()
-                return
-
-            # -------------------------------------------------------------
-            # Stage 2: Visual Fingerprinting
-            # -------------------------------------------------------------
-            session.state = PipelineState.FINGERPRINTING
-            ingestion_config = self._resolve_ingestion_config(session.config)
-
-            # Determine extractor callable
-            extractor_fn = self._resolve_extractor_callable(session)
-
-            async def _fingerprint_progress(prog: IngestionProgress) -> None:
-                session.progress_metrics.fingerprinted = prog.processed_cards
-
-            effective_cache = session.cache or self.cache
-            runner = IngestionRunner(
-                config=ingestion_config,
-                cache=effective_cache,
-                extractor_fn=extractor_fn,
-            )
-
-            ingestion_result = await runner.run(
-                cards=cards,
-                progress_callback=_fingerprint_progress,
-                cancellation_token=session.cancellation_token,
-            )
-
-            if session.is_cancelled:
-                session.state = PipelineState.CANCELLED
-                session.end_time = time.monotonic()
-                return
-
-            session.fingerprints = {fp.card_id: fp for fp in ingestion_result.fingerprints}
+            session.progress_metrics.skipped_cards = len(skipped_cards)
+            session.progress_metrics.newly_processed_cards = len(new_cards)
+            session.progress_metrics.baseline_recipes_count = len(baseline_recipes)
             session.progress_metrics.fingerprinted = len(session.fingerprints)
 
-            if not session.fingerprints:
-                raise RuntimeError("Visual fingerprinting yielded 0 valid fingerprints.")
-
-            # -------------------------------------------------------------
-            # Stage 3: Two-Stage Front/Back Correlation & Pairing Optimization
-            # -------------------------------------------------------------
-            session.state = PipelineState.CORRELATING
-            fingerprint_list = list(session.fingerprints.values())
-
-            # Check if custom optimizer or verifier on session
-            optimizer = session.optimizer or self.pairing_optimizer
-            if session.verifier is not None:
-                optimizer = PairingOptimizer(verifier=session.verifier)
-            elif session.mock_client is not None and hasattr(session.mock_client, "verify_correlation"):
-                # Use mock client verification directly if provided in test session
-                optimizer = self._build_mock_optimizer(session, fingerprint_list)
-
-            if isinstance(optimizer, PairingOptimizer):
-                correlation_result = await optimizer.optimize(fingerprint_list)
-            else:
-                correlation_result = await self._run_custom_optimizer(optimizer, fingerprint_list)
+            logger.info(
+                f"[{session.session_id}] Stage 1 Complete: {len(cards)} total scans, "
+                f"{len(skipped_cards)} skipped duplicates, {len(new_cards)} new cards, "
+                f"{len(baseline_recipes)} baseline recipes."
+            )
 
             if session.is_cancelled:
                 session.state = PipelineState.CANCELLED
                 session.end_time = time.monotonic()
                 return
 
-            session.proposals = list(correlation_result.proposals)
-            session.unmatched_card_ids = list(correlation_result.unmatched_card_ids)
-
-            # Package any remaining unmatched cards into standalone proposals for the review queue
-            assigned_ids = {cid for p in session.proposals for cid in p.ordered_card_ids}
-            for cid in correlation_result.unmatched_card_ids:
-                if cid not in assigned_ids and cid in session.fingerprints:
-                    fp = session.fingerprints[cid]
-                    unmatched_proposal = CorrelationProposal(
-                        proposal_id=f"prop_{uuid.uuid4().hex[:8]}",
-                        ordered_card_ids=[cid],
-                        part_count=1,
-                        transition_scores=[],
-                        heuristic_score=0.0,
-                        semantic_score=0.0,
-                        confidence=fp.role_confidence,
-                        is_standalone=True,
-                        continuity_explanation="Unmatched card presented as standalone candidate for human review.",
-                        recommended_action="STANDALONE",
-                    )
-                    session.proposals.append(unmatched_proposal)
-                    assigned_ids.add(cid)
-
-            session.unassigned_cards = [
-                session.fingerprints[cid]
-                for cid in correlation_result.unmatched_card_ids
-                if cid in session.fingerprints
-            ]
-            session.progress_metrics.proposals = len(session.proposals)
-
             # -------------------------------------------------------------
-            # Stage 4: Human-in-the-Loop (HITL) Pause Boundary
+            # Stage 2: Visual Fingerprinting (Processed ONLY for new cards)
             # -------------------------------------------------------------
-            resumed = await session.pause_for_hitl()
-            if not resumed or session.is_cancelled:
-                session.state = PipelineState.CANCELLED
-                session.end_time = time.monotonic()
-                return
+            if new_cards:
+                session.state = PipelineState.FINGERPRINTING
+                ingestion_config = self._resolve_ingestion_config(session.config)
+                extractor_fn = self._resolve_extractor_callable(session)
 
-            # -------------------------------------------------------------
-            # Stage 5: Multimodal Structured Recipe Extraction
-            # -------------------------------------------------------------
-            session.state = PipelineState.EXTRACTING
-            recipes: List[RecipeSchema] = []
-            session.recipes = []
-            session.progress_metrics.extracted = 0
+                async def _fingerprint_progress(prog: IngestionProgress) -> None:
+                    session.progress_metrics.fingerprinted = len(skipped_cards) + prog.processed_cards
 
-            for approval in session.approvals:
+                runner = IngestionRunner(
+                    config=ingestion_config,
+                    cache=effective_cache,
+                    extractor_fn=extractor_fn,
+                )
+
+                ingestion_result = await runner.run(
+                    cards=new_cards,
+                    progress_callback=_fingerprint_progress,
+                    cancellation_token=session.cancellation_token,
+                )
+
                 if session.is_cancelled:
                     session.state = PipelineState.CANCELLED
                     session.end_time = time.monotonic()
                     return
 
-                if approval.decision == HITLDecision.REJECT or getattr(approval, "is_rejected", False):
-                    logger.info(f"[{session.session_id}] Skipping rejected proposal {approval.proposal_id}")
-                    continue
+                for fp in ingestion_result.fingerprints:
+                    session.fingerprints[fp.card_id] = fp
+                session.progress_metrics.fingerprinted = len(session.fingerprints)
 
-                # Resolve authoritative ordered card sequence
-                ordered_card_ids: List[str] = []
-                if getattr(approval, "ordered_card_ids", None):
-                    ordered_card_ids = list(approval.ordered_card_ids)
-                elif getattr(approval, "card_ids", None):
-                    ordered_card_ids = list(approval.card_ids)
-
-                ordered_fps = [
-                    session.fingerprints[cid]
-                    for cid in ordered_card_ids
-                    if cid in session.fingerprints
-                ]
-
-                if not ordered_fps:
-                    logger.warning(
-                        f"[{session.session_id}] Missing cards for approval '{approval.proposal_id}' in fingerprints."
-                    )
-                    continue
-
-                try:
-                    recipe = await self._extract_single_recipe(
-                        session,
-                        front_fp=ordered_fps[0] if ordered_fps else None,
-                        back_fp=ordered_fps[1] if len(ordered_fps) > 1 else None,
-                        ordered_fps=ordered_fps,
-                    )
-                    if recipe:
-                        # Set authoritative card_ids and image_urls
-                        recipe.card_ids = ordered_card_ids if ordered_card_ids else [fp.card_id for fp in ordered_fps]
-                        recipe.image_urls = [
-                            f"/api/cards/{cid}/image?session_id={session.session_id}"
-                            for cid in recipe.card_ids
-                        ]
-
-                        # Propagate session-level batch default tags into extracted recipe tags
-                        session_tags: List[str] = []
-                        cfg = session.config
-                        if hasattr(cfg, "default_tags") and cfg.default_tags:
-                            session_tags = list(cfg.default_tags)
-                        elif isinstance(cfg, dict) and cfg.get("default_tags"):
-                            dt = cfg["default_tags"]
-                            if isinstance(dt, list):
-                                session_tags = [str(t).strip() for t in dt if str(t).strip()]
-                            elif isinstance(dt, str):
-                                session_tags = [t.strip() for t in dt.split(",") if t.strip()]
-                        elif hasattr(session, "ingestion_config") and session.ingestion_config and session.ingestion_config.default_tags:
-                            session_tags = list(session.ingestion_config.default_tags)
-
-                        if session_tags:
-                            combined_tags = list(session_tags) + list(recipe.tags or [])
-                            recipe.tags = RecipeSchema.clean_and_deduplicate_tags(combined_tags)
-
-                        recipes.append(recipe)
-                        session.recipes.append(recipe)
-                        session.progress_metrics.extracted = len(session.recipes)
-                except Exception as exc:
-                    logger.error(
-                        f"[{session.session_id}] Recipe extraction failed for {ordered_card_ids}: {exc}"
-                    )
-                    session.errors.append(f"Extraction failed for {ordered_card_ids}: {str(exc)}")
-
-            session.recipes = recipes
-
-            if not session.recipes and session.progress_metrics.approved > 0:
-                raise RuntimeError("Recipe extraction failed for all approved cards.")
+                if not session.fingerprints:
+                    raise RuntimeError("Visual fingerprinting yielded 0 valid fingerprints.")
+            else:
+                logger.info(
+                    f"[{session.session_id}] Stage 2 Fingerprinting bypassed: 0 new cards to process."
+                )
 
             # -------------------------------------------------------------
-            # Stage 6: Plan To Eat CSV Serialization & Export
+            # Stage 3: Two-Stage Correlation & Pairing Optimization
+            # -------------------------------------------------------------
+            if new_cards:
+                session.state = PipelineState.CORRELATING
+                new_fps = [session.fingerprints[c.card_id] for c in new_cards if c.card_id in session.fingerprints]
+
+                optimizer = session.optimizer or self.pairing_optimizer
+                if session.verifier is not None:
+                    optimizer = PairingOptimizer(verifier=session.verifier)
+                elif session.mock_client is not None and hasattr(session.mock_client, "verify_correlation"):
+                    optimizer = self._build_mock_optimizer(session, new_fps)
+
+                if isinstance(optimizer, PairingOptimizer):
+                    correlation_result = await optimizer.optimize(new_fps)
+                else:
+                    correlation_result = await self._run_custom_optimizer(optimizer, new_fps)
+
+                if session.is_cancelled:
+                    session.state = PipelineState.CANCELLED
+                    session.end_time = time.monotonic()
+                    return
+
+                session.proposals = list(correlation_result.proposals)
+                session.unmatched_card_ids = list(correlation_result.unmatched_card_ids)
+
+                assigned_ids = {cid for p in session.proposals for cid in p.ordered_card_ids}
+                for cid in correlation_result.unmatched_card_ids:
+                    if cid not in assigned_ids and cid in session.fingerprints:
+                        fp = session.fingerprints[cid]
+                        unmatched_proposal = CorrelationProposal(
+                            proposal_id=f"prop_{uuid.uuid4().hex[:8]}",
+                            ordered_card_ids=[cid],
+                            part_count=1,
+                            transition_scores=[],
+                            heuristic_score=0.0,
+                            semantic_score=0.0,
+                            confidence=fp.role_confidence,
+                            is_standalone=True,
+                            continuity_explanation="Unmatched card presented as standalone candidate for human review.",
+                            recommended_action="STANDALONE",
+                        )
+                        session.proposals.append(unmatched_proposal)
+                        assigned_ids.add(cid)
+
+                session.unassigned_cards = [
+                    session.fingerprints[cid]
+                    for cid in correlation_result.unmatched_card_ids
+                    if cid in session.fingerprints
+                ]
+                session.progress_metrics.proposals = len(session.proposals)
+            else:
+                session.proposals = []
+                session.unmatched_card_ids = []
+                session.unassigned_cards = []
+                session.progress_metrics.proposals = 0
+                logger.info(
+                    f"[{session.session_id}] Stage 3 Correlation bypassed: 0 new cards to correlate."
+                )
+
+            # -------------------------------------------------------------
+            # Stage 4: Human-in-the-Loop (HITL) Pause Boundary
+            # -------------------------------------------------------------
+            if session.proposals:
+                resumed = await session.pause_for_hitl()
+                if not resumed or session.is_cancelled:
+                    session.state = PipelineState.CANCELLED
+                    session.end_time = time.monotonic()
+                    return
+            else:
+                logger.info(
+                    f"[{session.session_id}] Stage 4 HITL bypassed: No new proposals requiring human review."
+                )
+
+            # -------------------------------------------------------------
+            # Stage 5: Multimodal Structured Recipe Extraction
+            # -------------------------------------------------------------
+            newly_extracted_recipes: List[RecipeSchema] = []
+
+            if session.approvals:
+                session.state = PipelineState.EXTRACTING
+                session.progress_metrics.extracted = 0
+
+                for approval in session.approvals:
+                    if session.is_cancelled:
+                        session.state = PipelineState.CANCELLED
+                        session.end_time = time.monotonic()
+                        return
+
+                    if approval.decision == HITLDecision.REJECT or getattr(approval, "is_rejected", False):
+                        logger.info(f"[{session.session_id}] Skipping rejected proposal {approval.proposal_id}")
+                        continue
+
+                    ordered_card_ids: List[str] = []
+                    if getattr(approval, "ordered_card_ids", None):
+                        ordered_card_ids = list(approval.ordered_card_ids)
+                    elif getattr(approval, "card_ids", None):
+                        ordered_card_ids = list(approval.card_ids)
+
+                    ordered_fps = [
+                        session.fingerprints[cid]
+                        for cid in ordered_card_ids
+                        if cid in session.fingerprints
+                    ]
+
+                    if not ordered_fps:
+                        logger.warning(
+                            f"[{session.session_id}] Missing cards for approval '{approval.proposal_id}' in fingerprints."
+                        )
+                        continue
+
+                    try:
+                        recipe = await self._extract_single_recipe(
+                            session,
+                            front_fp=ordered_fps[0] if ordered_fps else None,
+                            back_fp=ordered_fps[1] if len(ordered_fps) > 1 else None,
+                            ordered_fps=ordered_fps,
+                        )
+                        if recipe:
+                            recipe.card_ids = ordered_card_ids if ordered_card_ids else [fp.card_id for fp in ordered_fps]
+                            recipe.image_urls = [
+                                f"/api/cards/{cid}/image?session_id={session.session_id}"
+                                for cid in recipe.card_ids
+                            ]
+
+                            session_tags: List[str] = []
+                            cfg = session.config
+                            if hasattr(cfg, "default_tags") and cfg.default_tags:
+                                session_tags = list(cfg.default_tags)
+                            elif isinstance(cfg, dict) and cfg.get("default_tags"):
+                                dt = cfg["default_tags"]
+                                if isinstance(dt, list):
+                                    session_tags = [str(t).strip() for t in dt if str(t).strip()]
+                                elif isinstance(dt, str):
+                                    session_tags = [t.strip() for t in dt.split(",") if t.strip()]
+                            elif hasattr(session, "ingestion_config") and session.ingestion_config and session.ingestion_config.default_tags:
+                                session_tags = list(session.ingestion_config.default_tags)
+
+                            if session_tags:
+                                combined_tags = list(session_tags) + list(recipe.tags or [])
+                                recipe.tags = RecipeSchema.clean_and_deduplicate_tags(combined_tags)
+
+                            newly_extracted_recipes.append(recipe)
+                            session.progress_metrics.extracted = len(newly_extracted_recipes)
+                    except Exception as exc:
+                        logger.error(
+                            f"[{session.session_id}] Recipe extraction failed for {ordered_card_ids}: {exc}"
+                        )
+                        session.errors.append(f"Extraction failed for {ordered_card_ids}: {str(exc)}")
+
+                if not newly_extracted_recipes and session.progress_metrics.approved > 0:
+                    raise RuntimeError("Recipe extraction failed for all approved cards.")
+
+            # Stage 5 Unification: Baseline Recipes + Newly Extracted Recipes
+            merged_recipes: List[RecipeSchema] = []
+            seen_ids: Set[str] = set()
+
+            for r in baseline_recipes:
+                merged_recipes.append(r)
+                seen_ids.add(r.recipe_id)
+
+            for r in newly_extracted_recipes:
+                if r.recipe_id in seen_ids:
+                    r.recipe_id = f"rec_{uuid.uuid4().hex[:8]}"
+                merged_recipes.append(r)
+                seen_ids.add(r.recipe_id)
+
+            session.recipes = merged_recipes
+            session.progress_metrics.extracted = len(newly_extracted_recipes)
+
+            # -------------------------------------------------------------
+            # Stage 6: Plan To Eat CSV Serialization & Persistence
             # -------------------------------------------------------------
             session.state = PipelineState.EXPORTING
             self.settings.ensure_directories()
@@ -360,6 +521,21 @@ class RecipeBoxerAgent:
 
             session.csv_content = csv_text
             session.csv_output_path = str(export_path.resolve())
+
+            # Persist merged cards and recipes to SQLite SessionStore
+            try:
+                from recipeboxer.storage.session_store import SessionStore
+                store = SessionStore(self.settings.cache_db_path)
+                store.save_cards(session.session_id, session.cards)
+                store.save_recipes(session.session_id, session.recipes)
+                store.save_session(
+                    session_id=session.session_id,
+                    state=PipelineState.COMPLETED,
+                    card_count=len(session.cards),
+                    recipe_count=len(session.recipes),
+                )
+            except Exception as e:
+                logger.warning(f"Could not persist completed session to store: {e}")
 
             session.progress_metrics.percent_complete = 100.0
             session.state = PipelineState.COMPLETED

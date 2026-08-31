@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 from PIL import Image, ImageOps
 
+from recipeboxer.exporter.curation import CuratedCookbook, CuratedSection, GroupingPreset
 from recipeboxer.models.recipe import RecipeSchema
 
 logger = logging.getLogger(__name__)
@@ -396,24 +397,209 @@ class PdfExporter:
                 except Exception as exc:
                     logger.warning(f"Could not decode card scan image '{cid}': {exc}")
 
+    def _render_section_divider_page(
+        self,
+        section: CuratedSection,
+        pages: List[_PdfCanvas],
+    ) -> _PdfCanvas:
+        """Renders a dedicated full-page section divider with double border and centered typography."""
+        canvas = _PdfCanvas(page_num=len(pages) + 1)
+        pages.append(canvas)
+
+        # Outer border
+        canvas.draw_rect(
+            MARGIN_LEFT - 10.0,
+            MARGIN_BOTTOM - 10.0,
+            CONTENT_WIDTH + 20.0,
+            PAGE_HEIGHT - MARGIN_TOP - MARGIN_BOTTOM + 20.0,
+            stroke_rgb=(0.137, 0.263, 0.169),
+            line_width=2.0,
+        )
+        # Inner border
+        canvas.draw_rect(
+            MARGIN_LEFT - 5.0,
+            MARGIN_BOTTOM - 5.0,
+            CONTENT_WIDTH + 10.0,
+            PAGE_HEIGHT - MARGIN_TOP - MARGIN_BOTTOM + 10.0,
+            stroke_rgb=(0.176, 0.353, 0.176),
+            line_width=0.75,
+        )
+
+        center_y = PAGE_HEIGHT / 2.0 + 40.0
+
+        # Section Title in Times-Bold 26pt #23432B
+        title_lines = _wrap_text(section.title, 30)
+        y_pos = center_y + (len(title_lines) * 16.0)
+        for line in title_lines:
+            approx_w = len(line) * 14.0
+            x_pos = max(MARGIN_LEFT, (PAGE_WIDTH - approx_w) / 2.0)
+            canvas.draw_text(line, x_pos, y_pos, "F5", 26.0, 0.137, 0.263, 0.169)
+            y_pos -= 34.0
+
+        # Decorative Ornament
+        canvas.draw_text("✦  ✦  ✦", (PAGE_WIDTH - 50.0) / 2.0, y_pos, "F1", 12.0, 0.176, 0.353, 0.176)
+        y_pos -= 26.0
+
+        # Subtitle / recipe count in Times-Italic 13pt
+        if section.subtitle:
+            approx_sub_w = len(section.subtitle) * 6.5
+            x_sub = max(MARGIN_LEFT, (PAGE_WIDTH - approx_sub_w) / 2.0)
+            canvas.draw_text(section.subtitle, x_sub, y_pos, "F6", 13.0, 0.35, 0.35, 0.35)
+
+        return canvas
+
+    def _render_toc_pages(
+        self,
+        curation: CuratedCookbook,
+        section_pages: Dict[str, int],
+        recipe_pages: Dict[str, int],
+    ) -> List[_PdfCanvas]:
+        """Renders dedicated Table of Contents canvas pages with dotted leader lines and exact page numbers."""
+        toc_canvases: List[_PdfCanvas] = []
+
+        def start_toc_page() -> Tuple[_PdfCanvas, float]:
+            cvs = _PdfCanvas(page_num=len(toc_canvases) + 1)
+            toc_canvases.append(cvs)
+            cur_y = PAGE_HEIGHT - MARGIN_TOP
+
+            # Header rule
+            cvs.draw_text("RECIPEBOXER ARCHIVAL COLLECTION", MARGIN_LEFT, cur_y, "F2", 8.0, 0.4, 0.4, 0.4)
+            cur_y -= 8.0
+            cvs.draw_line(MARGIN_LEFT, cur_y, PAGE_WIDTH - MARGIN_RIGHT, cur_y, 0.75, 0.75, 0.75, 0.5)
+            cur_y -= 26.0
+
+            # Title
+            toc_title = curation.toc_title or "Table of Contents"
+            approx_t_w = len(toc_title) * 11.0
+            cvs.draw_text(toc_title, max(MARGIN_LEFT, (PAGE_WIDTH - approx_t_w) / 2.0), cur_y, "F5", 22.0, 0.137, 0.263, 0.169)
+            cur_y -= 16.0
+
+            # Ornament
+            cvs.draw_text("✦  ✦  ✦", (PAGE_WIDTH - 45.0) / 2.0, cur_y, "F1", 10.0, 0.176, 0.353, 0.176)
+            cur_y -= 24.0
+            return cvs, cur_y
+
+        canvas, y = start_toc_page()
+        show_section_headers = len(curation.sections) > 1 or curation.grouping_preset != GroupingPreset.NONE
+
+        for section in curation.sections:
+            needed_h = (24.0 if show_section_headers else 0.0) + (len(section.recipes) * 18.0) + 12.0
+            if y - needed_h < MARGIN_BOTTOM + 20.0 and len(section.recipes) > 0:
+                canvas, y = start_toc_page()
+
+            if show_section_headers:
+                if y < MARGIN_BOTTOM + 40.0:
+                    canvas, y = start_toc_page()
+
+                sec_page_num = section_pages.get(section.section_id)
+                canvas.draw_text(section.title, MARGIN_LEFT, y, "F5", 12.0, 0.137, 0.263, 0.169)
+                if sec_page_num and curation.include_section_dividers:
+                    canvas.draw_text(str(sec_page_num), PAGE_WIDTH - MARGIN_RIGHT - 20.0, y, "F5", 11.0, 0.137, 0.263, 0.169)
+                y -= 18.0
+
+            for recipe in section.recipes:
+                if y < MARGIN_BOTTOM + 20.0:
+                    canvas, y = start_toc_page()
+
+                r_title = recipe.title or "Untitled Recipe"
+                if len(r_title) > 42:
+                    r_title = r_title[:39] + "..."
+
+                canvas.draw_text(r_title, MARGIN_LEFT + 12.0, y, "F4", 10.5, 0.15, 0.15, 0.15)
+
+                # Dotted leader line
+                title_width = len(r_title) * 5.8
+                leader_start_x = MARGIN_LEFT + 16.0 + title_width
+                leader_end_x = PAGE_WIDTH - MARGIN_RIGHT - 28.0
+
+                if leader_end_x > leader_start_x + 10.0:
+                    num_dots = int((leader_end_x - leader_start_x) / 5.5)
+                    dots_str = ". " * (num_dots // 2)
+                    canvas.draw_text(dots_str, leader_start_x, y, "F1", 7.0, 0.55, 0.55, 0.55)
+
+                # Exact page number
+                p_num = recipe_pages.get(recipe.recipe_id, 1)
+                canvas.draw_text(str(p_num), PAGE_WIDTH - MARGIN_RIGHT - 20.0, y, "F5", 10.0, 0.137, 0.263, 0.169)
+                y -= 16.0
+
+            y -= 8.0
+
+        return toc_canvases
+
     def export_to_bytes(
         self,
         recipes: Union[RecipeSchema, List[RecipeSchema]],
         image_resolver: Optional[Callable[[str], Optional[Union[str, Path, bytes]]]] = None,
+        curation: Optional[CuratedCookbook] = None,
     ) -> bytes:
         """Generates print-ready PDF binary bytes adhering strictly to PDF 1.4 specification."""
-        recipe_list = [recipes] if isinstance(recipes, RecipeSchema) else list(recipes)
+        if curation:
+            recipe_list = curation.all_recipes
+        else:
+            recipe_list = [recipes] if isinstance(recipes, RecipeSchema) else list(recipes)
 
-        pages: List[_PdfCanvas] = []
         image_data_store: Dict[str, Tuple[int, int, bytes, str]] = {}
 
-        for recipe in recipe_list:
-            self._render_recipe_to_pages(
-                recipe=recipe,
-                pages=pages,
-                image_resolver=image_resolver,
-                image_data_store=image_data_store,
-            )
+        if curation and curation.include_toc and curation.total_recipe_count > 0:
+            # Deterministic 2-Pass Pagination Layout
+            show_headers = len(curation.sections) > 1 or curation.grouping_preset != GroupingPreset.NONE
+            total_items = sum((1 if show_headers else 0) + len(s.recipes) for s in curation.sections)
+            estimated_toc_pages = max(1, math.ceil(total_items / 26))
+
+            # Pass 1: Render body pages and measure exact page locations
+            body_pages: List[_PdfCanvas] = []
+            section_page_numbers: Dict[str, int] = {}
+            recipe_page_numbers: Dict[str, int] = {}
+
+            for section in curation.sections:
+                if curation.include_section_dividers and (len(curation.sections) > 1 or curation.grouping_preset != GroupingPreset.NONE):
+                    self._render_section_divider_page(section, body_pages)
+                    section_page_numbers[section.section_id] = 1 + estimated_toc_pages + len(body_pages) - 1
+
+                for recipe in section.recipes:
+                    recipe_page_numbers[recipe.recipe_id] = 1 + estimated_toc_pages + len(body_pages)
+                    self._render_recipe_to_pages(
+                        recipe=recipe,
+                        pages=body_pages,
+                        image_resolver=image_resolver,
+                        image_data_store=image_data_store,
+                    )
+
+            # Pass 2: Render TOC pages
+            toc_pages = self._render_toc_pages(curation, section_page_numbers, recipe_page_numbers)
+            if len(toc_pages) != estimated_toc_pages:
+                shift = len(toc_pages) - estimated_toc_pages
+                for k in section_page_numbers:
+                    section_page_numbers[k] += shift
+                for k in recipe_page_numbers:
+                    recipe_page_numbers[k] += shift
+                toc_pages = self._render_toc_pages(curation, section_page_numbers, recipe_page_numbers)
+
+            pages = toc_pages + body_pages
+
+        elif curation and curation.sections:
+            body_pages: List[_PdfCanvas] = []
+            for section in curation.sections:
+                if curation.include_section_dividers and (len(curation.sections) > 1 or curation.grouping_preset != GroupingPreset.NONE):
+                    self._render_section_divider_page(section, body_pages)
+                for recipe in section.recipes:
+                    self._render_recipe_to_pages(
+                        recipe=recipe,
+                        pages=body_pages,
+                        image_resolver=image_resolver,
+                        image_data_store=image_data_store,
+                    )
+            pages = body_pages
+        else:
+            body_pages: List[_PdfCanvas] = []
+            for recipe in recipe_list:
+                self._render_recipe_to_pages(
+                    recipe=recipe,
+                    pages=body_pages,
+                    image_resolver=image_resolver,
+                    image_data_store=image_data_store,
+                )
+            pages = body_pages
 
         if not pages:
             pages.append(_PdfCanvas(page_num=1))
@@ -528,13 +714,14 @@ class PdfExporter:
         recipes: Union[RecipeSchema, List[RecipeSchema]],
         output_path: Union[str, Path],
         image_resolver: Optional[Callable[[str], Optional[Union[str, Path, bytes]]]] = None,
+        curation: Optional[CuratedCookbook] = None,
     ) -> Path:
         """Writes PDF cookbook to file on disk."""
         path = Path(output_path).resolve()
         path.parent.mkdir(parents=True, exist_ok=True)
-        pdf_bytes = self.export_to_bytes(recipes, image_resolver=image_resolver)
+        pdf_bytes = self.export_to_bytes(recipes, image_resolver=image_resolver, curation=curation)
         path.write_bytes(pdf_bytes)
-        count = 1 if isinstance(recipes, RecipeSchema) else len(recipes)
+        count = curation.total_recipe_count if curation else (1 if isinstance(recipes, RecipeSchema) else len(recipes))
         logger.info(f"Exported {count} recipe(s) to PDF: {path}")
         return path
 
@@ -542,6 +729,8 @@ class PdfExporter:
 def export_recipes_to_pdf(
     recipes: Union[RecipeSchema, List[RecipeSchema]],
     image_resolver: Optional[Callable[[str], Optional[Union[str, Path, bytes]]]] = None,
+    curation: Optional[CuratedCookbook] = None,
 ) -> bytes:
     """Convenience helper to export recipes as .pdf binary bytes."""
-    return PdfExporter().export_to_bytes(recipes, image_resolver=image_resolver)
+    return PdfExporter().export_to_bytes(recipes, image_resolver=image_resolver, curation=curation)
+

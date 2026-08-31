@@ -1,8 +1,9 @@
-import React from 'react';
-import { History, Play, BookOpen, Trash2, RefreshCw } from 'lucide-react';
+import React, { useRef, useState } from 'react';
+import { History, Play, BookOpen, Trash2, RefreshCw, Upload } from 'lucide-react';
 import { SessionSummary, PipelineState } from '../../types/pipeline';
 import { Badge } from '../common/Badge';
 import { formatDate } from '../../utils/formatters';
+import { api } from '../../utils/api';
 
 export interface SessionHistoryTableProps {
   sessions: SessionSummary[];
@@ -10,6 +11,7 @@ export interface SessionHistoryTableProps {
   onViewRecipes: (sessionId: string) => void;
   onDeleteSession: (sessionId: string) => void;
   onRefresh: () => void;
+  onImportArchive?: (file: File) => void;
   isLoading?: boolean;
 }
 
@@ -19,8 +21,33 @@ export const SessionHistoryTable: React.FC<SessionHistoryTableProps> = ({
   onViewRecipes,
   onDeleteSession,
   onRefresh,
+  onImportArchive,
   isLoading = false,
 }) => {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isImporting, setIsImporting] = useState(false);
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      setIsImporting(true);
+      if (onImportArchive) {
+        onImportArchive(file);
+      } else {
+        await api.importProjectArchive(file);
+        onRefresh();
+      }
+    } catch (err) {
+      console.error('Failed to import project archive:', err);
+    } finally {
+      setIsImporting(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
   const getStatusBadge = (status: PipelineState | string) => {
     switch (status) {
       case PipelineState.COMPLETED:
@@ -53,14 +80,33 @@ export const SessionHistoryTable: React.FC<SessionHistoryTableProps> = ({
           <History className="w-4 h-4 text-blue-500" />
           <span>Historical &amp; Active Sessions</span>
         </div>
-        <button
-          onClick={onRefresh}
-          disabled={isLoading}
-          className="flex items-center gap-1.5 px-2.5 py-1 text-xs text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-        >
-          <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
-          Refresh
-        </button>
+        <div className="flex items-center gap-2">
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileChange}
+            accept=".recipeboxer,.zip"
+            className="hidden"
+            id="history-archive-import-input"
+          />
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isLoading || isImporting}
+            className="flex items-center gap-1.5 px-2.5 py-1 text-xs text-emerald-700 dark:text-emerald-400 hover:text-emerald-900 dark:hover:text-emerald-200 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 rounded-lg hover:bg-emerald-100 dark:hover:bg-emerald-900 transition-colors cursor-pointer"
+            title="Import Portable .recipeboxer Archive"
+          >
+            <Upload className={`w-3.5 h-3.5 ${isImporting ? 'animate-spin' : ''}`} />
+            <span>Import Archive (.recipeboxer)</span>
+          </button>
+          <button
+            onClick={onRefresh}
+            disabled={isLoading}
+            className="flex items-center gap-1.5 px-2.5 py-1 text-xs text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+            Refresh
+          </button>
+        </div>
       </div>
 
       {sessions.length === 0 ? (

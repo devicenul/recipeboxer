@@ -10,6 +10,7 @@ import os
 import re
 import shutil
 import uuid
+import zipfile
 from pathlib import Path
 from typing import Any, AsyncGenerator, Dict, List, Optional
 
@@ -35,6 +36,12 @@ from recipeboxer.agent.session import (
     get_session_manager,
 )
 from recipeboxer.config import Settings, get_settings
+from recipeboxer.exporter.curation import (
+    CuratedCookbook,
+    CuratedSection,
+    GroupingPreset,
+    curate_recipes,
+)
 from recipeboxer.exporter.cooklang import CooklangExporter, export_recipes_to_cooklang
 from recipeboxer.exporter.docx_export import DocxExporter, export_recipes_to_docx
 from recipeboxer.exporter.google_docs import (
@@ -78,6 +85,15 @@ from recipeboxer.sources import (
     get_source_provider,
     list_available_providers,
 )
+from recipeboxer.models.archive import RecipeBoxerArchiveManifest
+from recipeboxer.storage.archive import (
+    create_recipeboxer_archive,
+    extract_recipeboxer_archive,
+    merge_recipeboxer_archives,
+    restore_archive_to_session,
+    validate_archive_manifest,
+)
+from recipeboxer.storage.cache import FingerprintCache
 from recipeboxer.storage.session_store import SessionStore, get_session_store
 from recipeboxer.vision.heuristics import (
     calculate_color_similarity,
@@ -108,6 +124,14 @@ def get_app_settings(request: Request) -> Settings:
     return getattr(request.app.state, "settings", get_settings())
 
 
+def get_cache(request: Request) -> FingerprintCache:
+    """Dependency injection helper to retrieve FingerprintCache from application state or create default."""
+    if hasattr(request.app.state, "fingerprint_cache") and request.app.state.fingerprint_cache is not None:
+        return request.app.state.fingerprint_cache
+    settings = getattr(request.app.state, "settings", get_settings())
+    return FingerprintCache(settings.cache_db_path)
+
+
 # ============================================================================
 # 1. Pipeline Start & Ingestion
 # ============================================================================
@@ -125,6 +149,28 @@ async def start_pipeline(
 ) -> PipelineStartResponse:
     """Validates scans directory or remote source provider, initializes session, and launches processing."""
     is_remote = bool(payload.source_provider and payload.source_provider.lower() not in ("local", ""))
+
+    # Validate baseline project if provided
+    if payload.baseline_project_path:
+        base_p = Path(payload.baseline_project_path)
+        if not base_p.exists() or not base_p.is_file():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Baseline project archive not found: '{payload.baseline_project_path}'",
+            )
+        if not zipfile.is_zipfile(base_p):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid .recipeboxer project archive file: '{payload.baseline_project_path}'",
+            )
+
+    if payload.baseline_session_id:
+        base_detail = store.get_session_detail(payload.baseline_session_id)
+        if base_detail is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Baseline session '{payload.baseline_session_id}' not found in database",
+            )
 
     if is_remote:
         provider_name = payload.source_provider or "unknown"
@@ -399,6 +445,9 @@ async def upload_cards(
     slow_batch_interval_seconds: Optional[float] = Form(2.0),
     model: Optional[str] = Form("gemini-3.7-flash"),
     default_tags: Optional[str] = Form(None),
+    baseline_archive: Optional[UploadFile] = File(None),
+    baseline_project_path: Optional[str] = Form(None),
+    baseline_session_id: Optional[str] = Form(None),
     auto_start: Optional[bool] = Form(False),
     manager: SessionManager = Depends(get_manager),
     store: SessionStore = Depends(get_store),
@@ -422,6 +471,35 @@ async def upload_cards(
     sid = session_id or f"sess_{uuid.uuid4().hex[:8]}"
     upload_dir = settings.cache_dir / "uploads" / sid
     upload_dir.mkdir(parents=True, exist_ok=True)
+
+    # Save uploaded baseline archive if provided
+    resolved_baseline_path = baseline_project_path
+    if baseline_archive:
+        base_dest = upload_dir / "baseline.recipeboxer"
+        with open(base_dest, "wb") as buffer:
+            shutil.copyfileobj(baseline_archive.file, buffer)
+        resolved_baseline_path = str(base_dest)
+
+    if resolved_baseline_path:
+        base_p = Path(resolved_baseline_path)
+        if not base_p.exists() or not base_p.is_file():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Baseline project archive not found: '{resolved_baseline_path}'",
+            )
+        if not zipfile.is_zipfile(base_p):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid .recipeboxer project archive file: '{resolved_baseline_path}'",
+            )
+
+    if baseline_session_id:
+        base_detail = store.get_session_detail(baseline_session_id)
+        if base_detail is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Baseline session '{baseline_session_id}' not found in database",
+            )
 
     valid_cards: List[ScannedCard] = []
     saved_paths: List[Path] = []
@@ -453,6 +531,8 @@ async def upload_cards(
         ingest_mode = IngestionMode.PARALLEL if mode != "slow-batch" else IngestionMode.SLOW_BATCH
         config = PipelineStartRequest(
             scans_dir=str(upload_dir),
+            baseline_project_path=resolved_baseline_path,
+            baseline_session_id=baseline_session_id,
             mode=ingest_mode,
             max_concurrency=max_concurrency or 5,
             slow_batch_size=slow_batch_size or 2,
@@ -461,11 +541,24 @@ async def upload_cards(
             default_tags=parsed_default_tags,
         )
         session = manager.create_session(config=config, session_id=sid)
-    elif parsed_default_tags and hasattr(session, "config"):
-        if hasattr(session.config, "default_tags"):
-            session.config.default_tags = list(set(session.config.default_tags + parsed_default_tags))
-        elif isinstance(session.config, dict):
-            session.config["default_tags"] = list(set(session.config.get("default_tags", []) + parsed_default_tags))
+    else:
+        if resolved_baseline_path:
+            session.baseline_project_path = resolved_baseline_path
+            if hasattr(session.config, "baseline_project_path"):
+                session.config.baseline_project_path = resolved_baseline_path
+            elif isinstance(session.config, dict):
+                session.config["baseline_project_path"] = resolved_baseline_path
+        if baseline_session_id:
+            session.baseline_session_id = baseline_session_id
+            if hasattr(session.config, "baseline_session_id"):
+                session.config.baseline_session_id = baseline_session_id
+            elif isinstance(session.config, dict):
+                session.config["baseline_session_id"] = baseline_session_id
+        if parsed_default_tags and hasattr(session, "config"):
+            if hasattr(session.config, "default_tags"):
+                session.config.default_tags = list(set(session.config.default_tags + parsed_default_tags))
+            elif isinstance(session.config, dict):
+                session.config["default_tags"] = list(set(session.config.get("default_tags", []) + parsed_default_tags))
 
     session.cards.extend(valid_cards)
     session.scanned_paths.extend(saved_paths)
@@ -1376,53 +1469,95 @@ def _get_export_recipes_for_format(
     session_id: Optional[str],
     manager: SessionManager,
     store: SessionStore,
+    allow_empty: bool = False,
 ) -> List[RecipeSchema]:
     """Helper to retrieve recipes for export from active session or database with strict session isolation."""
     if session_id:
         session = manager.get_session(session_id)
         if session:
-            if session.recipes:
-                return session.recipes
-            if session.state != PipelineState.COMPLETED:
+            sess_state = getattr(session, "state", getattr(session, "status", None))
+            is_completed = False
+            if isinstance(sess_state, PipelineState):
+                is_completed = (sess_state == PipelineState.COMPLETED)
+            elif isinstance(sess_state, str):
+                is_completed = (sess_state.upper() == "COMPLETED")
+            if not is_completed:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Export not ready: pipeline has not completed extraction",
+                    detail="CSV export not ready: pipeline has not completed extraction",
                 )
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"No recipes available for export in session '{session_id}'",
-            )
+            if session.recipes:
+                return session.recipes
+            if not allow_empty:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"No recipes available for export in session '{session_id}'",
+                )
+            return []
 
         detail = store.get_session_detail(session_id)
         if detail is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Session '{session_id}' not found",
+                detail=f"Session not found: '{session_id}'",
+            )
+        detail_status = getattr(detail, "status", getattr(detail, "state", None))
+        is_completed = False
+        if isinstance(detail_status, PipelineState):
+            is_completed = (detail_status == PipelineState.COMPLETED)
+        elif isinstance(detail_status, str):
+            is_completed = (detail_status.upper() == "COMPLETED")
+        if not is_completed:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="CSV export not ready: pipeline has not completed extraction",
             )
         recipes = store.list_recipes(session_id=session_id)
         if recipes:
             return recipes
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"No recipes available for export in session '{session_id}'",
-        )
+        if not allow_empty:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"No recipes available for export in session '{session_id}'",
+            )
+        return []
 
     # If no session_id provided: check active in-memory session first
     active_sid = manager.get_active_session_id()
     if active_sid:
         active_sess = manager.get_session(active_sid)
-        if active_sess and active_sess.recipes:
-            return active_sess.recipes
+        if active_sess:
+            active_state = getattr(active_sess, "state", getattr(active_sess, "status", None))
+            is_completed = False
+            if isinstance(active_state, PipelineState):
+                is_completed = (active_state == PipelineState.COMPLETED)
+            elif isinstance(active_state, str):
+                is_completed = (active_state.upper() == "COMPLETED")
+            if not is_completed:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="CSV export not ready: pipeline has not completed extraction",
+                )
+            if active_sess.recipes:
+                return active_sess.recipes
+            if not allow_empty:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"No recipes available for export in session '{active_sid}'",
+                )
+            return []
 
     # Global database fallback only when session_id is None
     all_recipes = store.list_recipes()
     if all_recipes:
         return all_recipes
 
-    raise HTTPException(
-        status_code=status.HTTP_400_BAD_REQUEST,
-        detail="No recipes available for export",
-    )
+    if not allow_empty:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No recipes available for export",
+        )
+    return []
 
 
 def _get_image_resolver(
@@ -1546,72 +1681,89 @@ async def create_google_doc_document(
         )
 
 
+async def _extract_curation_params(
+    request: Request,
+    session_id: Optional[str] = None,
+    filename: Optional[str] = None,
+    recipe_order: Optional[str] = None,
+    grouping_preset: Optional[str] = "none",
+    include_section_dividers: bool = True,
+    include_toc: bool = True,
+    toc_title: Optional[str] = "Table of Contents",
+) -> tuple[Optional[str], Optional[str], Optional[Union[str, List[str]]], str, bool, bool, str]:
+    """Extracts session and curation parameters from query params or JSON request body."""
+    if request.method == "POST":
+        try:
+            body = await request.json()
+            if isinstance(body, dict):
+                session_id = body.get("session_id", session_id)
+                filename = body.get("filename", filename)
+                recipe_order = body.get("recipe_order", recipe_order)
+                grouping_preset = body.get("grouping_preset", grouping_preset)
+                include_section_dividers = body.get("include_section_dividers", include_section_dividers)
+                include_toc = body.get("include_toc", include_toc)
+                toc_title = body.get("toc_title", toc_title)
+        except Exception:
+            pass
+    return (
+        session_id,
+        filename,
+        recipe_order,
+        grouping_preset or "none",
+        include_section_dividers if include_section_dividers is not None else True,
+        include_toc if include_toc is not None else True,
+        toc_title or "Table of Contents",
+    )
+
+
 @router.get(
     "/export/csv",
     status_code=status.HTTP_200_OK,
     summary="Download Plan To Eat RFC 4180 CSV Export",
 )
+@router.post(
+    "/export/csv",
+    status_code=status.HTTP_200_OK,
+    summary="Download Plan To Eat RFC 4180 CSV Export (POST)",
+)
 async def export_csv(
+    request: Request,
     session_id: Optional[str] = Query(None, description="Optional target session ID"),
     filename: Optional[str] = Query(None, description="Custom export filename"),
+    recipe_order: Optional[str] = Query(None, description="Comma-separated recipe IDs in sequence"),
+    grouping_preset: Optional[str] = Query("none", description="Grouping preset (none, course, contributor, tags, alphabetical, custom)"),
+    include_section_dividers: bool = Query(True, description="Whether to include section dividers"),
+    include_toc: bool = Query(True, description="Whether to include table of contents"),
+    toc_title: Optional[str] = Query("Table of Contents", description="TOC title"),
     manager: SessionManager = Depends(get_manager),
     store: SessionStore = Depends(get_store),
 ) -> Response:
     """Returns the generated Plan To Eat CSV file as text/csv attachment with RFC 4180 headers."""
+    (
+        session_id,
+        filename,
+        recipe_order,
+        grouping_preset,
+        include_section_dividers,
+        include_toc,
+        toc_title,
+    ) = await _extract_curation_params(
+        request, session_id, filename, recipe_order, grouping_preset, include_section_dividers, include_toc, toc_title
+    )
     target_filename = sanitize_export_filename(filename, "recipeboxer_export.csv", "csv")
-
-    session = manager.get_session(session_id)
-    if session is None:
-        if session_id is not None:
-            # Check SQLite store
-            detail = store.get_session_detail(session_id)
-            if detail is None:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="Session not found",
-                )
-            if detail.status != PipelineState.COMPLETED and detail.status != "COMPLETED":
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="CSV export not ready: pipeline has not completed extraction",
-                )
-            recipes = store.list_recipes(session_id=session_id)
-            if not recipes:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="CSV export not ready: pipeline has not completed extraction",
-                )
-            csv_content = export_recipes_to_plan_to_eat_csv(recipes)
-            return Response(
-                content=csv_content,
-                media_type="text/csv; charset=utf-8",
-                headers={"Content-Disposition": f'attachment; filename="{target_filename}"'},
-            )
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Session not found",
-            )
-
-    if session.state != PipelineState.COMPLETED or not session.csv_content:
-        if session.state == PipelineState.COMPLETED and session.recipes:
-            session.csv_content = export_recipes_to_plan_to_eat_csv(session.recipes)
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="CSV export not ready: pipeline has not completed extraction",
-            )
-
-    if session.csv_output_path and Path(session.csv_output_path).exists() and not filename:
-        return FileResponse(
-            path=session.csv_output_path,
-            media_type="text/csv; charset=utf-8",
-            filename=target_filename,
-            headers={"Content-Disposition": f'attachment; filename="{target_filename}"'},
-        )
+    recipes = _get_export_recipes_for_format(session_id, manager, store, allow_empty=True)
+    curation = curate_recipes(
+        recipes=recipes,
+        recipe_order=recipe_order,
+        grouping_preset=grouping_preset,
+        include_section_dividers=include_section_dividers,
+        include_toc=include_toc,
+        toc_title=toc_title,
+    )
+    csv_content = export_recipes_to_plan_to_eat_csv(curation.all_recipes)
 
     return Response(
-        content=session.csv_content,
+        content=csv_content,
         media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": f'attachment; filename="{target_filename}"'},
     )
@@ -1627,15 +1779,50 @@ async def export_csv(
     status_code=status.HTTP_200_OK,
     summary="Download Schema.org Recipe JSON-LD Export (Alias)",
 )
+@router.post(
+    "/export/json-ld",
+    status_code=status.HTTP_200_OK,
+    summary="Download Schema.org Recipe JSON-LD Export (POST)",
+)
+@router.post(
+    "/export/jsonld",
+    status_code=status.HTTP_200_OK,
+    summary="Download Schema.org Recipe JSON-LD Export (POST Alias)",
+)
 async def export_json_ld(
+    request: Request,
     session_id: Optional[str] = Query(None, description="Optional target session ID"),
     filename: Optional[str] = Query(None, description="Custom export filename"),
+    recipe_order: Optional[str] = Query(None, description="Comma-separated recipe IDs in sequence"),
+    grouping_preset: Optional[str] = Query("none", description="Grouping preset"),
+    include_section_dividers: bool = Query(True, description="Whether to include section dividers"),
+    include_toc: bool = Query(True, description="Whether to include table of contents"),
+    toc_title: Optional[str] = Query("Table of Contents", description="TOC title"),
     manager: SessionManager = Depends(get_manager),
     store: SessionStore = Depends(get_store),
 ) -> Response:
     """Returns Schema.org Recipe structured JSON-LD format."""
+    (
+        session_id,
+        filename,
+        recipe_order,
+        grouping_preset,
+        include_section_dividers,
+        include_toc,
+        toc_title,
+    ) = await _extract_curation_params(
+        request, session_id, filename, recipe_order, grouping_preset, include_section_dividers, include_toc, toc_title
+    )
     recipes = _get_export_recipes_for_format(session_id, manager, store)
-    json_ld_str = export_recipes_to_json_ld(recipes)
+    curation = curate_recipes(
+        recipes=recipes,
+        recipe_order=recipe_order,
+        grouping_preset=grouping_preset,
+        include_section_dividers=include_section_dividers,
+        include_toc=include_toc,
+        toc_title=toc_title,
+    )
+    json_ld_str = export_recipes_to_json_ld(curation.all_recipes)
     target_filename = sanitize_export_filename(filename, "recipeboxer_recipes_json_ld.json", "json")
 
     return Response(
@@ -1650,15 +1837,45 @@ async def export_json_ld(
     status_code=status.HTTP_200_OK,
     summary="Download Raw Structured Recipe JSON",
 )
+@router.post(
+    "/export/json",
+    status_code=status.HTTP_200_OK,
+    summary="Download Raw Structured Recipe JSON (POST)",
+)
 async def export_json(
+    request: Request,
     session_id: Optional[str] = Query(None, description="Optional target session ID"),
     filename: Optional[str] = Query(None, description="Custom export filename"),
+    recipe_order: Optional[str] = Query(None, description="Comma-separated recipe IDs in sequence"),
+    grouping_preset: Optional[str] = Query("none", description="Grouping preset"),
+    include_section_dividers: bool = Query(True, description="Whether to include section dividers"),
+    include_toc: bool = Query(True, description="Whether to include table of contents"),
+    toc_title: Optional[str] = Query("Table of Contents", description="TOC title"),
     manager: SessionManager = Depends(get_manager),
     store: SessionStore = Depends(get_store),
 ) -> Response:
     """Returns standard RecipeSchema JSON array download."""
+    (
+        session_id,
+        filename,
+        recipe_order,
+        grouping_preset,
+        include_section_dividers,
+        include_toc,
+        toc_title,
+    ) = await _extract_curation_params(
+        request, session_id, filename, recipe_order, grouping_preset, include_section_dividers, include_toc, toc_title
+    )
     recipes = _get_export_recipes_for_format(session_id, manager, store)
-    json_str = export_recipes_to_json(recipes)
+    curation = curate_recipes(
+        recipes=recipes,
+        recipe_order=recipe_order,
+        grouping_preset=grouping_preset,
+        include_section_dividers=include_section_dividers,
+        include_toc=include_toc,
+        toc_title=toc_title,
+    )
+    json_str = export_recipes_to_json(curation.all_recipes)
     target_filename = sanitize_export_filename(filename, "recipeboxer_recipes.json", "json")
 
     return Response(
@@ -1673,16 +1890,46 @@ async def export_json(
     status_code=status.HTTP_200_OK,
     summary="Download Heirloom Cookbook DOCX Document",
 )
+@router.post(
+    "/export/docx",
+    status_code=status.HTTP_200_OK,
+    summary="Download Heirloom Cookbook DOCX Document (POST)",
+)
 async def export_docx(
+    request: Request,
     session_id: Optional[str] = Query(None, description="Optional target session ID"),
     filename: Optional[str] = Query(None, description="Custom export filename"),
+    recipe_order: Optional[str] = Query(None, description="Comma-separated recipe IDs in sequence"),
+    grouping_preset: Optional[str] = Query("none", description="Grouping preset"),
+    include_section_dividers: bool = Query(True, description="Whether to include section dividers"),
+    include_toc: bool = Query(True, description="Whether to include table of contents"),
+    toc_title: Optional[str] = Query("Table of Contents", description="TOC title"),
     manager: SessionManager = Depends(get_manager),
     store: SessionStore = Depends(get_store),
 ) -> Response:
     """Generates and downloads a standalone formatted .docx heirloom family cookbook."""
+    (
+        session_id,
+        filename,
+        recipe_order,
+        grouping_preset,
+        include_section_dividers,
+        include_toc,
+        toc_title,
+    ) = await _extract_curation_params(
+        request, session_id, filename, recipe_order, grouping_preset, include_section_dividers, include_toc, toc_title
+    )
     recipes = _get_export_recipes_for_format(session_id, manager, store)
     resolver = _get_image_resolver(session_id, manager, store)
-    docx_bytes = export_recipes_to_docx(recipes, image_resolver=resolver)
+    curation = curate_recipes(
+        recipes=recipes,
+        recipe_order=recipe_order,
+        grouping_preset=grouping_preset,
+        include_section_dividers=include_section_dividers,
+        include_toc=include_toc,
+        toc_title=toc_title,
+    )
+    docx_bytes = export_recipes_to_docx(curation.all_recipes, image_resolver=resolver, curation=curation)
     target_filename = sanitize_export_filename(filename, "recipeboxer_cookbook.docx", "docx")
 
     return Response(
@@ -1697,16 +1944,46 @@ async def export_docx(
     status_code=status.HTTP_200_OK,
     summary="Download Printable Archival PDF Cookbook",
 )
+@router.post(
+    "/export/pdf",
+    status_code=status.HTTP_200_OK,
+    summary="Download Printable Archival PDF Cookbook (POST)",
+)
 async def export_pdf(
+    request: Request,
     session_id: Optional[str] = Query(None, description="Optional target session ID"),
     filename: Optional[str] = Query(None, description="Custom export filename"),
+    recipe_order: Optional[str] = Query(None, description="Comma-separated recipe IDs in sequence"),
+    grouping_preset: Optional[str] = Query("none", description="Grouping preset"),
+    include_section_dividers: bool = Query(True, description="Whether to include section dividers"),
+    include_toc: bool = Query(True, description="Whether to include table of contents"),
+    toc_title: Optional[str] = Query("Table of Contents", description="TOC title"),
     manager: SessionManager = Depends(get_manager),
     store: SessionStore = Depends(get_store),
 ) -> Response:
     """Generates and downloads a print-ready PDF cookbook with embedded card scans."""
+    (
+        session_id,
+        filename,
+        recipe_order,
+        grouping_preset,
+        include_section_dividers,
+        include_toc,
+        toc_title,
+    ) = await _extract_curation_params(
+        request, session_id, filename, recipe_order, grouping_preset, include_section_dividers, include_toc, toc_title
+    )
     recipes = _get_export_recipes_for_format(session_id, manager, store)
     resolver = _get_image_resolver(session_id, manager, store)
-    pdf_bytes = export_recipes_to_pdf(recipes, image_resolver=resolver)
+    curation = curate_recipes(
+        recipes=recipes,
+        recipe_order=recipe_order,
+        grouping_preset=grouping_preset,
+        include_section_dividers=include_section_dividers,
+        include_toc=include_toc,
+        toc_title=toc_title,
+    )
+    pdf_bytes = export_recipes_to_pdf(curation.all_recipes, image_resolver=resolver, curation=curation)
     target_filename = sanitize_export_filename(filename, "recipeboxer_cookbook.pdf", "pdf")
 
     return Response(
@@ -1726,17 +2003,65 @@ async def export_pdf(
     status_code=status.HTTP_200_OK,
     summary="Download Obsidian Markdown (Alias)",
 )
+@router.post(
+    "/export/markdown",
+    status_code=status.HTTP_200_OK,
+    summary="Download Obsidian Markdown (POST)",
+)
+@router.post(
+    "/export/md",
+    status_code=status.HTTP_200_OK,
+    summary="Download Obsidian Markdown (POST Alias)",
+)
 async def export_markdown(
+    request: Request,
     session_id: Optional[str] = Query(None, description="Optional target session ID"),
     filename: Optional[str] = Query(None, description="Custom export filename"),
+    recipe_order: Optional[str] = Query(None, description="Comma-separated recipe IDs in sequence"),
+    grouping_preset: Optional[str] = Query("none", description="Grouping preset"),
+    include_section_dividers: bool = Query(True, description="Whether to include section dividers"),
+    include_toc: bool = Query(True, description="Whether to include table of contents"),
+    toc_title: Optional[str] = Query("Table of Contents", description="TOC title"),
     use_wikilinks: bool = Query(True, description="Whether to format card images as Obsidian wikilinks"),
     manager: SessionManager = Depends(get_manager),
     store: SessionStore = Depends(get_store),
 ) -> Response:
     """Returns Obsidian-compatible Markdown document with structured YAML frontmatter."""
+    (
+        session_id,
+        filename,
+        recipe_order,
+        grouping_preset,
+        include_section_dividers,
+        include_toc,
+        toc_title,
+    ) = await _extract_curation_params(
+        request, session_id, filename, recipe_order, grouping_preset, include_section_dividers, include_toc, toc_title
+    )
+    if request.method == "POST":
+        try:
+            body = await request.json()
+            if isinstance(body, dict) and "use_wikilinks" in body:
+                use_wikilinks = bool(body["use_wikilinks"])
+        except Exception:
+            pass
+
     recipes = _get_export_recipes_for_format(session_id, manager, store)
     resolver = _get_image_resolver(session_id, manager, store)
-    md_content = export_recipes_to_markdown(recipes, use_wikilinks=use_wikilinks, image_resolver=resolver)
+    curation = curate_recipes(
+        recipes=recipes,
+        recipe_order=recipe_order,
+        grouping_preset=grouping_preset,
+        include_section_dividers=include_section_dividers,
+        include_toc=include_toc,
+        toc_title=toc_title,
+    )
+    md_content = export_recipes_to_markdown(
+        curation.all_recipes,
+        use_wikilinks=use_wikilinks,
+        image_resolver=resolver,
+        curation=curation,
+    )
     target_filename = sanitize_export_filename(filename, "recipeboxer_recipes.md", "md")
 
     return Response(
@@ -1756,15 +2081,50 @@ async def export_markdown(
     status_code=status.HTTP_200_OK,
     summary="Download Cooklang (.cook) Serialized Recipes (Alias)",
 )
+@router.post(
+    "/export/cooklang",
+    status_code=status.HTTP_200_OK,
+    summary="Download Cooklang (.cook) Serialized Recipes (POST)",
+)
+@router.post(
+    "/export/cook",
+    status_code=status.HTTP_200_OK,
+    summary="Download Cooklang (.cook) Serialized Recipes (POST Alias)",
+)
 async def export_cooklang(
+    request: Request,
     session_id: Optional[str] = Query(None, description="Optional target session ID"),
     filename: Optional[str] = Query(None, description="Custom export filename"),
+    recipe_order: Optional[str] = Query(None, description="Comma-separated recipe IDs in sequence"),
+    grouping_preset: Optional[str] = Query("none", description="Grouping preset"),
+    include_section_dividers: bool = Query(True, description="Whether to include section dividers"),
+    include_toc: bool = Query(True, description="Whether to include table of contents"),
+    toc_title: Optional[str] = Query("Table of Contents", description="TOC title"),
     manager: SessionManager = Depends(get_manager),
     store: SessionStore = Depends(get_store),
 ) -> Response:
     """Returns Cooklang (.cook) markup formatted with ingredients, cookware, and timers."""
+    (
+        session_id,
+        filename,
+        recipe_order,
+        grouping_preset,
+        include_section_dividers,
+        include_toc,
+        toc_title,
+    ) = await _extract_curation_params(
+        request, session_id, filename, recipe_order, grouping_preset, include_section_dividers, include_toc, toc_title
+    )
     recipes = _get_export_recipes_for_format(session_id, manager, store)
-    cook_content = export_recipes_to_cooklang(recipes)
+    curation = curate_recipes(
+        recipes=recipes,
+        recipe_order=recipe_order,
+        grouping_preset=grouping_preset,
+        include_section_dividers=include_section_dividers,
+        include_toc=include_toc,
+        toc_title=toc_title,
+    )
+    cook_content = export_recipes_to_cooklang(curation.all_recipes)
     target_filename = sanitize_export_filename(filename, "recipeboxer_recipes.cook", "cook")
 
     return Response(
@@ -1779,17 +2139,55 @@ async def export_cooklang(
     status_code=status.HTTP_200_OK,
     summary="Download Paprika (.paprikarecipes) Gzip Archive",
 )
+@router.post(
+    "/export/paprika",
+    status_code=status.HTTP_200_OK,
+    summary="Download Paprika (.paprikarecipes) Gzip Archive (POST)",
+)
 async def export_paprika(
+    request: Request,
     session_id: Optional[str] = Query(None, description="Optional target session ID"),
     filename: Optional[str] = Query(None, description="Custom export filename"),
+    recipe_order: Optional[str] = Query(None, description="Comma-separated recipe IDs in sequence"),
+    grouping_preset: Optional[str] = Query("none", description="Grouping preset"),
+    include_section_dividers: bool = Query(True, description="Whether to include section dividers"),
+    include_toc: bool = Query(True, description="Whether to include table of contents"),
+    toc_title: Optional[str] = Query("Table of Contents", description="TOC title"),
     as_zip: bool = Query(False, description="Whether to format multi-recipe archive as ZIP of .paprikarecipe files"),
     manager: SessionManager = Depends(get_manager),
     store: SessionStore = Depends(get_store),
 ) -> Response:
     """Returns .paprikarecipes gzip archive containing JSON recipes and base64 card scans."""
+    (
+        session_id,
+        filename,
+        recipe_order,
+        grouping_preset,
+        include_section_dividers,
+        include_toc,
+        toc_title,
+    ) = await _extract_curation_params(
+        request, session_id, filename, recipe_order, grouping_preset, include_section_dividers, include_toc, toc_title
+    )
+    if request.method == "POST":
+        try:
+            body = await request.json()
+            if isinstance(body, dict) and "as_zip" in body:
+                as_zip = bool(body["as_zip"])
+        except Exception:
+            pass
+
     recipes = _get_export_recipes_for_format(session_id, manager, store)
     resolver = _get_image_resolver(session_id, manager, store)
-    paprika_bytes = export_recipes_to_paprika(recipes, image_resolver=resolver, as_zip_archive=as_zip)
+    curation = curate_recipes(
+        recipes=recipes,
+        recipe_order=recipe_order,
+        grouping_preset=grouping_preset,
+        include_section_dividers=include_section_dividers,
+        include_toc=include_toc,
+        toc_title=toc_title,
+    )
+    paprika_bytes = export_recipes_to_paprika(curation.all_recipes, image_resolver=resolver, as_zip_archive=as_zip)
 
     default_ext = "zip" if as_zip else "paprikarecipes"
     default_name = f"recipeboxer_export.{default_ext}"
@@ -1818,29 +2216,55 @@ async def export_google_docs(
     format: Optional[str] = Query("batch_requests", description="'batch_requests', 'json', or 'html'"),
     title: Optional[str] = Query("RecipeBoxer Archival Cookbook", description="Cookbook Title"),
     filename: Optional[str] = Query(None, description="Custom export filename"),
+    recipe_order: Optional[str] = Query(None, description="Comma-separated recipe IDs in sequence"),
+    grouping_preset: Optional[str] = Query("none", description="Grouping preset"),
+    include_section_dividers: bool = Query(True, description="Whether to include section dividers"),
+    include_toc: bool = Query(True, description="Whether to include table of contents"),
+    toc_title: Optional[str] = Query("Table of Contents", description="TOC title"),
     manager: SessionManager = Depends(get_manager),
     store: SessionStore = Depends(get_store),
 ) -> Any:
     """Generates structured Google Docs API batchUpdate requests or HTML archive."""
-    # Check if request has JSON body for POST
+    (
+        session_id,
+        filename,
+        recipe_order,
+        grouping_preset,
+        include_section_dividers,
+        include_toc,
+        toc_title,
+    ) = await _extract_curation_params(
+        request, session_id, filename, recipe_order, grouping_preset, include_section_dividers, include_toc, toc_title
+    )
     if request.method == "POST":
         try:
             body = await request.json()
             if isinstance(body, dict):
-                session_id = body.get("session_id", session_id)
                 format = body.get("format", format)
                 title = body.get("title", title)
-                filename = body.get("filename", filename)
         except Exception:
             pass
 
     recipes = _get_export_recipes_for_format(session_id, manager, store)
     resolver = _get_image_resolver(session_id, manager, store)
+    curation = curate_recipes(
+        recipes=recipes,
+        recipe_order=recipe_order,
+        grouping_preset=grouping_preset,
+        include_section_dividers=include_section_dividers,
+        include_toc=include_toc,
+        toc_title=toc_title,
+    )
     exporter = GoogleDocsExporter()
 
     fmt = (format or "batch_requests").lower().strip()
     if fmt == "html":
-        html_content = exporter.export_to_html(recipes, title=title or "RecipeBoxer Archival Cookbook", image_resolver=resolver)
+        html_content = exporter.export_to_html(
+            recipes,
+            title=title or "RecipeBoxer Archival Cookbook",
+            image_resolver=resolver,
+            curation=curation,
+        )
         target_filename = sanitize_export_filename(filename, "recipeboxer_google_docs.html", "html")
         return Response(
             content=html_content,
@@ -1848,7 +2272,12 @@ async def export_google_docs(
             headers={"Content-Disposition": f'attachment; filename="{target_filename}"'},
         )
     elif fmt == "json":
-        json_str = exporter.export_to_json_string(recipes, title=title or "RecipeBoxer Archival Cookbook", image_resolver=resolver)
+        json_str = exporter.export_to_json_string(
+            recipes,
+            title=title or "RecipeBoxer Archival Cookbook",
+            image_resolver=resolver,
+            curation=curation,
+        )
         target_filename = sanitize_export_filename(filename, "recipeboxer_google_docs.json", "json")
         return Response(
             content=json_str,
@@ -1857,12 +2286,231 @@ async def export_google_docs(
         )
     else:
         # Default: batch_requests dictionary
-        data = exporter.export_to_json_dict(recipes, title=title or "RecipeBoxer Archival Cookbook", image_resolver=resolver)
+        data = exporter.export_to_json_dict(
+            recipes,
+            title=title or "RecipeBoxer Archival Cookbook",
+            image_resolver=resolver,
+            curation=curation,
+        )
         return data
 
 
+
 # ============================================================================
-# 8. System & Native Directory Browsing
+# 8. Portable Project Archive Endpoints (.recipeboxer Save / Load / Merge)
+# ============================================================================
+
+@router.get(
+    "/project/export",
+    status_code=status.HTTP_200_OK,
+    summary="Download Portable .recipeboxer Project Archive",
+)
+@router.get(
+    "/export/project",
+    status_code=status.HTTP_200_OK,
+    summary="Download Portable .recipeboxer Project Archive (Export Alias)",
+)
+@router.get(
+    "/export/recipeboxer",
+    status_code=status.HTTP_200_OK,
+    summary="Download Portable .recipeboxer Project Archive (RecipeBoxer Alias)",
+)
+async def export_project_archive(
+    session_id: Optional[str] = Query(None, description="Target session ID"),
+    filename: Optional[str] = Query(None, description="Custom export archive filename"),
+    manager: SessionManager = Depends(get_manager),
+    store: SessionStore = Depends(get_store),
+    cache: FingerprintCache = Depends(get_cache),
+) -> Response:
+    """Packages full session state (cards, visual fingerprints, proposals, recipes,
+    marginalia, step bindings, and original scans) into a portable .recipeboxer ZIP archive.
+    """
+    sid = session_id or manager.get_active_session_id()
+    if not sid:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No active session found to export",
+        )
+
+    session = manager.get_session(sid)
+    detail = store.get_session_detail(sid) if store else None
+    if session is None and detail is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Session '{sid}' not found",
+        )
+
+    try:
+        archive_bytes = create_recipeboxer_archive(
+            session_or_id=session or sid,
+            store=store,
+            manager=manager,
+            cache=cache,
+        )
+    except Exception as exc:
+        logger.error(f"Failed to create .recipeboxer archive for session {sid}: {exc}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to package project archive: {exc}",
+        )
+
+    target_filename = sanitize_export_filename(filename, f"{sid}.recipeboxer", "recipeboxer")
+    if not target_filename.endswith(".recipeboxer"):
+        target_filename = f"{target_filename}.recipeboxer"
+
+    return Response(
+        content=archive_bytes,
+        media_type="application/x-recipeboxer",
+        headers={"Content-Disposition": f'attachment; filename="{target_filename}"'},
+    )
+
+
+@router.get(
+    "/sessions/{session_id}/export/project",
+    status_code=status.HTTP_200_OK,
+    summary="Download Portable .recipeboxer Project Archive for Session (Alias)",
+)
+async def export_project_archive_for_session(
+    session_id: str,
+    filename: Optional[str] = Query(None, description="Custom export archive filename"),
+    manager: SessionManager = Depends(get_manager),
+    store: SessionStore = Depends(get_store),
+    cache: FingerprintCache = Depends(get_cache),
+) -> Response:
+    """Session-specific alias for downloading portable .recipeboxer archive."""
+    return await export_project_archive(
+        session_id=session_id,
+        filename=filename,
+        manager=manager,
+        store=store,
+        cache=cache,
+    )
+
+
+@router.post(
+    "/project/import",
+    response_model=SessionDetail,
+    status_code=status.HTTP_200_OK,
+    summary="Import / Restore Portable .recipeboxer Project Archive",
+)
+@router.post(
+    "/sessions/import/project",
+    response_model=SessionDetail,
+    status_code=status.HTTP_200_OK,
+    summary="Import / Restore Portable .recipeboxer Project Archive (Alias)",
+)
+async def import_project_archive(
+    file: UploadFile = File(..., description="Uploaded .recipeboxer ZIP archive"),
+    target_session_id: Optional[str] = Form(None, description="Optional custom session ID override"),
+    auto_resume: Optional[bool] = Form(False, description="Whether to resume HITL immediately"),
+    manager: SessionManager = Depends(get_manager),
+    store: SessionStore = Depends(get_store),
+    cache: FingerprintCache = Depends(get_cache),
+) -> SessionDetail:
+    """Restores an uploaded .recipeboxer project archive into SQLite SessionStore,
+    in-memory SessionManager, and FingerprintCache with full state fidelity.
+    """
+    fn = file.filename or ""
+    if not (fn.endswith(".recipeboxer") or fn.endswith(".zip")):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Uploaded file must have a .recipeboxer or .zip extension",
+        )
+
+    try:
+        content = await file.read()
+        detail = restore_archive_to_session(
+            archive_file_or_bytes=content,
+            store=store,
+            manager=manager,
+            cache=cache,
+            target_session_id=target_session_id,
+            auto_resume=bool(auto_resume),
+        )
+        return detail
+    except ValueError as val_err:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(val_err),
+        )
+    except Exception as exc:
+        logger.error(f"Failed to import .recipeboxer archive: {exc}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to restore project archive: {exc}",
+        )
+
+
+@router.post(
+    "/project/merge",
+    status_code=status.HTTP_200_OK,
+    summary="Merge Active Session or Archive into Base .recipeboxer Project Archive",
+)
+async def merge_project_archive(
+    base_archive: UploadFile = File(..., description="Base .recipeboxer archive file"),
+    session_id: Optional[str] = Form(None, description="Active session ID to merge into base"),
+    incoming_archive: Optional[UploadFile] = File(None, description="Secondary .recipeboxer archive to merge"),
+    conflict_strategy: Optional[str] = Form("keep_both", description="Conflict resolution ('keep_both', 'prefer_incoming', 'prefer_base')"),
+    filename: Optional[str] = Form(None, description="Custom output filename"),
+    manager: SessionManager = Depends(get_manager),
+    store: SessionStore = Depends(get_store),
+    cache: FingerprintCache = Depends(get_cache),
+) -> Response:
+    """Merges incoming session or archive data into a base archive, deduplicating image
+    assets by SHA-256 and unifying recipes.
+    """
+    if not session_id and incoming_archive is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Either session_id or incoming_archive must be provided for project merge.",
+        )
+
+    try:
+        base_content = await base_archive.read()
+        incoming_target: Union[bytes, str]
+        if incoming_archive is not None:
+            incoming_target = await incoming_archive.read()
+        else:
+            incoming_target = session_id  # type: ignore[assignment]
+
+        merged_manifest, merged_bytes = merge_recipeboxer_archives(
+            base_archive=base_content,
+            incoming_archive_or_session=incoming_target,
+            conflict_strategy=conflict_strategy or "keep_both",
+            store=store,
+            manager=manager,
+            cache=cache,
+        )
+
+        stem = f"merged_{merged_manifest.project_id}"
+        target_filename = sanitize_export_filename(
+            filename,
+            f"{stem}.recipeboxer",
+            "recipeboxer",
+        )
+        if not target_filename.endswith(".recipeboxer"):
+            target_filename = f"{target_filename}.recipeboxer"
+
+        return Response(
+            content=merged_bytes,
+            media_type="application/x-recipeboxer",
+            headers={"Content-Disposition": f'attachment; filename="{target_filename}"'},
+        )
+    except ValueError as val_err:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(val_err),
+        )
+    except Exception as exc:
+        logger.error(f"Failed to merge .recipeboxer archives: {exc}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to merge project archives: {exc}",
+        )
+
+
+# ============================================================================
+# 9. System & Native Directory Browsing
 # ============================================================================
 
 class BrowseDirectoryRequest(BaseModel):

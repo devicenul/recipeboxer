@@ -65,9 +65,21 @@ export const ProgressDashboard: React.FC<ProgressDashboardProps> = ({
       {/* Header & Overall Percent */}
       <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-200 dark:border-slate-800">
         <div>
-          <h2 className="text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-            <span>Pipeline Telemetry &amp; Execution</span>
-          </h2>
+          <div className="flex items-center gap-2 flex-wrap">
+            <h2 className="text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+              <span>Pipeline Telemetry &amp; Execution</span>
+            </h2>
+            {Boolean(progress.skipped_cards && progress.skipped_cards > 0) && (
+              <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 flex items-center gap-1">
+                <span>{progress.skipped_cards} Duplicates Skipped</span>
+              </span>
+            )}
+            {Boolean(progress.baseline_recipes_count && progress.baseline_recipes_count > 0) && (
+              <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 dark:bg-blue-950/80 text-blue-800 dark:text-blue-300 border border-blue-200 dark:border-blue-800 flex items-center gap-1">
+                <span>{progress.baseline_recipes_count} Baseline Inherited</span>
+              </span>
+            )}
+          </div>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
             Session: <span className="font-mono text-slate-700 dark:text-slate-300">{status.session_id}</span>
           </p>
@@ -123,13 +135,22 @@ export const ProgressDashboard: React.FC<ProgressDashboardProps> = ({
       </div>
 
       {/* Metrics Grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 pt-2">
+      <div className={`grid grid-cols-2 sm:grid-cols-3 ${Boolean(progress.skipped_cards && progress.skipped_cards > 0) ? 'lg:grid-cols-6' : 'lg:grid-cols-5'} gap-3 pt-2`}>
         <div className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 flex flex-col">
           <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Scans Ingested</span>
           <span className="text-xl font-bold text-slate-900 dark:text-slate-100 font-mono mt-1">
             {progress.total_scans}
           </span>
         </div>
+
+        {Boolean(progress.skipped_cards && progress.skipped_cards > 0) && (
+          <div className="p-3.5 rounded-xl border border-emerald-200 dark:border-emerald-800/80 bg-emerald-50/50 dark:bg-emerald-950/30 flex flex-col">
+            <span className="text-[11px] text-emerald-700 dark:text-emerald-300 font-medium">Duplicates Skipped</span>
+            <span className="text-xl font-bold text-emerald-600 dark:text-emerald-400 font-mono mt-1">
+              {progress.skipped_cards}
+            </span>
+          </div>
+        )}
 
         <div className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 flex flex-col">
           <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Fingerprinted</span>

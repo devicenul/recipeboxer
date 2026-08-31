@@ -4,6 +4,12 @@ Provides Plan To Eat CSV, Schema.org Recipe JSON-LD, standard JSON, Google Docs 
 DOCX, Printable PDF, Obsidian Markdown, Cooklang, and Paprika export engines.
 """
 
+from recipeboxer.exporter.curation import (
+    CuratedCookbook,
+    CuratedSection,
+    GroupingPreset,
+    curate_recipes,
+)
 from recipeboxer.exporter.cooklang import (
     CooklangExporter,
     export_recipes_to_cooklang,
@@ -48,6 +54,11 @@ from recipeboxer.exporter.plan_to_eat import (
 )
 
 __all__ = [
+    # Curation & Categorical Grouping (R3)
+    "GroupingPreset",
+    "CuratedSection",
+    "CuratedCookbook",
+    "curate_recipes",
     # Plan To Eat CSV (Primary R0)
     "PLAN_TO_EAT_COLUMNS",
     "PlanToEatExporter",

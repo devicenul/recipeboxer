@@ -374,3 +374,21 @@ class TestExportEndpoints:
         paprika_data = json.loads(decomp.decode("utf-8"))
         assert paprika_data["categories"] == ["Dessert", "Autumn", "Fruit"]
 
+    @pytest.mark.asyncio
+    async def test_export_project_archive_endpoint(self, client: httpx.AsyncClient, populated_session: str):
+        res = await client.get(f"/api/project/export?session_id={populated_session}")
+        assert res.status_code == 200
+        assert "application/x-recipeboxer" in res.headers["content-type"]
+        assert f"{populated_session}.recipeboxer" in res.headers["content-disposition"]
+        assert len(res.content) > 0
+
+        # Verify zip structure
+        zip_buf = io.BytesIO(res.content)
+        with zipfile.ZipFile(zip_buf, "r") as zf:
+            names = zf.namelist()
+            assert "manifest.json" in names
+            manifest_dict = json.loads(zf.read("manifest.json").decode("utf-8"))
+            assert manifest_dict["format_version"] == "1.0.0"
+            assert len(manifest_dict["recipes"]) == 1
+            assert manifest_dict["recipes"][0]["title"] == "Spiced Apple Crisp"
+

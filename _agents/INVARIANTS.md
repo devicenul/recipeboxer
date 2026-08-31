@@ -197,3 +197,23 @@ All third-party libraries, runtime packages, build tools, and dependencies added
 3. **Agent & Contributor Verification Protocol**:
    - Before introducing any new Python dependency (`requirements.txt`, `pyproject.toml`) or npm package (`frontend/package.json`), the implementing agent must verify the package's license metadata against the approved list above.
 
+---
+
+## 9. Invariant 9: .recipeboxer Archive Integrity, Content-Addressing & ZipSlip Prevention
+
+### Rule
+The portable `.recipeboxer` project archive container (`recipeboxer/storage/archive.py`) must provide lossless round-trip serialization and deserialization of complete session state, preserve content-addressed SHA-256 asset immutability, and strictly enforce ZipSlip path traversal defenses during extraction.
+
+### Technical Specifications
+1. **Archive Container Structure**:
+   - Every `.recipeboxer` archive is a standard compressed ZIP archive containing:
+     - `manifest.json`: Complete serialized `RecipeBoxerArchiveManifest` storing session ID, creation timestamp, recipe card records, visual fingerprints, transcribed recipes (`RecipeSchema`), HITL review approvals, marginalia notes, and image-to-step bindings.
+     - `assets/scans/<sha256>.<ext>`: Original card scan pixel buffers content-addressed by their lowercase 64-character SHA-256 digest.
+2. **ZipSlip Defense & Canonical Path Verification**:
+   - The extraction routine (`_safe_extract`) must verify that every resolved extracted target path begins with the canonical root extraction directory (`os.path.commonpath([target_dir, resolved_path]) == target_dir`).
+   - Any member path attempting directory traversal (`../`, absolute paths, drive letters) must immediately raise a `ValueError` aborting extraction.
+3. **Lossless Round-Trip Restore**:
+   - Re-importing a `.recipeboxer` archive must reconstruct the exact sequence of cards, fingerprint feature descriptors, bounding boxes, recipe fields, and user notes with zero data degradation.
+4. **Idempotent Merge & Deduplication**:
+   - Merging an archive into an existing session must match incoming card assets by SHA-256 digest to avoid duplicating image files or creating redundant cards.
+

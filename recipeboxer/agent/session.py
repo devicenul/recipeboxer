@@ -94,6 +94,21 @@ class PipelineSession:
 
         self.state: PipelineState = PipelineState.IDLE
 
+        # Baseline archive & incremental ingestion state
+        self.baseline_project_path: Optional[str] = (
+            getattr(self.config, "baseline_project_path", None)
+            or (self.config.get("baseline_project_path") if isinstance(self.config, dict) else None)
+        )
+        self.baseline_session_id: Optional[str] = (
+            getattr(self.config, "baseline_session_id", None)
+            or (self.config.get("baseline_session_id") if isinstance(self.config, dict) else None)
+        )
+        self.baseline_manifest: Optional[Any] = None
+        self.baseline_cards: List[ScannedCard] = []
+        self.skipped_cards: List[ScannedCard] = []
+        self.new_cards: List[ScannedCard] = []
+        self.baseline_recipes: List[RecipeSchema] = []
+
         # Storage & Subsystems (for dependency injection / overrides)
         self.cache: Optional[FingerprintCache] = cache
         self.extractor: Optional[Any] = extractor or mock_client
@@ -350,12 +365,21 @@ class PipelineSession:
 
         # Compute dynamic percentage
         pct = 0.0
-        if self.state == PipelineState.IDLE:
+        new_cards_count = self.progress_metrics.newly_processed_cards
+        if self.progress_metrics.total_scans > 0 and new_cards_count == 0 and self.progress_metrics.skipped_cards > 0:
+            # 100% duplicate skip run
+            if self.state in (PipelineState.INGESTING, PipelineState.SCANNING):
+                pct = 20.0
+            elif self.state == PipelineState.COMPLETED:
+                pct = 100.0
+            else:
+                pct = 100.0
+        elif self.state == PipelineState.IDLE:
             pct = 0.0
         elif self.state in (PipelineState.INGESTING, PipelineState.SCANNING):
             pct = 5.0
         elif self.state == PipelineState.FINGERPRINTING:
-            total = max(1, self.progress_metrics.total_scans)
+            total = max(1, new_cards_count or self.progress_metrics.total_scans)
             done = min(total, self.progress_metrics.fingerprinted)
             pct = round(5.0 + 35.0 * (done / total), 1)
         elif self.state == PipelineState.CORRELATING:
@@ -363,7 +387,7 @@ class PipelineSession:
         elif self.state == PipelineState.HITL_PENDING:
             pct = 55.0
         elif self.state == PipelineState.EXTRACTING:
-            approved = max(1, self.progress_metrics.approved)
+            approved = max(1, self.progress_metrics.approved or new_cards_count or 1)
             extracted = min(approved, self.progress_metrics.extracted)
             pct = round(55.0 + 35.0 * (extracted / approved), 1)
         elif self.state == PipelineState.EXPORTING:
@@ -452,6 +476,13 @@ class SessionManager:
             self._active_session_id = sid
         logger.info(f"Created and registered session '{sid}'.")
         return session
+
+    def register_session(self, session: PipelineSession) -> None:
+        """Registers an existing PipelineSession instance in memory."""
+        with self._lock:
+            self._sessions[session.session_id] = session
+            self._active_session_id = session.session_id
+        logger.info(f"Registered existing session '{session.session_id}'.")
 
     def get_session(self, session_id: Optional[str] = None) -> Optional[PipelineSession]:
         """Retrieves session by ID or returns the currently active session if None given."""

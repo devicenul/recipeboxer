@@ -18,6 +18,7 @@ from typing import Any, Callable, Dict, List, Optional, Union
 
 import httpx
 
+from recipeboxer.exporter.curation import CuratedCookbook, CuratedSection, GroupingPreset
 from recipeboxer.models.recipe import RecipeSchema
 
 logger = logging.getLogger(__name__)
@@ -34,6 +35,7 @@ class GoogleDocsExporter:
         recipes: Union[RecipeSchema, List[RecipeSchema]],
         image_resolver: Optional[Callable[[str], Optional[Union[str, Path, bytes]]]] = None,
         include_page_breaks: bool = True,
+        curation: Optional[CuratedCookbook] = None,
     ) -> List[Dict[str, Any]]:
         """Constructs ordered Google Docs API batchUpdate requests for the given recipes.
 
@@ -41,12 +43,16 @@ class GoogleDocsExporter:
             recipes: Single RecipeSchema or list of RecipeSchema models.
             image_resolver: Optional callable that resolves a card_id to a file path, URI, or bytes.
             include_page_breaks: Whether to insert page breaks between recipes.
+            curation: Optional CuratedCookbook model specifying grouping, TOC, and section dividers.
 
         Returns:
             List of Google Docs API request dicts (insertText, updateTextStyle,
             updateParagraphStyle, insertPageBreak, insertInlineImage, etc.).
         """
-        recipe_list = [recipes] if isinstance(recipes, RecipeSchema) else list(recipes)
+        if curation:
+            recipe_list = curation.all_recipes
+        else:
+            recipe_list = [recipes] if isinstance(recipes, RecipeSchema) else list(recipes)
         requests: List[Dict[str, Any]] = []
 
         # We construct sequentially with relative indexing for Google Docs API batchUpdate
@@ -54,31 +60,17 @@ class GoogleDocsExporter:
         # We model requests using standard Google Docs API v1 schema.
         current_index = 1
 
-        for r_idx, recipe in enumerate(recipe_list):
-            if r_idx > 0 and include_page_breaks:
-                # Insert page break before subsequent recipes
-                requests.append({
-                    "insertPageBreak": {
-                        "location": {"index": current_index},
-                    }
-                })
-                current_index += 1
-
-            # 1. Recipe Title (HEADING_1)
-            title_text = f"{recipe.title}\n"
+        # 1. Table of Contents batchUpdate requests
+        if curation and curation.include_toc and curation.total_recipe_count > 0:
+            toc_text = f"{curation.toc_title or 'Table of Contents'}\n"
             start_pos = current_index
-            end_pos = start_pos + len(title_text)
-            requests.append({
-                "insertText": {
-                    "location": {"index": start_pos},
-                    "text": title_text,
-                }
-            })
+            end_pos = start_pos + len(toc_text)
+            requests.append({"insertText": {"location": {"index": start_pos}, "text": toc_text}})
             requests.append({
                 "updateParagraphStyle": {
                     "range": {"startIndex": start_pos, "endIndex": end_pos},
-                    "paragraphStyle": {"namedStyleType": "HEADING_1"},
-                    "fields": "namedStyleType",
+                    "paragraphStyle": {"namedStyleType": "HEADING_1", "alignment": "CENTER"},
+                    "fields": "namedStyleType,alignment",
                 }
             })
             requests.append({
@@ -86,247 +78,323 @@ class GoogleDocsExporter:
                     "range": {"startIndex": start_pos, "endIndex": end_pos - 1},
                     "textStyle": {
                         "bold": True,
-                        "fontSize": {"magnitude": 20, "unit": "PT"},
-                        "foregroundColor": {
-                            "color": {"rgbColor": {"red": 0.15, "green": 0.25, "blue": 0.15}}
-                        },
+                        "fontSize": {"magnitude": 22, "unit": "PT"},
+                        "foregroundColor": {"color": {"rgbColor": {"red": 0.137, "green": 0.263, "blue": 0.169}}},
                     },
                     "fields": "bold,fontSize,foregroundColor",
                 }
             })
             current_index = end_pos
 
-            # 2. Description (if present)
-            if recipe.description:
-                desc_text = f"{recipe.description}\n\n"
-                d_start = current_index
-                d_end = d_start + len(desc_text)
-                requests.append({
-                    "insertText": {
-                        "location": {"index": d_start},
-                        "text": desc_text,
-                    }
-                })
-                requests.append({
-                    "updateTextStyle": {
-                        "range": {"startIndex": d_start, "endIndex": d_end - 1},
-                        "textStyle": {
-                            "italic": True,
-                            "fontSize": {"magnitude": 11, "unit": "PT"},
-                            "foregroundColor": {
-                                "color": {"rgbColor": {"red": 0.35, "green": 0.35, "blue": 0.35}}
+            ornament_text = "✦  ✦  ✦\n\n"
+            o_start = current_index
+            o_end = o_start + len(ornament_text)
+            requests.append({"insertText": {"location": {"index": o_start}, "text": ornament_text}})
+            requests.append({
+                "updateParagraphStyle": {
+                    "range": {"startIndex": o_start, "endIndex": o_end},
+                    "paragraphStyle": {"alignment": "CENTER"},
+                    "fields": "alignment",
+                }
+            })
+            requests.append({
+                "updateTextStyle": {
+                    "range": {"startIndex": o_start, "endIndex": o_end - 1},
+                    "textStyle": {
+                        "fontSize": {"magnitude": 12, "unit": "PT"},
+                        "foregroundColor": {"color": {"rgbColor": {"red": 0.176, "green": 0.353, "blue": 0.176}}},
+                    },
+                    "fields": "fontSize,foregroundColor",
+                }
+            })
+            current_index = o_end
+
+            show_headers = len(curation.sections) > 1 or curation.grouping_preset != GroupingPreset.NONE
+            for sec in curation.sections:
+                if show_headers:
+                    sec_t = f"{sec.title}\n"
+                    s_start = current_index
+                    s_end = s_start + len(sec_t)
+                    requests.append({"insertText": {"location": {"index": s_start}, "text": sec_t}})
+                    requests.append({
+                        "updateParagraphStyle": {
+                            "range": {"startIndex": s_start, "endIndex": s_end},
+                            "paragraphStyle": {"namedStyleType": "HEADING_2"},
+                            "fields": "namedStyleType",
+                        }
+                    })
+                    requests.append({
+                        "updateTextStyle": {
+                            "range": {"startIndex": s_start, "endIndex": s_end - 1},
+                            "textStyle": {
+                                "bold": True,
+                                "fontSize": {"magnitude": 13, "unit": "PT"},
+                                "foregroundColor": {"color": {"rgbColor": {"red": 0.137, "green": 0.263, "blue": 0.169}}},
                             },
-                        },
-                        "fields": "italic,fontSize,foregroundColor",
-                    }
-                })
-                current_index = d_end
+                            "fields": "bold,fontSize,foregroundColor",
+                        }
+                    })
+                    current_index = s_end
 
-            # 3. Metadata Table (Prep, Cook, Total Time, Yield)
-            meta_items = []
-            if recipe.yield_servings:
-                meta_items.append(f"Yield: {recipe.yield_servings}")
-            if recipe.prep_time:
-                meta_items.append(f"Prep: {recipe.prep_time}")
-            if recipe.cook_time:
-                meta_items.append(f"Cook: {recipe.cook_time}")
-            if recipe.total_time:
-                meta_items.append(f"Total: {recipe.total_time}")
+                for rec in sec.recipes:
+                    rec_entry = f"•  {rec.title or 'Untitled Recipe'}\n"
+                    r_start = current_index
+                    r_end = r_start + len(rec_entry)
+                    requests.append({"insertText": {"location": {"index": r_start}, "text": rec_entry}})
+                    requests.append({
+                        "updateTextStyle": {
+                            "range": {"startIndex": r_start, "endIndex": r_end - 1},
+                            "textStyle": {"fontSize": {"magnitude": 11, "unit": "PT"}},
+                            "fields": "fontSize",
+                        }
+                    })
+                    current_index = r_end
 
-            if meta_items:
-                meta_header = " | ".join(meta_items) + "\n\n"
-                m_start = current_index
-                m_end = m_start + len(meta_header)
+                sp_text = "\n"
+                requests.append({"insertText": {"location": {"index": current_index}, "text": sp_text}})
+                current_index += len(sp_text)
+
+            if include_page_breaks:
+                requests.append({"insertPageBreak": {"location": {"index": current_index}}})
+                current_index += 1
+
+        # 2. Section Dividers and Recipe Content
+        sections_to_render = curation.sections if curation and curation.sections else [
+            CuratedSection(section_id="all", title="All Recipes", recipes=recipe_list)
+        ]
+
+        for s_idx, section in enumerate(sections_to_render):
+            show_divider = bool(
+                curation
+                and curation.include_section_dividers
+                and (len(curation.sections) > 1 or curation.grouping_preset != GroupingPreset.NONE)
+            )
+
+            if show_divider:
+                div_title = f"{section.title}\n"
+                dt_start = current_index
+                dt_end = dt_start + len(div_title)
+                requests.append({"insertText": {"location": {"index": dt_start}, "text": div_title}})
                 requests.append({
-                    "insertText": {
-                        "location": {"index": m_start},
-                        "text": meta_header,
+                    "updateParagraphStyle": {
+                        "range": {"startIndex": dt_start, "endIndex": dt_end},
+                        "paragraphStyle": {"namedStyleType": "HEADING_1", "alignment": "CENTER"},
+                        "fields": "namedStyleType,alignment",
                     }
                 })
                 requests.append({
                     "updateTextStyle": {
-                        "range": {"startIndex": m_start, "endIndex": m_end - 1},
+                        "range": {"startIndex": dt_start, "endIndex": dt_end - 1},
                         "textStyle": {
                             "bold": True,
-                            "fontSize": {"magnitude": 10, "unit": "PT"},
+                            "fontSize": {"magnitude": 26, "unit": "PT"},
+                            "foregroundColor": {"color": {"rgbColor": {"red": 0.137, "green": 0.263, "blue": 0.169}}},
+                        },
+                        "fields": "bold,fontSize,foregroundColor",
+                    }
+                })
+                current_index = dt_end
+
+                div_ornament = "✦  ✦  ✦\n"
+                do_start = current_index
+                do_end = do_start + len(div_ornament)
+                requests.append({"insertText": {"location": {"index": do_start}, "text": div_ornament}})
+                requests.append({
+                    "updateParagraphStyle": {
+                        "range": {"startIndex": do_start, "endIndex": do_end},
+                        "paragraphStyle": {"alignment": "CENTER"},
+                        "fields": "alignment",
+                    }
+                })
+                requests.append({
+                    "updateTextStyle": {
+                        "range": {"startIndex": do_start, "endIndex": do_end - 1},
+                        "textStyle": {
+                            "fontSize": {"magnitude": 14, "unit": "PT"},
+                            "foregroundColor": {"color": {"rgbColor": {"red": 0.176, "green": 0.353, "blue": 0.176}}},
+                        },
+                        "fields": "fontSize,foregroundColor",
+                    }
+                })
+                current_index = do_end
+
+                if section.subtitle:
+                    div_sub = f"{section.subtitle}\n"
+                    ds_start = current_index
+                    ds_end = ds_start + len(div_sub)
+                    requests.append({"insertText": {"location": {"index": ds_start}, "text": div_sub}})
+                    requests.append({
+                        "updateParagraphStyle": {
+                            "range": {"startIndex": ds_start, "endIndex": ds_end},
+                            "paragraphStyle": {"alignment": "CENTER"},
+                            "fields": "alignment",
+                        }
+                    })
+                    requests.append({
+                        "updateTextStyle": {
+                            "range": {"startIndex": ds_start, "endIndex": ds_end - 1},
+                            "textStyle": {
+                                "italic": True,
+                                "fontSize": {"magnitude": 12, "unit": "PT"},
+                                "foregroundColor": {"color": {"rgbColor": {"red": 0.4, "green": 0.4, "blue": 0.4}}},
+                            },
+                            "fields": "italic,fontSize,foregroundColor",
+                        }
+                    })
+                    current_index = ds_end
+
+                if include_page_breaks:
+                    requests.append({"insertPageBreak": {"location": {"index": current_index}}})
+                    current_index += 1
+
+            for r_idx, recipe in enumerate(section.recipes):
+                if (current_index > 1 or (s_idx > 0 or r_idx > 0)) and include_page_breaks and not show_divider and r_idx > 0:
+                    requests.append({
+                        "insertPageBreak": {
+                            "location": {"index": current_index},
+                        }
+                    })
+                    current_index += 1
+                elif show_divider and r_idx > 0 and include_page_breaks:
+                    requests.append({
+                        "insertPageBreak": {
+                            "location": {"index": current_index},
+                        }
+                    })
+                    current_index += 1
+
+                # 1. Recipe Title (HEADING_1)
+                title_text = f"{recipe.title}\n"
+                start_pos = current_index
+                end_pos = start_pos + len(title_text)
+                requests.append({
+                    "insertText": {
+                        "location": {"index": start_pos},
+                        "text": title_text,
+                    }
+                })
+                requests.append({
+                    "updateParagraphStyle": {
+                        "range": {"startIndex": start_pos, "endIndex": end_pos},
+                        "paragraphStyle": {"namedStyleType": "HEADING_1"},
+                        "fields": "namedStyleType",
+                    }
+                })
+                requests.append({
+                    "updateTextStyle": {
+                        "range": {"startIndex": start_pos, "endIndex": end_pos - 1},
+                        "textStyle": {
+                            "bold": True,
+                            "fontSize": {"magnitude": 20, "unit": "PT"},
                             "foregroundColor": {
-                                "color": {"rgbColor": {"red": 0.2, "green": 0.4, "blue": 0.3}}
+                                "color": {"rgbColor": {"red": 0.15, "green": 0.25, "blue": 0.15}}
                             },
                         },
                         "fields": "bold,fontSize,foregroundColor",
                     }
                 })
-                current_index = m_end
+                current_index = end_pos
 
-            # 4. Ingredients Section (HEADING_2 + dynamic bullets)
-            if recipe.ingredients:
-                ing_heading = "Ingredients\n"
-                ih_start = current_index
-                ih_end = ih_start + len(ing_heading)
-                requests.append({
-                    "insertText": {
-                        "location": {"index": ih_start},
-                        "text": ing_heading,
-                    }
-                })
-                requests.append({
-                    "updateParagraphStyle": {
-                        "range": {"startIndex": ih_start, "endIndex": ih_end},
-                        "paragraphStyle": {"namedStyleType": "HEADING_2"},
-                        "fields": "namedStyleType",
-                    }
-                })
-                current_index = ih_end
-
-                ing_block = "".join(f"{item}\n" for item in recipe.ingredients)
-                ib_start = current_index
-                ib_end = ib_start + len(ing_block)
-                requests.append({
-                    "insertText": {
-                        "location": {"index": ib_start},
-                        "text": ing_block,
-                    }
-                })
-                requests.append({
-                    "createParagraphBullets": {
-                        "range": {"startIndex": ib_start, "endIndex": ib_end},
-                        "bulletPreset": "BULLET_DISC_CIRCLE_SQUARE",
-                    }
-                })
-                current_index = ib_end
-
-                # Spacer newline
-                requests.append({
-                    "insertText": {
-                        "location": {"index": current_index},
-                        "text": "\n",
-                    }
-                })
-                current_index += 1
-
-            # 5. Directions Section (HEADING_2 + numbered instructions)
-            if recipe.directions:
-                dir_heading = "Directions\n"
-                dh_start = current_index
-                dh_end = dh_start + len(dir_heading)
-                requests.append({
-                    "insertText": {
-                        "location": {"index": dh_start},
-                        "text": dir_heading,
-                    }
-                })
-                requests.append({
-                    "updateParagraphStyle": {
-                        "range": {"startIndex": dh_start, "endIndex": dh_end},
-                        "paragraphStyle": {"namedStyleType": "HEADING_2"},
-                        "fields": "namedStyleType",
-                    }
-                })
-                current_index = dh_end
-
-                cleaned_dir_steps = [
-                    re.sub(r"^(?:Step\s+)?\d+[\.\)\-:]\s*", "", s, flags=re.IGNORECASE).strip()
-                    for s in recipe.directions
-                ]
-                dir_block = "".join(f"{step}\n" for step in cleaned_dir_steps)
-                db_start = current_index
-                db_end = db_start + len(dir_block)
-                requests.append({
-                    "insertText": {
-                        "location": {"index": db_start},
-                        "text": dir_block,
-                    }
-                })
-                requests.append({
-                    "createParagraphBullets": {
-                        "range": {"startIndex": db_start, "endIndex": db_end},
-                        "bulletPreset": "NUMBERED_DECIMAL_ALPHA_ROMAN",
-                    }
-                })
-                current_index = db_end
-
-                # Spacer newline
-                requests.append({
-                    "insertText": {
-                        "location": {"index": current_index},
-                        "text": "\n",
-                    }
-                })
-                current_index += 1
-
-            # 6. Tags & Source Notes
-            extra_lines = []
-            if recipe.tags:
-                extra_lines.append(f"Tags: {', '.join(recipe.tags)}")
-            if recipe.source_notes:
-                extra_lines.append(f"Source: {recipe.source_notes}")
-
-            if extra_lines:
-                notes_text = "\n".join(extra_lines) + "\n\n"
-                n_start = current_index
-                n_end = n_start + len(notes_text)
-                requests.append({
-                    "insertText": {
-                        "location": {"index": n_start},
-                        "text": notes_text,
-                    }
-                })
-                requests.append({
-                    "updateTextStyle": {
-                        "range": {"startIndex": n_start, "endIndex": n_end - 1},
-                        "textStyle": {
-                            "italic": True,
-                            "fontSize": {"magnitude": 9, "unit": "PT"},
-                            "foregroundColor": {
-                                "color": {"rgbColor": {"red": 0.45, "green": 0.45, "blue": 0.45}}
-                            },
-                        },
-                        "fields": "italic,fontSize,foregroundColor",
-                    }
-                })
-                current_index = n_end
-
-            # 7. Embedded Card Scans (front, back, attachments)
-            card_images: List[str] = []
-            if image_resolver:
-                for cid in recipe.card_ids:
-                    resolved = image_resolver(cid)
-                    if resolved:
-                        card_images.append(str(resolved))
-            if not card_images and recipe.image_urls:
-                card_images.extend(recipe.image_urls)
-
-            if card_images:
-                scans_heading = "Archival Card Scans\n"
-                sh_start = current_index
-                sh_end = sh_start + len(scans_heading)
-                requests.append({
-                    "insertText": {
-                        "location": {"index": sh_start},
-                        "text": scans_heading,
-                    }
-                })
-                requests.append({
-                    "updateParagraphStyle": {
-                        "range": {"startIndex": sh_start, "endIndex": sh_end},
-                        "paragraphStyle": {"namedStyleType": "HEADING_3"},
-                        "fields": "namedStyleType",
-                    }
-                })
-                current_index = sh_end
-
-                for img_uri in card_images:
+                # 2. Description (if present)
+                if recipe.description:
+                    desc_text = f"{recipe.description}\n\n"
+                    d_start = current_index
+                    d_end = d_start + len(desc_text)
                     requests.append({
-                        "insertInlineImage": {
-                            "location": {"index": current_index},
-                            "uri": img_uri,
-                            "objectSize": {
-                                "height": {"magnitude": 250, "unit": "PT"},
-                                "width": {"magnitude": 350, "unit": "PT"},
-                            },
+                        "insertText": {
+                            "location": {"index": d_start},
+                            "text": desc_text,
                         }
                     })
-                    current_index += 1
+                    requests.append({
+                        "updateTextStyle": {
+                            "range": {"startIndex": d_start, "endIndex": d_end - 1},
+                            "textStyle": {
+                                "italic": True,
+                                "fontSize": {"magnitude": 11, "unit": "PT"},
+                                "foregroundColor": {
+                                    "color": {"rgbColor": {"red": 0.35, "green": 0.35, "blue": 0.35}}
+                                },
+                            },
+                            "fields": "italic,fontSize,foregroundColor",
+                        }
+                    })
+                    current_index = d_end
+
+                # 3. Metadata Table (Prep, Cook, Total Time, Yield)
+                meta_items = []
+                if recipe.yield_servings:
+                    meta_items.append(f"Yield: {recipe.yield_servings}")
+                if recipe.prep_time:
+                    meta_items.append(f"Prep: {recipe.prep_time}")
+                if recipe.cook_time:
+                    meta_items.append(f"Cook: {recipe.cook_time}")
+                if recipe.total_time:
+                    meta_items.append(f"Total: {recipe.total_time}")
+
+                if meta_items:
+                    meta_header = " | ".join(meta_items) + "\n\n"
+                    m_start = current_index
+                    m_end = m_start + len(meta_header)
+                    requests.append({
+                        "insertText": {
+                            "location": {"index": m_start},
+                            "text": meta_header,
+                        }
+                    })
+                    requests.append({
+                        "updateTextStyle": {
+                            "range": {"startIndex": m_start, "endIndex": m_end - 1},
+                            "textStyle": {
+                                "bold": True,
+                                "fontSize": {"magnitude": 10, "unit": "PT"},
+                                "foregroundColor": {
+                                    "color": {"rgbColor": {"red": 0.2, "green": 0.4, "blue": 0.3}}
+                                },
+                            },
+                            "fields": "bold,fontSize,foregroundColor",
+                        }
+                    })
+                    current_index = m_end
+
+                # 4. Ingredients Section (HEADING_2 + dynamic bullets)
+                if recipe.ingredients:
+                    ing_heading = "Ingredients\n"
+                    ih_start = current_index
+                    ih_end = ih_start + len(ing_heading)
+                    requests.append({
+                        "insertText": {
+                            "location": {"index": ih_start},
+                            "text": ing_heading,
+                        }
+                    })
+                    requests.append({
+                        "updateParagraphStyle": {
+                            "range": {"startIndex": ih_start, "endIndex": ih_end},
+                            "paragraphStyle": {"namedStyleType": "HEADING_2"},
+                            "fields": "namedStyleType",
+                        }
+                    })
+                    current_index = ih_end
+
+                    ing_block = "".join(f"{item}\n" for item in recipe.ingredients)
+                    ib_start = current_index
+                    ib_end = ib_start + len(ing_block)
+                    requests.append({
+                        "insertText": {
+                            "location": {"index": ib_start},
+                            "text": ing_block,
+                        }
+                    })
+                    requests.append({
+                        "createParagraphBullets": {
+                            "range": {"startIndex": ib_start, "endIndex": ib_end},
+                            "bulletPreset": "BULLET_DISC_CIRCLE_SQUARE",
+                        }
+                    })
+                    current_index = ib_end
+
+                    # Spacer newline
                     requests.append({
                         "insertText": {
                             "location": {"index": current_index},
@@ -335,6 +403,137 @@ class GoogleDocsExporter:
                     })
                     current_index += 1
 
+                # 5. Directions Section (HEADING_2 + numbered instructions)
+                if recipe.directions:
+                    dir_heading = "Directions\n"
+                    dh_start = current_index
+                    dh_end = dh_start + len(dir_heading)
+                    requests.append({
+                        "insertText": {
+                            "location": {"index": dh_start},
+                            "text": dir_heading,
+                        }
+                    })
+                    requests.append({
+                        "updateParagraphStyle": {
+                            "range": {"startIndex": dh_start, "endIndex": dh_end},
+                            "paragraphStyle": {"namedStyleType": "HEADING_2"},
+                            "fields": "namedStyleType",
+                        }
+                    })
+                    current_index = dh_end
+
+                    cleaned_dir_steps = [
+                        re.sub(r"^(?:Step\s+)?\d+[\.\)\-:]\s*", "", s, flags=re.IGNORECASE).strip()
+                        for s in recipe.directions
+                    ]
+                    dir_block = "".join(f"{step}\n" for step in cleaned_dir_steps)
+                    db_start = current_index
+                    db_end = db_start + len(dir_block)
+                    requests.append({
+                        "insertText": {
+                            "location": {"index": db_start},
+                            "text": dir_block,
+                        }
+                    })
+                    requests.append({
+                        "createParagraphBullets": {
+                            "range": {"startIndex": db_start, "endIndex": db_end},
+                            "bulletPreset": "NUMBERED_DECIMAL_ALPHA_ROMAN",
+                        }
+                    })
+                    current_index = db_end
+
+                    # Spacer newline
+                    requests.append({
+                        "insertText": {
+                            "location": {"index": current_index},
+                            "text": "\n",
+                        }
+                    })
+                    current_index += 1
+
+                # 6. Tags & Source Notes
+                extra_lines = []
+                if recipe.tags:
+                    extra_lines.append(f"Tags: {', '.join(recipe.tags)}")
+                if recipe.source_notes:
+                    extra_lines.append(f"Source: {recipe.source_notes}")
+
+                if extra_lines:
+                    notes_text = "\n".join(extra_lines) + "\n\n"
+                    n_start = current_index
+                    n_end = n_start + len(notes_text)
+                    requests.append({
+                        "insertText": {
+                            "location": {"index": n_start},
+                            "text": notes_text,
+                        }
+                    })
+                    requests.append({
+                        "updateTextStyle": {
+                            "range": {"startIndex": n_start, "endIndex": n_end - 1},
+                            "textStyle": {
+                                "italic": True,
+                                "fontSize": {"magnitude": 9, "unit": "PT"},
+                                "foregroundColor": {
+                                    "color": {"rgbColor": {"red": 0.45, "green": 0.45, "blue": 0.45}}
+                                },
+                            },
+                            "fields": "italic,fontSize,foregroundColor",
+                        }
+                    })
+                    current_index = n_end
+
+                # 7. Embedded Card Scans (front, back, attachments)
+                card_images: List[str] = []
+                if image_resolver:
+                    for cid in recipe.card_ids:
+                        resolved = image_resolver(cid)
+                        if resolved:
+                            card_images.append(str(resolved))
+                if not card_images and recipe.image_urls:
+                    card_images.extend(recipe.image_urls)
+
+                if card_images:
+                    scans_heading = "Archival Card Scans\n"
+                    sh_start = current_index
+                    sh_end = sh_start + len(scans_heading)
+                    requests.append({
+                        "insertText": {
+                            "location": {"index": sh_start},
+                            "text": scans_heading,
+                        }
+                    })
+                    requests.append({
+                        "updateParagraphStyle": {
+                            "range": {"startIndex": sh_start, "endIndex": sh_end},
+                            "paragraphStyle": {"namedStyleType": "HEADING_3"},
+                            "fields": "namedStyleType",
+                        }
+                    })
+                    current_index = sh_end
+
+                    for img_uri in card_images:
+                        requests.append({
+                            "insertInlineImage": {
+                                "location": {"index": current_index},
+                                "uri": img_uri,
+                                "objectSize": {
+                                    "height": {"magnitude": 250, "unit": "PT"},
+                                    "width": {"magnitude": 350, "unit": "PT"},
+                                },
+                            }
+                        })
+                        current_index += 1
+                        requests.append({
+                            "insertText": {
+                                "location": {"index": current_index},
+                                "text": "\n",
+                            }
+                        })
+                        current_index += 1
+
         return requests
 
     def export_to_json_dict(
@@ -342,12 +541,17 @@ class GoogleDocsExporter:
         recipes: Union[RecipeSchema, List[RecipeSchema]],
         title: str = "RecipeBoxer Archival Cookbook",
         image_resolver: Optional[Callable[[str], Optional[Union[str, Path, bytes]]]] = None,
+        curation: Optional[CuratedCookbook] = None,
     ) -> Dict[str, Any]:
         """Exports Google Docs interchange document dictionary containing metadata and batch requests."""
-        recipe_list = [recipes] if isinstance(recipes, RecipeSchema) else list(recipes)
+        if curation:
+            recipe_list = curation.all_recipes
+        else:
+            recipe_list = [recipes] if isinstance(recipes, RecipeSchema) else list(recipes)
         batch_requests = self.build_batch_update_requests(
             recipes=recipe_list,
             image_resolver=image_resolver,
+            curation=curation,
         )
 
         return {
@@ -365,9 +569,10 @@ class GoogleDocsExporter:
         title: str = "RecipeBoxer Archival Cookbook",
         indent: int = 2,
         image_resolver: Optional[Callable[[str], Optional[Union[str, Path, bytes]]]] = None,
+        curation: Optional[CuratedCookbook] = None,
     ) -> str:
         """Serializes Google Docs archive into JSON formatted string."""
-        data = self.export_to_json_dict(recipes, title=title, image_resolver=image_resolver)
+        data = self.export_to_json_dict(recipes, title=title, image_resolver=image_resolver, curation=curation)
         return json.dumps(data, indent=indent, ensure_ascii=False)
 
     def export_to_html(
@@ -376,9 +581,13 @@ class GoogleDocsExporter:
         title: str = "RecipeBoxer Archival Cookbook",
         embed_images_base64: bool = True,
         image_resolver: Optional[Callable[[str], Optional[Union[str, Path, bytes]]]] = None,
+        curation: Optional[CuratedCookbook] = None,
     ) -> str:
-        """Generates self-contained Google Docs compatible HTML interchange archive."""
-        recipe_list = [recipes] if isinstance(recipes, RecipeSchema) else list(recipes)
+        """Generates self-contained Google Docs compatible HTML interchange archive with TOC and dividers."""
+        if curation:
+            recipe_list = curation.all_recipes
+        else:
+            recipe_list = [recipes] if isinstance(recipes, RecipeSchema) else list(recipes)
 
         html_out = io.StringIO()
         html_out.write("<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n")
@@ -400,6 +609,75 @@ body {
     padding: 48px;
     box-shadow: 0 4px 12px rgba(0,0,0,0.08);
     border-radius: 8px;
+}
+.table-of-contents {
+    margin-bottom: 48px;
+    padding: 32px 0 36px 0;
+    border-bottom: 2px solid #23432b;
+}
+.toc-title {
+    font-size: 26px;
+    color: #23432b;
+    text-align: center;
+    margin-bottom: 4px;
+}
+.toc-ornament {
+    text-align: center;
+    color: #2d5a2d;
+    font-size: 14px;
+    margin-bottom: 24px;
+}
+.toc-section-title {
+    font-size: 16px;
+    color: #23432b;
+    margin-top: 16px;
+    margin-bottom: 8px;
+    font-family: sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+.toc-recipe-list {
+    list-style-type: none;
+    padding-left: 0;
+    margin: 0 0 16px 0;
+}
+.toc-recipe-list li {
+    padding: 4px 0;
+    border-bottom: 1px dotted #ccc;
+    display: flex;
+    justify-content: space-between;
+}
+.toc-recipe-list a {
+    color: #23432b;
+    text-decoration: none;
+    font-weight: 500;
+}
+.toc-recipe-list a:hover {
+    text-decoration: underline;
+}
+.section-divider {
+    text-align: center;
+    padding: 64px 24px;
+    margin-bottom: 48px;
+    background: #f4f7f4;
+    border: 2px solid #23432b;
+    border-radius: 8px;
+}
+.section-divider-title {
+    font-size: 30px;
+    color: #23432b;
+    margin: 0 0 12px 0;
+}
+.section-divider-ornament {
+    color: #2d5a2d;
+    font-size: 16px;
+    margin-bottom: 12px;
+}
+.section-divider-subtitle {
+    font-style: italic;
+    color: #555555;
+    font-size: 15px;
+    margin: 0;
 }
 .recipe-card {
     margin-bottom: 48px;
@@ -525,86 +803,126 @@ ol.direction-list li {
 <div class="cookbook-container">
 """)
 
-        for idx, recipe in enumerate(recipe_list):
-            page_break_cls = " recipe-page-break" if idx > 0 else ""
-            html_out.write(f'<div class="recipe-card{page_break_cls}">\n')
-            html_out.write(f'<h1 class="recipe-title">{html.escape(recipe.title)}</h1>\n')
+        # 1. Table of Contents
+        if curation and curation.include_toc and curation.total_recipe_count > 0:
+            toc_title_str = curation.toc_title or "Table of Contents"
+            html_out.write('<div class="table-of-contents recipe-page-break">\n')
+            html_out.write(f'<h1 class="toc-title">{html.escape(toc_title_str)}</h1>\n')
+            html_out.write('<div class="toc-ornament">✦  ✦  ✦</div>\n')
 
-            if recipe.description:
-                html_out.write(f'<p class="recipe-desc">{html.escape(recipe.description)}</p>\n')
-
-            # Metadata table
-            html_out.write('<table class="meta-table"><tr>\n')
-            html_out.write(f'<td><strong>Yield:</strong> {html.escape(recipe.yield_servings or "—")}</td>\n')
-            html_out.write(f'<td><strong>Prep Time:</strong> {html.escape(recipe.prep_time or "—")}</td>\n')
-            html_out.write(f'<td><strong>Cook Time:</strong> {html.escape(recipe.cook_time or "—")}</td>\n')
-            html_out.write(f'<td><strong>Total Time:</strong> {html.escape(recipe.total_time or "—")}</td>\n')
-            html_out.write('</tr></table>\n')
-
-            # Ingredients
-            if recipe.ingredients:
-                html_out.write('<h2 class="section-heading">Ingredients</h2>\n')
-                html_out.write('<ul class="ingredient-list">\n')
-                for item in recipe.ingredients:
-                    html_out.write(f'  <li>{html.escape(item)}</li>\n')
+            show_sec_headers = len(curation.sections) > 1 or curation.grouping_preset != GroupingPreset.NONE
+            for sec in curation.sections:
+                if show_sec_headers:
+                    html_out.write(f'<h2 class="toc-section-title">{html.escape(sec.title)}</h2>\n')
+                html_out.write('<ul class="toc-recipe-list">\n')
+                for rec in sec.recipes:
+                    rec_t = rec.title or "Untitled Recipe"
+                    html_out.write(f'  <li><a href="#recipe-{html.escape(rec.recipe_id)}">{html.escape(rec_t)}</a></li>\n')
                 html_out.write('</ul>\n')
-
-            # Directions
-            if recipe.directions:
-                html_out.write('<h2 class="section-heading">Directions</h2>\n')
-                html_out.write('<ol class="direction-list">\n')
-                for step in recipe.directions:
-                    # Clean any leading step numbers (e.g. '1. ', 'Step 2: ')
-                    cleaned_step = re.sub(r"^(?:Step\s+)?\d+[\.\)\-:]\s*", "", step, flags=re.IGNORECASE).strip()
-                    html_out.write(f'  <li>{html.escape(cleaned_step)}</li>\n')
-                html_out.write('</ol>\n')
-
-            # Tags & Source
-            html_out.write('<div class="tags-source">\n')
-            if recipe.tags:
-                html_out.write('  <div>Tags: ')
-                for tag in recipe.tags:
-                    html_out.write(f'<span class="tag-badge">{html.escape(tag)}</span>')
-                html_out.write('</div>\n')
-            if recipe.source_notes:
-                html_out.write(f'  <div style="margin-top:4px;">Source: {html.escape(recipe.source_notes)}</div>\n')
             html_out.write('</div>\n')
 
-            # Card Scans
-            resolved_images: List[tuple[str, str]] = []  # (src, caption)
-            if image_resolver:
-                for c_idx, cid in enumerate(recipe.card_ids, start=1):
-                    res = image_resolver(cid)
-                    if res is not None:
-                        if isinstance(res, (bytes, bytearray)):
-                            b64 = base64.b64encode(res).decode("ascii")
-                            src = f"data:image/jpeg;base64,{b64}"
-                            resolved_images.append((src, f"Card Scan #{c_idx} ({cid})"))
-                        elif isinstance(res, (str, Path)):
-                            p = Path(res)
-                            if p.exists() and embed_images_base64:
-                                data = p.read_bytes()
-                                mime = "image/png" if p.suffix.lower() == ".png" else "image/jpeg"
-                                b64 = base64.b64encode(data).decode("ascii")
-                                src = f"data:{mime};base64,{b64}"
-                                resolved_images.append((src, f"Card Scan #{c_idx} ({p.name})"))
-                            else:
-                                resolved_images.append((str(res), f"Card Scan #{c_idx}"))
-            if not resolved_images and recipe.image_urls:
-                for c_idx, url in enumerate(recipe.image_urls, start=1):
-                    resolved_images.append((url, f"Card Scan #{c_idx}"))
+        # 2. Sections and Recipe Cards
+        sections_to_render = curation.sections if curation and curation.sections else [
+            CuratedSection(section_id="all", title="All Recipes", recipes=recipe_list)
+        ]
 
-            if resolved_images:
-                html_out.write('<h2 class="section-heading">Archival Card Scans</h2>\n')
-                html_out.write('<div class="scans-container">\n')
-                for src, caption in resolved_images:
-                    html_out.write('  <div class="scan-wrapper">\n')
-                    html_out.write(f'    <img src="{html.escape(src)}" alt="{html.escape(caption)}" loading="lazy" />\n')
-                    html_out.write(f'    <div class="scan-caption">{html.escape(caption)}</div>\n')
-                    html_out.write('  </div>\n')
+        rendered_recipe_count = 0
+        for s_idx, section in enumerate(sections_to_render):
+            show_divider = bool(
+                curation
+                and curation.include_section_dividers
+                and (len(curation.sections) > 1 or curation.grouping_preset != GroupingPreset.NONE)
+            )
+
+            if show_divider:
+                html_out.write('<div class="section-divider recipe-page-break">\n')
+                html_out.write(f'<h1 class="section-divider-title">{html.escape(section.title)}</h1>\n')
+                html_out.write('<div class="section-divider-ornament">✦  ✦  ✦</div>\n')
+                if section.subtitle:
+                    html_out.write(f'<p class="section-divider-subtitle">{html.escape(section.subtitle)}</p>\n')
                 html_out.write('</div>\n')
 
-            html_out.write('</div>\n')  # end recipe-card
+            for r_idx, recipe in enumerate(section.recipes):
+                rendered_recipe_count += 1
+                page_break_cls = " recipe-page-break" if (rendered_recipe_count > 1 or (curation and curation.include_toc) or show_divider) else ""
+                recipe_anchor_id = f' id="recipe-{html.escape(recipe.recipe_id)}"'
+                html_out.write(f'<div class="recipe-card{page_break_cls}"{recipe_anchor_id}>\n')
+                html_out.write(f'<h1 class="recipe-title">{html.escape(recipe.title)}</h1>\n')
+
+                if recipe.description:
+                    html_out.write(f'<p class="recipe-desc">{html.escape(recipe.description)}</p>\n')
+
+                # Metadata table
+                html_out.write('<table class="meta-table"><tr>\n')
+                html_out.write(f'<td><strong>Yield:</strong> {html.escape(recipe.yield_servings or "—")}</td>\n')
+                html_out.write(f'<td><strong>Prep Time:</strong> {html.escape(recipe.prep_time or "—")}</td>\n')
+                html_out.write(f'<td><strong>Cook Time:</strong> {html.escape(recipe.cook_time or "—")}</td>\n')
+                html_out.write(f'<td><strong>Total Time:</strong> {html.escape(recipe.total_time or "—")}</td>\n')
+                html_out.write('</tr></table>\n')
+
+                # Ingredients
+                if recipe.ingredients:
+                    html_out.write('<h2 class="section-heading">Ingredients</h2>\n')
+                    html_out.write('<ul class="ingredient-list">\n')
+                    for item in recipe.ingredients:
+                        html_out.write(f'  <li>{html.escape(item)}</li>\n')
+                    html_out.write('</ul>\n')
+
+                # Directions
+                if recipe.directions:
+                    html_out.write('<h2 class="section-heading">Directions</h2>\n')
+                    html_out.write('<ol class="direction-list">\n')
+                    for step in recipe.directions:
+                        cleaned_step = re.sub(r"^(?:Step\s+)?\d+[\.\)\-:]\s*", "", step, flags=re.IGNORECASE).strip()
+                        html_out.write(f'  <li>{html.escape(cleaned_step)}</li>\n')
+                    html_out.write('</ol>\n')
+
+                # Tags & Source
+                html_out.write('<div class="tags-source">\n')
+                if recipe.tags:
+                    html_out.write('  <div>Tags: ')
+                    for tag in recipe.tags:
+                        html_out.write(f'<span class="tag-badge">{html.escape(tag)}</span>')
+                    html_out.write('</div>\n')
+                if recipe.source_notes:
+                    html_out.write(f'  <div style="margin-top:4px;">Source: {html.escape(recipe.source_notes)}</div>\n')
+                html_out.write('</div>\n')
+
+                # Card Scans
+                resolved_images: List[tuple[str, str]] = []
+                if image_resolver:
+                    for c_idx, cid in enumerate(recipe.card_ids, start=1):
+                        res = image_resolver(cid)
+                        if res is not None:
+                            if isinstance(res, (bytes, bytearray)):
+                                b64 = base64.b64encode(res).decode("ascii")
+                                src = f"data:image/jpeg;base64,{b64}"
+                                resolved_images.append((src, f"Card Scan #{c_idx} ({cid})"))
+                            elif isinstance(res, (str, Path)):
+                                p = Path(res)
+                                if p.exists() and embed_images_base64:
+                                    data = p.read_bytes()
+                                    mime = "image/png" if p.suffix.lower() == ".png" else "image/jpeg"
+                                    b64 = base64.b64encode(data).decode("ascii")
+                                    src = f"data:{mime};base64,{b64}"
+                                    resolved_images.append((src, f"Card Scan #{c_idx} ({p.name})"))
+                                else:
+                                    resolved_images.append((str(res), f"Card Scan #{c_idx}"))
+                if not resolved_images and recipe.image_urls:
+                    for c_idx, url in enumerate(recipe.image_urls, start=1):
+                        resolved_images.append((url, f"Card Scan #{c_idx}"))
+
+                if resolved_images:
+                    html_out.write('<h2 class="section-heading">Archival Card Scans</h2>\n')
+                    html_out.write('<div class="scans-container">\n')
+                    for src, caption in resolved_images:
+                        html_out.write('  <div class="scan-wrapper">\n')
+                        html_out.write(f'    <img src="{html.escape(src)}" alt="{html.escape(caption)}" loading="lazy" />\n')
+                        html_out.write(f'    <div class="scan-caption">{html.escape(caption)}</div>\n')
+                        html_out.write('  </div>\n')
+                    html_out.write('</div>\n')
+
+                html_out.write('</div>\n')  # end recipe-card
 
         html_out.write("</div>\n</body>\n</html>\n")
         return html_out.getvalue()
@@ -616,18 +934,19 @@ ol.direction-list li {
         as_html: bool = False,
         title: str = "RecipeBoxer Archival Cookbook",
         image_resolver: Optional[Callable[[str], Optional[Union[str, Path, bytes]]]] = None,
+        curation: Optional[CuratedCookbook] = None,
     ) -> Path:
         """Writes Google Docs archive to a JSON or HTML file on disk."""
         path = Path(output_path).resolve()
         path.parent.mkdir(parents=True, exist_ok=True)
 
         if as_html or path.suffix.lower() in (".html", ".htm"):
-            content = self.export_to_html(recipes, title=title, image_resolver=image_resolver)
+            content = self.export_to_html(recipes, title=title, image_resolver=image_resolver, curation=curation)
         else:
-            content = self.export_to_json_string(recipes, title=title, image_resolver=image_resolver)
+            content = self.export_to_json_string(recipes, title=title, image_resolver=image_resolver, curation=curation)
 
         path.write_text(content, encoding=self.encoding)
-        count = 1 if isinstance(recipes, RecipeSchema) else len(recipes)
+        count = curation.total_recipe_count if curation else (1 if isinstance(recipes, RecipeSchema) else len(recipes))
         logger.info(f"Exported {count} recipe(s) to Google Docs archive: {path}")
         return path
 
@@ -637,11 +956,12 @@ ol.direction-list li {
         as_html: bool = False,
         title: str = "RecipeBoxer Archival Cookbook",
         image_resolver: Optional[Callable[[str], Optional[Union[str, Path, bytes]]]] = None,
+        curation: Optional[CuratedCookbook] = None,
     ) -> bytes:
         """Serializes Google Docs archive into UTF-8 encoded bytes."""
         if as_html:
-            return self.export_to_html(recipes, title=title, image_resolver=image_resolver).encode(self.encoding)
-        return self.export_to_json_string(recipes, title=title, image_resolver=image_resolver).encode(self.encoding)
+            return self.export_to_html(recipes, title=title, image_resolver=image_resolver, curation=curation).encode(self.encoding)
+        return self.export_to_json_string(recipes, title=title, image_resolver=image_resolver, curation=curation).encode(self.encoding)
 
     def create_google_document(
         self,
@@ -651,6 +971,7 @@ ol.direction-list li {
         image_resolver: Optional[Callable[[str], Optional[Union[str, Path, bytes]]]] = None,
         drive_folder_name: str = "RecipeBoxer Scans",
         http_client: Optional[httpx.Client] = None,
+        curation: Optional[CuratedCookbook] = None,
     ) -> Dict[str, Any]:
         """Creates an authentic Google Doc in the user's account using Google Docs & Drive APIs.
 
@@ -662,7 +983,11 @@ ol.direction-list li {
         if not access_token or not access_token.strip():
             raise ValueError("Google OAuth access token is required")
 
-        recipe_list = [recipes] if isinstance(recipes, RecipeSchema) else list(recipes)
+        if curation:
+            recipe_list = curation.all_recipes
+        else:
+            recipe_list = [recipes] if isinstance(recipes, RecipeSchema) else list(recipes)
+
         if not recipe_list:
             raise ValueError("No recipes provided for Google Docs export")
 
@@ -828,6 +1153,7 @@ ol.direction-list li {
                 recipes=recipe_list,
                 image_resolver=drive_image_resolver,
                 include_page_breaks=True,
+                curation=curation,
             )
 
             # Step 5: Execute Batch Update Requests
@@ -860,27 +1186,30 @@ ol.direction-list li {
 def export_recipes_to_google_docs_batch_requests(
     recipes: Union[RecipeSchema, List[RecipeSchema]],
     image_resolver: Optional[Callable[[str], Optional[Union[str, Path, bytes]]]] = None,
+    curation: Optional[CuratedCookbook] = None,
 ) -> List[Dict[str, Any]]:
     """Convenience helper to generate Google Docs API batchUpdate requests."""
-    return GoogleDocsExporter().build_batch_update_requests(recipes, image_resolver=image_resolver)
+    return GoogleDocsExporter().build_batch_update_requests(recipes, image_resolver=image_resolver, curation=curation)
 
 
 def export_recipes_to_google_docs_json(
     recipes: Union[RecipeSchema, List[RecipeSchema]],
     title: str = "RecipeBoxer Archival Cookbook",
     image_resolver: Optional[Callable[[str], Optional[Union[str, Path, bytes]]]] = None,
+    curation: Optional[CuratedCookbook] = None,
 ) -> str:
     """Convenience helper to export Google Docs JSON archive string."""
-    return GoogleDocsExporter().export_to_json_string(recipes, title=title, image_resolver=image_resolver)
+    return GoogleDocsExporter().export_to_json_string(recipes, title=title, image_resolver=image_resolver, curation=curation)
 
 
 def export_recipes_to_google_docs_html(
     recipes: Union[RecipeSchema, List[RecipeSchema]],
     title: str = "RecipeBoxer Archival Cookbook",
     image_resolver: Optional[Callable[[str], Optional[Union[str, Path, bytes]]]] = None,
+    curation: Optional[CuratedCookbook] = None,
 ) -> str:
     """Convenience helper to export Google Docs HTML archive string."""
-    return GoogleDocsExporter().export_to_html(recipes, title=title, image_resolver=image_resolver)
+    return GoogleDocsExporter().export_to_html(recipes, title=title, image_resolver=image_resolver, curation=curation)
 
 
 def create_google_docs_archival_document(
@@ -890,6 +1219,7 @@ def create_google_docs_archival_document(
     image_resolver: Optional[Callable[[str], Optional[Union[str, Path, bytes]]]] = None,
     drive_folder_name: str = "RecipeBoxer Scans",
     http_client: Optional[httpx.Client] = None,
+    curation: Optional[CuratedCookbook] = None,
 ) -> Dict[str, Any]:
     """Convenience helper to create a real Google Doc in the user's account."""
     return GoogleDocsExporter().create_google_document(
@@ -899,5 +1229,7 @@ def create_google_docs_archival_document(
         image_resolver=image_resolver,
         drive_folder_name=drive_folder_name,
         http_client=http_client,
+        curation=curation,
     )
+
 

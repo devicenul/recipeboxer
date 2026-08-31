@@ -26,7 +26,7 @@ The platform combines:
 | [**`INVARIANTS.md`**](INVARIANTS.md) | **Non-Negotiable Guardrails**: SQLite WAL concurrency & `threading.RLock()`, Plan To Eat RFC 4180 CSV escaping (9 columns, CRLF `\r\n`, `""` quoting), HITL async barrier semantics, keyboard focus trapping, Vite SPA static asset path contracts (`recipeboxer/api/static`), secure card image streaming, and ingestion throttling invariants. |
 | [**`TESTING_GUIDELINES.md`**](TESTING_GUIDELINES.md) | **Testing Standards & QA**: The 4-tier testing architecture (Tier 1 Feature Coverage, Tier 2 Boundary Cases, Tier 3 Pairwise Combinations, Tier 4 Real-World Scenarios) + Tier 5 Adversarial Hardening. Pytest test suites, core fixtures (`MockGeminiClient`, `synthetic_card_deck`), Vitest frontend test suites, setup mocks, and test execution commands. |
 | [**`EXTENDING_RECIPEBOXER.md`**](EXTENDING_RECIPEBOXER.md) | **Developer Extension Playbooks**: Step-by-step guides with complete code examples for adding external source providers (Google Photos, S3), implementing custom prompt branches / LLM customization, and creating new export format serializers (Markdown, Cooklang). |
-| [**`../ROADMAP.md`**](../ROADMAP.md) | **Canonical Milestone Roadmap**: Shared roadmap tracking milestones M1 to M15, standardized status tags (`[x] Completed`, `[~] In Progress`, `[ ] Planned`), future enhancement backlog (Phase 9), and roadmap update conventions. |
+| [**`../ROADMAP.md`**](../ROADMAP.md) | **Canonical Milestone Roadmap**: Shared roadmap tracking milestones M1 to M16, standardized status tags (`[x] Completed`, `[~] In Progress`, `[ ] Planned`), future enhancement backlog (Phase 10), and roadmap update conventions. |
 | [**`../README.md`**](../README.md) | **Repository Root Overview**: High-level project summary, prerequisites, CLI usage, environment variables, test commands, and quick-start instructions. |
 
 ---
@@ -93,12 +93,12 @@ The platform combines:
 .\setup.ps1
 ```
 
-### 2. Running Automated Tests (1,788 Passing Tests)
+### 2. Running Automated Tests (2,205 Passing Tests)
 ```bash
-# Run all Python backend tests (1,530 tests across Tiers 1–5 and challenger suites)
+# Run all Python backend tests (1,848 tests across Tiers 1–5 and challenger suites)
 ./test.sh
 
-# Run all Frontend Vitest tests (258 tests across 23 suites)
+# Run all Frontend Vitest tests (357 tests across 29 suites)
 cd frontend && npm test -- --run
 
 # Run both in sequence
@@ -132,7 +132,7 @@ When operating in this codebase as an autonomous AI agent or contributor, you mu
    - Offline tests must use dedicated fixtures from `tests/conftest.py` (such as `MockGeminiClient` or `synthetic_card_deck`), never hardcoded bypasses in `recipeboxer/`.
 
 2. **Regression Gate — 100% Pass Rate**:
-   - The repository maintains **1,232 passing tests** (1,130 Python pytest tests + 102 Frontend Vitest tests).
+   - The repository maintains **2,205 passing tests** (1,848 Python pytest tests + 357 Frontend Vitest tests across 29 suites).
    - Zero test failures or regressions are permitted. After every code modification, run `./test.sh` and `cd frontend && npm test -- --run` to confirm all tests pass.
 
 3. **Respect System Invariants**:

@@ -1,11 +1,15 @@
 import React, { useState } from 'react';
 import { Copy, Check } from 'lucide-react';
 import { RecipeSchema } from '../../types/recipe';
+import { CuratedCookbook } from '../../types/export';
 import { generateMarkdown } from '../../utils/exportMarkdown';
 
-export const MarkdownPreview: React.FC<{ recipes: RecipeSchema[] }> = ({ recipes }) => {
+export const MarkdownPreview: React.FC<{ recipes: RecipeSchema[]; curation?: CuratedCookbook }> = ({
+  recipes,
+  curation,
+}) => {
   const [copied, setCopied] = useState(false);
-  const content = generateMarkdown(recipes);
+  const content = generateMarkdown(recipes, true, curation);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(content);

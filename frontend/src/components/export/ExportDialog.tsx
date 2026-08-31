@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Download,
   FileSpreadsheet,
@@ -11,8 +11,12 @@ import {
   Flame,
   Printer,
   Edit3,
+  Archive,
 } from 'lucide-react';
 import { RecipeSchema } from '../../types/recipe';
+import { ExportCurationOptions, CuratedCookbook } from '../../types/export';
+import { curateRecipes, flattenCuratedRecipes } from '../../utils/exportCuration';
+import { ExportCurationToolbar } from './ExportCurationToolbar';
 import { CsvPreview } from './CsvPreview';
 import { JsonLdPreview } from './JsonLdPreview';
 import { RawJsonPreview } from './RawJsonPreview';
@@ -28,11 +32,13 @@ import { downloadRawJson } from '../../utils/exportJson';
 import { downloadMarkdown } from '../../utils/exportMarkdown';
 import { downloadCooklang } from '../../utils/exportCooklang';
 import { downloadGoogleDocsHtml } from '../../utils/exportGoogleDocs';
-import { downloadDocx, downloadPdf, downloadPaprika } from '../../utils/exportBinary';
+import { downloadDocx, downloadPdf, downloadPaprika, downloadProjectArchive } from '../../utils/exportBinary';
 
 export interface ExportDialogProps {
   recipes: RecipeSchema[];
   sessionId?: string;
+  isOpen?: boolean;
+  onClose?: () => void;
 }
 
 export type ExportTab =
@@ -44,7 +50,8 @@ export type ExportTab =
   | 'paprika'
   | 'googledocs'
   | 'docx'
-  | 'pdf';
+  | 'pdf'
+  | 'project';
 
 export const getExtensionForTab = (tab: ExportTab): string => {
   switch (tab) {
@@ -57,6 +64,7 @@ export const getExtensionForTab = (tab: ExportTab): string => {
     case 'googledocs': return '.html';
     case 'docx': return '.docx';
     case 'pdf': return '.pdf';
+    case 'project': return '.recipeboxer';
   }
 };
 
@@ -80,13 +88,38 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({ recipes, sessionId }
   });
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
 
+  // Curation and grouping state
+  const [curationOptions, setCurationOptions] = useState<ExportCurationOptions>({
+    recipe_order: (recipes || []).map((r) => r.recipe_id),
+    grouping_preset: 'none',
+    include_section_dividers: true,
+    include_toc: true,
+    toc_title: 'Table of Contents',
+  });
+
+  // Re-sync recipe IDs when recipes prop changes
   useEffect(() => {
     if (recipes && recipes.length > 0) {
+      setCurationOptions((prev) => ({
+        ...prev,
+        recipe_order: prev.recipe_order && prev.recipe_order.length > 0
+          ? prev.recipe_order
+          : recipes.map((r) => r.recipe_id),
+      }));
       const stem = getSuggestedStem(recipes, sessionId);
       const ext = getExtensionForTab(activeTab);
       setCustomFilename(`${stem}${ext}`);
     }
   }, [recipes, sessionId]);
+
+  // Compute curated cookbook and flattened curated recipes
+  const curatedCookbook: CuratedCookbook = useMemo(() => {
+    return curateRecipes(recipes || [], curationOptions);
+  }, [recipes, curationOptions]);
+
+  const curatedRecipes: RecipeSchema[] = useMemo(() => {
+    return flattenCuratedRecipes(curatedCookbook);
+  }, [curatedCookbook]);
 
   if (!recipes || recipes.length === 0) {
     return (
@@ -104,7 +137,6 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({ recipes, sessionId }
 
   const handleTabChange = (newTab: ExportTab) => {
     setActiveTab(newTab);
-    // Update filename extension while preserving current stem
     const currentDot = customFilename.lastIndexOf('.');
     const stem = currentDot > 0 ? customFilename.substring(0, currentDot) : customFilename;
     const newExt = getExtensionForTab(newTab);
@@ -115,31 +147,34 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({ recipes, sessionId }
     const targetFilename = (filenameToUse || customFilename).trim() || `recipeboxer_export${getExtensionForTab(activeTab)}`;
     switch (activeTab) {
       case 'csv':
-        downloadPlanToEatCsv(recipes, targetFilename);
+        downloadPlanToEatCsv(curatedRecipes, targetFilename);
         break;
       case 'jsonld':
-        downloadJsonLd(recipes, targetFilename);
+        downloadJsonLd(curatedRecipes, targetFilename);
         break;
       case 'raw':
-        downloadRawJson(recipes, targetFilename);
+        downloadRawJson(curatedRecipes, targetFilename);
         break;
       case 'markdown':
-        downloadMarkdown(recipes, targetFilename);
+        downloadMarkdown(curatedRecipes, targetFilename, true, curatedCookbook);
         break;
       case 'cooklang':
-        downloadCooklang(recipes, targetFilename);
+        downloadCooklang(curatedRecipes, targetFilename);
         break;
       case 'googledocs':
-        downloadGoogleDocsHtml(recipes, targetFilename);
+        downloadGoogleDocsHtml(curatedRecipes, targetFilename, curatedCookbook);
         break;
       case 'paprika':
-        downloadPaprika(sessionId, targetFilename);
+        downloadPaprika(sessionId, targetFilename, curationOptions);
         break;
       case 'docx':
-        downloadDocx(sessionId, targetFilename);
+        downloadDocx(sessionId, targetFilename, curationOptions);
         break;
       case 'pdf':
-        downloadPdf(sessionId, targetFilename);
+        downloadPdf(sessionId, targetFilename, curationOptions);
+        break;
+      case 'project':
+        downloadProjectArchive(sessionId, targetFilename);
         break;
     }
   };
@@ -155,6 +190,7 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({ recipes, sessionId }
       case 'paprika': return 'Paprika Archive';
       case 'docx': return 'DOCX Cookbook';
       case 'pdf': return 'Printable PDF';
+      case 'project': return '.recipeboxer Project Archive';
     }
   };
 
@@ -209,6 +245,14 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({ recipes, sessionId }
           <span>More Options</span>
         </button>
       </div>
+
+      {/* Curation & Grouping Toolbar (R3) */}
+      <ExportCurationToolbar
+        recipes={recipes}
+        curatedCookbook={curatedCookbook}
+        curationOptions={curationOptions}
+        onChangeOptions={setCurationOptions}
+      />
 
       {/* Group 1: Primary Formats (R0) */}
       <div className="flex flex-col gap-2">
@@ -405,38 +449,76 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({ recipes, sessionId }
         </div>
       </div>
 
+      {/* Group 4: Portable Project State (.recipeboxer Archive) */}
+      <div className="flex flex-col gap-2">
+        <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+          Portable Project State & Backup (Phase 9)
+        </span>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {/* Project Archive */}
+          <button
+            type="button"
+            onClick={() => handleTabChange('project')}
+            className={`p-3.5 rounded-xl border text-left flex flex-col gap-1 transition-all cursor-pointer ${
+              activeTab === 'project'
+                ? 'border-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/30 ring-2 ring-emerald-500/20'
+                : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-slate-50/50 dark:bg-slate-850/50'
+            }`}
+          >
+            <div className="flex items-center gap-2 font-semibold text-xs text-emerald-700 dark:text-emerald-400">
+              <Archive className="w-4 h-4" />
+              <span>.recipeboxer Project Archive</span>
+            </div>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400">
+              Complete portable backup (scans, fingerprints, proposals, recipes, marginalia).
+            </p>
+          </button>
+        </div>
+      </div>
+
       {/* Format Content Preview */}
       <div className="pt-2">
-        {activeTab === 'csv' && <CsvPreview recipes={recipes} />}
-        {activeTab === 'jsonld' && <JsonLdPreview recipes={recipes} />}
-        {activeTab === 'raw' && <RawJsonPreview recipes={recipes} />}
-        {activeTab === 'markdown' && <MarkdownPreview recipes={recipes} />}
-        {activeTab === 'cooklang' && <CooklangPreview recipes={recipes} />}
+        {activeTab === 'csv' && <CsvPreview recipes={curatedRecipes} />}
+        {activeTab === 'jsonld' && <JsonLdPreview recipes={curatedRecipes} />}
+        {activeTab === 'raw' && <RawJsonPreview recipes={curatedRecipes} />}
+        {activeTab === 'markdown' && (
+          <MarkdownPreview recipes={curatedRecipes} curation={curatedCookbook} />
+        )}
+        {activeTab === 'cooklang' && <CooklangPreview recipes={curatedRecipes} />}
         {activeTab === 'googledocs' && (
           <GoogleDocsPreview
-            recipes={recipes}
+            recipes={curatedRecipes}
             sessionId={sessionId}
             customFilename={customFilename}
+            curation={curatedCookbook}
+            curationOptions={curationOptions}
           />
         )}
         {activeTab === 'paprika' && (
           <BinaryExportPreview
             format="paprika"
-            recipes={recipes}
+            recipes={curatedRecipes}
             onDownload={() => handleDownload()}
           />
         )}
         {activeTab === 'docx' && (
           <BinaryExportPreview
             format="docx"
-            recipes={recipes}
+            recipes={curatedRecipes}
             onDownload={() => handleDownload()}
           />
         )}
         {activeTab === 'pdf' && (
           <BinaryExportPreview
             format="pdf"
-            recipes={recipes}
+            recipes={curatedRecipes}
+            onDownload={() => handleDownload()}
+          />
+        )}
+        {activeTab === 'project' && (
+          <BinaryExportPreview
+            format="project"
+            recipes={curatedRecipes}
             onDownload={() => handleDownload()}
           />
         )}

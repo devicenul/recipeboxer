@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 from PIL import Image
 
+from recipeboxer.exporter.curation import CuratedCookbook, CuratedSection, GroupingPreset
 from recipeboxer.models.recipe import RecipeSchema
 
 logger = logging.getLogger(__name__)
@@ -220,55 +221,123 @@ class DocxExporter:
         self,
         recipes: List[RecipeSchema],
         image_map: Dict[str, Tuple[Any, ...]],  # card_id -> (rel_id, media_target, cx, cy)
+        curation: Optional[CuratedCookbook] = None,
     ) -> str:
-        """Constructs word/document.xml with heirloom cookbook formatting."""
+        """Constructs word/document.xml with heirloom cookbook formatting, TOC, and section dividers."""
         p_elements: List[str] = []
         doc_img_counter = 1
 
-        for r_idx, recipe in enumerate(recipes):
-            if r_idx > 0:
-                # Page break between recipes
+        # 1. Table of Contents page (if requested)
+        if curation and curation.include_toc and curation.total_recipe_count > 0:
+            toc_title_esc = _escape_xml(curation.toc_title or "Table of Contents")
+            p_elements.append(f"""<w:p>
+  <w:pPr><w:pStyle w:val="Heading1"/><w:jc w:val="center"/><w:spacing w:before="240" w:after="160"/></w:pPr>
+  <w:r><w:rPr><w:rFonts w:ascii="Georgia" w:hAnsi="Georgia"/><w:b/><w:sz w:val="48"/><w:color w:val="23432B"/></w:rPr><w:t>{toc_title_esc}</w:t></w:r>
+</w:p>""")
+            p_elements.append("""<w:p>
+  <w:pPr><w:jc w:val="center"/><w:spacing w:after="240"/></w:pPr>
+  <w:r><w:rPr><w:sz w:val="24"/><w:color w:val="2D5A2D"/></w:rPr><w:t>✦ ✦ ✦</w:t></w:r>
+</w:p>""")
+            show_section_headers = len(curation.sections) > 1 or curation.grouping_preset != GroupingPreset.NONE
+            for section in curation.sections:
+                if show_section_headers:
+                    sec_title_esc = _escape_xml(section.title)
+                    p_elements.append(f"""<w:p>
+  <w:pPr><w:spacing w:before="160" w:after="80"/></w:pPr>
+  <w:r><w:rPr><w:rFonts w:ascii="Georgia" w:hAnsi="Georgia"/><w:b/><w:sz w:val="26"/><w:color w:val="23432B"/></w:rPr><w:t>{sec_title_esc}</w:t></w:r>
+</w:p>""")
+                for recipe in section.recipes:
+                    rec_title_esc = _escape_xml(recipe.title or "Untitled Recipe")
+                    p_elements.append(f"""<w:p>
+  <w:pPr>
+    <w:tabs><w:tab w:val="right" w:leader="dot" w:pos="9360"/></w:tabs>
+    <w:spacing w:after="80"/>
+    <w:ind w:left="280"/>
+  </w:pPr>
+  <w:r><w:rPr><w:sz w:val="22"/><w:color w:val="222222"/></w:rPr><w:t>{rec_title_esc}</w:t></w:r>
+  <w:r><w:tab/></w:r>
+  <w:r><w:rPr><w:sz w:val="20"/><w:color w:val="666666"/></w:rPr><w:t>•</w:t></w:r>
+</w:p>""")
+
+            # End of TOC page break
+            p_elements.append('<w:p><w:r><w:br w:type="page"/></w:r></w:p>')
+
+        # 2. Recipe Sections and Section Dividers
+        sections_to_render = curation.sections if curation and curation.sections else [
+            CuratedSection(section_id="section_all", title="All Recipes", recipes=recipes)
+        ]
+
+        for s_idx, section in enumerate(sections_to_render):
+            show_dividers = bool(
+                curation
+                and curation.include_section_dividers
+                and (len(curation.sections) > 1 or curation.grouping_preset != GroupingPreset.NONE)
+            )
+
+            if show_dividers:
+                if p_elements and not p_elements[-1].endswith('<w:br w:type="page"/></w:r></w:p>'):
+                    p_elements.append('<w:p><w:r><w:br w:type="page"/></w:r></w:p>')
+
+                sec_title_esc = _escape_xml(section.title)
+                p_elements.append(f"""<w:p>
+  <w:pPr><w:spacing w:before="2800" w:after="160"/><w:jc w:val="center"/></w:pPr>
+  <w:r><w:rPr><w:rFonts w:ascii="Georgia" w:hAnsi="Georgia"/><w:b/><w:sz w:val="56"/><w:color w:val="23432B"/></w:rPr><w:t>{sec_title_esc}</w:t></w:r>
+</w:p>""")
+                p_elements.append("""<w:p>
+  <w:pPr><w:jc w:val="center"/><w:spacing w:after="160"/></w:pPr>
+  <w:r><w:rPr><w:sz w:val="28"/><w:color w:val="2D5A2D"/></w:rPr><w:t>✦ ✦ ✦</w:t></w:r>
+</w:p>""")
+                if section.subtitle:
+                    sub_esc = _escape_xml(section.subtitle)
+                    p_elements.append(f"""<w:p>
+  <w:pPr><w:jc w:val="center"/><w:spacing w:after="2800"/></w:pPr>
+  <w:r><w:rPr><w:i/><w:sz w:val="24"/><w:color w:val="666666"/></w:rPr><w:t>{sub_esc}</w:t></w:r>
+</w:p>""")
                 p_elements.append('<w:p><w:r><w:br w:type="page"/></w:r></w:p>')
 
-            # 1. Recipe Title (Heading 1)
-            title_escaped = _escape_xml(recipe.title)
-            p_elements.append(f"""<w:p>
+            for r_idx, recipe in enumerate(section.recipes):
+                if p_elements and not p_elements[-1].endswith('<w:br w:type="page"/></w:r></w:p>'):
+                    p_elements.append('<w:p><w:r><w:br w:type="page"/></w:r></w:p>')
+
+                # 1. Recipe Title (Heading 1)
+                title_escaped = _escape_xml(recipe.title)
+                p_elements.append(f"""<w:p>
   <w:pPr><w:pStyle w:val="Heading1"/></w:pPr>
   <w:r><w:t>{title_escaped}</w:t></w:r>
 </w:p>""")
 
-            # 2. Description
-            if recipe.description:
-                desc_escaped = _escape_xml(recipe.description)
-                p_elements.append(f"""<w:p>
+                # 2. Description
+                if recipe.description:
+                    desc_escaped = _escape_xml(recipe.description)
+                    p_elements.append(f"""<w:p>
   <w:pPr><w:spacing w:after="160"/></w:pPr>
   <w:r><w:rPr><w:i/><w:color w:val="555555"/></w:rPr><w:t>{desc_escaped}</w:t></w:r>
 </w:p>""")
 
-            # 3. Metadata Table (Yield, Prep Time, Cook Time, Total Time)
-            meta_cells = [
-                ("Yield", recipe.yield_servings or "—"),
-                ("Prep Time", recipe.prep_time or "—"),
-                ("Cook Time", recipe.cook_time or "—"),
-                ("Total Time", recipe.total_time or "—"),
-            ]
-            tbl_xml = ['<w:tbl>',
-                       '  <w:tblPr>',
-                       '    <w:tblW w:w="5000" w:type="pct"/>',
-                       '    <w:tblBorders>',
-                       '      <w:top w:val="single" w:sz="6" w:space="0" w:color="DBE5DB"/>',
-                       '      <w:bottom w:val="single" w:sz="6" w:space="0" w:color="DBE5DB"/>',
-                       '      <w:insideH w:val="none"/>',
-                       '      <w:insideV w:val="single" w:sz="4" w:space="0" w:color="E5EAE5"/>',
-                       '    </w:tblBorders>',
-                       '    <w:tblCellMar><w:top w:w="120"/><w:bottom w:w="120"/><w:left w:w="160"/><w:right w:w="160"/></w:tblCellMar>',
-                       '  </w:tblPr>',
-                       '  <w:tr>']
+                # 3. Metadata Table (Yield, Prep Time, Cook Time, Total Time)
+                meta_cells = [
+                    ("Yield", recipe.yield_servings or "—"),
+                    ("Prep Time", recipe.prep_time or "—"),
+                    ("Cook Time", recipe.cook_time or "—"),
+                    ("Total Time", recipe.total_time or "—"),
+                ]
+                tbl_xml = ['<w:tbl>',
+                           '  <w:tblPr>',
+                           '    <w:tblW w:w="5000" w:type="pct"/>',
+                           '    <w:tblBorders>',
+                           '      <w:top w:val="single" w:sz="6" w:space="0" w:color="DBE5DB"/>',
+                           '      <w:bottom w:val="single" w:sz="6" w:space="0" w:color="DBE5DB"/>',
+                           '      <w:insideH w:val="none"/>',
+                           '      <w:insideV w:val="single" w:sz="4" w:space="0" w:color="E5EAE5"/>',
+                           '    </w:tblBorders>',
+                           '    <w:tblCellMar><w:top w:w="120"/><w:bottom w:w="120"/><w:left w:w="160"/><w:right w:w="160"/></w:tblCellMar>',
+                           '  </w:tblPr>',
+                           '  <w:tr>']
 
-            for label, val in meta_cells:
-                lbl_esc = _escape_xml(label)
-                val_esc = _escape_xml(val)
-                tbl_xml.append(f"""    <w:tc>
+                for label, val in meta_cells:
+                    lbl_esc = _escape_xml(label)
+                    val_esc = _escape_xml(val)
+                    tbl_xml.append(f"""    <w:tc>
       <w:tcPr><w:shd w:val="clear" w:color="auto" w:fill="F4F7F4"/></w:tcPr>
       <w:p>
         <w:pPr><w:spacing w:after="0"/></w:pPr>
@@ -276,80 +345,80 @@ class DocxExporter:
         <w:r><w:rPr><w:sz w:val="18"/><w:color w:val="333333"/></w:rPr><w:t>{val_esc}</w:t></w:r>
       </w:p>
     </w:tc>""")
-            tbl_xml.append('  </w:tr>')
-            tbl_xml.append('</w:tbl>')
-            p_elements.append("\n".join(tbl_xml))
+                tbl_xml.append('  </w:tr>')
+                tbl_xml.append('</w:tbl>')
+                p_elements.append("\n".join(tbl_xml))
 
-            # Spacer
-            p_elements.append('<w:p><w:pPr><w:spacing w:after="120"/></w:pPr></w:p>')
+                # Spacer
+                p_elements.append('<w:p><w:pPr><w:spacing w:after="120"/></w:pPr></w:p>')
 
-            # 4. Ingredients Heading & List
-            if recipe.ingredients:
-                p_elements.append("""<w:p>
+                # 4. Ingredients Heading & List
+                if recipe.ingredients:
+                    p_elements.append("""<w:p>
   <w:pPr><w:pStyle w:val="Heading2"/></w:pPr>
   <w:r><w:t>Ingredients</w:t></w:r>
 </w:p>""")
-                for item in recipe.ingredients:
-                    item_esc = _escape_xml(item)
-                    p_elements.append(f"""<w:p>
+                    for item in recipe.ingredients:
+                        item_esc = _escape_xml(item)
+                        p_elements.append(f"""<w:p>
   <w:pPr><w:spacing w:after="60"/><w:ind w:left="280"/></w:pPr>
   <w:r><w:rPr><w:color w:val="2D5A2D"/></w:rPr><w:t>• </w:t></w:r>
   <w:r><w:t>{item_esc}</w:t></w:r>
 </w:p>""")
 
-            # Spacer
-            p_elements.append('<w:p><w:pPr><w:spacing w:after="120"/></w:pPr></w:p>')
+                # Spacer
+                p_elements.append('<w:p><w:pPr><w:spacing w:after="120"/></w:pPr></w:p>')
 
-            # 5. Directions Heading & List
-            if recipe.directions:
-                p_elements.append("""<w:p>
+                # 5. Directions Heading & List
+                if recipe.directions:
+                    p_elements.append("""<w:p>
   <w:pPr><w:pStyle w:val="Heading2"/></w:pPr>
   <w:r><w:t>Directions</w:t></w:r>
 </w:p>""")
-                for step in recipe.directions:
-                    step_esc = _escape_xml(step)
-                    p_elements.append(f"""<w:p>
+                    for step in recipe.directions:
+                        step_esc = _escape_xml(step)
+                        p_elements.append(f"""<w:p>
   <w:pPr><w:spacing w:after="100"/><w:ind w:left="280"/></w:pPr>
   <w:r><w:t>{step_esc}</w:t></w:r>
 </w:p>""")
 
-            # 6. Tags & Source
-            meta_notes = []
-            if recipe.tags:
-                meta_notes.append(f"Tags: {', '.join(recipe.tags)}")
-            if recipe.source_notes:
-                meta_notes.append(f"Source: {recipe.source_notes}")
+                # 6. Tags & Source
+                meta_notes = []
+                if recipe.tags:
+                    meta_notes.append(f"Tags: {', '.join(recipe.tags)}")
+                if recipe.source_notes:
+                    meta_notes.append(f"Source: {recipe.source_notes}")
 
-            if meta_notes:
-                p_elements.append('<w:p><w:pPr><w:spacing w:before="120" w:after="60"/></w:pPr></w:p>')
-                for note in meta_notes:
-                    note_esc = _escape_xml(note)
-                    p_elements.append(f"""<w:p>
+                if meta_notes:
+                    p_elements.append('<w:p><w:pPr><w:spacing w:before="120" w:after="60"/></w:pPr></w:p>')
+                    for note in meta_notes:
+                        note_esc = _escape_xml(note)
+                        p_elements.append(f"""<w:p>
   <w:pPr><w:spacing w:after="40"/></w:pPr>
   <w:r><w:rPr><w:i/><w:sz w:val="18"/><w:color w:val="666666"/></w:rPr><w:t>{note_esc}</w:t></w:r>
 </w:p>""")
 
-            # 7. Embedded Card Scans
-            recipe_imgs: List[Tuple[str, str, int, int]] = []  # (card_id, rel_id, cx, cy)
-            for cid in recipe.card_ids:
-                if cid in image_map:
-                    img_info = image_map[cid]
-                    rel_id = img_info[0]
-                    cx = img_info[2] if len(img_info) > 2 else MAX_EMU_WIDTH
-                    cy = img_info[3] if len(img_info) > 3 else MAX_EMU_HEIGHT
-                    recipe_imgs.append((cid, rel_id, cx, cy))
+                # 7. Embedded Card Scans
+                recipe_imgs: List[Tuple[str, str, int, int]] = []  # (card_id, rel_id, cx, cy)
+                for cid in recipe.card_ids:
+                    if cid in image_map:
+                        img_info = image_map[cid]
+                        rel_id = img_info[0]
+                        cx = img_info[2] if len(img_info) > 2 else MAX_EMU_WIDTH
+                        cy = img_info[3] if len(img_info) > 3 else MAX_EMU_HEIGHT
+                        recipe_imgs.append((cid, rel_id, cx, cy))
 
-            if recipe_imgs:
-                p_elements.append("""<w:p>
+                if recipe_imgs:
+                    p_elements.append("""<w:p>
   <w:pPr><w:pStyle w:val="Heading3"/></w:pPr>
   <w:r><w:t>Archival Card Scans</w:t></w:r>
 </w:p>""")
-                for c_num, (cid, rel_id, cx, cy) in enumerate(recipe_imgs, start=1):
-                    draw_xml = self._generate_drawing_xml(rel_id, doc_img_counter, cx=cx, cy=cy)
-                    doc_img_counter += 1
-                    p_elements.append(f"<w:p>{draw_xml}</w:p>")
-                    caption_esc = _escape_xml(f"Figure {c_num}: Original Scanned Card ({cid})")
-                    p_elements.append(f"""<w:p>
+                    for c_num, (cid, rel_id, cx, cy) in enumerate(recipe_imgs, start=1):
+                        draw_xml = self._generate_drawing_xml(rel_id, doc_img_counter, cx=cx, cy=cy)
+                        doc_img_counter += 1
+                        p_elements.append(f"<w:p>{draw_xml}</w:p>")
+                        caption_esc = _escape_xml(f"Figure {c_num}: Original Scanned Card ({cid})")
+                        p_elements.append(f"""<w:p>
   <w:pPr><w:jc w:val="center"/><w:spacing w:after="160"/></w:pPr>
   <w:r><w:rPr><w:i/><w:sz w:val="18"/><w:color w:val="777777"/></w:rPr><w:t>{caption_esc}</w:t></w:r>
 </w:p>""")
@@ -379,9 +448,13 @@ class DocxExporter:
         self,
         recipes: Union[RecipeSchema, List[RecipeSchema]],
         image_resolver: Optional[Callable[[str], Optional[Union[str, Path, bytes]]]] = None,
+        curation: Optional[CuratedCookbook] = None,
     ) -> bytes:
         """Serializes RecipeSchema models into a standalone OpenXML .docx file bytes."""
-        recipe_list = [recipes] if isinstance(recipes, RecipeSchema) else list(recipes)
+        if curation:
+            recipe_list = curation.all_recipes
+        else:
+            recipe_list = [recipes] if isinstance(recipes, RecipeSchema) else list(recipes)
 
         media_files: List[Tuple[str, str, bytes]] = []  # (filename, rel_id, bytes)
         image_relationships: List[Tuple[str, str]] = []  # (rel_id, target)
@@ -436,7 +509,7 @@ class DocxExporter:
         root_rels_xml = self._build_root_rels_xml()
         document_rels_xml = self._build_document_rels_xml(image_relationships)
         styles_xml = self._build_styles_xml()
-        document_xml = self._build_document_xml(recipe_list, image_map)
+        document_xml = self._build_document_xml(recipe_list, image_map, curation=curation)
 
         # Pack into ZIP archive (.docx)
         zip_buffer = io.BytesIO()
@@ -457,13 +530,14 @@ class DocxExporter:
         recipes: Union[RecipeSchema, List[RecipeSchema]],
         output_path: Union[str, Path],
         image_resolver: Optional[Callable[[str], Optional[Union[str, Path, bytes]]]] = None,
+        curation: Optional[CuratedCookbook] = None,
     ) -> Path:
         """Writes .docx cookbook to file on disk."""
         path = Path(output_path).resolve()
         path.parent.mkdir(parents=True, exist_ok=True)
-        docx_bytes = self.export_to_bytes(recipes, image_resolver=image_resolver)
+        docx_bytes = self.export_to_bytes(recipes, image_resolver=image_resolver, curation=curation)
         path.write_bytes(docx_bytes)
-        count = 1 if isinstance(recipes, RecipeSchema) else len(recipes)
+        count = curation.total_recipe_count if curation else (1 if isinstance(recipes, RecipeSchema) else len(recipes))
         logger.info(f"Exported {count} recipe(s) to DOCX: {path}")
         return path
 
@@ -471,6 +545,8 @@ class DocxExporter:
 def export_recipes_to_docx(
     recipes: Union[RecipeSchema, List[RecipeSchema]],
     image_resolver: Optional[Callable[[str], Optional[Union[str, Path, bytes]]]] = None,
+    curation: Optional[CuratedCookbook] = None,
 ) -> bytes:
     """Convenience helper to export recipes as .docx binary bytes."""
-    return DocxExporter().export_to_bytes(recipes, image_resolver=image_resolver)
+    return DocxExporter().export_to_bytes(recipes, image_resolver=image_resolver, curation=curation)
+

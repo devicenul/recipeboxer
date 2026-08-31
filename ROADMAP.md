@@ -33,6 +33,7 @@ All roadmap items and milestones use standardized status tags:
 | **M13** | **Interactive UI Guided Tour, User Guide & MVP Packaging** | Accessible 6-step interactive onboarding tutorial overlay (`frontend/src/components/tutorial/`), complete multi-platform documentation and architecture walkthrough (`README.md`), CLI option verification (`--concurrency`), and standalone PyInstaller packaging verification. | `[x] Completed` |
 | **M14** | **Open-Ended N-Part Sequence Correlation & Model Modernization** | Clean-break deprecation of `front_card_id`/`back_card_id` across models and schemas; directed transition graph and DAG maximal path chaining ($N \ge 1$); dynamic SQLite `session_proposals` sequence migration; unified "Part 1 of N" HITL UI with drag-and-drop reordering, split, and merge; sequence-preserving multimodal extraction and 9 exporters; 1,660 passing tests. | `[x] Completed` |
 | **M15** | **Integration Findings Resolution & Eval Anti-Cheating Hardening** | Dynamic OS-adaptive folder import path placeholders (`C:\...`, `/Users/...`, `/home/...`), evaluation filename and metadata obfuscation/sanitization (`obfuscation.py`, `runner.py`) preventing LLM cheating, authentic public domain magazine/box/can label clippings added to corpus, and interactive Google Identity Services (GIS) OAuth popup authorization for Docs export and Drive/Photos ingestion; 1,592 pytest + 290 vitest tests passing. | `[x] Completed` |
+| **M16** | **Multi-Session Project Persistence & Export Curation** | Portable `.recipeboxer` ZIP archive format with content-addressed SHA-256 asset storage, project save/import/merge REST endpoints, incremental duplicate-skipping ingestion engine, 5 export curation grouping presets (Course, Contributor, Tag, Alphabetical, Custom) with manual drag-and-drop reordering, styled section divider pages and TOCs across DOCX, PDF, and Google Docs; 1,848 pytest + 357 vitest tests passing. | `[x] Completed` |
 
 ---
 
@@ -63,7 +64,7 @@ All roadmap items and milestones use standardized status tags:
 [x] Phase 8: Integration Findings Resolution & Anti-Cheating Eval Hardening
        │
        ▼
-[ ] Phase 9: Multi-Session Project Persistence & Export Curation
+[x] Phase 9: Multi-Session Project Persistence & Export Curation
        │
        ▼
 [ ] Phase 10: Official Google Cloud OAuth Provisioning & Fallback Deprecation
@@ -226,18 +227,18 @@ All roadmap items and milestones use standardized status tags:
 ### Phase 9: Multi-Session Project Persistence & Export Curation
 *Workflow continuity & publication polish: Enable iterative multi-session project building via `.recipeboxer` archives with incremental duplicate-skipping ingestion, and add configurable recipe re-ordering and categorised grouping for cookbook exports.*
 
-- [ ] **Portable Project State Persistence (`.recipeboxer` Project Archive)**:
+- [x] **Portable Project State Persistence (`.recipeboxer` Project Archive)**:
   - **Standardized Archive Format**: Define a portable, compressed `.recipeboxer` project archive (containing JSON metadata manifest + original high-resolution card scans with content-addressed SHA-256 digests).
   - **Full State Retention**: Preserve matched card sequences, visual fingerprints, transcribed recipe schemas, human-in-the-loop review approvals, marginalia notes, and image-to-step bindings.
   - **Export-Stage Project Save & Merge**:
     - Allow users on the Export view to "Save Project As..." (`<name>.recipeboxer`) to store their work for future sessions.
     - Enable "Merge into Existing Project..." to append current session recipes into an existing `.recipeboxer` archive, resolving duplicates and updating the combined collection before saving or exporting.
-- [ ] **Incremental Ingestion with Duplicate-Skipping**:
+- [x] **Incremental Ingestion with Duplicate-Skipping**:
   - **Project-Aware Ingestion**: Allow users at the Ingest stage to select an existing `.recipeboxer` file as a baseline when pointing to a local directory or cloud album.
   - **Intelligent SHA-256 Skip**: Compute fast image hashes during directory/album scanning and compare against the project archive's registered cards; automatically skip previously processed scans.
   - **Targeted Incremental Processing**: Only run OCR, fingerprinting, and correlation on newly detected scans, dramatically saving API tokens and processing time.
   - **Automated Export Consolidation**: Seamlessly combine existing archive recipes with newly extracted recipes in the HITL and Export stages for consolidated editing and export.
-- [ ] **Configurable Multi-Format Recipe Ordering & Grouping (DOCX, PDF, Google Docs)**:
+- [x] **Configurable Multi-Format Recipe Ordering & Grouping (DOCX, PDF, Google Docs)**:
   - **Interactive Reordering UI in Export Dialog**:
     - Visual drag-and-drop list allowing manual reordering of recipes prior to export.
   - **Categorical & Metadata Grouping Presets**:

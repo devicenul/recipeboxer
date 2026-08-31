@@ -226,8 +226,104 @@ export const api = {
     return fetchJson<ListItemsResponse>(`/api/sources/${encodeURIComponent(providerId)}/items${q}`);
   },
 
-  getSourceThumbnailUrl(providerId: string, itemId: string, maxSize: number = 256): string {
+    getSourceThumbnailUrl(providerId: string, itemId: string, maxSize: number = 256): string {
     return `/api/sources/${encodeURIComponent(providerId)}/thumbnail/${encodeURIComponent(itemId)}?max_size=${maxSize}`;
   },
+
+  // 7. Project State Persistence & Archive (.recipeboxer)
+  async exportProjectArchive(sessionId?: string, filename?: string): Promise<void> {
+    const targetFn = filename || `${sessionId || 'recipeboxer_project'}.recipeboxer`;
+    const query = new URLSearchParams();
+    if (sessionId) query.set('session_id', sessionId);
+    if (filename) query.set('filename', filename);
+    const url = `/api/project/export${query.toString() ? '?' + query.toString() : ''}`;
+
+    try {
+      const res = await fetch(url);
+      if (!res.ok) {
+        throw new Error(`Export failed with HTTP status ${res.status}`);
+      }
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.setAttribute('download', targetFn);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(blobUrl);
+    } catch (err) {
+      console.error('Failed to download project archive:', err);
+      window.location.href = url;
+    }
+  },
+
+  async importProjectArchive(
+    file: File,
+    autoResume: boolean = false,
+    targetSessionId?: string
+  ): Promise<SessionDetail> {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (autoResume) formData.append('auto_resume', 'true');
+    if (targetSessionId) formData.append('target_session_id', targetSessionId);
+
+    const response = await fetch('/api/project/import', {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!response.ok) {
+      let errorMsg = `HTTP ${response.status} ${response.statusText}`;
+      try {
+        const j = await response.json();
+        if (j.detail) {
+          errorMsg = typeof j.detail === 'string' ? j.detail : JSON.stringify(j.detail);
+        }
+      } catch {}
+      throw new Error(errorMsg);
+    }
+
+    return response.json();
+  },
+
+  async mergeProjectArchive(
+    baseArchive: File,
+    incoming: { sessionId?: string; file?: File },
+    conflictStrategy: string = 'keep_both',
+    filename?: string
+  ): Promise<Blob> {
+    const formData = new FormData();
+    formData.append('base_archive', baseArchive);
+    if (incoming.sessionId) {
+      formData.append('session_id', incoming.sessionId);
+    }
+    if (incoming.file) {
+      formData.append('incoming_archive', incoming.file);
+    }
+    formData.append('conflict_strategy', conflictStrategy);
+    if (filename) {
+      formData.append('filename', filename);
+    }
+
+    const response = await fetch('/api/project/merge', {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!response.ok) {
+      let errorMsg = `HTTP ${response.status} ${response.statusText}`;
+      try {
+        const j = await response.json();
+        if (j.detail) {
+          errorMsg = typeof j.detail === 'string' ? j.detail : JSON.stringify(j.detail);
+        }
+      } catch {}
+      throw new Error(errorMsg);
+    }
+
+    return response.blob();
+  },
 };
+
 

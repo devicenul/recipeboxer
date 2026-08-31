@@ -1,17 +1,17 @@
-# E2E Test Infrastructure: RecipeBoxer Full-Stack Platform
+# E2E Test Infrastructure: RecipeBoxer Phase 9 Multi-Session Persistence & Export Curation
 
 ## 1. Test Philosophy & Architecture
 
-The RecipeBoxer E2E Test Suite provides an exhaustive, requirement-driven, opaque-box verification platform across both the React 18+ TypeScript SPA frontend and the FastAPI backend engine.
+The RecipeBoxer Phase 9 E2E Test Suite provides an exhaustive, requirement-driven, opaque-box verification platform across both the React 18+ TypeScript SPA frontend and the FastAPI backend engine.
 
 ### Core Testing Principles
-1. **Opaque-Box Verification**: Exercise platform functionality strictly through public REST API endpoints, Server-Sent Events (SSE), standard filesystem interfaces, and frontend DOM component trees / user events without accessing internal private states or facade mocks.
+1. **Opaque-Box Verification**: Exercise platform functionality strictly through public REST API endpoints, Server-Sent Events (SSE), standard filesystem interfaces, `.recipeboxer` archive containers, and frontend DOM component trees / user events without relying on private implementation details or fragile internal monkeypatches.
 2. **Progressive 4-Tier Test Matrix**:
-   - **Tier 1 (Feature Coverage)**: Validates nominal happy path functionality across all 15 platform features (≥5 tests per feature).
-   - **Tier 2 (Boundary & Corner Cases)**: Stress tests limits, zero-states, extreme inputs, malformed structures, rate limits, and network anomalies (≥5 tests per feature).
-   - **Tier 3 (Cross-Feature Combinations)**: Evaluates pairwise interaction dynamics across ingestion, HITL correlation, recipe review, multimodal extraction, and document exporters (≥10 comprehensive interaction tests).
-   - **Tier 4 (Real-World Application Scenarios)**: Simulates complex multi-generational heirloom digitization workflows from raw multi-card scans to structured publishing (≥5 end-to-end multi-stage scenarios).
-3. **Deterministic & Isolated Execution**: Every test runs in isolated temporary workspaces with unique session IDs, SQLite WAL instances, and self-contained mock responses.
+   - **Tier 1 (Feature Coverage)**: Validates nominal happy path functionality across all Phase 9 platform features (≥5 tests per feature).
+   - **Tier 2 (Boundary & Corner Cases)**: Stress tests limits, zero-states, extreme inputs, ZipSlip path traversal payloads, corrupted archives, hash mismatches, and network anomalies (≥5 tests per feature).
+   - **Tier 3 (Cross-Feature Combinations)**: Evaluates pairwise interaction dynamics across archive export/import, incremental duplicate-skipping ingestion, baseline recipe merging, and multi-format curated cookbook publishing (≥10 comprehensive interaction tests).
+   - **Tier 4 (Real-World Application Scenarios)**: Simulates complex multi-generational heirloom digitization workflows spanning multi-day scanning sessions, archive backup & merge, duplicate bypass, and styled heirloom cookbook publishing (≥5 end-to-end multi-stage scenarios).
+3. **Deterministic & Isolated Execution**: Every test runs in isolated temporary workspaces with unique session IDs, dedicated temp directories for archive extraction, in-memory/isolated SQLite session stores, and self-contained mock responses.
 
 ---
 
@@ -19,82 +19,91 @@ The RecipeBoxer E2E Test Suite provides an exhaustive, requirement-driven, opaqu
 
 | # | Feature | Milestone | Description & Contract | Tier 1 | Tier 2 | Tier 3 | Tier 4 |
 |---|---------|-----------|------------------------|:------:|:------:|:------:|:------:|
-| **F1.1** | Directory Picker (Modern API) | M1 | `showDirectoryPicker()` integration with `<input webkitdirectory>` fallback in `SourceSelector.tsx` | ≥5 | ≥5 | T3.1 | T4.S1 |
-| **F1.2** | SSE Stability & Debounce | M1 | Single EventSource instance, ref-stabilized callbacks, heartbeat handling, and reconnection backoff | ≥5 | ≥5 | T3.2, T3.9 | T4.S4 |
-| **F1.3** | Batch Default Tags | M1 | Session-level batch tags in Ingestion Controller merged into extracted recipes | ≥5 | ≥5 | T3.4, T3.10 | T4.S1, T4.S5 |
-| **F2.1** | Multi-Card Full-Size Modal | M2 | Full-resolution modal & split-canvas inspection for 3+ card recipe sets during HITL | ≥5 | ≥5 | T3.4 | T4.S3 |
-| **F2.2** | Positional Drag/Reorder Controls | M2 | Interactive ordering of 3+ card sets with explicit positional indices (Front, Back, Continuation 1..N) | ≥5 | ≥5 | T3.3, T3.4 | T4.S3 |
-| **F2.3** | Multi-Card Sequence Preservation | M2 | Backend preservation and ordered merging of reordered card sequences during multimodal extraction | ≥5 | ≥5 | T3.4, T3.7 | T4.S3 |
-| **F3.1** | Card Images in Review Pane | M3 | High-fidelity card scan image rendering (`/api/cards/{id}/image`) with fallback loading states in Recipe Editor | ≥5 | ≥5 | T3.5 | T4.S1, T4.S3 |
-| **F3.2** | Workflow Navigation Dialog | M3 | "Next" button on last recipe displays `"Go to export? [Yes] [Cancel]"` confirmation dialog routing to Export | ≥5 | ≥5 | T3.8 | T4.S1 |
-| **F3.3** | Inline Tag Editing & State Sync | M3 | Inline tag addition, removal, keyboard triggers (Enter/comma/semicolon), and state synchronization | ≥5 | ≥5 | T3.8 | T4.S1, T4.S5 |
-| **F4.1** | Recipe Title Guessing Flag | M3 | Inferred titles for untitled / low-confidence cards append ` [GUESS]` suffix for user verification | ≥5 | ≥5 | T3.10 | T4.S2 |
-| **F4.2** | Anecdote & Story Preservation | M3 | Family stories, marginalia, and vintage notes preserved in `description`/`source_notes` without polluting ingredients/directions | ≥5 | ≥5 | T3.8 | T4.S1, T4.S5 |
-| **F5.1** | Google Docs OAuth & Doc Creation | M4 | Google OAuth 2.0 Web flow and Google Docs/Drive API creation with embedded scan images and formatted typography | ≥5 | ≥5 | T3.8 | T4.S5 |
-| **F5.2** | Embedded Images in PDF & DOCX | M4 | Printable PDF and Word DOCX cookbook generation embedding high-resolution card scan images with proportional aspect scaling | ≥5 | ≥5 | T3.4 | T4.S1, T4.S5 |
-| **F5.3** | Customizable Export Filenames | M4 | Editable suggested filename modal presented before initiating download across all 9 export formats | ≥5 | ≥5 | T3.8, T3.10 | T4.S1..S5 |
-| **F5.4** | Tag Serialization Across Formats | M4 | RFC 4180 Column 8 `Tags` in Plan To Eat CSV, Schema.org `keywords`, Markdown/Cooklang frontmatter, Paprika categories | ≥5 | ≥5 | T3.4, T3.10 | T4.S1, T4.S5 |
+| **F1** | Archive Models & Manifest Schema | M1 | Pydantic models for `.recipeboxer` archive manifest (`manifest.json`), `ArchiveAssetRecord`, `ArchiveCardRecord`, `StepImageBinding`, `MarginaliaEntry` | ≥5 | ≥5 | T3.1 | T4.S1 |
+| **F2** | `.recipeboxer` ZIP Storage Engine | M1 | ZIP packing/unpacking, SHA-256 content addressing (`assets/scans/<sha256>.<ext>`), ZipSlip rejection, integrity validation | ≥5 | ≥5 | T3.1, T3.2 | T4.S1, T4.S4 |
+| **F3** | Project Export/Import/Merge Endpoints | M1 | REST endpoints `GET /api/project/export`, `POST /api/project/import`, `POST /api/project/merge` | ≥5 | ≥5 | T3.2, T3.3 | T4.S1, T4.S2 |
+| **F4** | Frontend Archive UI Touchpoints | M1 | `.recipeboxer` tab in `ExportDialog`, restore & import dropzones in `SessionLauncher` and `SessionHistoryTable` | ≥5 | ≥5 | T3.3 | T4.S1 |
+| **F5** | Baseline Archive Ingestion Loading | M2 | `PipelineStartRequest` and `POST /api/cards/upload` accepting baseline `.recipeboxer` archive or session ID | ≥5 | ≥5 | T3.4 | T4.S2 |
+| **F6** | SHA-256 Duplicate-Skipping Engine | M2 | Card SHA-256 calculation against baseline manifest, partitioning skipped vs new cards | ≥5 | ≥5 | T3.4, T3.5 | T4.S2, T4.S3 |
+| **F7** | Pipeline Stage Bypass & Recipe Merge | M2 | Bypassing vision/OCR/HITL/LLM extraction for duplicate cards, merging baseline recipes with new extractions | ≥5 | ≥5 | T3.4, T3.5 | T4.S2, T4.S3 |
+| **F8** | Telemetry & SSE Progress Accounting | M2 | `ProgressMetrics` emitting `skipped_cards`, `newly_processed_cards`, `baseline_recipes_count` via SSE | ≥5 | ≥5 | T3.5 | T4.S2 |
+| **F9** | Frontend Ingestion Baseline Controls | M2 | Baseline archive dropzone/session selector in `SessionLauncher`, duplicate skipping telemetry in `ProgressDashboard` | ≥5 | ≥5 | T3.4 | T4.S2 |
+| **F10** | Export Curation & Grouping Engine | M3 | `GroupingPreset` (`none`, `course`, `contributor`, `tags`, `alphabetical`, `custom`), `CuratedCookbook`, `CuratedSection`, reorder logic | ≥5 | ≥5 | T3.6, T3.7 | T4.S4, T4.S5 |
+| **F11** | DOCX Exporter TOC & Section Dividers | M3 | Decorative section divider pages (Georgia 28pt bold, ornaments) and styled TOC with dot leaders (`w:leader="dot"`) | ≥5 | ≥5 | T3.6, T3.8 | T4.S5 |
+| **F12** | PDF Exporter TOC & Section Dividers | M3 | 2-pass pagination engine, dedicated TOC canvas page with dot leaders, and double-bordered section divider pages | ≥5 | ≥5 | T3.6, T3.8 | T4.S5 |
+| **F13** | Google Docs & Markdown Curation | M3 | Google Docs section breaks / dividers & hyperlinked TOC; Markdown section headers & index | ≥5 | ≥5 | T3.7, T3.8 | T4.S5 |
+| **F14** | Export REST Endpoints Curation Args | M3 | `/api/export/*` endpoints accepting `recipe_order`, `grouping_preset`, `include_section_dividers`, `include_toc`, `toc_title` | ≥5 | ≥5 | T3.7 | T4.S4, T4.S5 |
+| **F15** | Frontend Export Curation Toolbar | M3 | Drag-and-drop / manual reordering, preset selector pills, TOC / divider toggles in `ExportDialog` | ≥5 | ≥5 | T3.8 | T4.S4, T4.S5 |
+| **F16** | 4-Tier Automated Test Matrix | M4 | Unit, integration, regression, and E2E lifecycle test suites across archive, ingestion, and export curation | ≥5 | ≥5 | T3.1..T3.8 | T4.S1..S5 |
 
 ---
 
 ## 3. Test Tier Breakdown & Methodology
 
 ### Tier 1: Feature Coverage (Happy Path Verification)
-- **Objective**: Verify nominal functionality of every feature under expected inputs and user interactions.
-- **Backend Scope**: API route contract compliance, 200/201 response status, correct JSON schemas, SQLite session persistence, exporter byte streams.
-- **Frontend Scope**: Component rendering, button clicks, form input dispatch, state transitions, modal opening/closing, tab switching.
+- **Objective**: Verify nominal functionality of every Phase 9 feature under expected inputs and user interactions.
+- **Backend Scope**:
+  - Archive manifest schema validation, format versioning, Pydantic model serialization/deserialization.
+  - ZIP creation with `manifest.json` and `assets/scans/<sha256>.<ext>`, archive extraction, asset content addressing.
+  - Endpoints `GET /api/project/export`, `POST /api/project/import`, `POST /api/project/merge` returning 200 OK and valid session data.
+  - Ingestion pipeline with baseline archive skipping 100% of duplicate cards and restoring baseline recipes.
+  - Ingestion pipeline with 0% duplicates processing 100% of new cards.
+  - Curation presets (Course, Contributor, Tags, Alphabetical, Custom) grouping recipes accurately.
+  - Exporters (DOCX, PDF, Google Docs, Markdown) generating styled section divider pages and dot-leader Tables of Contents.
+- **Frontend Scope**:
+  - `.recipeboxer` export tab in `ExportDialog` triggering archive download.
+  - Baseline archive file dropzone in `SessionLauncher`.
+  - Telemetry counters in `ProgressDashboard` showing `skipped_cards` and `newly_processed_cards`.
+  - Curation toolbar in `ExportDialog` enabling preset selection (Course, Contributor, Tag, Alphabetical) and TOC/divider toggles.
 
-### Tier 2: Boundary & Corner Cases (Adversarial & Stress Verification)
-- **Objective**: Verify robustness against edge conditions, malformed payloads, rate limits, zero lengths, special characters, and network disruptions.
+### Tier 2: Boundary & Corner Cases (Adversarial & Security Verification)
+- **Objective**: Verify resilience against edge conditions, malformed archives, ZipSlip directory traversal attacks, SHA-256 checksum mismatches, extreme recipe counts, and zero-state groupings.
 - **Scenarios**:
-  - Empty directories, missing scan files, zero-byte corrupted images.
-  - Rapid double-clicks, duplicate tag submissions, extreme string lengths (10,000+ characters).
-  - Special characters, quotes, commas, semicolons, emoji in recipe titles, notes, and tags.
-  - Multi-card collections up to 10+ continuation cards.
-  - Filename sanitization protecting against path traversal (`../../etc/passwd`).
-  - Google OAuth token expiration and permission denial handling.
+  - **ZipSlip Security**: Archives containing malicious entry names (`../../evil.py`, `..\..\windows\system32\calc.exe`, `/etc/passwd`, embedded NUL characters) must be rejected with security exceptions before extraction.
+  - **Archive Integrity**: Archives with missing `manifest.json`, malformed JSON, corrupted ZIP bytes, or SHA-256 digest mismatches between manifest records and asset bytes.
+  - **Ingestion Boundary**: Empty baseline archive, baseline with zero recipes, 100% duplicate deck, 0% duplicate deck, baseline with missing asset files, modified scan bytes triggering re-extraction.
+  - **Curation Boundary**: Single recipe export, empty recipe list, recipes with missing tags or missing source notes/contributors, special XML/HTML characters (`<>&"'`) in titles, long recipe titles spanning multiple lines in TOC.
+  - **Endpoint Validation**: Non-existent session IDs, non-zip file uploads to import/merge endpoints, invalid query parameter values.
 
 ### Tier 3: Cross-Feature Combinations (Pairwise Interaction Dynamics)
-- **T3.1**: Directory Picker Ingestion + Dark Mode Theme UI state persistence.
-- **T3.2**: Slow-batch Throttled Ingestion + SSE Telemetry Backoff & Progress streaming.
-- **T3.3**: Rapid Queue Keyboard Navigation + Multi-Card Candidate Reordering.
-- **T3.4**: 3+ Multi-Card Reordered Grouping + Sequence Preservation Extraction + PDF/DOCX Embedded Scans + Tag Serialization.
-- **T3.5**: Multipart Card Upload + Card Image Streaming Service + Recipe Editor Review Pane.
-- **T3.6**: Session Cache Hits + Heuristic Screening + Ingestion Throttle Controls.
-- **T3.7**: HITL Candidate Rejection + Standalone Conversion + Recipe Sequence Linkage.
-- **T3.8**: Inline Tag & Story Editing + Navigation Dialog Routing to Export + Google Docs Document Creation.
-- **T3.9**: Mid-flight Crash & Resume + SSE Telemetry Recovery without duplicate events.
-- **T3.10**: Batch Default Tags + Inferred `[GUESS]` Titles + Custom Filename Modal + Plan To Eat RFC 4180 CSV Export.
+- **T3.1**: Archive Serialization + Content-Addressed Asset Hashing + Step-Image Bindings + Marginalia Annotations.
+- **T3.2**: Project Export -> Disk Persistence -> Project Import -> Session Restoration -> Full Equality Verification.
+- **T3.3**: Project Merge: Merging Archive A (Recipes 1..3) with Archive B (Recipes 4..5) into unified Archive C with deduplicated assets.
+- **T3.4**: Baseline Project Ingestion: Day 1 Session -> Export `.recipeboxer` -> Day 2 Ingestion with Day 1 Baseline -> 50% Duplicate Skip + 50% New Card Extraction.
+- **T3.5**: Multi-Card Pairing + Baseline Ingestion: Baseline contains 2-card recipe; new deck contains 1 new standalone card -> baseline 2-card recipe retained intact while new card creates recipe #2.
+- **T3.6**: Custom Reordering + Course Grouping + DOCX & PDF Exporters with Styled Section Dividers and Dot-Leader TOCs.
+- **T3.7**: Contributor Grouping + Alphabetical Sorting + Markdown & Google Docs Exporters with Hyperlinked TOCs.
+- **T3.8**: Frontend Export Dialog Curation Toolbar -> Reorder Cards -> Select Contributor Preset -> Enable Dividers & TOC -> Download DOCX/PDF -> Verify structure.
 
 ### Tier 4: Real-World Application Scenarios (Multi-Stage Workflows)
-- **Scenario 1 (Vintage Heirloom Index Cards with Faded Cursive & Marginalia)**:
-  Ingest faded multi-generational heirloom cards with batch tags `["Heirloom", "Grandma"]`, preserve handwritten marginalia in description/notes, review card images in split pane, edit tags, trigger navigation modal, and export to PDF with embedded scan images and sanitized custom filenames.
-- **Scenario 2 (High-Speed Keyboard Triage with Title Guessing)**:
-  Ingest large mixed deck, triage with rapid keyboard shortcuts, verify cards with missing titles receive `[GUESS]` flag, convert low-confidence pairings to standalone recipes.
-- **Scenario 3 (4-Card Thanksgiving Holiday Feast Assembly & Reordering)**:
-  Group 4 separate recipe cards (Roast Turkey, Sourdough Stuffing, Pan Gravy, Cranberry Relish) using multi-card modal, reorder continuation cards into sequence (Front, Back, Cont 1, Cont 2), verify backend multimodal extraction preserves sequence and links all 4 card images.
-- **Scenario 4 (Rate-Limited Ingestion with Network Interruption & SSE Recovery)**:
-  Launch slow-batch ingestion with interval throttling, simulate temporary network disconnect and SSE reconnection backoff, ensure zero dropped telemetry events and clean completion.
-- **Scenario 5 (Universal Multi-Format Export Interoperability & Compliance)**:
-  Take fully digitized recipe collection with complex fractions, multi-line instructions, anecdotes, and default tags; export across all 9 formats (Plan To Eat CSV, Schema.org JSON-LD, PDF, DOCX, Markdown, Cooklang, Paprika, Google Docs, Raw JSON); verify 100% tag serialization and RFC 4180 quoting compliance.
+- **Scenario 1 (Multi-Session Heirloom Archive Portability & Restoration)**:
+  Digitize 4 heirloom cards with marginalia notes and step bindings -> Save `.recipeboxer` project archive -> Clear session store / restart server -> Import archive -> Verify 100% fidelity of cards, fingerprints, proposals, recipes, notes, and image assets.
+- **Scenario 2 (Multi-Day Incremental Batch Ingestion with Zero Redundant OCR)**:
+  Day 1: Ingest 5 vintage cards -> Extract 3 recipes -> Save baseline project. Day 2: Ingest 8 cards (5 identical from Day 1 + 3 new cards) with Day 1 baseline -> Verify duplicate-skipping engine bypasses Vision & LLM extraction for the 5 existing cards, processes only the 3 new cards, and yields 5 recipes in the active session.
+- **Scenario 3 (Archive Project Merging from Multiple Family Contributors)**:
+  Branch A: Cousin Alice digitizes 3 dessert cards -> exports `alice_desserts.recipeboxer`. Branch B: Uncle Bob digitizes 4 savory cards -> exports `bob_mains.recipeboxer`. Merge Alice & Bob archives via `/api/project/merge` -> Verify unified project contains all 7 recipes and 7 card scans without asset collisions or duplicates.
+- **Scenario 4 (End-to-End Heirloom Cookbook Curation & Multi-Format Publishing)**:
+  Ingest mixed heirloom card deck (Appetizers, Mains, Desserts from Grandma Rose and Aunt Clara) -> Group by Course with alphabetical sorting -> Generate Heirloom DOCX and Printable PDF -> Verify decorative section divider pages, 2-pass TOC page numbering with dot leaders, and recipe fidelity.
+- **Scenario 5 (Adversarial Archive Attack Mitigation & Fault Isolation)**:
+  Simulate malicious user uploading crafted `.recipeboxer` zip with ZipSlip payloads, tampered SHA-256 hashes, and corrupt manifest -> Verify backend rejects payloads cleanly with HTTP 400/422 without compromising filesystem or server stability.
 
 ---
 
 ## 4. Execution Commands & Automation
 
 ### Backend Pytest Suite
-```bash
-# Run the complete platform E2E test suite
-./test.sh tests/test_e2e_platform.py -v
+```powershell
+# Run the complete Phase 9 test suite
+powershell -ExecutionPolicy Bypass -File .\test.ps1 tests/test_archive.py tests/test_archive_endpoints.py tests/test_incremental_ingestion.py tests/test_export_curation.py -v
 
 # Run full project pytest suite
-./test.sh
+powershell -ExecutionPolicy Bypass -File .\test.ps1
 ```
 
 ### Frontend Vitest Suite
 ```bash
-# Run the platform frontend E2E test suite
-cd frontend && npm test -- tests/e2e_platform.test.tsx --run
+# Run Phase 9 frontend Vitest suites
+cd frontend && npm test -- tests/archive_export_import.test.tsx tests/export_curation.test.tsx --run
 
 # Run all frontend tests
 cd frontend && npm test -- --run
@@ -103,6 +112,6 @@ cd frontend && npm test -- --run
 ---
 
 ## 5. Coverage Goals & Verification Standards
-- **Total E2E Test Cases**: ≥165 tests across Tiers 1–4.
-- **Feature Coverage**: 100% of Features F1.1–F5.4 covered in both backend and frontend suites.
-- **Pass Rate**: 100% passing rate with zero skips or failures.
+- **Total Phase 9 Test Cases**: ≥80 dedicated tests across Tiers 1–4.
+- **Feature Coverage**: 100% of Features F1–F16 covered in backend pytest and frontend vitest suites.
+- **Pass Rate**: 100% passing rate once implementation milestones M1–M3 are complete.

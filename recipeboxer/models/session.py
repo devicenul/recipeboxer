@@ -35,6 +35,10 @@ class SessionSummary(BaseModel):
         default=0,
         description="Total number of scanned cards processed in this session",
     )
+    skipped_cards: int = Field(
+        default=0,
+        description="Cards skipped due to matching baseline SHA-256 digests",
+    )
     recipe_count: int = Field(
         default=0,
         description="Total number of extracted recipes produced in this session",
@@ -42,6 +46,14 @@ class SessionSummary(BaseModel):
     mode: Optional[str] = Field(
         default="parallel",
         description="Ingestion mode (parallel or slow-batch)",
+    )
+    baseline_project_path: Optional[str] = Field(
+        default=None,
+        description="Path to baseline project archive if used for incremental ingestion",
+    )
+    baseline_session_id: Optional[str] = Field(
+        default=None,
+        description="Baseline session ID if used for incremental ingestion",
     )
     error: Optional[str] = Field(
         default=None,
@@ -87,9 +99,25 @@ class SessionDetail(BaseModel):
         default=0,
         description="Total number of scanned cards in this session",
     )
+    skipped_cards: int = Field(
+        default=0,
+        description="Total number of skipped duplicate cards matching baseline",
+    )
     recipe_count: int = Field(
         default=0,
         description="Total number of extracted recipes in this session",
+    )
+    baseline_recipes_count: int = Field(
+        default=0,
+        description="Number of recipes inherited from baseline project",
+    )
+    baseline_project_path: Optional[str] = Field(
+        default=None,
+        description="Path to baseline project archive if used",
+    )
+    baseline_session_id: Optional[str] = Field(
+        default=None,
+        description="Baseline session ID if used",
     )
     cards: List[Dict[str, Any]] = Field(
         default_factory=list,
@@ -120,12 +148,25 @@ class SessionDetail(BaseModel):
         description="Error message if session failed",
     )
 
+    @property
+    def state(self) -> Union[PipelineState, str]:
+        """Alias for status to maintain symmetry with PipelineSession.state."""
+        return self.status
+
 
 class IngestionConfig(BaseModel):
     """Configuration options for initiating card ingestion."""
     folder_path: Optional[str] = Field(
         default=None,
         description="Local directory path containing recipe card scans",
+    )
+    baseline_project_path: Optional[str] = Field(
+        default=None,
+        description="Path to baseline .recipeboxer project archive",
+    )
+    baseline_session_id: Optional[str] = Field(
+        default=None,
+        description="Baseline session ID for duplicate skipping",
     )
     default_tags: List[str] = Field(
         default_factory=list,

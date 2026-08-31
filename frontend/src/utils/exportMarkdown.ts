@@ -1,4 +1,5 @@
 import { RecipeSchema } from '../types/recipe';
+import { CuratedCookbook } from '../types/export';
 
 /**
  * Serializes a single recipe into Obsidian Markdown with YAML frontmatter.
@@ -104,17 +105,74 @@ export function recipeToMarkdown(recipe: RecipeSchema, useWikilinks = true): str
 }
 
 /**
- * Serializes a list of recipes into Obsidian Markdown string.
+ * Serializes a list of recipes or CuratedCookbook into Obsidian Markdown string.
  */
-export function generateMarkdown(recipes: RecipeSchema[], useWikilinks = true): string {
+export function generateMarkdown(
+  recipes: RecipeSchema[],
+  useWikilinks = true,
+  curation?: CuratedCookbook
+): string {
+  if (curation) {
+    const parts: string[] = [];
+
+    // 1. Table of Contents
+    if (curation.include_toc && curation.total_recipe_count > 0) {
+      const tocLines: string[] = [
+        `# ${curation.toc_title || 'Table of Contents'}`,
+        '',
+      ];
+      const showSecHeaders = curation.sections.length > 1 || curation.grouping_preset !== 'none';
+      for (const sec of curation.sections) {
+        if (showSecHeaders) {
+          tocLines.push(`## ${sec.title}`);
+          tocLines.push('');
+        }
+        for (const rec of sec.recipes) {
+          const t = rec.title || 'Untitled Recipe';
+          if (useWikilinks) {
+            tocLines.push(`- [[#${t}]]`);
+          } else {
+            const slug = t.toLowerCase().replace(/[^a-z0-9\-_]+/g, '-').replace(/^-+|-+$/g, '');
+            tocLines.push(`- [${t}](#${slug})`);
+          }
+        }
+        tocLines.push('');
+      }
+      parts.push(tocLines.join('\n').trim());
+    }
+
+    // 2. Sections and Recipes
+    for (const sec of curation.sections) {
+      const showDivider =
+        curation.include_section_dividers &&
+        (curation.sections.length > 1 || curation.grouping_preset !== 'none');
+      if (showDivider) {
+        const divLines = [`# ${sec.title}`, ''];
+        if (sec.subtitle) {
+          divLines.push(`*${sec.subtitle}*`, '');
+        }
+        parts.push(divLines.join('\n').trim());
+      }
+      for (const rec of sec.recipes) {
+        parts.push(recipeToMarkdown(rec, useWikilinks));
+      }
+    }
+    return parts.join('\n\n---\n\n');
+  }
+
   return recipes.map((r) => recipeToMarkdown(r, useWikilinks)).join('\n\n---\n\n');
 }
 
 /**
  * Initiates browser download of Obsidian Markdown file.
  */
-export function downloadMarkdown(recipes: RecipeSchema[], filename = 'recipeboxer_recipes.md', useWikilinks = true): void {
-  const content = generateMarkdown(recipes, useWikilinks);
+export function downloadMarkdown(
+  recipes: RecipeSchema[],
+  filename = 'recipeboxer_recipes.md',
+  useWikilinks = true,
+  curation?: CuratedCookbook
+): void {
+  const content = generateMarkdown(recipes, useWikilinks, curation);
   const blob = new Blob([content], { type: 'text/markdown;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');

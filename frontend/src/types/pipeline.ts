@@ -18,12 +18,15 @@ export enum IngestionMode {
 
 export interface ProgressMetrics {
   total_scans: number;
+  skipped_cards?: number;
+  newly_processed_cards?: number;
   fingerprinted: number;
   proposals_generated: number;
   approved_recipes?: number;
   approved_pairs?: number;
   recipes_extracted: number;
-  current_stage: string;
+  baseline_recipes_count?: number;
+  current_stage?: string;
   percent_complete: number;
 }
 
@@ -50,6 +53,8 @@ export interface PipelineStartRequest {
   scans_dir?: string;
   directory_path?: string;
   folder_path?: string;
+  baseline_project_path?: string;
+  baseline_session_id?: string;
   default_tags?: string[];
   source_provider?: string;
   source_container_id?: string;
@@ -78,14 +83,17 @@ export interface SessionSummary {
   status: PipelineState | string;
   created_at: string;
   card_count: number;
+  skipped_cards?: number;
   recipe_count: number;
   mode?: string;
+  baseline_project_path?: string | null;
+  baseline_session_id?: string | null;
   csv_output_path?: string | null;
 }
 
 export interface SessionDetail {
   session_id: string;
-  folder_path: string;
+  folder_path?: string | null;
   status: PipelineState | string;
   mode: string;
   config: Record<string, any>;
@@ -94,7 +102,14 @@ export interface SessionDetail {
   elapsed_seconds: number;
   created_at: string;
   updated_at: string;
+  card_count?: number;
+  skipped_cards?: number;
+  recipe_count?: number;
+  baseline_recipes_count?: number;
+  baseline_project_path?: string | null;
+  baseline_session_id?: string | null;
   cards: any[];
+  proposals?: any[];
   recipes: any[];
   csv_output_path?: string | null;
   error?: string | null;

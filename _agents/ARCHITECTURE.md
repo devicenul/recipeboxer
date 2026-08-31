@@ -14,6 +14,7 @@ RecipeBoxer is structured as a decoupled, multi-stage pipeline designed for phys
 |   • Local Filesystem Directory Scans (.jpg, .jpeg, .png, .webp, .tiff, .bmp)                  |
 |   • Google Photos Library API (OAuth2, auto-refresh token mutex, category filters)           |
 |   • Cloud Storage & Drives (Google Drive, AWS S3 / GCS with pure-Python SigV4)               |
+|   • Baseline .recipeboxer Archives (Incremental Ingestion with SHA-256 Duplicate-Skipping)   |
 +-----------------------------------------------------------------------------------------------+
                                                │
                                                ▼
@@ -27,33 +28,33 @@ RecipeBoxer is structured as a decoupled, multi-stage pipeline designed for phys
 |       ┌───────────────────┬──────────────────┴────────────────────┬───────────────────┐       |
 |       ▼                   ▼                                       ▼                   ▼       |
 |  [ Stage 1 ]        [ Stage 2 ]                             [ Stage 3 ]         [ Stage 4 ]   |
-|  INGESTION        FINGERPRINTING                            CORRELATION        HITL BARRIER   |
-|  • BaseSource-    • CV Preprocessing (Deskewing,            • CIELAB ΔE        • Async Event  |
-|    Provider         Border Cropping, CLAHE Contrast)        • Proximity Decay    Pause Barrier|
-|  • SHA-256 Cache  • Content-Addressed SQLite Cache          • Mirrored Stains  • Rapid Queue  |
-|  • ScannedCard    • Modality Router (95.7% accuracy)        • Semantic Verify  • Candidate    |
-|                     (Cached in SQLite FingerprintCache)     • Greedy Match       Drawer       |
+|  INGESTION & DUP-   FINGERPRINTING                          CORRELATION        HITL BARRIER   |
+|  SKIPPING           • CV Preprocessing (Deskewing,          • CIELAB ΔE        • Async Event  |
+|  • BaseSource-        Border Cropping, CLAHE Contrast)      • Proximity Decay    Pause Barrier|
+|    Provider         • Content-Addressed SQLite Cache        • Mirrored Stains  • Rapid Queue  |
+|  • SHA-256 Skip     • Modality Router (95.7% accuracy)      • Semantic Verify  • Candidate    |
+|  • ScannedCard        (Cached in SQLite FingerprintCache)   • Sequence Chaining  Drawer       |
 |                                                             • Multi-Card Group  • Visual Tools|
 |                                                                                       │       |
 |       ┌───────────────────────────────────────────────────────────────────────────────┘       |
 |       ▼                                                                                       |
 |  [ Stage 5 ]                                                [ Stage 6 ]                       |
-|  RECIPE EXTRACTION                                          EXPORTERS (9 Formats)             |
-|  • Antigravity Skills (Cursive, Clippings)                  • Plan To Eat RFC 4180 CSV (Prim) |
-|  • Dynamic Thinking Budget Allocation (0-4096 tokens)       • Schema.org Recipe JSON-LD       |
-|  • RecipeSchema (Ingredients, Steps, Times, Yield, Tags)    • Google Docs Archival with Scans |
-|                                                             • OpenXML DOCX & Printable PDF    |
-|                                                             • Obsidian MD / Cooklang / Paprika|
-|                                                             • Standard JSON                   |
+|  RECIPE EXTRACTION                                          CURATION & EXPORTERS (9 Formats)  |
+|  • Antigravity Skills (Cursive, Clippings)                  • Export Curation (5 Presets,     |
+|  • Dynamic Thinking Budget Allocation (0-4096 tokens)         Drag-and-Drop Reordering)       |
+|  • RecipeSchema (Ingredients, Steps, Times, Yield, Tags)    • Section Dividers & Styled TOCs  |
+|  • Baseline & New Extraction Unification                    • Plan To Eat CSV / Schema.org    |
+|                                                             • Google Docs, DOCX, PDF, MD, etc.|
 |                                                                                               |
 |  +─────────────────────────────────────────────────────────────────────────────────────────+  |
-|  |                     Persistence Layer (SQLite WAL Mode + RLock)                         |  |
+|  |             Persistence Layer (SQLite WAL Mode + RLock + .recipeboxer Archives)         |  |
 |  |  • FingerprintCache & RemoteAssetCache: sha256_hash -> cached assets & fingerprints     |  |
 |  |  • SessionStore: sessions, session_cards, session_proposals, session_recipes            |  |
+|  |  • Archive Engine: .recipeboxer ZIP (manifest.json + content-addressed scans/ + notes) |  |
 |  +─────────────────────────────────────────────────────────────────────────────────────────+  |
 |  |                     FastAPI ASGI Layer & Server-Sent Events (SSE)                       |  |
 |  |  • REST Endpoints: /api/pipeline/*, /api/hitl/*, /api/recipes/*, /api/export/*,         |  |
-|  |                    /api/sources/*                                                       |  |
+|  |                    /api/sources/*, /api/project/* (export/import/merge)                 |  |
 |  |  • SSE Stream: /api/events (Real-time telemetry, state transitions, keep-alives)        |  |
 |  |  • Static Asset Host: /assets -> recipeboxer/api/static/assets                          |  |
 |  |  • SPA Catch-All: /{full_path} -> recipeboxer/api/static/index.html (with /api 404 guard)|
@@ -68,11 +69,12 @@ RecipeBoxer is structured as a decoupled, multi-stage pipeline designed for phys
 |                                                                                               |
 |  • Interactive Onboarding Tutorial: 6-step spotlight walkthrough, keyboard nav, persistent tour|
 |  • Custom Hooks: useSSE, useKeyboard, useImageViewer, useRecipeForm, useTheme               |
-|  • Ingestion & Source Switcher: Local Dropzone, Google Photos Album Picker, Cloud Drive Tabs   |
+|  • Ingestion & Source Switcher: Local Dropzone, Baseline Project Selector, Photos/Drive Tabs  |
 |  • Interactive Image Viewer: Pan, Zoom (0.25x-5x), 90° Stepped Rotation, CSS Filters          |
 |  • Rapid HITL Workspace: Side-by-side comparison, Hotkeys, Candidate Drawer, Multi-Card Tray  |
 |  • Split-Screen Recipe Review: Side-by-side card inspection and editable structured form      |
-|  • Multi-Format Export Dialog: Monospace previews, live download buttons across 9 formats     |
+|  • Multi-Format Export Dialog: Curation Toolbar (Drag & drop reordering, presets), 9 formats, |
+|    Save Project As (.recipeboxer), and Merge into Existing Project                            |
 +-----------------------------------------------------------------------------------------------+
 ```
 
