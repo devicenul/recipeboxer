@@ -498,11 +498,35 @@ async def upload_cards(
 # 2. Status & Telemetry
 # ============================================================================
 
+def _normalize_pipeline_state(val: Any) -> PipelineState:
+    if isinstance(val, PipelineState):
+        return val
+    try:
+        return PipelineState(str(val or "").strip().upper())
+    except Exception:
+        return PipelineState.IDLE
+
+
+def _normalize_ingestion_mode(val: Any) -> IngestionMode:
+    if isinstance(val, IngestionMode):
+        return val
+    norm = str(val or "").strip().lower().replace("-", "_")
+    if norm == "slow_batch":
+        return IngestionMode.SLOW_BATCH
+    return IngestionMode.PARALLEL
+
+
 @router.get(
     "/status",
     response_model=PipelineStatus,
     status_code=status.HTTP_200_OK,
     summary="Get Pipeline Progress and Telemetry",
+)
+@router.get(
+    "/pipeline/status",
+    response_model=PipelineStatus,
+    status_code=status.HTTP_200_OK,
+    summary="Get Pipeline Progress and Telemetry (Alias)",
 )
 async def get_pipeline_status(
     session_id: Optional[str] = Query(None, description="Optional target session ID"),
@@ -510,18 +534,21 @@ async def get_pipeline_status(
     store: SessionStore = Depends(get_store),
 ) -> PipelineStatus:
     """Returns the current state, progress metrics, card counts, and elapsed time."""
-    session = manager.get_session(session_id)
+    raw_sid = session_id.strip() if session_id else ""
+    target_sid = raw_sid if raw_sid and raw_sid.lower() not in ("", "none", "null", "undefined") else None
+
+    session = manager.get_session(target_sid)
     if session is not None:
         return session.get_status()
 
     # Fallback to SQLite persistence
-    if session_id:
-        detail = store.get_session_detail(session_id)
+    if target_sid:
+        detail = store.get_session_detail(target_sid)
         if detail:
             return PipelineStatus(
                 session_id=detail.session_id,
-                status=detail.status if isinstance(detail.status, PipelineState) else PipelineState(detail.status),
-                mode=IngestionMode(detail.mode) if detail.mode in ("parallel", "slow-batch") else IngestionMode.PARALLEL,
+                status=_normalize_pipeline_state(detail.status),
+                mode=_normalize_ingestion_mode(detail.mode),
                 progress=detail.progress,
                 token_usage=detail.token_usage,
                 elapsed_seconds=detail.elapsed_seconds,
@@ -530,7 +557,7 @@ async def get_pipeline_status(
             )
 
     return PipelineStatus(
-        session_id=session_id or "none",
+        session_id="none",
         status=PipelineState.IDLE,
         error=None,
     )
@@ -544,13 +571,18 @@ async def stream_events(
     request: Request,
     session_id: Optional[str] = Query(None, description="Target session ID"),
     manager: SessionManager = Depends(get_manager),
+    store: SessionStore = Depends(get_store),
 ) -> StreamingResponse:
     """Streams Server-Sent Events (SSE) broadcasting real-time session progress and state changes."""
-    if session_id is not None and manager.get_session(session_id) is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Session '{session_id}' not found",
-        )
+    raw_sid = session_id.strip() if session_id else ""
+    target_sid = raw_sid if raw_sid and raw_sid.lower() not in ("", "none", "null", "undefined") else None
+    if target_sid is not None and manager.get_session(target_sid) is None:
+        # Check SQLite persistence before returning 404
+        if store.get_session_detail(target_sid) is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Session '{target_sid}' not found",
+            )
 
     async def event_generator() -> AsyncGenerator[str, None]:
         last_state: Optional[str] = None
@@ -566,9 +598,34 @@ async def stream_events(
                 if await request.is_disconnected():
                     break
 
-                session = manager.get_session(session_id) if session_id else None
+                session = manager.get_session(target_sid)
                 if session is None:
-                    yield f"event: status\ndata: {json.dumps({'status': 'IDLE', 'session_id': session_id or 'none'})}\n\n"
+                    if target_sid:
+                        detail = store.get_session_detail(target_sid)
+                        if detail:
+                            status_obj = PipelineStatus(
+                                session_id=detail.session_id,
+                                status=_normalize_pipeline_state(detail.status),
+                                mode=_normalize_ingestion_mode(detail.mode),
+                                progress=detail.progress,
+                                token_usage=detail.token_usage,
+                                elapsed_seconds=detail.elapsed_seconds,
+                                csv_output_path=detail.csv_output_path,
+                                error=detail.error,
+                            )
+                            current_state = status_obj.status.value
+                            yield f"event: state_change\ndata: {status_obj.model_dump_json()}\n\n"
+                            yield f"event: progress\ndata: {status_obj.model_dump_json()}\n\n"
+                            if detail.recipes:
+                                for r in detail.recipes:
+                                    r_json = r.model_dump_json() if hasattr(r, "model_dump_json") else json.dumps(r)
+                                    yield f"event: recipe_extracted\ndata: {r_json}\n\n"
+                            if current_state in (PipelineState.COMPLETED.value, PipelineState.FAILED.value, PipelineState.CANCELLED.value):
+                                yield f"event: {current_state.lower()}\ndata: {status_obj.model_dump_json()}\n\n"
+                            else:
+                                yield f"event: status\ndata: {status_obj.model_dump_json()}\n\n"
+                            break
+                    yield f"event: status\ndata: {json.dumps({'status': 'IDLE', 'session_id': 'none'})}\n\n"
                     yield ": ping\n\n"
                     break
 
@@ -1450,7 +1507,8 @@ async def create_google_doc_document(
     Uploads card scan images to Google Drive, creates the document, applies batch updates,
     and returns document ID and URL.
     """
-    if not payload.access_token or not payload.access_token.strip():
+    clean_token = re.sub(r"^Bearer\s+", "", payload.access_token.strip(), flags=re.IGNORECASE).strip().strip('"\'')
+    if not clean_token:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Google OAuth access token is required",
@@ -1462,7 +1520,7 @@ async def create_google_doc_document(
 
     try:
         result = exporter.create_google_document(
-            access_token=payload.access_token,
+            access_token=clean_token,
             recipes=recipes,
             title=payload.document_title or "RecipeBoxer Archival Cookbook",
             image_resolver=resolver,

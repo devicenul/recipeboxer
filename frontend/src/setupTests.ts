@@ -1,6 +1,12 @@
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
 
+// Default mock VITE_GOOGLE_CLIENT_ID in test environment
+process.env.VITE_GOOGLE_CLIENT_ID = 'mock-test-client-id.apps.googleusercontent.com';
+if (typeof import.meta !== 'undefined' && (import.meta as any).env) {
+  (import.meta as any).env.VITE_GOOGLE_CLIENT_ID = 'mock-test-client-id.apps.googleusercontent.com';
+}
+
 // Polyfill localStorage
 const localStorageMock = (() => {
   let store: Record<string, string> = {};
@@ -71,19 +77,18 @@ export const setMockGisResponse = (resp: typeof mockGisResponse) => {
   mockGisResponse = resp;
 };
 
+export const mockInitTokenClient = vi.fn();
+
 export const resetMockGisResponse = () => {
   mockGisResponse = { access_token: 'ya29.mock_gis_test_token' };
-};
-
-export const mockInitTokenClient = vi.fn().mockImplementation((config: any) => {
-  mockTokenClientCallback = config.callback;
-  mockTokenClientErrorCallback = config.error_callback || null;
-  return mockTokenClient;
-});
-
-Object.defineProperty(window, 'google', {
-  writable: true,
-  value: {
+  mockTokenClientCallback = null;
+  mockTokenClientErrorCallback = null;
+  mockInitTokenClient.mockReset().mockImplementation((config: any) => {
+    mockTokenClientCallback = config.callback;
+    mockTokenClientErrorCallback = config.error_callback || null;
+    return mockTokenClient;
+  });
+  window.google = {
     accounts: {
       oauth2: {
         initTokenClient: mockInitTokenClient,
@@ -92,5 +97,7 @@ Object.defineProperty(window, 'google', {
         revoke: vi.fn((_token, done) => done && done()),
       },
     },
-  },
-});
+  };
+};
+
+resetMockGisResponse();

@@ -275,8 +275,19 @@ class S3SourceProvider(BaseSourceProvider):
 
         return f"{base_url}?{canonical_query}&X-Amz-Signature={signature}"
 
+    def has_credentials(self) -> bool:
+        """Check if minimum required credentials for S3 are present."""
+        return bool(
+            self._custom_client is not None
+            or (self.access_key and self.secret_key)
+            or (self.config.credentials_json and self.config.credentials_json.strip())
+            or (self.config.auth_token and self.config.auth_token.strip())
+        )
+
     async def test_connection(self) -> bool:
         """Verify S3 credentials by checking bucket connectivity."""
+        if not self.has_credentials():
+            return False
         try:
             resp = await self._request("GET", query="list-type=2&max-keys=1")
             return resp.status_code in (200, 204)
@@ -292,6 +303,9 @@ class S3SourceProvider(BaseSourceProvider):
         **kwargs: Any,
     ) -> ListContainersResponse:
         """List common prefixes (virtual folders) within the bucket."""
+        if not self.has_credentials():
+            return ListContainersResponse(containers=[], next_page_token=None, total_count=0)
+
         prefix = parent_id or self.config.prefix or ""
         if prefix and not prefix.endswith("/"):
             prefix += "/"
@@ -341,6 +355,8 @@ class S3SourceProvider(BaseSourceProvider):
         **kwargs: Any,
     ) -> ListItemsResponse:
         """List image objects from S3 bucket matching prefix or search query."""
+        if not self.has_credentials():
+            return ListItemsResponse(items=[], next_page_token=None, total_count=0)
         prefix = container_id or self.config.prefix or ""
         query_str = f"list-type=2&prefix={urllib.parse.quote(prefix)}&max-keys={min(page_size, 100)}"
         if page_token:
@@ -545,8 +561,20 @@ class GCSSourceProvider(BaseSourceProvider):
             if should_close:
                 await client.aclose()
 
+    def has_credentials(self) -> bool:
+        """Check if minimum required credentials for GCS are present."""
+        return bool(
+            self._custom_client is not None
+            or (self._token and self._token.strip())
+            or (self.config.credentials_json and self.config.credentials_json.strip())
+            or (self.config.refresh_token and self.config.refresh_token.strip())
+            or (self.config.auth_token and self.config.auth_token.strip())
+        )
+
     async def test_connection(self) -> bool:
         """Verify GCS bucket accessibility."""
+        if not self.has_credentials():
+            return False
         try:
             resp = await self._request("GET", "o", params={"maxResults": 1})
             return resp.status_code == 200
@@ -562,6 +590,9 @@ class GCSSourceProvider(BaseSourceProvider):
         **kwargs: Any,
     ) -> ListContainersResponse:
         """List prefixes (directories) in GCS bucket."""
+        if not self.has_credentials():
+            return ListContainersResponse(containers=[], next_page_token=None, total_count=0)
+
         prefix = parent_id or self.config.prefix or ""
         params: Dict[str, Any] = {
             "delimiter": "/",
@@ -606,6 +637,8 @@ class GCSSourceProvider(BaseSourceProvider):
         **kwargs: Any,
     ) -> ListItemsResponse:
         """List objects in GCS bucket matching image extensions."""
+        if not self.has_credentials():
+            return ListItemsResponse(items=[], next_page_token=None, total_count=0)
         prefix = container_id or self.config.prefix or ""
         params: Dict[str, Any] = {
             "maxResults": min(page_size, 100),

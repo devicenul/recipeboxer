@@ -118,12 +118,76 @@ export const AppContent: React.FC = () => {
     if (!target) return;
     try {
       const st = await api.getStatus(target);
+      if (st.status === PipelineState.IDLE && (st.session_id === 'none' || !st.session_id) && target === sessionId) {
+        setSessionId(null);
+        if (typeof window !== 'undefined' && window.history.pushState) {
+          const url = new URL(window.location.href);
+          url.searchParams.delete('session_id');
+          window.history.pushState({}, '', url.pathname + (url.search ? url.search : '') + (url.hash ? url.hash : ''));
+        }
+        setCurrentStatus({
+          session_id: 'none',
+          status: PipelineState.IDLE,
+          mode: IngestionMode.PARALLEL,
+          progress: {
+            total_scans: 0,
+            fingerprinted: 0,
+            proposals_generated: 0,
+            approved_recipes: 0,
+            approved_pairs: 0,
+            recipes_extracted: 0,
+            current_stage: 'Idle',
+            percent_complete: 0,
+          },
+          token_usage: {
+            prompt_tokens: 0,
+            candidates_tokens: 0,
+            thinking_tokens: 0,
+            total_tokens: 0,
+          },
+          elapsed_seconds: 0,
+        });
+        return;
+      }
       setCurrentStatus(st);
       if (st.status === PipelineState.HITL_PENDING) {
         setPendingHitlCount(st.progress.proposals_generated || 1);
       }
-    } catch {
-      // Ignored
+    } catch (err: any) {
+      const isNotFound =
+        err?.message?.includes('404') ||
+        err?.status === 404 ||
+        err?.response?.status === 404;
+      if (isNotFound && target === sessionId) {
+        setSessionId(null);
+        if (typeof window !== 'undefined' && window.history.pushState) {
+          const url = new URL(window.location.href);
+          url.searchParams.delete('session_id');
+          window.history.pushState({}, '', url.pathname + (url.search ? url.search : '') + (url.hash ? url.hash : ''));
+        }
+        setCurrentStatus({
+          session_id: 'none',
+          status: PipelineState.IDLE,
+          mode: IngestionMode.PARALLEL,
+          progress: {
+            total_scans: 0,
+            fingerprinted: 0,
+            proposals_generated: 0,
+            approved_recipes: 0,
+            approved_pairs: 0,
+            recipes_extracted: 0,
+            current_stage: 'Idle',
+            percent_complete: 0,
+          },
+          token_usage: {
+            prompt_tokens: 0,
+            candidates_tokens: 0,
+            thinking_tokens: 0,
+            total_tokens: 0,
+          },
+          elapsed_seconds: 0,
+        });
+      }
     }
   }, [sessionId]);
 
@@ -138,6 +202,23 @@ export const AppContent: React.FC = () => {
   const { isConnected } = useSSE({
     sessionId,
     enabled: !!sessionId,
+    maxReconnectAttempts: 3,
+    onSessionInvalid: (invalidSid) => {
+      if (sessionId === invalidSid || !sessionId) {
+        setSessionId(null);
+        if (typeof window !== 'undefined' && window.history.pushState) {
+          const url = new URL(window.location.href);
+          url.searchParams.delete('session_id');
+          window.history.pushState({}, '', url.pathname + (url.search ? url.search : '') + (url.hash ? url.hash : ''));
+        }
+        setCurrentStatus((prev) => ({
+          ...prev,
+          session_id: 'none',
+          status: PipelineState.IDLE,
+          error: undefined,
+        }));
+      }
+    },
     onStateChange: (status) => {
       setCurrentStatus(status);
       if (status.session_id && status.session_id !== 'none' && !sessionId) {

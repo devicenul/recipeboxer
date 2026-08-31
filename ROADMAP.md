@@ -64,6 +64,9 @@ All roadmap items and milestones use standardized status tags:
        │
        ▼
 [ ] Phase 9: Multi-Session Project Persistence & Export Curation
+       │
+       ▼
+[ ] Phase 10: Official Google Cloud OAuth Provisioning & Fallback Deprecation
 ```
 
 ---
@@ -244,6 +247,22 @@ All roadmap items and milestones use standardized status tags:
     - **Alphabetical Ordering**: A–Z or Z–A by recipe title.
   - **Cookbook Layout & Section Formatting**:
     - Automatically generate formatted section divider pages and styled Tables of Contents in DOCX, printable PDF, and Google Docs cookbook exports reflecting the user's chosen grouping.
+
+---
+
+### Phase 10: Official Google Cloud OAuth Provisioning & Fallback Deprecation
+*Zero-configuration cloud publishing: Provision an official Google Cloud project with public OAuth 2.0 Web Client credentials for localhost/production origins, complete Google app verification for Docs/Drive scopes, bake the default client ID into open-source distributions, and deprecate manual token/client ID entry fallback drawers once verified working.*
+
+- [ ] **Official Google Cloud Project & OAuth 2.0 Provisioning**:
+  - **Google Cloud Console Setup**: Create an official, zero-cost Google Cloud project dedicated to RecipeBoxer.
+  - **API Enablement**: Enable the Google Docs API and Google Drive API (`drive.file` and `documents` scopes).
+  - **OAuth 2.0 Web Client Configuration**: Register an OAuth 2.0 Client ID with authorized JavaScript origins for local development (`http://localhost:8000`, `http://127.0.0.1:8000`) and any future hosted domain.
+  - **Verification & Consent Screen**: Configure the OAuth consent screen with privacy policy documentation and submit for standard Google verification so any user can authenticate without developer test-user restrictions.
+- [ ] **Repository Configuration & Zero-Friction Distribution**:
+  - **Default Client ID Integration**: Embed the official public Client ID into `frontend/.env.production` and default client configuration (`VITE_GOOGLE_CLIENT_ID`) so GitHub clones run 1-click Google sign-in out of the box.
+- [ ] **Fallback Deprecation & UI Cleanup**:
+  - **Deprecate Manual Token Drawer**: Once the official OAuth popup flow is confirmed operational across all target environments, retire the manual token input drawer and client ID entry prompts from `GoogleDocsPreview.tsx` to streamline the UI to a pure 1-click export experience.
+  - **Retain Power-User Overrides**: Preserve environment variable (`VITE_GOOGLE_CLIENT_ID`) overrides for self-hosted instances running on custom non-localhost domain names.
 
 ---
 

@@ -447,3 +447,131 @@ class TestAPIRoutes:
             joined = "".join(chunks)
             assert ": connected" in joined
             assert "event: state_change" in joined or "event: completed" in joined
+
+    @pytest.mark.asyncio
+    async def test_sse_stream_sqlite_fallback_for_restarted_session(
+        self, client: httpx.AsyncClient, test_session_store: SessionStore
+    ):
+        """Test GET /api/events gracefully streams persisted terminal status from SQLite without 404."""
+        sid = "sess_restarted_sqlite"
+        test_session_store.save_session(
+            session_id=sid,
+            state=PipelineState.COMPLETED,
+            mode="parallel",
+            recipe_count=1,
+        )
+
+        async with client.stream("GET", f"/api/events?session_id={sid}") as response:
+            assert response.status_code == 200
+            assert "text/event-stream" in response.headers["content-type"]
+            chunks = []
+            async for chunk in response.aiter_text():
+                chunks.append(chunk)
+            joined = "".join(chunks)
+            assert ": connected" in joined
+            assert "event: state_change" in joined
+            assert "event: completed" in joined
+
+    @pytest.mark.asyncio
+    async def test_sse_stream_nonexistent_session_returns_404(
+        self, client: httpx.AsyncClient
+    ):
+        """Test GET /api/events with nonexistent session in both memory and SQLite returns 404."""
+        resp = await client.get("/api/events?session_id=nonexistent_missing_session")
+        assert resp.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_sources_providers_unconfigured_cloud_fast_probe(
+        self, client: httpx.AsyncClient
+    ):
+        """Test GET /api/sources/providers returns immediately with connected=False for unconfigured S3/GCS."""
+        resp = await client.get("/api/sources/providers")
+        assert resp.status_code == 200
+        providers = {p["provider_id"]: p for p in resp.json()}
+        assert "s3" in providers
+        assert "gcs" in providers
+        assert providers["s3"]["connected"] is False
+        assert providers["gcs"]["connected"] is False
+
+    @pytest.mark.asyncio
+    async def test_sse_stream_empty_or_none_sentinel_session_id(
+        self, client: httpx.AsyncClient
+    ):
+        """Test GET /api/events with empty, whitespace, 'none', 'null', 'undefined' (case-insensitive) returns IDLE cleanly without 404."""
+        for param in ["", "none", "None", "NONE", "null", "NULL", "undefined", "Undefined", "   "]:
+            async with client.stream("GET", f"/api/events?session_id={param}") as response:
+                assert response.status_code == 200
+                chunks = []
+                async for chunk in response.aiter_text():
+                    chunks.append(chunk)
+                joined = "".join(chunks)
+                assert ": connected" in joined
+                assert '"status": "IDLE"' in joined
+
+    @pytest.mark.asyncio
+    async def test_sse_stream_active_session_when_omitted(
+        self, client: httpx.AsyncClient, test_session_manager: SessionManager
+    ):
+        """Test GET /api/events with no session_id streams active session when present in manager."""
+        session = test_session_manager.create_session()
+        session.state = PipelineState.COMPLETED
+        session.progress_metrics.percent_complete = 100.0
+
+        async with client.stream("GET", "/api/events") as response:
+            assert response.status_code == 200
+            chunks = []
+            async for chunk in response.aiter_text():
+                chunks.append(chunk)
+            joined = "".join(chunks)
+            assert ": connected" in joined
+            assert "event: state_change" in joined or "event: completed" in joined
+            assert session.session_id in joined
+
+    @pytest.mark.asyncio
+    async def test_sse_stream_sqlite_fallback_slow_batch_and_lowercase_state(
+        self, client: httpx.AsyncClient, test_session_store: SessionStore
+    ):
+        """Test GET /api/events and /api/pipeline/status correctly normalize slow-batch / slow_batch modes and lowercase states."""
+        sid = "sess_slow_batch_sqlite"
+        test_session_store.save_session(
+            session_id=sid,
+            state="completed",
+            mode="slow-batch",
+            recipe_count=2,
+        )
+
+        async with client.stream("GET", f"/api/events?session_id={sid}") as response:
+            assert response.status_code == 200
+            chunks = []
+            async for chunk in response.aiter_text():
+                chunks.append(chunk)
+            joined = "".join(chunks)
+            assert ": connected" in joined
+            assert '"mode":"slow_batch"' in joined or '"mode": "slow_batch"' in joined
+            assert '"status":"COMPLETED"' in joined or '"status": "COMPLETED"' in joined
+            assert "event: completed" in joined
+
+        resp = await client.get(f"/api/pipeline/status?session_id={sid}")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["mode"] == "slow_batch"
+        assert data["status"] == "COMPLETED"
+
+    @pytest.mark.asyncio
+    async def test_pipeline_status_unknown_session_returns_none_session_id(
+        self, client: httpx.AsyncClient
+    ):
+        """Test GET /api/pipeline/status and /api/status for unknown session returns session_id='none' and status=IDLE."""
+        resp = await client.get("/api/pipeline/status?session_id=totally_unknown_session_id")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["session_id"] == "none"
+        assert data["status"] == "IDLE"
+
+        resp_alias = await client.get("/api/status?session_id=totally_unknown_session_id")
+        assert resp_alias.status_code == 200
+        data_alias = resp_alias.json()
+        assert data_alias["session_id"] == "none"
+        assert data_alias["status"] == "IDLE"
+
+

@@ -9,13 +9,20 @@ class MockEventSource {
   onopen: (() => void) | null = null;
   onerror: ((err: any) => void) | null = null;
   listeners: Record<string, ((e: any) => void)[]> = {};
-  private openTimer: any = null;
+  openTimer: any = null;
 
   constructor(url: string) {
     this.url = url;
     this.openTimer = setTimeout(() => {
       this.onopen?.();
     }, 10);
+  }
+
+  cancelAutoOpen() {
+    if (this.openTimer) {
+      clearTimeout(this.openTimer);
+      this.openTimer = null;
+    }
   }
 
   addEventListener(type: string, listener: (e: any) => void) {
@@ -39,6 +46,10 @@ class MockEventSource {
   }
 
   triggerError(err: any) {
+    if (this.openTimer) {
+      clearTimeout(this.openTimer);
+      this.openTimer = null;
+    }
     this.onerror?.(err);
   }
 
@@ -204,4 +215,330 @@ describe('R1: Server-Sent Events (SSE) Live Stream Hook', () => {
     expect(callCount).toBe(2);
     vi.useRealTimers();
   });
+
+  it('caps repeated reconnection attempts and stops reconnect loop', async () => {
+    vi.useFakeTimers();
+    let callCount = 0;
+    (global as any).EventSource = vi.fn((url: string) => {
+      callCount++;
+      const instance = new MockEventSource(url);
+      if (instance.openTimer) {
+        clearTimeout(instance.openTimer);
+        instance.openTimer = null;
+      }
+      mockEventSourceInstance = instance;
+      return mockEventSourceInstance;
+    });
+
+    const onSessionInvalid = vi.fn();
+    const onError = vi.fn();
+
+    const { result } = renderHook(() =>
+      useSSE({
+        sessionId: 'sess_cap_test',
+        maxReconnectAttempts: 2,
+        fallbackPolling: false,
+        onError,
+        onSessionInvalid,
+      })
+    );
+
+    expect(callCount).toBe(1);
+
+    // First error -> should schedule reconnect
+    act(() => {
+      mockEventSourceInstance?.triggerError(new Error('Connection 1 failed'));
+    });
+    expect(result.current.isReconnecting).toBe(true);
+
+    act(() => {
+      vi.advanceTimersByTime(1600);
+    });
+    expect(callCount).toBe(2);
+
+    // Second error -> reaches maxReconnectAttempts (2), should stop reconnecting
+    act(() => {
+      mockEventSourceInstance?.triggerError(new Error('Connection 2 failed'));
+    });
+
+    expect(result.current.isReconnecting).toBe(false);
+    expect(onSessionInvalid).toHaveBeenCalledWith('sess_cap_test');
+
+    // Advance time further -> no new EventSource connections created
+    act(() => {
+      vi.advanceTimersByTime(10000);
+    });
+    expect(callCount).toBe(2);
+
+    vi.useRealTimers();
+  });
+
+  it('falls back to polling /api/pipeline/status when SSE fails repeatedly', async () => {
+    vi.useFakeTimers();
+    let callCount = 0;
+    (global as any).EventSource = vi.fn((url: string) => {
+      callCount++;
+      mockEventSourceInstance = new MockEventSource(url);
+      return mockEventSourceInstance;
+    });
+
+    const onStateChange = vi.fn();
+    const onSessionInvalid = vi.fn();
+
+    // Mock fetch for fallback polling
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        session_id: 'sess_poll_test',
+        status: PipelineState.COMPLETED,
+        progress: { percent_complete: 100 },
+      }),
+    });
+    (global as any).fetch = fetchMock;
+
+    renderHook(() =>
+      useSSE({
+        sessionId: 'sess_poll_test',
+        maxReconnectAttempts: 1,
+        fallbackPolling: true,
+        fallbackPollingIntervalMs: 2000,
+        onStateChange,
+        onSessionInvalid,
+      })
+    );
+
+    expect(callCount).toBe(1);
+
+    // Trigger error -> exceeds maxReconnectAttempts (1)
+    act(() => {
+      mockEventSourceInstance?.triggerError(new Error('SSE disconnected'));
+    });
+
+    // Advance to trigger fallback poll
+    await act(async () => {
+      vi.advanceTimersByTime(600);
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('/api/pipeline/status?session_id=sess_poll_test')
+    );
+    expect(onStateChange).toHaveBeenCalledWith(
+      expect.objectContaining({ status: PipelineState.COMPLETED })
+    );
+
+    vi.useRealTimers();
+  });
+
+  it('evicts stale session when fallback polling receives 404', async () => {
+    vi.useFakeTimers();
+    let callCount = 0;
+    (global as any).EventSource = vi.fn((url: string) => {
+      callCount++;
+      mockEventSourceInstance = new MockEventSource(url);
+      return mockEventSourceInstance;
+    });
+
+    const onSessionInvalid = vi.fn();
+
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 404,
+      json: async () => ({ detail: 'Session not found' }),
+    });
+    (global as any).fetch = fetchMock;
+
+    renderHook(() =>
+      useSSE({
+        sessionId: 'sess_stale_404',
+        maxReconnectAttempts: 1,
+        fallbackPolling: true,
+        onSessionInvalid,
+      })
+    );
+
+    // Trigger error -> starts fallback polling
+    act(() => {
+      mockEventSourceInstance?.triggerError(new Error('SSE connection refused'));
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(600);
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('/api/pipeline/status?session_id=sess_stale_404')
+    );
+    expect(onSessionInvalid).toHaveBeenCalledWith('sess_stale_404');
+
+    vi.useRealTimers();
+  });
+
+  it('discards stale fallback polling updates when sessionId changes', async () => {
+    vi.useFakeTimers();
+    let callCount = 0;
+    (global as any).EventSource = vi.fn((url: string) => {
+      callCount++;
+      mockEventSourceInstance = new MockEventSource(url);
+      return mockEventSourceInstance;
+    });
+
+    const onStateChange = vi.fn();
+    const fetchMock = vi.fn().mockImplementation(async () => {
+      await new Promise((r) => setTimeout(r, 100));
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          session_id: 'sess_old',
+          status: PipelineState.COMPLETED,
+          progress: { percent_complete: 100 },
+        }),
+      };
+    });
+    (global as any).fetch = fetchMock;
+
+    const { rerender } = renderHook(
+      ({ sid }) =>
+        useSSE({
+          sessionId: sid,
+          maxReconnectAttempts: 1,
+          fallbackPolling: true,
+          onStateChange,
+        }),
+      { initialProps: { sid: 'sess_old' } }
+    );
+
+    // Error out sess_old to start fallback polling
+    act(() => {
+      mockEventSourceInstance?.triggerError(new Error('SSE failed'));
+    });
+
+    // Switch to sess_new before poll executes/resolves
+    rerender({ sid: 'sess_new' });
+
+    await act(async () => {
+      vi.advanceTimersByTime(1000);
+    });
+
+    // onStateChange should not have been called with sess_old's data
+    expect(onStateChange).not.toHaveBeenCalledWith(
+      expect.objectContaining({ session_id: 'sess_old' })
+    );
+
+    vi.useRealTimers();
+  });
+
+  it('resets isConnected to false when enabled becomes false', async () => {
+    vi.useFakeTimers();
+    (global as any).EventSource = vi.fn((url: string) => {
+      mockEventSourceInstance = new MockEventSource(url);
+      return mockEventSourceInstance;
+    });
+
+    const { result, rerender } = renderHook(
+      ({ isEnabled }) =>
+        useSSE({
+          sessionId: 'sess_toggle',
+          enabled: isEnabled,
+        }),
+      { initialProps: { isEnabled: true } }
+    );
+
+    act(() => {
+      vi.advanceTimersByTime(20);
+    });
+
+    expect(result.current.isConnected).toBe(true);
+
+    // Disable hook (e.g. session cleared)
+    rerender({ isEnabled: false });
+
+    expect(result.current.isConnected).toBe(false);
+    expect(result.current.isReconnecting).toBe(false);
+
+    vi.useRealTimers();
+  });
+
+  it('evicts session when fallback polling receives status IDLE with session_id none', async () => {
+    vi.useFakeTimers();
+    (global as any).EventSource = vi.fn((url: string) => {
+      mockEventSourceInstance = new MockEventSource(url);
+      return mockEventSourceInstance;
+    });
+
+    const onSessionInvalid = vi.fn();
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        session_id: 'none',
+        status: PipelineState.IDLE,
+      }),
+    });
+    (global as any).fetch = fetchMock;
+
+    renderHook(() =>
+      useSSE({
+        sessionId: 'sess_unknown_poll',
+        maxReconnectAttempts: 1,
+        fallbackPolling: true,
+        onSessionInvalid,
+      })
+    );
+
+    // Trigger error -> starts fallback polling
+    act(() => {
+      mockEventSourceInstance?.triggerError(new Error('SSE closed'));
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(600);
+    });
+
+    expect(onSessionInvalid).toHaveBeenCalledWith('sess_unknown_poll');
+
+    vi.useRealTimers();
+  });
+
+  it('evicts session when fallback polling receives status IDLE with session_id empty or missing', async () => {
+    vi.useFakeTimers();
+    (global as any).EventSource = vi.fn((url: string) => {
+      mockEventSourceInstance = new MockEventSource(url);
+      return mockEventSourceInstance;
+    });
+
+    const onSessionInvalid = vi.fn();
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        session_id: '',
+        status: PipelineState.IDLE,
+      }),
+    });
+    (global as any).fetch = fetchMock;
+
+    renderHook(() =>
+      useSSE({
+        sessionId: 'my_empty_session',
+        maxReconnectAttempts: 1,
+        fallbackPolling: true,
+        onSessionInvalid,
+      })
+    );
+
+    act(() => {
+      mockEventSourceInstance?.triggerError(new Error('SSE closed'));
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(600);
+    });
+
+    expect(onSessionInvalid).toHaveBeenCalledWith('my_empty_session');
+
+    vi.useRealTimers();
+  });
 });
+

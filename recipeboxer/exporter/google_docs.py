@@ -666,7 +666,9 @@ ol.direction-list li {
         if not recipe_list:
             raise ValueError("No recipes provided for Google Docs export")
 
-        clean_token = access_token.strip()
+        clean_token = re.sub(r"^Bearer\s+", "", access_token.strip(), flags=re.IGNORECASE).strip().strip('"\'')
+        if not clean_token:
+            raise ValueError("Google OAuth access token is required")
         headers = {
             "Authorization": f"Bearer {clean_token}",
             "Accept": "application/json",
