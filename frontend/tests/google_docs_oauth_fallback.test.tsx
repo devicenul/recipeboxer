@@ -182,7 +182,7 @@ describe('Google Identity Services OAuth 401 invalid_client Resolution & Manual 
 
       await expect(
         requestGoogleAccessToken({ scope: GOOGLE_SCOPES.DOCS_EXPORT })
-      ).rejects.toThrow(/popup was blocked by the browser.*Manual Access Token/i);
+      ).rejects.toThrow(/popup was blocked by the browser/i);
     });
 
     it('handles popup_closed error when user closes popup window', async () => {
@@ -321,7 +321,7 @@ describe('Google Identity Services OAuth 401 invalid_client Resolution & Manual 
   });
 
   describe('2. Integration: GoogleDocsPreview Unconfigured State Alerting & Setup Guidance (R1, R3)', () => {
-    it('displays unconfigured alert banner when no Client ID is set and does not trigger fake GIS client ID', async () => {
+    it('displays unconfigured alert banner when no Client ID is set and export button is disabled with tooltip', async () => {
       process.env.VITE_GOOGLE_CLIENT_ID = '';
       clearStoredGoogleClientId();
 
@@ -332,16 +332,21 @@ describe('Google Identity Services OAuth 401 invalid_client Resolution & Manual 
         screen.getByText(/Google OAuth Client ID is not configured/i)
       ).toBeInTheDocument();
 
-      // Click "Export directly to Google Docs"
+      // Verify export button is disabled with "Support In Progress" tooltip
       const exportBtn = screen.getByRole('button', { name: /Export directly to Google Docs/i });
-      fireEvent.click(exportBtn);
+      expect(exportBtn).toBeDisabled();
+      expect(exportBtn).toHaveAttribute('title', 'Support In Progress');
 
-      // Verify error alert is displayed and GIS init was NOT called with a fake dummy ID
-      expect(
-        screen.getByText(/Google OAuth Client ID is not configured\. Please configure your Client ID in OAuth Settings/i)
-      ).toBeInTheDocument();
+      // Verify no manual token buttons or fallback drawers exist
+      expect(screen.queryByRole('button', { name: /Manual Access/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Enter Manual Token/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('region', { name: /Manual Access Token Fallback/i })).not.toBeInTheDocument();
 
-      // Verify OAuth settings drawer opened automatically
+      // Click "Configure Client ID" in unconfigured banner
+      const configBtn = screen.getByRole('button', { name: /Configure Client ID/i });
+      fireEvent.click(configBtn);
+
+      // Verify OAuth settings drawer opened
       expect(screen.getByRole('region', { name: /OAuth Client ID Settings/i })).toBeInTheDocument();
     });
 
@@ -403,329 +408,27 @@ describe('Google Identity Services OAuth 401 invalid_client Resolution & Manual 
     });
   });
 
-  describe('3. Integration: Manual Access Token Fallback Drawer (R2)', () => {
-    it('toggles manual token drawer open and closed cleanly', () => {
-      render(<GoogleDocsPreview recipes={sampleRecipes} sessionId="sess_drawer_toggle" />);
+  describe('3. Integration: Streamlined OAuth Configuration & Removal of Manual Fallbacks (R1, R2)', () => {
+    it('verifies manual token fallback drawer, manual inputs, and buttons are completely absent from DOM', () => {
+      render(<GoogleDocsPreview recipes={sampleRecipes} sessionId="sess_no_drawer" />);
 
-      // Initially closed
       expect(screen.queryByRole('region', { name: /Manual Access Token Fallback/i })).not.toBeInTheDocument();
-
-      // Click toggle
-      const manualToggle = screen.getByRole('button', { name: /Manual Access Fallback/i });
-      fireEvent.click(manualToggle);
-
-      // Now open
-      expect(screen.getByRole('region', { name: /Manual Access Token Fallback/i })).toBeInTheDocument();
-      expect(screen.getByLabelText(/Google OAuth Access Token/i)).toBeInTheDocument();
-
-      // Click Close
-      const closeBtn = screen.getByRole('button', { name: /Close/i });
-      fireEvent.click(closeBtn);
-
-      // Closed again
-      expect(screen.queryByRole('region', { name: /Manual Access Token Fallback/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Manual Access/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Enter Manual Token/i })).not.toBeInTheDocument();
+      expect(screen.queryByLabelText(/Google OAuth Access Token/i)).not.toBeInTheDocument();
+      expect(screen.queryByPlaceholderText(/ya29\./i)).not.toBeInTheDocument();
     });
 
-    it('submits manual access token to /api/export/google-docs/create-document and renders document link upon success', async () => {
-      const originalFetch = global.fetch;
-      const mockFetch = vi.fn().mockImplementation((url, init) => {
-        if (typeof url === 'string' && url.includes('/api/export/google-docs/create-document')) {
-          const body = JSON.parse(init.body);
-          expect(body.access_token).toBe('ya29.manual_live_token_777');
-          expect(body.session_id).toBe('sess_manual_token_export');
-          expect(body.document_title).toBe('RecipeBoxer - Rustic Apple Galette');
-
-          return Promise.resolve({
-            ok: true,
-            status: 200,
-            json: () =>
-              Promise.resolve({
-                document_id: 'doc_manual_success_888',
-                url: 'https://docs.google.com/document/d/doc_manual_success_888/edit',
-                title: 'RecipeBoxer - Rustic Apple Galette',
-                recipe_count: 1,
-              }),
-          } as Response);
-        }
-        return originalFetch(url, init);
-      });
-      global.fetch = mockFetch;
-
-      render(<GoogleDocsPreview recipes={sampleRecipes} sessionId="sess_manual_token_export" />);
-
-      // Open manual token drawer
-      const manualToggle = screen.getByRole('button', { name: /Manual Access Fallback/i });
-      fireEvent.click(manualToggle);
-
-      // Enter manual access token
-      const tokenInput = screen.getByLabelText(/Google OAuth Access Token/i);
-      fireEvent.change(tokenInput, { target: { value: 'ya29.manual_live_token_777' } });
-
-      // Click "Export with Access Token"
-      const exportTokenBtn = screen.getByRole('button', { name: /Export with Access Token/i });
-      fireEvent.click(exportTokenBtn);
-
-      // Verify success document link
-      const successLink = await screen.findByRole('link', { name: /Open in Google Docs/i });
-      expect(successLink).toBeInTheDocument();
-      expect(successLink).toHaveAttribute(
-        'href',
-        'https://docs.google.com/document/d/doc_manual_success_888/edit'
-      );
-      expect(screen.getByText(/Document Created:/i)).toBeInTheDocument();
-
-      global.fetch = originalFetch;
-    });
-
-    it('validates manual token input and displays error when token is empty or whitespace', async () => {
-      render(<GoogleDocsPreview recipes={sampleRecipes} sessionId="sess_empty_token" />);
-
-      // Open manual token drawer
-      const manualToggle = screen.getByRole('button', { name: /Manual Access Fallback/i });
-      fireEvent.click(manualToggle);
-
-      // Leave empty and click export
-      const tokenInput = screen.getByLabelText(/Google OAuth Access Token/i);
-      fireEvent.change(tokenInput, { target: { value: '   ' } });
-
-      const exportTokenBtn = screen.getByRole('button', { name: /Export with Access Token/i });
-      expect(exportTokenBtn).toBeDisabled();
-    });
-
-    it('surfaces manual token option and diagnostics when GIS popup fails with invalid_client', async () => {
-      setMockGisResponse({
-        error: 'invalid_client',
-        error_description: 'The OAuth client was not found.',
-      });
-
-      render(<GoogleDocsPreview recipes={sampleRecipes} sessionId="sess_invalid_client_test" />);
-
-      // Click 1-click GIS export button
-      const exportBtn = screen.getByRole('button', { name: /Export directly to Google Docs/i });
-      fireEvent.click(exportBtn);
-
-      // Verify diagnostic error alert is rendered
-      await waitFor(() => {
-        expect(
-          screen.getByText(/Google Docs export failed: Google OAuth authorization failed: invalid_client/i)
-        ).toBeInTheDocument();
-      });
-
-      // Verify troubleshooting actions are surfaced
-      expect(screen.getByText(/Troubleshooting:/i)).toBeInTheDocument();
-      const enterManualBtn = screen.getByRole('button', { name: /Enter Manual Token/i });
-      expect(enterManualBtn).toBeInTheDocument();
-
-      // Clicking troubleshooting "Enter Manual Token" reveals manual token drawer
-      fireEvent.click(enterManualBtn);
-      expect(screen.getByRole('region', { name: /Manual Access Token Fallback/i })).toBeInTheDocument();
-    });
-
-    it('handles HTTP 403 Insufficient Scope error by clearing cached token and surfacing manual token drawer', async () => {
-      const originalFetch = global.fetch;
-      global.fetch = vi.fn().mockImplementation((url) => {
-        if (typeof url === 'string' && url.includes('/api/export/google-docs/create-document')) {
-          return Promise.resolve({
-            ok: false,
-            status: 403,
-            json: () =>
-              Promise.resolve({
-                detail: 'Google OAuth authorization failed: Insufficient Permission / Scope',
-              }),
-          } as Response);
-        }
-        return originalFetch(url);
-      });
-
-      render(<GoogleDocsPreview recipes={sampleRecipes} sessionId="sess_scope_403_test" />);
-
-      // Open manual drawer and submit token
-      const manualToggle = screen.getByRole('button', { name: /Manual Access Fallback/i });
-      fireEvent.click(manualToggle);
-
-      const tokenInput = screen.getByLabelText(/Google OAuth Access Token/i);
-      fireEvent.change(tokenInput, { target: { value: 'ya29.scope_insufficient_token' } });
-
-      const exportBtn = screen.getByRole('button', { name: /Export with Access Token/i });
-      fireEvent.click(exportBtn);
-
-      // Verify 403 error is surfaced with troubleshooting actions
-      await waitFor(() => {
-        expect(
-          screen.getByText(/Google Docs export failed: Google OAuth authorization failed: Insufficient Permission/i)
-        ).toBeInTheDocument();
-      });
-
-      expect(screen.getByText(/Troubleshooting:/i)).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /Enter Manual Token/i })).toBeInTheDocument();
-
-      global.fetch = originalFetch;
-    });
-
-    it('handles expired token (HTTP 401), clears token state, and allows re-authentication via GIS popup', async () => {
-      let callCount = 0;
-      const originalFetch = global.fetch;
-      global.fetch = vi.fn().mockImplementation((url, init) => {
-        if (typeof url === 'string' && url.includes('/api/export/google-docs/create-document')) {
-          callCount++;
-          if (callCount === 1) {
-            return Promise.resolve({
-              ok: false,
-              status: 401,
-              json: () =>
-                Promise.resolve({
-                  detail: 'Google OAuth authorization failed: 401 Unauthorized (Token expired)',
-                }),
-            } as Response);
-          } else {
-            return Promise.resolve({
-              ok: true,
-              status: 200,
-              json: () =>
-                Promise.resolve({
-                  document_id: 'doc_refreshed_999',
-                  url: 'https://docs.google.com/document/d/doc_refreshed_999/edit',
-                  title: 'RecipeBoxer - Rustic Apple Galette',
-                  recipe_count: 1,
-                }),
-            } as Response);
-          }
-        }
-        return originalFetch(url, init);
-      });
-
-      // Provide valid mock GIS token
-      setMockGisResponse({ access_token: 'mock-gis-fresh-token-123' });
-
-      render(<GoogleDocsPreview recipes={sampleRecipes} sessionId="sess_expired_token_test" />);
-
-      // First click: gets GIS token and attempts create -> fails with 401
-      const exportBtn = screen.getByRole('button', { name: /Export directly to Google Docs/i });
-      fireEvent.click(exportBtn);
-
-      await waitFor(() => {
-        expect(
-          screen.getByText(/Google Docs export failed: Google OAuth authorization failed: 401/i)
-        ).toBeInTheDocument();
-      });
-
-      // Second click: token state was evicted on 401, so it requests fresh token from GIS and succeeds
-      fireEvent.click(exportBtn);
-
-      await waitFor(() => {
-        expect(screen.getByRole('link', { name: /Open in Google Docs/i })).toBeInTheDocument();
-      });
-
-      global.fetch = originalFetch;
-    });
-
-    it('surfaces manual token fallback when browser blocks popup window', async () => {
-      mockInitTokenClient.mockImplementationOnce((config) => {
-        return {
-          requestAccessToken: () => {
-            if (config.error_callback) {
-              config.error_callback({
-                type: 'popup_blocked_by_browser',
-                message: 'Popup window was blocked by the browser',
-              });
-            }
-          },
-        };
-      });
-
-      render(<GoogleDocsPreview recipes={sampleRecipes} sessionId="sess_popup_blocked_test" />);
+    it('disables Google Docs export trigger button and renders Support In Progress tooltip', () => {
+      render(<GoogleDocsPreview recipes={sampleRecipes} sessionId="sess_disabled_tooltip" />);
 
       const exportBtn = screen.getByRole('button', { name: /Export directly to Google Docs/i });
-      fireEvent.click(exportBtn);
-
-      await waitFor(() => {
-        expect(
-          screen.getByText(/Google OAuth authorization popup was blocked by the browser/i)
-        ).toBeInTheDocument();
-      });
-
-      // Manual token fallback drawer automatically surfaced
-      expect(screen.getByRole('region', { name: /Manual Access Token Fallback/i })).toBeInTheDocument();
-      expect(screen.getByText(/Troubleshooting:/i)).toBeInTheDocument();
+      expect(exportBtn).toBeInTheDocument();
+      expect(exportBtn).toBeDisabled();
+      expect(exportBtn).toHaveAttribute('title', 'Support In Progress');
     });
 
-    it('surfaces manual token fallback when GIS script fails to load or SDK is unavailable', async () => {
-      mockInitTokenClient.mockImplementationOnce(() => {
-        throw new Error('Google Identity Services SDK is not available. Please use the Manual Access Token fallback.');
-      });
-
-      render(<GoogleDocsPreview recipes={sampleRecipes} sessionId="sess_script_fail_test" />);
-
-      const exportBtn = screen.getByRole('button', { name: /Export directly to Google Docs/i });
-      fireEvent.click(exportBtn);
-
-      await waitFor(() => {
-        expect(
-          screen.getByText(/Google Identity Services SDK is not available/i)
-        ).toBeInTheDocument();
-      });
-
-      // Verifies manual token fallback drawer opened automatically
-      expect(screen.getByRole('region', { name: /Manual Access Token Fallback/i })).toBeInTheDocument();
-      expect(screen.getByText(/Troubleshooting:/i)).toBeInTheDocument();
-    });
-
-    it('handles non-JSON HTTP 502/500 error from backend gracefully without syntax error crash', async () => {
-      const originalFetch = global.fetch;
-      global.fetch = vi.fn().mockImplementation((url) => {
-        if (typeof url === 'string' && url.includes('/api/export/google-docs/create-document')) {
-          return Promise.resolve({
-            ok: false,
-            status: 502,
-            statusText: 'Bad Gateway',
-            json: () => Promise.reject(new SyntaxError('Unexpected token < in JSON at position 0')),
-          } as unknown as Response);
-        }
-        return originalFetch(url);
-      });
-
-      render(<GoogleDocsPreview recipes={sampleRecipes} sessionId="sess_502_test" />);
-
-      // Open manual drawer and submit token
-      const manualToggle = screen.getByRole('button', { name: /Manual Access Fallback/i });
-      fireEvent.click(manualToggle);
-
-      const tokenInput = screen.getByLabelText(/Google OAuth Access Token/i);
-      fireEvent.change(tokenInput, { target: { value: 'ya29.valid_token_but_gateway_down' } });
-
-      const exportBtn = screen.getByRole('button', { name: /Export with Access Token/i });
-      fireEvent.click(exportBtn);
-
-      await waitFor(() => {
-        expect(
-          screen.getByText(/Google Docs export failed: Server returned HTTP 502 \(Bad Gateway\)/i)
-        ).toBeInTheDocument();
-      });
-
-      expect(screen.getByText(/Troubleshooting:/i)).toBeInTheDocument();
-      global.fetch = originalFetch;
-    });
-
-    it('supports submitting manual access token and saving client ID with Enter key', async () => {
-      let createCalled = false;
-      const originalFetch = global.fetch;
-      global.fetch = vi.fn().mockImplementation((url) => {
-        if (typeof url === 'string' && url.includes('/api/export/google-docs/create-document')) {
-          createCalled = true;
-          return Promise.resolve({
-            ok: true,
-            status: 200,
-            json: () =>
-              Promise.resolve({
-                document_id: 'doc_enter_key_123',
-                url: 'https://docs.google.com/document/d/doc_enter_key_123/edit',
-                title: 'RecipeBoxer - Rustic Apple Galette',
-              }),
-          } as Response);
-        }
-        return originalFetch(url);
-      });
-
+    it('supports saving client ID with Enter key and verifies no manual token drawer exists', async () => {
       render(<GoogleDocsPreview recipes={sampleRecipes} sessionId="sess_enter_key_test" />);
 
       // Test Enter on Client ID input
@@ -738,20 +441,8 @@ describe('Google Identity Services OAuth 401 invalid_client Resolution & Manual 
 
       expect(localStorage.getItem(GOOGLE_CLIENT_ID_STORAGE_KEY)).toBe('enter-key-client.apps.googleusercontent.com');
 
-      // Test Enter on Manual Token input
-      const manualToggle = screen.getByRole('button', { name: /Manual Access Fallback/i });
-      fireEvent.click(manualToggle);
-
-      const tokenInput = screen.getByLabelText(/Google OAuth Access Token/i);
-      fireEvent.change(tokenInput, { target: { value: 'ya29.enter_token_456' } });
-      fireEvent.keyDown(tokenInput, { key: 'Enter', code: 'Enter' });
-
-      await waitFor(() => {
-        expect(createCalled).toBe(true);
-        expect(screen.getByRole('link', { name: /Open in Google Docs/i })).toBeInTheDocument();
-      });
-
-      global.fetch = originalFetch;
+      // Verify no manual token fallback is triggered or visible
+      expect(screen.queryByRole('region', { name: /Manual Access Token Fallback/i })).not.toBeInTheDocument();
     });
 
     it('copies fallback batch JSON when /api/export/google-docs endpoint returns error', async () => {
@@ -789,141 +480,6 @@ describe('Google Identity Services OAuth 401 invalid_client Resolution & Manual 
       global.fetch = originalFetch;
     });
 
-    it('sanitizes manual access token by stripping Bearer prefix and surrounding quotes before API submission', async () => {
-      let submittedToken = '';
-      const originalFetch = global.fetch;
-      global.fetch = vi.fn().mockImplementation((url, init) => {
-        if (typeof url === 'string' && url.includes('/api/export/google-docs/create-document')) {
-          const body = JSON.parse(init.body);
-          submittedToken = body.access_token;
-          return Promise.resolve({
-            ok: true,
-            status: 200,
-            json: () =>
-              Promise.resolve({
-                document_id: 'doc_bearer_clean_123',
-                url: 'https://docs.google.com/document/d/doc_bearer_clean_123/edit',
-                title: 'RecipeBoxer - Rustic Apple Galette',
-              }),
-          } as Response);
-        }
-        return originalFetch(url, init);
-      });
-
-      render(<GoogleDocsPreview recipes={sampleRecipes} sessionId="sess_bearer_strip_test" />);
-
-      // Open manual drawer
-      const manualToggle = screen.getByRole('button', { name: /Manual Access Fallback/i });
-      fireEvent.click(manualToggle);
-
-      // Enter manual token with "Bearer " prefix and quotes
-      const tokenInput = screen.getByLabelText(/Google OAuth Access Token/i);
-      fireEvent.change(tokenInput, { target: { value: 'Bearer "ya29.bearer_raw_token_xyz"' } });
-
-      const exportBtn = screen.getByRole('button', { name: /Export with Access Token/i });
-      fireEvent.click(exportBtn);
-
-      await waitFor(() => {
-        expect(submittedToken).toBe('ya29.bearer_raw_token_xyz');
-        expect(screen.getByRole('link', { name: /Open in Google Docs/i })).toBeInTheDocument();
-      });
-
-      global.fetch = originalFetch;
-    });
-
-    it('saving or clearing client ID resets cached access token state so fresh GIS token is acquired', async () => {
-      let callCount = 0;
-      const originalFetch = global.fetch;
-      global.fetch = vi.fn().mockImplementation((url) => {
-        if (typeof url === 'string' && url.includes('/api/export/google-docs/create-document')) {
-          callCount++;
-          return Promise.resolve({
-            ok: true,
-            status: 200,
-            json: () =>
-              Promise.resolve({
-                document_id: `doc_id_${callCount}`,
-                url: `https://docs.google.com/document/d/doc_id_${callCount}/edit`,
-                title: 'RecipeBoxer - Rustic Apple Galette',
-              }),
-          } as Response);
-        }
-        return originalFetch(url);
-      });
-
-      render(<GoogleDocsPreview recipes={sampleRecipes} sessionId="sess_token_eviction_test" />);
-
-      // First export
-      const exportBtn = screen.getByRole('button', { name: /Export directly to Google Docs/i });
-      fireEvent.click(exportBtn);
-
-      await waitFor(() => {
-        expect(screen.getByRole('link', { name: /Open in Google Docs/i })).toBeInTheDocument();
-      });
-      expect(mockInitTokenClient).toHaveBeenCalledTimes(1);
-
-      // Open settings and save new client ID
-      const settingsToggle = screen.getByRole('button', { name: /OAuth Settings/i });
-      fireEvent.click(settingsToggle);
-
-      const clientIdInput = screen.getByLabelText(/Google OAuth Client ID/i);
-      fireEvent.change(clientIdInput, { target: { value: 'new-client-id-555.apps.googleusercontent.com' } });
-
-      const saveBtn = screen.getByRole('button', { name: /Save Client ID/i });
-      fireEvent.click(saveBtn);
-
-      // Trigger export again -> since cached token was cleared, GIS token request is triggered with new client ID
-      fireEvent.click(exportBtn);
-
-      await waitFor(() => {
-        expect(mockInitTokenClient).toHaveBeenCalledTimes(2);
-      });
-
-      global.fetch = originalFetch;
-    });
-
-    it('formats FastAPI 422 array validation errors cleanly without [object Object]', async () => {
-      const originalFetch = global.fetch;
-      global.fetch = vi.fn().mockImplementation((url) => {
-        if (typeof url === 'string' && url.includes('/api/export/google-docs/create-document')) {
-          return Promise.resolve({
-            ok: false,
-            status: 422,
-            statusText: 'Unprocessable Entity',
-            json: () =>
-              Promise.resolve({
-                detail: [
-                  { loc: ['body', 'access_token'], msg: 'Field required', type: 'value_error.missing' },
-                ],
-              }),
-          } as Response);
-        }
-        return originalFetch(url);
-      });
-
-      render(<GoogleDocsPreview recipes={sampleRecipes} sessionId="sess_422_test" />);
-
-      const manualToggle = screen.getByRole('button', { name: /Manual Access Fallback/i });
-      fireEvent.click(manualToggle);
-
-      const tokenInput = screen.getByLabelText(/Google OAuth Access Token/i);
-      fireEvent.change(tokenInput, { target: { value: 'ya29.invalid_test' } });
-
-      const exportBtn = screen.getByRole('button', { name: /Export with Access Token/i });
-      fireEvent.click(exportBtn);
-
-      await waitFor(() => {
-        expect(
-          screen.getByText(/Google Docs export failed: Field required/i)
-        ).toBeInTheDocument();
-      });
-
-      // Confirm [object Object] is NOT displayed
-      expect(screen.queryByText(/\[object Object\]/i)).not.toBeInTheDocument();
-
-      global.fetch = originalFetch;
-    });
-
     it('handles clipboard write failures gracefully without unhandled exceptions', async () => {
       const originalClipboard = navigator.clipboard;
       Object.assign(navigator, {
@@ -940,12 +496,16 @@ describe('Google Identity Services OAuth 401 invalid_client Resolution & Manual 
       const copyJsonBtn = screen.getByRole('button', { name: /Copy Batch JSON/i });
       expect(() => fireEvent.click(copyJsonBtn)).not.toThrow();
 
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /Copy Batch JSON|Copied JSON/i })).toBeInTheDocument();
+      });
+
       Object.assign(navigator, { clipboard: originalClipboard });
     });
   });
 
   describe('4. Integration: ExportDialog Google Docs Tab Navigation', () => {
-    it('renders Google Docs tab in ExportDialog with manual token fallback and settings access', async () => {
+    it('renders Google Docs tab in ExportDialog without manual token fallback and with Support In Progress tooltip', async () => {
       render(<ExportDialog recipes={sampleRecipes} sessionId="sess_dialog_full" />);
 
       // Switch to Google Docs tab
@@ -953,9 +513,13 @@ describe('Google Identity Services OAuth 401 invalid_client Resolution & Manual 
       fireEvent.click(gdocsTab);
 
       expect(screen.getByText(/Direct Google Docs & Drive API Publishing/i)).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /Manual Access Fallback/i })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Manual Access/i })).not.toBeInTheDocument();
       expect(screen.getByRole('button', { name: /OAuth Settings/i })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /Export directly to Google Docs/i })).toBeInTheDocument();
+
+      const exportBtn = screen.getByRole('button', { name: /Export directly to Google Docs/i });
+      expect(exportBtn).toBeInTheDocument();
+      expect(exportBtn).toBeDisabled();
+      expect(exportBtn).toHaveAttribute('title', 'Support In Progress');
     });
   });
 });

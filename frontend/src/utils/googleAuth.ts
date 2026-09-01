@@ -190,7 +190,7 @@ export async function loadGoogleIdentityScript(timeoutMs: number = 3000): Promis
         }
         reject(
           new Error(
-            'Failed to load Google Identity Services SDK (network offline or blocked). Please check your internet connection or use the Manual Access Token fallback.'
+            'Failed to load Google Identity Services SDK (network offline or blocked). Please check your internet connection.'
           )
         );
       };
@@ -207,7 +207,7 @@ export async function loadGoogleIdentityScript(timeoutMs: number = 3000): Promis
           }
           reject(
             new Error(
-              'Failed to load Google Identity Services SDK (timeout). Please check your internet connection or use the Manual Access Token fallback.'
+              'Failed to load Google Identity Services SDK (timeout). Please check your internet connection.'
             )
           );
         }, timeoutMs);
@@ -234,7 +234,7 @@ export async function loadGoogleIdentityScript(timeoutMs: number = 3000): Promis
       }
       reject(
         new Error(
-          'Failed to load Google Identity Services SDK (network offline or blocked). Please check your internet connection or use the Manual Access Token fallback.'
+          'Failed to load Google Identity Services SDK (network offline or blocked). Please check your internet connection.'
         )
       );
     };
@@ -253,7 +253,7 @@ export async function loadGoogleIdentityScript(timeoutMs: number = 3000): Promis
         }
         reject(
           new Error(
-            'Failed to load Google Identity Services SDK (timeout). Please check your internet connection or use the Manual Access Token fallback.'
+            'Failed to load Google Identity Services SDK (timeout). Please check your internet connection.'
           )
         );
       }, timeoutMs);
@@ -277,7 +277,7 @@ export function requestGoogleAccessToken(options: GoogleAuthOptions): Promise<st
 
       if (!window.google?.accounts?.oauth2?.initTokenClient) {
         throw new Error(
-          'Google Identity Services SDK is not available in the current environment. Please use the Manual Access Token fallback.'
+          'Google Identity Services SDK is not available in the current environment.'
         );
       }
 
@@ -285,7 +285,7 @@ export function requestGoogleAccessToken(options: GoogleAuthOptions): Promise<st
       const clientId = rawClientId ? rawClientId.trim().replace(/^["']|["']$/g, '').trim() : '';
       if (!isValidClientIdString(clientId)) {
         throw new Error(
-          'Google OAuth Client ID is not configured. Please configure your Client ID in settings or provide a manual OAuth access token.'
+          'Google OAuth Client ID is not configured. Please configure your Client ID in settings.'
         );
       }
 
@@ -343,7 +343,7 @@ export function requestGoogleAccessToken(options: GoogleAuthOptions): Promise<st
           ) {
             reject(
               new Error(
-                'Google OAuth authorization popup was blocked by the browser. Please allow popups or use the Manual Access Token fallback.'
+                'Google OAuth authorization popup was blocked by the browser. Please allow popups.'
               )
             );
           } else if (

@@ -24,7 +24,7 @@ describe('Phase 5: Cloud & External Source Providers UI', () => {
   });
 
   describe('SourceSelector Component', () => {
-    it('renders main source options and switches between Local, Google Photos, and Cloud Drive', () => {
+    it('renders main source options with Google Photos disabled and switches to Cloud Drive', () => {
       const onSourceChange = vi.fn();
       const onSelectContainer = vi.fn();
 
@@ -54,12 +54,17 @@ describe('Phase 5: Cloud & External Source Providers UI', () => {
       expect(screen.getByText('Google Photos')).toBeInTheDocument();
       expect(screen.getByText('Cloud Drive & Storage')).toBeInTheDocument();
 
-      // Click Google Photos
+      // Verify Google Photos is disabled with "Support In Progress" tooltip
       const gpButton = screen.getByText('Google Photos').closest('button');
-      if (gpButton) fireEvent.click(gpButton);
-      expect(onSourceChange).toHaveBeenCalledWith('google_photos');
+      expect(gpButton).toBeDisabled();
+      expect(gpButton).toHaveAttribute('title', 'Support In Progress');
 
-      // Re-render as Google Photos
+      // Click Cloud Drive & Storage
+      const cloudButton = screen.getByText('Cloud Drive & Storage').closest('button');
+      if (cloudButton) fireEvent.click(cloudButton);
+      expect(onSourceChange).toHaveBeenCalledWith('s3');
+
+      // Re-render as Google Photos to verify inner controls are disabled
       rerender(
         <SourceSelector
           sourceType="google_photos"
@@ -82,10 +87,12 @@ describe('Phase 5: Cloud & External Source Providers UI', () => {
       );
 
       expect(screen.getByText(/Google Photos Library Connection/i)).toBeInTheDocument();
-      expect(screen.getByText(/Browse Google Photos Albums.../i)).toBeInTheDocument();
+      const browseAlbumsBtn = screen.getByRole('button', { name: /Browse Google Photos Albums.../i });
+      expect(browseAlbumsBtn).toBeDisabled();
+      expect(browseAlbumsBtn).toHaveAttribute('title', 'Support In Progress');
     });
 
-    it('renders Cloud Drive and object storage options (Google Drive, S3, GCS)', () => {
+    it('renders Cloud Drive and object storage options (Google Drive disabled, S3 and GCS enabled)', () => {
       const onSourceChange = vi.fn();
 
       render(
@@ -108,6 +115,11 @@ describe('Phase 5: Cloud & External Source Providers UI', () => {
           onPrefixChange={vi.fn()}
         />
       );
+
+      // Google Drive option is disabled with tooltip
+      const gdriveBtn = screen.getByRole('button', { name: /^Google Drive$/i });
+      expect(gdriveBtn).toBeDisabled();
+      expect(gdriveBtn).toHaveAttribute('title', 'Support In Progress');
 
       expect(screen.getByText('Amazon S3 / MinIO')).toBeInTheDocument();
       expect(screen.getByText('Google Cloud Storage')).toBeInTheDocument();
@@ -228,10 +240,10 @@ describe('Phase 5: Cloud & External Source Providers UI', () => {
   });
 
   describe('SessionLauncher with Remote Sources Integration', () => {
-    it('launches pipeline with Google Photos provider payload', async () => {
+    it('verifies Google Photos tab is disabled in SessionLauncher and launches pipeline with GCS provider payload', async () => {
       const onStarted = vi.fn();
       vi.mocked(api.startPipeline).mockResolvedValueOnce({
-        session_id: 'sess_gphotos_101',
+        session_id: 'sess_gcs_101',
         status: 'SCANNING',
         total_scans_found: 15,
         mode: 'parallel',
@@ -240,9 +252,21 @@ describe('Phase 5: Cloud & External Source Providers UI', () => {
 
       render(<SessionLauncher onSessionStarted={onStarted} />);
 
-      // Switch to Google Photos
+      // Verify Google Photos tab is disabled with "Support In Progress" tooltip
       const gpTab = screen.getByText('Google Photos').closest('button');
-      if (gpTab) fireEvent.click(gpTab);
+      expect(gpTab).toBeDisabled();
+      expect(gpTab).toHaveAttribute('title', 'Support In Progress');
+
+      // Switch to Cloud Drive & Storage
+      const cloudTab = screen.getByText('Cloud Drive & Storage').closest('button');
+      if (cloudTab) fireEvent.click(cloudTab);
+
+      // Switch to GCS
+      const gcsBtn = screen.getByText('Google Cloud Storage');
+      fireEvent.click(gcsBtn);
+
+      const bucketInput = screen.getByPlaceholderText('recipeboxer-archive');
+      fireEvent.change(bucketInput, { target: { value: 'my-gcs-bucket' } });
 
       // Launch
       const launchBtn = screen.getByRole('button', { name: /Launch Digitization Pipeline/i });
@@ -251,11 +275,11 @@ describe('Phase 5: Cloud & External Source Providers UI', () => {
       await waitFor(() => {
         expect(api.startPipeline).toHaveBeenCalledWith(
           expect.objectContaining({
-            source_provider: 'google_photos',
-            source_config: expect.objectContaining({ category_filter: 'FOOD' }),
+            source_provider: 'gcs',
+            source_config: expect.objectContaining({ bucket_name: 'my-gcs-bucket' }),
           })
         );
-        expect(onStarted).toHaveBeenCalledWith('sess_gphotos_101');
+        expect(onStarted).toHaveBeenCalledWith('sess_gcs_101');
       });
     });
 

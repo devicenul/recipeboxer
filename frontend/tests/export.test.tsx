@@ -220,27 +220,8 @@ describe('R5: Multi-Format Recipe Export Subsystem', () => {
     });
   });
 
-  describe('Google Docs Direct Publishing & OAuth Flow', () => {
-    it('handles 1-click interactive GIS OAuth authorization and displays success link', async () => {
-      // Mock global fetch for create-document
-      const originalFetch = global.fetch;
-      global.fetch = vi.fn().mockImplementation((url, init) => {
-        if (typeof url === 'string' && url.includes('/api/export/google-docs/create-document')) {
-          return Promise.resolve({
-            ok: true,
-            status: 200,
-            json: () =>
-              Promise.resolve({
-                document_id: 'doc_mock_live_123',
-                url: 'https://docs.google.com/document/d/doc_mock_live_123/edit',
-                title: "RecipeBoxer - Grandma's \"Secret\" Apple Pie",
-                recipe_count: 1,
-              }),
-          } as Response);
-        }
-        return originalFetch(url, init);
-      });
-
+  describe('Google Docs Direct Publishing & Streamlined Touchpoints', () => {
+    it('verifies Google Docs export button is disabled with Support In Progress tooltip and manual token fallback is removed', async () => {
       render(<ExportDialog recipes={sampleRecipes} sessionId="sess_gdocs_oauth" />);
 
       // Switch to Google Docs tab
@@ -249,19 +230,15 @@ describe('R5: Multi-Format Recipe Export Subsystem', () => {
 
       expect(screen.getByText(/Direct Google Docs & Drive API Publishing/i)).toBeInTheDocument();
 
-      // Click 1-click GIS OAuth export button
+      // Verify export button is disabled with Support In Progress tooltip
       const exportBtn = screen.getByRole('button', { name: /Export directly to Google Docs/i });
-      fireEvent.click(exportBtn);
+      expect(exportBtn).toBeInTheDocument();
+      expect(exportBtn).toBeDisabled();
+      expect(exportBtn).toHaveAttribute('title', 'Support In Progress');
 
-      // Wait for success alert and open link
-      const successLink = await screen.findByRole('link', { name: /Open in Google Docs/i });
-      expect(successLink).toBeInTheDocument();
-      expect(successLink).toHaveAttribute(
-        'href',
-        'https://docs.google.com/document/d/doc_mock_live_123/edit'
-      );
-
-      global.fetch = originalFetch;
+      // Verify no manual token fallback elements exist
+      expect(screen.queryByRole('region', { name: /Manual Access Token Fallback/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Manual Access/i })).not.toBeInTheDocument();
     });
   });
 });

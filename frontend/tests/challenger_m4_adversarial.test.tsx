@@ -108,44 +108,20 @@ describe('Milestone 4 Empirical Challenger Adversarial Tests (Frontend)', () => 
     });
   });
 
-  describe('Area 2: Google Docs OAuth Error Resilience', () => {
-    it('displays error message when token request fails with 401 unauthorized', async () => {
-      const originalFetch = global.fetch;
-      global.fetch = vi.fn().mockResolvedValue({
-        ok: false,
-        status: 401,
-        json: () => Promise.resolve({ detail: 'Google OAuth authorization failed: 401 Unauthorized' }),
-      } as Response);
-
+  describe('Area 2: Google Docs Export Disabled with Tooltip & Fallback Removal', () => {
+    it('verifies export button is disabled with Support In Progress tooltip and manual token drawer is absent', async () => {
       render(<GoogleDocsPreview recipes={adversarialRecipes} sessionId="sess_oauth_fail" />);
 
-      // Click 1-click GIS export button
+      // Verify Google Docs export button is disabled
       const exportBtn = screen.getByRole('button', { name: /Export directly to Google Docs/i });
-      fireEvent.click(exportBtn);
+      expect(exportBtn).toBeInTheDocument();
+      expect(exportBtn).toBeDisabled();
+      expect(exportBtn).toHaveAttribute('title', 'Support In Progress');
 
-      // Verify error banner is rendered
-      await waitFor(() => {
-        expect(screen.getByText(/Google Docs export failed: Google OAuth authorization failed/i)).toBeInTheDocument();
-      });
-
-      global.fetch = originalFetch;
-    });
-
-    it('displays error message when network exception or 502 bad gateway occurs', async () => {
-      const originalFetch = global.fetch;
-      global.fetch = vi.fn().mockRejectedValue(new Error('Network connection timeout to Google Drive'));
-
-      render(<GoogleDocsPreview recipes={adversarialRecipes} sessionId="sess_timeout" />);
-
-      // Click 1-click GIS export button
-      const exportBtn = screen.getByRole('button', { name: /Export directly to Google Docs/i });
-      fireEvent.click(exportBtn);
-
-      await waitFor(() => {
-        expect(screen.getByText(/Network connection timeout to Google Drive/i)).toBeInTheDocument();
-      });
-
-      global.fetch = originalFetch;
+      // Verify manual token fallback drawer and inputs are absent
+      expect(screen.queryByRole('region', { name: /Manual Access Token Fallback/i })).not.toBeInTheDocument();
+      expect(screen.queryByPlaceholderText(/ya29\./i)).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Manual Access/i })).not.toBeInTheDocument();
     });
   });
 });

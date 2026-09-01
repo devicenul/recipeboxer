@@ -163,7 +163,7 @@ describe('Milestone 1: Platform Detection & Google Identity Services (GIS) OAuth
     });
   });
 
-  describe('3. GoogleDocsPreview 1-Click Interactive OAuth Flow (R4)', () => {
+  describe('3. GoogleDocsPreview Streamlined Integration (R1, R2)', () => {
     const mockRecipes = [
       {
         recipe_id: 'rec_docs_01',
@@ -174,62 +174,23 @@ describe('Milestone 1: Platform Detection & Google Identity Services (GIS) OAuth
       },
     ];
 
-    it('initiates 1-click GIS popup flow and creates Google Doc without manual token drawer', async () => {
-      const originalFetch = global.fetch;
-      global.fetch = vi.fn().mockImplementation((url) => {
-        if (typeof url === 'string' && url.includes('/api/export/google-docs/create-document')) {
-          return Promise.resolve({
-            ok: true,
-            status: 200,
-            json: () =>
-              Promise.resolve({
-                document_id: 'doc_gis_789',
-                url: 'https://docs.google.com/document/d/doc_gis_789/edit',
-                title: 'RecipeBoxer - Heirloom Apple Crisp',
-                recipe_count: 1,
-              }),
-          } as Response);
-        }
-        return originalFetch(url);
-      });
-
+    it('verifies Google Docs export button is disabled with Support In Progress tooltip and no manual token drawer', () => {
       render(<GoogleDocsPreview recipes={mockRecipes} sessionId="sess_gis_test" />);
 
       // Verify no manual token input drawer exists
       expect(screen.queryByPlaceholderText(/ya29\./i)).not.toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: /Token/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Manual Access/i })).not.toBeInTheDocument();
 
-      // Click "Export directly to Google Docs"
+      // Verify Google Docs export button is disabled with Support In Progress tooltip
       const exportBtn = screen.getByRole('button', { name: /Export directly to Google Docs/i });
-      fireEvent.click(exportBtn);
-
-      // Verify success link
-      const successLink = await screen.findByRole('link', { name: /Open in Google Docs/i });
-      expect(successLink).toBeInTheDocument();
-      expect(successLink).toHaveAttribute('href', 'https://docs.google.com/document/d/doc_gis_789/edit');
-
-      global.fetch = originalFetch;
-    });
-
-    it('displays error banner when GIS consent is denied during Docs export', async () => {
-      setMockGisResponse({
-        error: 'access_denied',
-        error_description: 'Consent prompt closed by user',
-      });
-
-      render(<GoogleDocsPreview recipes={mockRecipes} sessionId="sess_gis_denied" />);
-
-      const exportBtn = screen.getByRole('button', { name: /Export directly to Google Docs/i });
-      fireEvent.click(exportBtn);
-
-      await waitFor(() => {
-        expect(screen.getByText(/Google Docs export failed: Google authorization error: Consent prompt closed by user/i)).toBeInTheDocument();
-      });
+      expect(exportBtn).toBeInTheDocument();
+      expect(exportBtn).toBeDisabled();
+      expect(exportBtn).toHaveAttribute('title', 'Support In Progress');
     });
   });
 
-  describe('4. SourceSelector Interactive Drive & Photos OAuth (R4)', () => {
-    it('provides interactive Connect Account button for Google Photos and updates status to Ready', async () => {
+  describe('4. SourceSelector Google Providers Disabled State (R2)', () => {
+    it('provides disabled Connect Account button with Support In Progress tooltip for Google Photos', async () => {
       vi.mocked(api.listSourceProviders).mockResolvedValueOnce([
         {
           provider_id: 'google_photos',
@@ -249,24 +210,6 @@ describe('Milestone 1: Platform Detection & Google Identity Services (GIS) OAuth
           },
         },
       ]);
-
-      vi.mocked(api.connectSourceProvider).mockResolvedValueOnce({
-        provider_id: 'google_photos',
-        name: 'Google Photos',
-        description: '',
-        connected: true,
-        auth_required: false,
-        authenticated: true,
-        message: 'Connected',
-        capabilities: {
-          supports_containers: true,
-          supports_search: true,
-          supports_thumbnails: true,
-          supports_pagination: true,
-          supports_streaming: true,
-          requires_auth: true,
-        },
-      });
 
       render(
         <SourceSelector
@@ -295,105 +238,11 @@ describe('Milestone 1: Platform Detection & Google Identity Services (GIS) OAuth
       });
 
       const connectBtn = screen.getByRole('button', { name: /Connect Google Photos|Connect Account/i });
-      fireEvent.click(connectBtn);
-
-      await waitFor(() => {
-        expect(api.connectSourceProvider).toHaveBeenCalledWith(
-          'google_photos',
-          expect.objectContaining({
-            provider_id: 'google_photos',
-            auth_token: expect.any(String),
-          })
-        );
-        expect(screen.getByText('Ready')).toBeInTheDocument();
-      });
+      expect(connectBtn).toBeDisabled();
+      expect(connectBtn).toHaveAttribute('title', 'Support In Progress');
     });
 
-    it('provides interactive Connect Account button for Google Drive and updates status to Ready', async () => {
-      vi.mocked(api.listSourceProviders).mockResolvedValueOnce([
-        {
-          provider_id: 'google_drive',
-          name: 'Google Drive',
-          description: '',
-          connected: false,
-          auth_required: true,
-          authenticated: false,
-          message: 'Auth required',
-          capabilities: {
-            supports_containers: true,
-            supports_search: true,
-            supports_thumbnails: true,
-            supports_pagination: true,
-            supports_streaming: true,
-            requires_auth: true,
-          },
-        },
-      ]);
-
-      vi.mocked(api.connectSourceProvider).mockResolvedValueOnce({
-        provider_id: 'google_drive',
-        name: 'Google Drive',
-        description: '',
-        connected: true,
-        auth_required: false,
-        authenticated: true,
-        message: 'Connected',
-        capabilities: {
-          supports_containers: true,
-          supports_search: true,
-          supports_thumbnails: true,
-          supports_pagination: true,
-          supports_streaming: true,
-          requires_auth: true,
-        },
-      });
-
-      render(
-        <SourceSelector
-          sourceType="google_drive"
-          onSourceTypeChange={vi.fn()}
-          localMethod="folder"
-          onLocalMethodChange={vi.fn()}
-          folderPath=""
-          onFolderPathChange={vi.fn()}
-          uploadedFiles={[]}
-          onUploadedFilesChange={vi.fn()}
-          selectedContainer={null}
-          onSelectContainer={vi.fn()}
-          categoryFilter="FOOD"
-          onCategoryFilterChange={vi.fn()}
-          bucketName=""
-          onBucketNameChange={vi.fn()}
-          prefix=""
-          onPrefixChange={vi.fn()}
-        />
-      );
-
-      await waitFor(() => {
-        expect(screen.getByText('Auth Required')).toBeInTheDocument();
-      });
-
-      const connectBtn = screen.getByRole('button', { name: /Connect Google Drive|Connect Account/i });
-      fireEvent.click(connectBtn);
-
-      await waitFor(() => {
-        expect(api.connectSourceProvider).toHaveBeenCalledWith(
-          'google_drive',
-          expect.objectContaining({
-            provider_id: 'google_drive',
-            auth_token: expect.any(String),
-          })
-        );
-        expect(screen.getByText('Ready')).toBeInTheDocument();
-      });
-    });
-
-    it('renders error banner when Google Drive OAuth fails', async () => {
-      setMockGisResponse({
-        error: 'popup_closed_by_user',
-        error_description: 'OAuth popup closed by user',
-      });
-
+    it('provides disabled Connect Account button with Support In Progress tooltip for Google Drive', async () => {
       vi.mocked(api.listSourceProviders).mockResolvedValueOnce([
         {
           provider_id: 'google_drive',
@@ -440,51 +289,16 @@ describe('Milestone 1: Platform Detection & Google Identity Services (GIS) OAuth
       });
 
       const connectBtn = screen.getByRole('button', { name: /Connect Google Drive|Connect Account/i });
-      fireEvent.click(connectBtn);
-
-      await waitFor(() => {
-        expect(screen.getByText(/OAuth popup closed by user/i)).toBeInTheDocument();
-      });
+      expect(connectBtn).toBeDisabled();
+      expect(connectBtn).toHaveAttribute('title', 'Support In Progress');
     });
   });
 
-  describe('5. AlbumPickerModal 401 Re-Auth & Auto-Retry Flow (R4)', () => {
-    it('handles 401 unauthorized in AlbumPickerModal with interactive Google sign-in and auto-fetches containers', async () => {
-      // First attempt fails with 401 Unauthorized
+  describe('5. AlbumPickerModal Google Disabled Actions (R2)', () => {
+    it('disables Google Sign In button with Support In Progress tooltip when auth is required', async () => {
       vi.mocked(api.listSourceContainers).mockRejectedValueOnce(
         new Error('HTTP 401: Unauthorized / Auth required')
       );
-
-      // Second attempt (after OAuth connect) succeeds
-      vi.mocked(api.listSourceContainers).mockResolvedValueOnce({
-        containers: [
-          {
-            id: 'gphotos_autumn_2026',
-            name: 'Autumn Baking 2026',
-            item_count: 24,
-            container_type: 'album',
-          },
-        ],
-        next_page_token: null,
-      });
-
-      vi.mocked(api.connectSourceProvider).mockResolvedValueOnce({
-        provider_id: 'google_photos',
-        name: 'Google Photos',
-        description: '',
-        connected: true,
-        auth_required: false,
-        authenticated: true,
-        message: 'Connected',
-        capabilities: {
-          supports_containers: true,
-          supports_search: true,
-          supports_thumbnails: true,
-          supports_pagination: true,
-          supports_streaming: true,
-          requires_auth: true,
-        },
-      });
 
       const onSelect = vi.fn();
       const onClose = vi.fn();
@@ -499,26 +313,15 @@ describe('Milestone 1: Platform Detection & Google Identity Services (GIS) OAuth
         />
       );
 
-      // Should show error & Sign in with Google button
+      // Should show error & disabled Sign in with Google button
       await waitFor(() => {
         expect(screen.getByText(/HTTP 401: Unauthorized/i)).toBeInTheDocument();
       });
 
       const signInButtons = screen.getAllByRole('button', { name: /Sign in with Google/i });
       expect(signInButtons.length).toBeGreaterThan(0);
-      fireEvent.click(signInButtons[0]);
-
-      // Verify connectSourceProvider called and containers auto-loaded
-      await waitFor(() => {
-        expect(api.connectSourceProvider).toHaveBeenCalledWith(
-          'google_photos',
-          expect.objectContaining({
-            provider_id: 'google_photos',
-            auth_token: expect.any(String),
-          })
-        );
-        expect(screen.getByText('Autumn Baking 2026')).toBeInTheDocument();
-      });
+      expect(signInButtons[0]).toBeDisabled();
+      expect(signInButtons[0]).toHaveAttribute('title', 'Support In Progress');
     });
   });
 });

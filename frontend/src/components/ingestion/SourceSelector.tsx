@@ -251,23 +251,16 @@ export const SourceSelector: React.FC<SourceSelectorProps> = ({
         {/* 2. Google Photos */}
         <button
           type="button"
-          onClick={() => {
-            onSourceTypeChange('google_photos');
-            onSelectContainer(null);
-          }}
-          disabled={disabled}
-          className={`flex items-center gap-3 p-4 rounded-xl border transition-all text-left cursor-pointer ${
-            sourceType === 'google_photos'
-              ? 'border-blue-600 bg-blue-50/50 dark:bg-blue-950/30 ring-2 ring-blue-500/20 text-blue-700 dark:text-blue-300'
-              : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300'
-          }`}
+          disabled={true}
+          title="Support In Progress"
+          className="flex items-center gap-3 p-4 rounded-xl border transition-all text-left opacity-50 cursor-not-allowed border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300"
         >
-          <div className={`p-2.5 rounded-lg ${sourceType === 'google_photos' ? 'bg-blue-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'}`}>
+          <div className="p-2.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
             <Camera className="w-5 h-5" />
           </div>
           <div>
             <p className="font-semibold text-sm">Google Photos</p>
-            <p className="text-xs text-slate-500 dark:text-slate-400">Albums & food category filters</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400">Albums &amp; food category filters</p>
           </div>
         </button>
 
@@ -275,7 +268,9 @@ export const SourceSelector: React.FC<SourceSelectorProps> = ({
         <button
           type="button"
           onClick={() => {
-            onSourceTypeChange('google_drive');
+            if (sourceType !== 's3' && sourceType !== 'gcs') {
+              onSourceTypeChange('s3');
+            }
             onSelectContainer(null);
           }}
           disabled={disabled}
@@ -289,7 +284,7 @@ export const SourceSelector: React.FC<SourceSelectorProps> = ({
             <Cloud className="w-5 h-5" />
           </div>
           <div>
-            <p className="font-semibold text-sm">Cloud Drive & Storage</p>
+            <p className="font-semibold text-sm">Cloud Drive &amp; Storage</p>
             <p className="text-xs text-slate-500 dark:text-slate-400">Google Drive, S3, or GCS</p>
           </div>
         </button>
@@ -404,7 +399,8 @@ export const SourceSelector: React.FC<SourceSelectorProps> = ({
                     variant="primary"
                     size="sm"
                     onClick={() => handleConnectProvider('google_photos')}
-                    disabled={disabled || isConnecting !== null}
+                    disabled={true}
+                    title="Support In Progress"
                     aria-label="Connect Google Photos"
                   >
                     Connect Account
@@ -438,9 +434,9 @@ export const SourceSelector: React.FC<SourceSelectorProps> = ({
                 disabled={disabled}
                 className="px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                <option value="FOOD">FOOD — Recipes, Food & Kitchen Photos</option>
-                <option value="DOCUMENTS">DOCUMENTS — Scanned Documents & Card Clippings</option>
-                <option value="RECEIPTS">RECEIPTS — Receipts & Handwritten Notes</option>
+                <option value="FOOD">FOOD — Recipes, Food &amp; Kitchen Photos</option>
+                <option value="DOCUMENTS">DOCUMENTS — Scanned Documents &amp; Card Clippings</option>
+                <option value="RECEIPTS">RECEIPTS — Receipts &amp; Handwritten Notes</option>
                 <option value="ALL">ALL — Full Library Search</option>
               </select>
             </div>
@@ -470,7 +466,8 @@ export const SourceSelector: React.FC<SourceSelectorProps> = ({
                     variant="secondary"
                     className="w-full"
                     onClick={() => setIsModalOpen(true)}
-                    disabled={disabled}
+                    disabled={true}
+                    title="Support In Progress"
                     leftIcon={<Folder className="w-4 h-4" />}
                   >
                     Browse Google Photos Albums...
@@ -488,15 +485,9 @@ export const SourceSelector: React.FC<SourceSelectorProps> = ({
           <div className="flex gap-2 border-b border-slate-200 dark:border-slate-800 pb-3">
             <button
               type="button"
-              onClick={() => {
-                onSourceTypeChange('google_drive');
-                onSelectContainer(null);
-              }}
-              className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
-                sourceType === 'google_drive'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200'
-              }`}
+              disabled={true}
+              title="Support In Progress"
+              className="px-3 py-1.5 text-xs font-semibold rounded-lg transition-all opacity-50 cursor-not-allowed bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400"
             >
               Google Drive
             </button>
@@ -506,7 +497,7 @@ export const SourceSelector: React.FC<SourceSelectorProps> = ({
                 onSourceTypeChange('s3');
                 onSelectContainer(null);
               }}
-              className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+              className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
                 sourceType === 's3'
                   ? 'bg-blue-600 text-white'
                   : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200'
@@ -520,7 +511,7 @@ export const SourceSelector: React.FC<SourceSelectorProps> = ({
                 onSourceTypeChange('gcs');
                 onSelectContainer(null);
               }}
-              className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+              className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
                 sourceType === 'gcs'
                   ? 'bg-blue-600 text-white'
                   : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200'
@@ -556,7 +547,8 @@ export const SourceSelector: React.FC<SourceSelectorProps> = ({
                         variant="primary"
                         size="sm"
                         onClick={() => handleConnectProvider('google_drive')}
-                        disabled={disabled || isConnecting !== null}
+                        disabled={true}
+                        title="Support In Progress"
                         aria-label="Connect Google Drive"
                       >
                         Connect Account
@@ -603,7 +595,8 @@ export const SourceSelector: React.FC<SourceSelectorProps> = ({
                     type="button"
                     variant="secondary"
                     onClick={() => setIsModalOpen(true)}
-                    disabled={disabled}
+                    disabled={true}
+                    title="Support In Progress"
                     leftIcon={<Folder className="w-4 h-4" />}
                   >
                     Browse &amp; Select Google Drive Folder...

@@ -8,7 +8,6 @@ import {
   Loader2,
   AlertCircle,
   FileCode,
-  Key,
   Settings,
   HelpCircle,
 } from 'lucide-react';
@@ -45,8 +44,6 @@ export const GoogleDocsPreview: React.FC<GoogleDocsPreviewProps> = ({
   const [copiedHtml, setCopiedHtml] = useState(false);
   const [copiedJson, setCopiedJson] = useState(false);
   const [accessToken, setAccessToken] = useState('');
-  const [manualToken, setManualToken] = useState('');
-  const [isManualTokenOpen, setIsManualTokenOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [showSetupGuide, setShowSetupGuide] = useState(false);
   const [clientIdInput, setClientIdInput] = useState('');
@@ -219,38 +216,10 @@ export const GoogleDocsPreview: React.FC<GoogleDocsPreviewProps> = ({
         msg.includes('Client ID')
       ) {
         setIsSettingsOpen(true);
-        setIsManualTokenOpen(false);
-      } else if (
-        msg.includes('401') ||
-        msg.includes('403') ||
-        msg.toLowerCase().includes('expired') ||
-        msg.toLowerCase().includes('scope') ||
-        msg.toLowerCase().includes('permission') ||
-        msg.toLowerCase().includes('unauthorized') ||
-        msg.toLowerCase().includes('popup') ||
-        msg.toLowerCase().includes('blocked') ||
-        msg.toLowerCase().includes('sdk') ||
-        msg.toLowerCase().includes('script') ||
-        msg.toLowerCase().includes('offline') ||
-        msg.toLowerCase().includes('failed to load') ||
-        msg.toLowerCase().includes('unavailable')
-      ) {
-        setIsManualTokenOpen(true);
-        setIsSettingsOpen(false);
       }
     } finally {
       setIsCreating(false);
     }
-  };
-
-  const handleManualTokenSubmit = async () => {
-    const cleanToken = sanitizeAccessToken(manualToken);
-    if (!cleanToken) {
-      setErrorMessage('Please provide a valid Google OAuth access token');
-      return;
-    }
-    setAccessToken(cleanToken);
-    await handleCreateDocumentWithToken(cleanToken);
   };
 
   const triggerGoogleOAuthFlow = async () => {
@@ -263,10 +232,9 @@ export const GoogleDocsPreview: React.FC<GoogleDocsPreviewProps> = ({
     const currentClientId = getGoogleClientId();
     if (!currentClientId) {
       setErrorMessage(
-        'Google OAuth Client ID is not configured. Please configure your Client ID in OAuth Settings or use the Manual Access Token fallback.'
+        'Google OAuth Client ID is not configured. Please configure your Client ID in OAuth Settings.'
       );
       setIsSettingsOpen(true);
-      setIsManualTokenOpen(false);
       return;
     }
 
@@ -292,22 +260,6 @@ export const GoogleDocsPreview: React.FC<GoogleDocsPreviewProps> = ({
         msg.includes('Client ID')
       ) {
         setIsSettingsOpen(true);
-        setIsManualTokenOpen(false);
-      } else if (
-        msg.toLowerCase().includes('popup') ||
-        msg.toLowerCase().includes('blocked') ||
-        msg.toLowerCase().includes('401') ||
-        msg.toLowerCase().includes('403') ||
-        msg.toLowerCase().includes('sdk') ||
-        msg.toLowerCase().includes('script') ||
-        msg.toLowerCase().includes('offline') ||
-        msg.toLowerCase().includes('failed to load') ||
-        msg.toLowerCase().includes('unavailable') ||
-        msg.toLowerCase().includes('scope') ||
-        msg.toLowerCase().includes('permission')
-      ) {
-        setIsManualTokenOpen(true);
-        setIsSettingsOpen(false);
       }
       setIsCreating(false);
     }
@@ -338,26 +290,7 @@ export const GoogleDocsPreview: React.FC<GoogleDocsPreviewProps> = ({
               variant="outline"
               size="sm"
               onClick={() => {
-                setIsManualTokenOpen(!isManualTokenOpen);
-                if (!isManualTokenOpen) {
-                  setIsSettingsOpen(false);
-                }
-              }}
-              aria-expanded={isManualTokenOpen}
-              aria-controls="manual-access-token-drawer"
-              leftIcon={<Key className="w-3.5 h-3.5" />}
-            >
-              {isManualTokenOpen ? 'Hide Manual Access' : 'Manual Access Fallback'}
-            </Button>
-
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
                 setIsSettingsOpen(!isSettingsOpen);
-                if (!isSettingsOpen) {
-                  setIsManualTokenOpen(false);
-                }
               }}
               aria-expanded={isSettingsOpen}
               aria-controls="google-client-id-drawer"
@@ -370,7 +303,9 @@ export const GoogleDocsPreview: React.FC<GoogleDocsPreviewProps> = ({
               variant="success"
               size="sm"
               onClick={triggerGoogleOAuthFlow}
-              disabled={isCreating}
+              disabled={true}
+              title="Support In Progress"
+              className="disabled:opacity-50 disabled:cursor-not-allowed"
               leftIcon={
                 isCreating ? (
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -390,7 +325,7 @@ export const GoogleDocsPreview: React.FC<GoogleDocsPreviewProps> = ({
             <div className="flex items-center gap-2">
               <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
               <span>
-                <strong>Google OAuth Client ID is not configured:</strong> 1-click export requires an OAuth Client ID, or you can paste a manual access token below.
+                <strong>Google OAuth Client ID is not configured:</strong> 1-click export requires an OAuth Client ID.
               </span>
             </div>
             <div className="flex items-center gap-2 shrink-0">
@@ -398,21 +333,10 @@ export const GoogleDocsPreview: React.FC<GoogleDocsPreviewProps> = ({
                 type="button"
                 onClick={() => {
                   setIsSettingsOpen(true);
-                  setIsManualTokenOpen(false);
                 }}
                 className="px-2.5 py-1 text-xs font-semibold rounded-md bg-amber-200 dark:bg-amber-800 hover:bg-amber-300 dark:hover:bg-amber-700 text-amber-900 dark:text-amber-100 transition-colors cursor-pointer"
               >
                 Configure Client ID
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setIsManualTokenOpen(true);
-                  setIsSettingsOpen(false);
-                }}
-                className="px-2.5 py-1 text-xs font-semibold rounded-md bg-amber-100 dark:bg-amber-900/60 hover:bg-amber-200 dark:hover:bg-amber-800 text-amber-800 dark:text-amber-200 transition-colors cursor-pointer"
-              >
-                Enter Manual Token
               </button>
             </div>
           </div>
@@ -459,7 +383,6 @@ export const GoogleDocsPreview: React.FC<GoogleDocsPreviewProps> = ({
                 type="button"
                 onClick={() => {
                   setIsSettingsOpen(true);
-                  setIsManualTokenOpen(false);
                 }}
                 className="px-2 py-0.5 rounded text-[11px] font-medium bg-rose-100 dark:bg-rose-900/60 hover:bg-rose-200 dark:hover:bg-rose-800 text-rose-900 dark:text-rose-200 transition-colors cursor-pointer"
               >
@@ -468,19 +391,8 @@ export const GoogleDocsPreview: React.FC<GoogleDocsPreviewProps> = ({
               <button
                 type="button"
                 onClick={() => {
-                  setIsManualTokenOpen(true);
-                  setIsSettingsOpen(false);
-                }}
-                className="px-2 py-0.5 rounded text-[11px] font-medium bg-rose-100 dark:bg-rose-900/60 hover:bg-rose-200 dark:hover:bg-rose-800 text-rose-900 dark:text-rose-200 transition-colors cursor-pointer"
-              >
-                Enter Manual Token
-              </button>
-              <button
-                type="button"
-                onClick={() => {
                   setIsSettingsOpen(true);
                   setShowSetupGuide(true);
-                  setIsManualTokenOpen(false);
                 }}
                 className="px-2 py-0.5 rounded text-[11px] font-medium bg-rose-100 dark:bg-rose-900/60 hover:bg-rose-200 dark:hover:bg-rose-800 text-rose-900 dark:text-rose-200 transition-colors cursor-pointer"
               >
@@ -490,89 +402,6 @@ export const GoogleDocsPreview: React.FC<GoogleDocsPreviewProps> = ({
           </div>
         )}
       </div>
-
-      {/* Manual Access Token Fallback Drawer */}
-      {isManualTokenOpen && (
-        <div
-          id="manual-access-token-drawer"
-          role="region"
-          aria-label="Manual Access Token Fallback"
-          className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 flex flex-col gap-3"
-        >
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Key className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-              <h5 className="text-xs font-bold text-slate-900 dark:text-slate-100">
-                Manual Google OAuth Access Token Fallback
-              </h5>
-            </div>
-            <button
-              type="button"
-              onClick={() => setIsManualTokenOpen(false)}
-              className="text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 cursor-pointer"
-            >
-              Close
-            </button>
-          </div>
-
-          <p className="text-[11px] text-slate-600 dark:text-slate-400">
-            Paste a temporary Google OAuth Bearer token (with <code className="px-1 py-0.5 rounded bg-slate-200 dark:bg-slate-800 text-[10px]">documents</code> and <code className="px-1 py-0.5 rounded bg-slate-200 dark:bg-slate-800 text-[10px]">drive.file</code> scopes) from{' '}
-            <a
-              href="https://developers.google.com/oauthplayground"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-emerald-600 dark:text-emerald-400 underline font-medium hover:text-emerald-700 inline-flex items-center gap-0.5"
-            >
-              <span>Google OAuth 2.0 Playground</span>
-              <ExternalLink className="w-2.5 h-2.5" />
-            </a>{' '}
-            or <code className="px-1 py-0.5 rounded bg-slate-200 dark:bg-slate-800 text-[10px]">gcloud auth print-access-token</code> to export directly without requiring GIS popup configuration.
-          </p>
-
-          <div className="flex flex-col gap-1.5">
-            <label
-              htmlFor="manual-access-token-input"
-              className="text-xs font-semibold text-slate-700 dark:text-slate-300"
-            >
-              Google OAuth Access Token
-            </label>
-            <div className="flex flex-wrap sm:flex-nowrap gap-2">
-              <input
-                id="manual-access-token-input"
-                type="password"
-                value={manualToken}
-                autoComplete="off"
-                autoCapitalize="off"
-                spellCheck={false}
-                onChange={(e) => setManualToken(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && sanitizeAccessToken(manualToken) && !isCreating) {
-                    e.preventDefault();
-                    handleManualTokenSubmit();
-                  }
-                }}
-                placeholder="ya29.a0..."
-                className="flex-1 min-w-[200px] px-3 py-2 text-xs font-mono rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              />
-              <Button
-                variant="success"
-                size="sm"
-                disabled={isCreating || !sanitizeAccessToken(manualToken)}
-                onClick={handleManualTokenSubmit}
-                leftIcon={
-                  isCreating ? (
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  ) : (
-                    <BookOpen className="w-3.5 h-3.5" />
-                  )
-                }
-              >
-                {isCreating ? 'Exporting...' : 'Export with Access Token'}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* OAuth Client ID Settings Drawer */}
       {isSettingsOpen && (

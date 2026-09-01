@@ -154,9 +154,10 @@ export const AlbumPickerModal: React.FC<AlbumPickerModalProps> = ({
               variant="outline"
               size="sm"
               onClick={handleGoogleSignIn}
+              disabled={true}
+              title="Support In Progress"
               isLoading={isAuthenticating}
               leftIcon={<LogIn className="w-4 h-4" />}
-              title="Connect / re-authenticate Google account"
             >
               Sign in with Google
             </Button>
@@ -184,6 +185,8 @@ export const AlbumPickerModal: React.FC<AlbumPickerModalProps> = ({
                 variant="primary"
                 size="sm"
                 onClick={handleGoogleSignIn}
+                disabled={true}
+                title="Support In Progress"
                 isLoading={isAuthenticating}
                 leftIcon={<LogIn className="w-3.5 h-3.5" />}
                 className="shrink-0"
@@ -207,6 +210,8 @@ export const AlbumPickerModal: React.FC<AlbumPickerModalProps> = ({
             <Button
               variant="primary"
               onClick={handleGoogleSignIn}
+              disabled={true}
+              title="Support In Progress"
               isLoading={isAuthenticating}
               leftIcon={
                 isAuthenticating ? (
