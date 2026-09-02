@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 class SourceCapabilities(BaseModel):
     """Capabilities and feature flags supported by a specific SourceProvider."""
-    supports_containers: bool = Field(default=True, description="Supports listing and browsing albums/folders/buckets")
+    supports_containers: bool = Field(default=True, description="Supports listing and browsing albums/folders")
     supports_search: bool = Field(default=False, description="Supports media item search queries")
     supports_thumbnails: bool = Field(default=True, description="Supports low-overhead thumbnail preview fetching")
     supports_pagination: bool = Field(default=True, description="Supports paginated container and item browsing")
@@ -53,7 +53,7 @@ class SourceCapabilities(BaseModel):
 
 class SourceItem(BaseModel):
     """Represents a remote or local media item (recipe card scan candidate)."""
-    id: str = Field(..., description="Unique source-specific identifier (e.g. photo ID, file ID, S3 key)")
+    id: str = Field(..., description="Unique source-specific identifier (e.g. photo ID, file ID)")
     name: str = Field(..., description="Display filename or title")
     mime_type: str = Field(default="image/jpeg", description="MIME type of the media file")
     size_bytes: Optional[int] = Field(default=None, description="File size in bytes if known")
@@ -68,29 +68,29 @@ class SourceItem(BaseModel):
 
 
 class SourceContainer(BaseModel):
-    """Represents a container (album, folder, bucket) grouping source items."""
-    id: str = Field(..., description="Unique container ID (e.g. album ID, folder ID, bucket/prefix)")
+    """Represents a container (album, folder) grouping source items."""
+    id: str = Field(..., description="Unique container ID (e.g. album ID, folder ID)")
     name: str = Field(..., description="Display name or title of container")
     item_count: Optional[int] = Field(default=None, description="Total media items in container if known")
     cover_image_url: Optional[str] = Field(default=None, description="Cover thumbnail URL if available")
-    container_type: str = Field(default="album", description="Container category: album, folder, bucket, prefix")
+    container_type: str = Field(default="album", description="Container category: album, folder")
     metadata: Dict[str, Any] = Field(default_factory=dict, description="Source-specific container metadata")
 
 
 class SourceProviderConfig(BaseModel):
     """Configuration credentials and parameters for connecting to a SourceProvider."""
-    provider_id: str = Field(..., description="Target provider identifier (local, google_photos, google_drive, s3, gcs)")
+    provider_id: str = Field(..., description="Target provider identifier (local, google_photos, google_drive)")
     auth_token: Optional[str] = Field(default=None, description="OAuth2 Bearer token or API token")
     client_id: Optional[str] = Field(default=None, description="OAuth2 Client ID")
     client_secret: Optional[str] = Field(default=None, description="OAuth2 Client Secret")
     refresh_token: Optional[str] = Field(default=None, description="OAuth2 Refresh Token")
     token_uri: Optional[str] = Field(default="https://oauth2.googleapis.com/token", description="OAuth2 Token Endpoint")
-    bucket_name: Optional[str] = Field(default=None, description="S3 or GCS bucket name")
+    bucket_name: Optional[str] = Field(default=None, description="Optional bucket name (legacy)")
     prefix: Optional[str] = Field(default=None, description="Object key prefix or folder path")
-    endpoint_url: Optional[str] = Field(default=None, description="Custom endpoint for S3-compatible APIs (MinIO/LocalStack)")
-    region_name: Optional[str] = Field(default="us-east-1", description="AWS or cloud region")
-    access_key_id: Optional[str] = Field(default=None, description="AWS Access Key ID")
-    secret_access_key: Optional[str] = Field(default=None, description="AWS Secret Access Key")
+    endpoint_url: Optional[str] = Field(default=None, description="Custom endpoint for compatible APIs")
+    region_name: Optional[str] = Field(default="us-east-1", description="Cloud region")
+    access_key_id: Optional[str] = Field(default=None, description="Access Key ID")
+    secret_access_key: Optional[str] = Field(default=None, description="Secret Access Key")
     credentials_json: Optional[str] = Field(default=None, description="Raw service account JSON or credentials payload")
     local_path: Optional[str] = Field(default=None, description="Local filesystem path for local provider")
     category_filter: Optional[str] = Field(default=None, description="Default category filter for media search")
@@ -110,7 +110,7 @@ class SourceConnectionStatus(BaseModel):
 
 
 class ListContainersResponse(BaseModel):
-    """Paginated list of containers (albums, folders, buckets)."""
+    """Paginated list of containers (albums, folders)."""
     containers: List[SourceContainer] = Field(default_factory=list)
     next_page_token: Optional[str] = Field(default=None)
     total_count: Optional[int] = Field(default=None)
@@ -148,7 +148,7 @@ class BaseSourceProvider(ABC):
         parent_id: Optional[str] = None,
         **kwargs: Any,
     ) -> ListContainersResponse:
-        """List containers (e.g. albums, folders, buckets) from the source."""
+        """List containers (e.g. albums, folders) from the source."""
         pass
 
     @abstractmethod

@@ -26,6 +26,7 @@ import { GoogleDocsPreview } from './GoogleDocsPreview';
 import { BinaryExportPreview } from './BinaryExportPreview';
 import { ExportFilenameModal } from './ExportFilenameModal';
 import { Button } from '../common/Button';
+import { Badge } from '../common/Badge';
 import { downloadPlanToEatCsv } from '../../utils/exportPlanToEat';
 import { downloadJsonLd } from '../../utils/exportJsonLd';
 import { downloadRawJson } from '../../utils/exportJson';
@@ -393,16 +394,16 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({ recipes, sessionId }
           {/* Google Docs */}
           <button
             type="button"
-            onClick={() => handleTabChange('googledocs')}
-            className={`p-3.5 rounded-xl border text-left flex flex-col gap-1 transition-all cursor-pointer ${
-              activeTab === 'googledocs'
-                ? 'border-emerald-600 bg-emerald-50/50 dark:bg-emerald-950/30 ring-2 ring-emerald-600/20'
-                : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-slate-50/50 dark:bg-slate-850/50'
-            }`}
+            disabled={true}
+            title="Support In Progress"
+            className="p-3.5 rounded-xl border text-left flex flex-col gap-1 transition-all opacity-50 cursor-not-allowed border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-850/50 text-slate-700 dark:text-slate-300"
           >
-            <div className="flex items-center gap-2 font-semibold text-xs text-emerald-800 dark:text-emerald-300">
-              <BookOpen className="w-4 h-4" />
-              <span>Google Docs Archival</span>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 font-semibold text-xs text-slate-600 dark:text-slate-400">
+                <BookOpen className="w-4 h-4" />
+                <span>Google Docs Archival</span>
+              </div>
+              <Badge variant="warning" size="sm">Coming Soon</Badge>
             </div>
             <p className="text-[11px] text-slate-500 dark:text-slate-400">
               Direct OAuth publishing & HTML archive.

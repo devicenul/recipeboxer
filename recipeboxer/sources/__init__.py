@@ -19,7 +19,6 @@ from recipeboxer.sources.registry import (
     get_source_registry,
     list_available_providers,
 )
-from recipeboxer.sources.s3_gcs import GCSSourceProvider, S3SourceProvider
 
 __all__ = [
     # Base abstraction & Models
@@ -35,11 +34,10 @@ __all__ = [
     "LocalSourceProvider",
     "GooglePhotosProvider",
     "GoogleDriveProvider",
-    "S3SourceProvider",
-    "GCSSourceProvider",
     # Registry & Utilities
     "SourceProviderRegistry",
     "get_source_registry",
     "get_source_provider",
     "list_available_providers",
 ]
+

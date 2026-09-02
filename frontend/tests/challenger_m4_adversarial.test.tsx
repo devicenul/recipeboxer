@@ -34,7 +34,7 @@ describe('Milestone 4 Empirical Challenger Adversarial Tests (Frontend)', () => 
   ];
 
   describe('Area 1: Filename Customization & Tab Switching Stem Synchronization', () => {
-    it('preserves user custom stem while updating file extensions across all 9 tabs', () => {
+    it('preserves user custom stem while updating file extensions across enabled tabs', () => {
       render(<ExportDialog recipes={adversarialRecipes} sessionId="sess_adv_test_999" />);
 
       const filenameInput = screen.getByLabelText(/Export Filename:/i) as HTMLInputElement;
@@ -50,7 +50,6 @@ describe('Milestone 4 Empirical Challenger Adversarial Tests (Frontend)', () => 
         { name: /Obsidian Markdown/i, expectedExt: '.md' },
         { name: /Cooklang \(\.cook\)/i, expectedExt: '.cook' },
         { name: /Paprika \(\.paprikarecipes\)/i, expectedExt: '.paprikarecipes' },
-        { name: /Google Docs Archival/i, expectedExt: '.html' },
         { name: /Heirloom DOCX/i, expectedExt: '.docx' },
         { name: /Printable PDF/i, expectedExt: '.pdf' },
         { name: /Plan To Eat CSV/i, expectedExt: '.csv' },
@@ -61,6 +60,12 @@ describe('Milestone 4 Empirical Challenger Adversarial Tests (Frontend)', () => 
         fireEvent.click(tabBtn);
         expect(filenameInput.value).toBe(`grandma_heirloom_deck_2026${expectedExt}`);
       }
+
+      // Verify Google Docs format button is disabled with Coming Soon badge and Support In Progress tooltip
+      const gdocsTab = screen.getByRole('button', { name: /Google Docs Archival/i });
+      expect(gdocsTab).toBeDisabled();
+      expect(gdocsTab).toHaveAttribute('title', 'Support In Progress');
+      expect(gdocsTab).toHaveTextContent('Coming Soon');
     });
 
     it('handles empty custom filename by falling back to auto-generated suggested stem', () => {
@@ -109,7 +114,7 @@ describe('Milestone 4 Empirical Challenger Adversarial Tests (Frontend)', () => 
   });
 
   describe('Area 2: Google Docs Export Disabled with Tooltip & Fallback Removal', () => {
-    it('verifies export button is disabled with Support In Progress tooltip and manual token drawer is absent', async () => {
+    it('verifies export button is disabled with Support In Progress tooltip and manual drawers are absent', async () => {
       render(<GoogleDocsPreview recipes={adversarialRecipes} sessionId="sess_oauth_fail" />);
 
       // Verify Google Docs export button is disabled
@@ -117,11 +122,14 @@ describe('Milestone 4 Empirical Challenger Adversarial Tests (Frontend)', () => 
       expect(exportBtn).toBeInTheDocument();
       expect(exportBtn).toBeDisabled();
       expect(exportBtn).toHaveAttribute('title', 'Support In Progress');
+      expect(screen.getByText('Coming Soon')).toBeInTheDocument();
 
-      // Verify manual token fallback drawer and inputs are absent
+      // Verify manual token and OAuth settings fallback drawer and inputs are absent
+      expect(screen.queryByRole('region', { name: /OAuth Client ID Settings/i })).not.toBeInTheDocument();
       expect(screen.queryByRole('region', { name: /Manual Access Token Fallback/i })).not.toBeInTheDocument();
-      expect(screen.queryByPlaceholderText(/ya29\./i)).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /OAuth Settings/i })).not.toBeInTheDocument();
       expect(screen.queryByRole('button', { name: /Manual Access/i })).not.toBeInTheDocument();
+      expect(screen.queryByPlaceholderText(/ya29\./i)).not.toBeInTheDocument();
     });
   });
 });

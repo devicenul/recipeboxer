@@ -158,10 +158,11 @@ describe('R5: Multi-Format Recipe Export Subsystem', () => {
       fireEvent.click(paprikaTab);
       expect(screen.getByText(/Paprika Recipe Manager/i)).toBeInTheDocument();
 
-      // Click Google Docs Tab
+      // Verify Google Docs format button is disabled with Coming Soon badge and Support In Progress tooltip
       const gdocsTab = screen.getByRole('button', { name: /Google Docs Archival/i });
-      fireEvent.click(gdocsTab);
-      expect(screen.getByText(/Google Docs Interchange Archive/i)).toBeInTheDocument();
+      expect(gdocsTab).toBeDisabled();
+      expect(gdocsTab).toHaveAttribute('title', 'Support In Progress');
+      expect(gdocsTab).toHaveTextContent('Coming Soon');
 
       // Click Heirloom DOCX Tab
       const docxTab = screen.getByRole('button', { name: /Heirloom DOCX/i });
@@ -221,23 +222,20 @@ describe('R5: Multi-Format Recipe Export Subsystem', () => {
   });
 
   describe('Google Docs Direct Publishing & Streamlined Touchpoints', () => {
-    it('verifies Google Docs export button is disabled with Support In Progress tooltip and manual token fallback is removed', async () => {
+    it('verifies Google Docs format and action buttons are disabled with Support In Progress tooltip and Coming Soon badges', async () => {
       render(<ExportDialog recipes={sampleRecipes} sessionId="sess_gdocs_oauth" />);
 
-      // Switch to Google Docs tab
+      // Verify Google Docs format tab button is disabled with tooltip & badge
       const gdocsTab = screen.getByRole('button', { name: /Google Docs Archival/i });
-      fireEvent.click(gdocsTab);
+      expect(gdocsTab).toBeInTheDocument();
+      expect(gdocsTab).toBeDisabled();
+      expect(gdocsTab).toHaveAttribute('title', 'Support In Progress');
+      expect(gdocsTab).toHaveTextContent('Coming Soon');
 
-      expect(screen.getByText(/Direct Google Docs & Drive API Publishing/i)).toBeInTheDocument();
-
-      // Verify export button is disabled with Support In Progress tooltip
-      const exportBtn = screen.getByRole('button', { name: /Export directly to Google Docs/i });
-      expect(exportBtn).toBeInTheDocument();
-      expect(exportBtn).toBeDisabled();
-      expect(exportBtn).toHaveAttribute('title', 'Support In Progress');
-
-      // Verify no manual token fallback elements exist
+      // Verify no manual OAuth settings or fallback drawers exist
+      expect(screen.queryByRole('region', { name: /OAuth Client ID Settings/i })).not.toBeInTheDocument();
       expect(screen.queryByRole('region', { name: /Manual Access Token Fallback/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /OAuth Settings/i })).not.toBeInTheDocument();
       expect(screen.queryByRole('button', { name: /Manual Access/i })).not.toBeInTheDocument();
     });
   });

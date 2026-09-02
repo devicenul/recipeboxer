@@ -293,7 +293,7 @@ async def start_pipeline(
     summary="List Source Providers and Connection Statuses",
 )
 async def list_sources() -> List[SourceConnectionStatus]:
-    """Retrieve all registered source providers (Local, Google Photos, Google Drive, S3, GCS) and connectivity."""
+    """Retrieve all registered source providers (Local, Google Photos, Google Drive) and connectivity."""
     return await list_available_providers()
 
 
@@ -331,7 +331,7 @@ async def connect_source(
     "/sources/{provider_id}/containers",
     response_model=ListContainersResponse,
     status_code=status.HTTP_200_OK,
-    summary="List Source Containers (Albums / Folders / Buckets)",
+    summary="List Source Containers (Albums / Folders)",
 )
 async def list_source_containers(
     provider_id: str,
@@ -339,7 +339,7 @@ async def list_source_containers(
     page_token: Optional[str] = Query(None),
     parent_id: Optional[str] = Query(None),
 ) -> ListContainersResponse:
-    """Browse albums, directories, or prefixes for a source provider."""
+    """Browse albums or directories for a source provider."""
     try:
         provider = get_source_provider(provider_id)
         return await provider.list_containers(

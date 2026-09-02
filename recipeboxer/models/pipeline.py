@@ -78,7 +78,7 @@ class PipelineStartRequest(BaseModel):
         default_factory=list,
         description="Initial batch default tags to apply to all recipes scanned in this session",
     )
-    source_provider: Optional[str] = Field(default=None, description="External source provider ID (e.g. google_photos, google_drive, s3, gcs, local)")
+    source_provider: Optional[str] = Field(default=None, description="External source provider ID (e.g. google_photos, google_drive, local)")
     source_container_id: Optional[str] = Field(default=None, description="Selected container / album / folder ID")
     source_item_ids: Optional[List[str]] = Field(default=None, description="Specific item IDs to ingest from provider")
     source_config: Optional[Dict[str, Any]] = Field(default=None, description="Credentials or configuration for source provider")

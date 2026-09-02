@@ -320,91 +320,59 @@ describe('Google Identity Services OAuth 401 invalid_client Resolution & Manual 
     });
   });
 
-  describe('2. Integration: GoogleDocsPreview Unconfigured State Alerting & Setup Guidance (R1, R3)', () => {
-    it('displays unconfigured alert banner when no Client ID is set and export button is disabled with tooltip', async () => {
+  describe('2. Integration: GoogleDocsPreview OAuth Simplification & Absence of Manual Settings (R1, R3)', () => {
+    it('verifies manual OAuth client ID drawer, setup guide modal, and unconfigured alert banner are absent from DOM', async () => {
       process.env.VITE_GOOGLE_CLIENT_ID = '';
       clearStoredGoogleClientId();
 
       render(<GoogleDocsPreview recipes={sampleRecipes} sessionId="sess_unconfigured_test" />);
 
-      // Verify unconfigured warning banner is rendered
+      // Verify unconfigured warning banner is NOT rendered
       expect(
-        screen.getByText(/Google OAuth Client ID is not configured/i)
-      ).toBeInTheDocument();
+        screen.queryByText(/Google OAuth Client ID is not configured/i)
+      ).not.toBeInTheDocument();
 
-      // Verify export button is disabled with "Support In Progress" tooltip
+      // Verify OAuth settings buttons and drawers are NOT rendered
+      expect(screen.queryByRole('button', { name: /OAuth Settings/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Configure Client ID/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Setup Guide/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('region', { name: /OAuth Client ID Settings/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('region', { name: /Google Cloud Setup Guide/i })).not.toBeInTheDocument();
+      expect(screen.queryByLabelText(/Google OAuth Client ID/i)).not.toBeInTheDocument();
+
+      // Verify export button is disabled with "Support In Progress" tooltip and Coming Soon badge
       const exportBtn = screen.getByRole('button', { name: /Export directly to Google Docs/i });
       expect(exportBtn).toBeDisabled();
       expect(exportBtn).toHaveAttribute('title', 'Support In Progress');
+      expect(screen.getByText('Coming Soon')).toBeInTheDocument();
 
       // Verify no manual token buttons or fallback drawers exist
       expect(screen.queryByRole('button', { name: /Manual Access/i })).not.toBeInTheDocument();
       expect(screen.queryByRole('button', { name: /Enter Manual Token/i })).not.toBeInTheDocument();
       expect(screen.queryByRole('region', { name: /Manual Access Token Fallback/i })).not.toBeInTheDocument();
-
-      // Click "Configure Client ID" in unconfigured banner
-      const configBtn = screen.getByRole('button', { name: /Configure Client ID/i });
-      fireEvent.click(configBtn);
-
-      // Verify OAuth settings drawer opened
-      expect(screen.getByRole('region', { name: /OAuth Client ID Settings/i })).toBeInTheDocument();
     });
 
-    it('allows user to enter, save, and reset custom Client ID via OAuth Settings drawer', async () => {
-      process.env.VITE_GOOGLE_CLIENT_ID = 'default-env-id.apps.googleusercontent.com';
-      clearStoredGoogleClientId();
+    it('verifies absence of troubleshooting configuration buttons in error alert', async () => {
+      render(<GoogleDocsPreview recipes={sampleRecipes} sessionId="sess_error_test" />);
 
-      render(<GoogleDocsPreview recipes={sampleRecipes} sessionId="sess_save_client_id" />);
+      expect(screen.queryByRole('button', { name: /Configure Client ID/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /View Setup Guide/i })).not.toBeInTheDocument();
+    });
 
-      // Open OAuth Settings drawer
-      const settingsToggle = screen.getByRole('button', { name: /OAuth Settings/i });
-      fireEvent.click(settingsToggle);
+    it('streamlined direct 1-click OAuth flow initiates requestGoogleAccessToken when triggered', async () => {
+      setMockGisResponse({ access_token: 'ya29.live_direct_token_123' });
 
-      const clientIdInput = screen.getByLabelText(/Google OAuth Client ID/i);
-      expect(clientIdInput).toBeInTheDocument();
-
-      // Enter new custom Client ID
-      fireEvent.change(clientIdInput, {
-        target: { value: 'my-custom-client-12345.apps.googleusercontent.com' },
+      const tokenPromise = requestGoogleAccessToken({
+        scope: GOOGLE_SCOPES.DOCS_EXPORT,
       });
 
-      // Click Save Client ID
-      const saveBtn = screen.getByRole('button', { name: /Save Client ID/i });
-      fireEvent.click(saveBtn);
-
-      // Verify persistence in localStorage
-      expect(localStorage.getItem(GOOGLE_CLIENT_ID_STORAGE_KEY)).toBe(
-        'my-custom-client-12345.apps.googleusercontent.com'
+      const token = await tokenPromise;
+      expect(token).toBe('ya29.live_direct_token_123');
+      expect(mockInitTokenClient).toHaveBeenCalledWith(
+        expect.objectContaining({
+          scope: GOOGLE_SCOPES.DOCS_EXPORT,
+        })
       );
-      expect(screen.getByText(/Client ID saved to local storage/i)).toBeInTheDocument();
-      expect(screen.getByText(/Custom \(localStorage\)/i)).toBeInTheDocument();
-
-      // Click Reset / Clear button
-      const resetBtn = await screen.findByRole('button', { name: /Reset \/ Clear/i });
-      fireEvent.click(resetBtn);
-
-      // Verify localStorage was cleared and reverted to environment source
-      expect(localStorage.getItem(GOOGLE_CLIENT_ID_STORAGE_KEY)).toBeNull();
-      await waitFor(() => {
-        expect(screen.getByText(/Environment \(VITE_GOOGLE_CLIENT_ID\)/i)).toBeInTheDocument();
-      });
-    });
-
-    it('toggles Google Cloud Console Setup Guidance with detailed instructions', () => {
-      render(<GoogleDocsPreview recipes={sampleRecipes} sessionId="sess_guide_test" />);
-
-      // Open settings
-      const settingsToggle = screen.getByRole('button', { name: /OAuth Settings/i });
-      fireEvent.click(settingsToggle);
-
-      // Open setup guide
-      const guideBtn = screen.getByRole('button', { name: /Setup Guide/i });
-      fireEvent.click(guideBtn);
-
-      expect(screen.getByText(/How to create a Google OAuth Client ID:/i)).toBeInTheDocument();
-      expect(screen.getByText(/Google Cloud Console Credentials/i)).toBeInTheDocument();
-      expect(screen.getByText(/Authorized JavaScript origins/i)).toBeInTheDocument();
-      expect(screen.getByText(/Google Docs API/i)).toBeInTheDocument();
     });
   });
 
@@ -419,30 +387,23 @@ describe('Google Identity Services OAuth 401 invalid_client Resolution & Manual 
       expect(screen.queryByPlaceholderText(/ya29\./i)).not.toBeInTheDocument();
     });
 
-    it('disables Google Docs export trigger button and renders Support In Progress tooltip', () => {
+    it('disables Google Docs export trigger button and renders Support In Progress tooltip and Coming Soon badge', () => {
       render(<GoogleDocsPreview recipes={sampleRecipes} sessionId="sess_disabled_tooltip" />);
 
       const exportBtn = screen.getByRole('button', { name: /Export directly to Google Docs/i });
       expect(exportBtn).toBeInTheDocument();
       expect(exportBtn).toBeDisabled();
       expect(exportBtn).toHaveAttribute('title', 'Support In Progress');
+      expect(screen.getByText('Coming Soon')).toBeInTheDocument();
     });
 
-    it('supports saving client ID with Enter key and verifies no manual token drawer exists', async () => {
-      render(<GoogleDocsPreview recipes={sampleRecipes} sessionId="sess_enter_key_test" />);
+    it('verifies no manual client ID drawer or settings elements exist in DOM', async () => {
+      render(<GoogleDocsPreview recipes={sampleRecipes} sessionId="sess_no_settings" />);
 
-      // Test Enter on Client ID input
-      const settingsToggle = screen.getByRole('button', { name: /OAuth Settings/i });
-      fireEvent.click(settingsToggle);
-
-      const clientIdInput = screen.getByLabelText(/Google OAuth Client ID/i);
-      fireEvent.change(clientIdInput, { target: { value: 'enter-key-client.apps.googleusercontent.com' } });
-      fireEvent.keyDown(clientIdInput, { key: 'Enter', code: 'Enter' });
-
-      expect(localStorage.getItem(GOOGLE_CLIENT_ID_STORAGE_KEY)).toBe('enter-key-client.apps.googleusercontent.com');
-
-      // Verify no manual token fallback is triggered or visible
+      expect(screen.queryByRole('region', { name: /OAuth Client ID Settings/i })).not.toBeInTheDocument();
       expect(screen.queryByRole('region', { name: /Manual Access Token Fallback/i })).not.toBeInTheDocument();
+      expect(screen.queryByLabelText(/Google OAuth Client ID/i)).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /OAuth Settings/i })).not.toBeInTheDocument();
     });
 
     it('copies fallback batch JSON when /api/export/google-docs endpoint returns error', async () => {
@@ -505,21 +466,18 @@ describe('Google Identity Services OAuth 401 invalid_client Resolution & Manual 
   });
 
   describe('4. Integration: ExportDialog Google Docs Tab Navigation', () => {
-    it('renders Google Docs tab in ExportDialog without manual token fallback and with Support In Progress tooltip', async () => {
+    it('renders Google Docs format button in ExportDialog as disabled with Support In Progress tooltip and Coming Soon badge', async () => {
       render(<ExportDialog recipes={sampleRecipes} sessionId="sess_dialog_full" />);
 
-      // Switch to Google Docs tab
       const gdocsTab = screen.getByRole('button', { name: /Google Docs Archival/i });
-      fireEvent.click(gdocsTab);
+      expect(gdocsTab).toBeInTheDocument();
+      expect(gdocsTab).toBeDisabled();
+      expect(gdocsTab).toHaveAttribute('title', 'Support In Progress');
+      expect(gdocsTab).toHaveTextContent('Coming Soon');
 
-      expect(screen.getByText(/Direct Google Docs & Drive API Publishing/i)).toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: /Manual Access/i })).not.toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /OAuth Settings/i })).toBeInTheDocument();
-
-      const exportBtn = screen.getByRole('button', { name: /Export directly to Google Docs/i });
-      expect(exportBtn).toBeInTheDocument();
-      expect(exportBtn).toBeDisabled();
-      expect(exportBtn).toHaveAttribute('title', 'Support In Progress');
+      // Verify no OAuth settings or setup guide modals exist
+      expect(screen.queryByRole('button', { name: /OAuth Settings/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('region', { name: /OAuth Client ID Settings/i })).not.toBeInTheDocument();
     });
   });
 });

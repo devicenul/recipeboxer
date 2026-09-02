@@ -345,17 +345,17 @@ describe('RecipeBoxer Frontend E2E Platform Suite (Tiers 1–4)', () => {
     });
 
     // F5.1: Google Docs OAuth & Doc Creation
-    it('T1.F5.1: provides Google Docs export preview and download button in ExportDialog', () => {
+    it('T1.F5.1: provides Google Docs format button disabled with Coming Soon watermark and Support In Progress tooltip in ExportDialog', () => {
       const recipes: RecipeSchema[] = [
         { recipe_id: 'rec_gdoc_01', title: 'Google Doc Tart', ingredients: ['Apples'], directions: ['Bake.'], tags: [] },
       ];
 
       render(<ExportDialog recipes={recipes} sessionId="sess_gdoc_01" />);
 
-      const gdocTab = screen.getByText('Google Docs Archival');
-      fireEvent.click(gdocTab);
-
-      expect(screen.getByText(/Download Google Docs Archive/i)).toBeInTheDocument();
+      const gdocTab = screen.getByRole('button', { name: /Google Docs Archival/i });
+      expect(gdocTab).toBeDisabled();
+      expect(gdocTab).toHaveAttribute('title', 'Support In Progress');
+      expect(gdocTab).toHaveTextContent('Coming Soon');
     });
 
     // F5.2: Embedded Images in PDF & DOCX

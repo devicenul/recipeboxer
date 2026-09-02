@@ -37,11 +37,6 @@ from recipeboxer.sources.registry import (
     get_source_registry,
     list_available_providers,
 )
-from recipeboxer.sources.s3_gcs import (
-    GCSSourceProvider,
-    S3SourceProvider,
-    sign_s3_request,
-)
 from recipeboxer.storage.cache import RemoteAssetCache, RemoteAssetRecord
 
 
@@ -121,11 +116,11 @@ class TestBaseAndRegistry:
         drive = registry.get_provider("google_drive")
         assert isinstance(drive, GoogleDriveProvider)
 
-        s3 = registry.get_provider("s3")
-        assert isinstance(s3, S3SourceProvider)
+        with pytest.raises(KeyError):
+            registry.get_provider("s3")
 
-        gcs = registry.get_provider("gcs")
-        assert isinstance(gcs, GCSSourceProvider)
+        with pytest.raises(KeyError):
+            registry.get_provider("gcs")
 
         with pytest.raises(KeyError):
             registry.get_provider("unknown_provider_xyz")
@@ -134,13 +129,11 @@ class TestBaseAndRegistry:
     async def test_list_available_providers(self):
         """Verify list_available_providers returns statuses for all registered providers."""
         statuses = await list_available_providers()
-        assert len(statuses) >= 5
+        assert len(statuses) == 3
         provider_ids = [s.provider_id for s in statuses]
-        assert "local" in provider_ids
-        assert "google_photos" in provider_ids
-        assert "google_drive" in provider_ids
-        assert "s3" in provider_ids
-        assert "gcs" in provider_ids
+        assert set(provider_ids) == {"local", "google_photos", "google_drive"}
+        assert "s3" not in provider_ids
+        assert "gcs" not in provider_ids
 
 
 # ============================================================================
@@ -202,11 +195,12 @@ class TestRemoteAssetCache:
         cache = RemoteAssetCache(":memory:")
         data = create_dummy_jpeg_bytes(120, 80, "green")
         h = cache.put(
-            provider_id="s3",
+            provider_id="google_photos",
             item_id="recipes/soup.jpg",
             filename="soup.jpg",
             data=data,
         )
+
 
         staging_dir = tmp_path / "staging"
         card = cache.materialize_as_scanned_card(h, staging_dir)
@@ -450,106 +444,7 @@ class TestGoogleDriveProvider:
 
 
 # ============================================================================
-# 6. S3 & GCS Connectors Mock Tests (SigV4, Objects, Signed URLs)
-# ============================================================================
-
-class TestCloudStorageProviders:
-    def test_aws_sigv4_request_signing(self):
-        """Verify SigV4 signing generates valid AWS4-HMAC-SHA256 headers."""
-        headers = sign_s3_request(
-            method="GET",
-            url="https://mybucket.s3.us-east-1.amazonaws.com/?list-type=2",
-            access_key="AKIAEXAMPLE",
-            secret_key="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
-            region="us-east-1",
-        )
-        assert "Authorization" in headers
-        assert headers["Authorization"].startswith("AWS4-HMAC-SHA256")
-        assert "Credential=AKIAEXAMPLE" in headers["Authorization"]
-        assert "x-amz-date" in headers
-
-    @pytest.mark.asyncio
-    async def test_s3_provider_list_and_download(self):
-        """Verify S3SourceProvider XML parsing and download."""
-        dummy_img = create_dummy_jpeg_bytes(200, 200)
-        s3_xml = """<?xml version="1.0" encoding="UTF-8"?>
-        <ListBucketResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
-            <Name>recipeboxer-bucket</Name>
-            <Prefix>box1/</Prefix>
-            <Contents>
-                <Key>box1/pancake_recipe.jpg</Key>
-                <LastModified>2026-08-25T10:00:00.000Z</LastModified>
-                <ETag>"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"</ETag>
-                <Size>4096</Size>
-            </Contents>
-        </ListBucketResult>"""
-
-        def handler(request: httpx.Request) -> httpx.Response:
-            url = str(request.url)
-            if "box1/pancake_recipe.jpg" in url and request.method == "GET":
-                return httpx.Response(200, content=dummy_img, headers={"Content-Type": "image/jpeg"})
-            if "list-type=2" in url:
-                return httpx.Response(200, content=s3_xml.encode("utf-8"), headers={"Content-Type": "application/xml"})
-            return httpx.Response(404)
-
-        transport = httpx.MockTransport(handler)
-        client = httpx.AsyncClient(transport=transport)
-        cfg = SourceProviderConfig(
-            provider_id="s3",
-            bucket_name="recipeboxer-bucket",
-            access_key_id="AKIA123",
-            secret_access_key="SECRET123",
-            region_name="us-east-1",
-        )
-        provider = S3SourceProvider(config=cfg, http_client=client)
-
-        items = await provider.list_items(container_id="box1/")
-        assert len(items.items) == 1
-        assert items.items[0].id == "box1/pancake_recipe.jpg"
-
-        data = await provider.download_image("box1/pancake_recipe.jpg")
-        assert data == dummy_img
-
-    @pytest.mark.asyncio
-    async def test_gcs_provider_list_and_download(self):
-        """Verify GCSSourceProvider JSON API parsing and download."""
-        dummy_img = create_dummy_jpeg_bytes(100, 100)
-
-        def handler(request: httpx.Request) -> httpx.Response:
-            url = str(request.url)
-            if "alt=media" in url:
-                return httpx.Response(200, content=dummy_img)
-            if "/b/archive-bucket/o" in url:
-                return httpx.Response(
-                    200,
-                    json={
-                        "items": [
-                            {
-                                "name": "cards/beef_stew.jpg",
-                                "size": "8192",
-                                "contentType": "image/jpeg",
-                                "timeCreated": "2026-08-25T11:00:00Z",
-                            }
-                        ]
-                    },
-                )
-            return httpx.Response(404)
-
-        transport = httpx.MockTransport(handler)
-        client = httpx.AsyncClient(transport=transport)
-        cfg = SourceProviderConfig(provider_id="gcs", bucket_name="archive-bucket", auth_token="gcs_token")
-        provider = GCSSourceProvider(config=cfg, http_client=client)
-
-        items = await provider.list_items(container_id="cards/")
-        assert len(items.items) == 1
-        assert items.items[0].name == "beef_stew.jpg"
-
-        data = await provider.download_image("cards/beef_stew.jpg")
-        assert data == dummy_img
-
-
-# ============================================================================
-# 7. FastAPI Source Endpoints & Pipeline Ingestion Tests
+# 6. FastAPI Source Endpoints & Pipeline Ingestion Tests
 # ============================================================================
 
 class TestFastAPISourceRoutes:
@@ -565,9 +460,13 @@ class TestFastAPISourceRoutes:
         data = res.json()
         assert isinstance(data, list)
         provider_ids = [p["provider_id"] for p in data]
+        assert len(provider_ids) == 3
         assert "local" in provider_ids
         assert "google_photos" in provider_ids
-        assert "s3" in provider_ids
+        assert "google_drive" in provider_ids
+        assert "s3" not in provider_ids
+        assert "gcs" not in provider_ids
+
 
     def test_post_source_connect_endpoint(self, client):
         """POST /api/sources/{provider_id}/connect validates config."""
@@ -657,50 +556,13 @@ class TestFastAPISourceRoutes:
 
 
 # ============================================================================
-# 8. Adversarial Edge Cases, SigV4 Compliance, Caching & Ordering Tests
+# 7. Adversarial Edge Cases, Caching & Ordering Tests
 # ============================================================================
 
 class TestAdversarialPhase5EdgeCases:
-    def test_aws_sigv4_query_param_sorting_and_odd_keys(self):
-        """Verify AWS SigV4 canonical query string sorts unordered parameters and quotes paths."""
-        url_unordered = (
-            "https://mybucket.s3.us-east-1.amazonaws.com/recipes/grandma's%20pie%20%2B%20cake.jpg"
-            "?prefix=holiday&max-keys=50&continuation-token=abc%2B123&delimiter=%2F"
-        )
-        headers = sign_s3_request(
-            method="GET",
-            url=url_unordered,
-            access_key="AKIAEXAMPLE",
-            secret_key="SECRETEXAMPLEKEY",
-            region="us-east-1",
-        )
-        assert "Authorization" in headers
-        assert "AWS4-HMAC-SHA256" in headers["Authorization"]
-        assert headers["x-amz-date"]
-
-    def test_s3_odd_key_url_building_and_presigning(self):
-        """Verify S3 _build_url and generate_presigned_url handle spaces, plus signs, emojis, and quotes."""
-        cfg = SourceProviderConfig(
-            provider_id="s3",
-            bucket_name="recipe-box-archive",
-            access_key_id="AKIA123",
-            secret_access_key="SECRET123",
-            region_name="us-east-1",
-        )
-        provider = S3SourceProvider(config=cfg)
-
-        odd_key = "holiday batch/Grandma's (Secret) Pie + Cake 🍰.jpg"
-        url = provider._build_url(odd_key)
-        assert "holiday%20batch" in url
-        assert "Grandma%27s" in url or "Grandma's" in url or "%20Pie%20%2B%20Cake" in url
-
-        presigned = provider.generate_presigned_url(odd_key, expires_in=1800)
-        assert "X-Amz-Signature=" in presigned
-        assert "X-Amz-Credential=" in presigned
-        assert "X-Amz-Expires=1800" in presigned
-
     @pytest.mark.asyncio
     async def test_base_provider_caching_target_dir_none(self, tmp_path: Path):
+
         """Verify download_and_cache hits cache and materializes even when target_dir is None."""
         cache_db = tmp_path / "cache.db"
         asset_cache = RemoteAssetCache(cache_db)
@@ -833,28 +695,6 @@ class TestAdversarialPhase5EdgeCases:
         )
         assert await gd.fetch_thumbnail("bad_file_id") is None
 
-        # 3. S3 404 error
-        def s3_err(req):
-            return httpx.Response(404)
-
-        s3_client = httpx.AsyncClient(transport=httpx.MockTransport(s3_err))
-        s3 = S3SourceProvider(
-            config=SourceProviderConfig(provider_id="s3", bucket_name="b"),
-            http_client=s3_client,
-        )
-        assert await s3.fetch_thumbnail("bad_key.jpg") is None
-
-        # 4. GCS 404 error
-        def gcs_err(req):
-            return httpx.Response(404)
-
-        gcs_client = httpx.AsyncClient(transport=httpx.MockTransport(gcs_err))
-        gcs = GCSSourceProvider(
-            config=SourceProviderConfig(provider_id="gcs", bucket_name="b"),
-            http_client=gcs_client,
-        )
-        assert await gcs.fetch_thumbnail("bad_obj.jpg") is None
-
     def test_pipeline_start_with_local_source_config(self, sample_image_dir: Path):
         """Verify POST /api/pipeline/start accepts source_provider='local' with source_config.local_path."""
         from starlette.testclient import TestClient
@@ -873,29 +713,6 @@ class TestAdversarialPhase5EdgeCases:
         assert "session_id" in data
         assert data["total_scans_found"] == 3
 
-    def test_aws_sigv4_query_param_space_percent20_encoding(self):
-        """Verify AWS SigV4 query string encodes spaces strictly as %20 and not + per AWS specification."""
-        import urllib.parse
-        headers = sign_s3_request(
-            method="GET",
-            url="https://mybucket.s3.us-east-1.amazonaws.com/?prefix=holiday%20baking%2Fbox%201%2F&max-keys=50",
-            access_key="AKIA123",
-            secret_key="SECRET123",
-            region="us-east-1",
-        )
-        assert "Authorization" in headers
-        # Ensure presigned URL also uses %20 for spaces
-        cfg = SourceProviderConfig(
-            provider_id="s3",
-            bucket_name="mybucket",
-            access_key_id="AKIA123",
-            secret_access_key="SECRET123",
-            region_name="us-east-1",
-        )
-        provider = S3SourceProvider(config=cfg)
-        presigned = provider.generate_presigned_url("holiday recipes/apple pie.jpg")
-        assert "holiday%20recipes/apple%20pie.jpg" in presigned
-        assert "+" not in presigned.split("?")[0]
 
     @pytest.mark.asyncio
     async def test_google_photos_concurrent_token_refresh_thundering_herd(self):
@@ -1045,7 +862,7 @@ class TestAdversarialPhase5EdgeCases:
             import hashlib
             h = hashlib.sha256(blob).hexdigest().lower()
             res_h = cache.put(
-                provider_id="s3",
+                provider_id="google_photos",
                 item_id=f"concurrent_key_{i}.jpg",
                 filename=f"card_{i}.jpg",
                 data=blob,
@@ -1102,39 +919,6 @@ class TestAdversarialPhase5EdgeCases:
         assert "image/bmp" in mimes
         assert "image/tiff" in mimes
 
-    @pytest.mark.asyncio
-    async def test_gcs_fallback_download_url_generation(self):
-        """Verify GCSSourceProvider creates fallback download URLs when mediaLink is absent."""
-        def handler(request: httpx.Request) -> httpx.Response:
-            url = str(request.url)
-            if "/b/custom-bucket/o" in url:
-                return httpx.Response(
-                    200,
-                    json={
-                        "items": [
-                            {
-                                "name": "recipes/secret_pie.webp",
-                                "size": "4096",
-                                "timeCreated": "2026-08-25T12:00:00Z",
-                                # mediaLink intentionally omitted
-                            }
-                        ]
-                    },
-                )
-            return httpx.Response(404)
-
-        transport = httpx.MockTransport(handler)
-        client = httpx.AsyncClient(transport=transport)
-        cfg = SourceProviderConfig(provider_id="gcs", bucket_name="custom-bucket")
-        provider = GCSSourceProvider(config=cfg, http_client=client)
-
-        items_res = await provider.list_items(container_id="recipes/")
-        assert len(items_res.items) == 1
-        item = items_res.items[0]
-        assert item.name == "secret_pie.webp"
-        assert item.mime_type == "image/webp"
-        assert item.download_url == "https://storage.googleapis.com/storage/v1/b/custom-bucket/o/recipes%2Fsecret_pie.webp?alt=media"
-
     def test_remote_asset_cache_lru_eviction_and_size_bounds(self, tmp_path: Path):
         """Verify RemoteAssetCache enforces maximum size and max entries via LRU eviction."""
         db_path = tmp_path / "lru_test_cache.db"
@@ -1145,12 +929,13 @@ class TestAdversarialPhase5EdgeCases:
         hashes = []
         for i, b in enumerate(blobs):
             h = cache.put(
-                provider_id="s3",
+                provider_id="google_photos",
                 item_id=f"card_{i}.jpg",
                 filename=f"card_{i}.jpg",
                 data=b,
             )
             hashes.append(h)
+
 
         # Cache must not exceed max_entries (3)
         assert cache.count() <= 3

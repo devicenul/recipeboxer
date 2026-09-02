@@ -174,18 +174,21 @@ describe('Milestone 1: Platform Detection & Google Identity Services (GIS) OAuth
       },
     ];
 
-    it('verifies Google Docs export button is disabled with Support In Progress tooltip and no manual token drawer', () => {
+    it('verifies Google Docs export button is disabled with Support In Progress tooltip and Coming Soon badge and no manual drawers exist', () => {
       render(<GoogleDocsPreview recipes={mockRecipes} sessionId="sess_gis_test" />);
 
-      // Verify no manual token input drawer exists
+      // Verify no manual OAuth or token input drawers exist
       expect(screen.queryByPlaceholderText(/ya29\./i)).not.toBeInTheDocument();
       expect(screen.queryByRole('button', { name: /Manual Access/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /OAuth Settings/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('region', { name: /OAuth Client ID Settings/i })).not.toBeInTheDocument();
 
-      // Verify Google Docs export button is disabled with Support In Progress tooltip
+      // Verify Google Docs export button is disabled with Support In Progress tooltip and Coming Soon badge
       const exportBtn = screen.getByRole('button', { name: /Export directly to Google Docs/i });
       expect(exportBtn).toBeInTheDocument();
       expect(exportBtn).toBeDisabled();
       expect(exportBtn).toHaveAttribute('title', 'Support In Progress');
+      expect(screen.getByText('Coming Soon')).toBeInTheDocument();
     });
   });
 

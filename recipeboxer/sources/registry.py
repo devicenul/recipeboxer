@@ -14,7 +14,6 @@ from recipeboxer.sources.base import (
 from recipeboxer.sources.cloud_drive import GoogleDriveProvider
 from recipeboxer.sources.google_photos import GooglePhotosProvider
 from recipeboxer.sources.local import LocalSourceProvider
-from recipeboxer.sources.s3_gcs import GCSSourceProvider, S3SourceProvider
 
 logger = logging.getLogger(__name__)
 
@@ -32,8 +31,7 @@ class SourceProviderRegistry:
         self.register_provider_class("local", LocalSourceProvider)
         self.register_provider_class("google_photos", GooglePhotosProvider)
         self.register_provider_class("google_drive", GoogleDriveProvider)
-        self.register_provider_class("s3", S3SourceProvider)
-        self.register_provider_class("gcs", GCSSourceProvider)
+
 
     def register_provider_class(
         self, provider_id: str, provider_cls: Type[BaseSourceProvider]

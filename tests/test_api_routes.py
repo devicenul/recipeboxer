@@ -484,14 +484,18 @@ class TestAPIRoutes:
     async def test_sources_providers_unconfigured_cloud_fast_probe(
         self, client: httpx.AsyncClient
     ):
-        """Test GET /api/sources/providers returns immediately with connected=False for unconfigured S3/GCS."""
+        """Test GET /api/sources/providers returns registered providers without out-of-scope S3/GCS."""
         resp = await client.get("/api/sources/providers")
         assert resp.status_code == 200
         providers = {p["provider_id"]: p for p in resp.json()}
-        assert "s3" in providers
-        assert "gcs" in providers
-        assert providers["s3"]["connected"] is False
-        assert providers["gcs"]["connected"] is False
+        assert "local" in providers
+        assert "google_photos" in providers
+        assert "google_drive" in providers
+        assert "s3" not in providers
+        assert "gcs" not in providers
+        assert providers["google_photos"]["connected"] is False
+        assert providers["google_drive"]["connected"] is False
+
 
     @pytest.mark.asyncio
     async def test_sse_stream_empty_or_none_sentinel_session_id(

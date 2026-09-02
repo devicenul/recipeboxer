@@ -29,9 +29,9 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     targetTab: 'ingest',
     targetSelector: '[data-tour="ingestion-sources"]',
     description:
-      'Import recipe card collections from multiple sources including local scan directories, multi-file uploads, Google Photos albums, and Cloud Drive (S3/GCS buckets). Configure max concurrency and slow-batch pacing to control API quota consumption.',
+      'Import recipe card collections from multiple sources including local scan directories, multi-file uploads, Google Photos albums, and Google Drive folders. Configure max concurrency and slow-batch pacing to control API quota consumption.',
     highlights: [
-      'Pluggable Sources: Local Folders, Drag-and-Drop Scans, Google Photos & Cloud Drive',
+      'Pluggable Sources: Local Folders, Drag-and-Drop Scans, Google Photos & Google Drive',
       'API Quota Throttle: Slow-batch chunk size and delay pacing controls',
       'Dynamic Thinking Mode: Configurable reasoning budget for degraded cursive',
     ],

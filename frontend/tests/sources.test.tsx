@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import React from 'react';
 import { SourceSelector } from '../src/components/ingestion/SourceSelector';
 import { AlbumPickerModal } from '../src/components/ingestion/AlbumPickerModal';
@@ -15,20 +15,22 @@ vi.mock('../src/utils/api', () => ({
     listSourceItems: vi.fn(),
     connectSourceProvider: vi.fn(),
     getSourceThumbnailUrl: vi.fn((providerId, itemId) => `/api/sources/${providerId}/thumbnail/${itemId}`),
+    listSessions: vi.fn().mockResolvedValue([]),
+    browseDirectory: vi.fn(),
   },
 }));
 
-describe('Phase 5: Cloud & External Source Providers UI', () => {
+describe('Ingestion Sources & Provider Standardization', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
   describe('SourceSelector Component', () => {
-    it('renders main source options with Google Photos disabled and switches to Cloud Drive', () => {
+    it('renders main source options with Google Photos and Google Drive disabled, showing Coming Soon badges and tooltips', () => {
       const onSourceChange = vi.fn();
       const onSelectContainer = vi.fn();
 
-      const { rerender } = render(
+      render(
         <SourceSelector
           sourceType="local"
           onSourceTypeChange={onSourceChange}
@@ -42,62 +44,44 @@ describe('Phase 5: Cloud & External Source Providers UI', () => {
           onSelectContainer={onSelectContainer}
           categoryFilter="FOOD"
           onCategoryFilterChange={vi.fn()}
-          bucketName=""
-          onBucketNameChange={vi.fn()}
-          prefix=""
-          onPrefixChange={vi.fn()}
         />
       );
 
       // Verify all 3 top buttons exist
       expect(screen.getByText('Local Folder / Uploads')).toBeInTheDocument();
       expect(screen.getByText('Google Photos')).toBeInTheDocument();
-      expect(screen.getByText('Cloud Drive & Storage')).toBeInTheDocument();
+      expect(screen.getByText('Google Drive')).toBeInTheDocument();
 
-      // Verify Google Photos is disabled with "Support In Progress" tooltip
+      // Verify Local button is enabled
+      const localButton = screen.getByText('Local Folder / Uploads').closest('button');
+      expect(localButton).toBeEnabled();
+
+      // Verify Google Photos is disabled with "Support In Progress" tooltip and "Coming Soon" badge
       const gpButton = screen.getByText('Google Photos').closest('button');
       expect(gpButton).toBeDisabled();
       expect(gpButton).toHaveAttribute('title', 'Support In Progress');
+      expect(within(gpButton!).getByText('Coming Soon')).toBeInTheDocument();
 
-      // Click Cloud Drive & Storage
-      const cloudButton = screen.getByText('Cloud Drive & Storage').closest('button');
-      if (cloudButton) fireEvent.click(cloudButton);
-      expect(onSourceChange).toHaveBeenCalledWith('s3');
+      // Verify Google Drive is disabled with "Support In Progress" tooltip and "Coming Soon" badge
+      const gdriveButton = screen.getByText('Google Drive').closest('button');
+      expect(gdriveButton).toBeDisabled();
+      expect(gdriveButton).toHaveAttribute('title', 'Support In Progress');
+      expect(within(gdriveButton!).getByText('Coming Soon')).toBeInTheDocument();
 
-      // Re-render as Google Photos to verify inner controls are disabled
-      rerender(
-        <SourceSelector
-          sourceType="google_photos"
-          onSourceTypeChange={onSourceChange}
-          localMethod="folder"
-          onLocalMethodChange={vi.fn()}
-          folderPath=""
-          onFolderPathChange={vi.fn()}
-          uploadedFiles={[]}
-          onUploadedFilesChange={vi.fn()}
-          selectedContainer={null}
-          onSelectContainer={onSelectContainer}
-          categoryFilter="FOOD"
-          onCategoryFilterChange={vi.fn()}
-          bucketName=""
-          onBucketNameChange={vi.fn()}
-          prefix=""
-          onPrefixChange={vi.fn()}
-        />
-      );
-
-      expect(screen.getByText(/Google Photos Library Connection/i)).toBeInTheDocument();
-      const browseAlbumsBtn = screen.getByRole('button', { name: /Browse Google Photos Albums.../i });
-      expect(browseAlbumsBtn).toBeDisabled();
-      expect(browseAlbumsBtn).toHaveAttribute('title', 'Support In Progress');
+      // Assert complete absence of S3 and GCS options, tabs, and inputs
+      expect(screen.queryByText('Cloud Drive & Storage')).not.toBeInTheDocument();
+      expect(screen.queryByText(/Amazon S3/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Google Cloud Storage/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/S3 Bucket Name/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/GCS Bucket Name/i)).not.toBeInTheDocument();
     });
 
-    it('renders Cloud Drive and object storage options (Google Drive disabled, S3 and GCS enabled)', () => {
+    it('renders Google Drive connection panel when sourceType is google_drive without S3/GCS tabs or inputs', () => {
       const onSourceChange = vi.fn();
 
       render(
         <SourceSelector
-          sourceType="s3"
+          sourceType="google_drive"
           onSourceTypeChange={onSourceChange}
           localMethod="folder"
           onLocalMethodChange={vi.fn()}
@@ -109,21 +93,51 @@ describe('Phase 5: Cloud & External Source Providers UI', () => {
           onSelectContainer={vi.fn()}
           categoryFilter="FOOD"
           onCategoryFilterChange={vi.fn()}
-          bucketName="my-recipe-bucket"
-          onBucketNameChange={vi.fn()}
-          prefix="box-1/"
-          onPrefixChange={vi.fn()}
         />
       );
 
-      // Google Drive option is disabled with tooltip
-      const gdriveBtn = screen.getByRole('button', { name: /^Google Drive$/i });
-      expect(gdriveBtn).toBeDisabled();
-      expect(gdriveBtn).toHaveAttribute('title', 'Support In Progress');
+      // Google Drive connection panel is present
+      expect(screen.getByText(/Google Drive Connection/i)).toBeInTheDocument();
+      expect(screen.getByText(/Target Google Drive Folder/i)).toBeInTheDocument();
 
-      expect(screen.getByText('Amazon S3 / MinIO')).toBeInTheDocument();
-      expect(screen.getByText('Google Cloud Storage')).toBeInTheDocument();
-      expect(screen.getByText('S3 Bucket Name')).toBeInTheDocument();
+      // Browse Google Drive button is disabled with tooltip
+      const browseDriveBtn = screen.getByRole('button', { name: /Browse & Select Google Drive Folder.../i });
+      expect(browseDriveBtn).toBeDisabled();
+      expect(browseDriveBtn).toHaveAttribute('title', 'Support In Progress');
+
+      // Assert complete absence of S3/GCS tabs and bucket/prefix inputs
+      expect(screen.queryByText('Amazon S3 / MinIO')).not.toBeInTheDocument();
+      expect(screen.queryByText('Google Cloud Storage')).not.toBeInTheDocument();
+      expect(screen.queryByText('S3 Bucket Name')).not.toBeInTheDocument();
+      expect(screen.queryByText('GCS Bucket Name')).not.toBeInTheDocument();
+      expect(screen.queryByPlaceholderText('batch-2026/box-1/')).not.toBeInTheDocument();
+    });
+
+    it('renders Google Photos panel when sourceType is google_photos with disabled browse button and filter', () => {
+      const onSourceChange = vi.fn();
+
+      render(
+        <SourceSelector
+          sourceType="google_photos"
+          onSourceTypeChange={onSourceChange}
+          localMethod="folder"
+          onLocalMethodChange={vi.fn()}
+          folderPath=""
+          onFolderPathChange={vi.fn()}
+          uploadedFiles={[]}
+          onUploadedFilesChange={vi.fn()}
+          selectedContainer={null}
+          onSelectContainer={vi.fn()}
+          categoryFilter="FOOD"
+          onCategoryFilterChange={vi.fn()}
+        />
+      );
+
+      expect(screen.getByText(/Google Photos Library Connection/i)).toBeInTheDocument();
+      const browseAlbumsBtn = screen.getByRole('button', { name: /Browse Google Photos Albums.../i });
+      expect(browseAlbumsBtn).toBeDisabled();
+      expect(browseAlbumsBtn).toHaveAttribute('title', 'Support In Progress');
+      expect(screen.getByText(/Category Search Filter/i)).toBeInTheDocument();
     });
 
     it('fetches provider statuses and renders Auth Required badge when disconnected', async () => {
@@ -163,10 +177,6 @@ describe('Phase 5: Cloud & External Source Providers UI', () => {
           onSelectContainer={vi.fn()}
           categoryFilter="FOOD"
           onCategoryFilterChange={vi.fn()}
-          bucketName=""
-          onBucketNameChange={vi.fn()}
-          prefix=""
-          onPrefixChange={vi.fn()}
         />
       );
 
@@ -236,96 +246,6 @@ describe('Phase 5: Cloud & External Source Providers UI', () => {
         expect.objectContaining({ id: 'album_1', name: 'Grandmas Desserts' })
       );
       expect(onClose).toHaveBeenCalled();
-    });
-  });
-
-  describe('SessionLauncher with Remote Sources Integration', () => {
-    it('verifies Google Photos tab is disabled in SessionLauncher and launches pipeline with GCS provider payload', async () => {
-      const onStarted = vi.fn();
-      vi.mocked(api.startPipeline).mockResolvedValueOnce({
-        session_id: 'sess_gcs_101',
-        status: 'SCANNING',
-        total_scans_found: 15,
-        mode: 'parallel',
-        message: 'Started',
-      });
-
-      render(<SessionLauncher onSessionStarted={onStarted} />);
-
-      // Verify Google Photos tab is disabled with "Support In Progress" tooltip
-      const gpTab = screen.getByText('Google Photos').closest('button');
-      expect(gpTab).toBeDisabled();
-      expect(gpTab).toHaveAttribute('title', 'Support In Progress');
-
-      // Switch to Cloud Drive & Storage
-      const cloudTab = screen.getByText('Cloud Drive & Storage').closest('button');
-      if (cloudTab) fireEvent.click(cloudTab);
-
-      // Switch to GCS
-      const gcsBtn = screen.getByText('Google Cloud Storage');
-      fireEvent.click(gcsBtn);
-
-      const bucketInput = screen.getByPlaceholderText('recipeboxer-archive');
-      fireEvent.change(bucketInput, { target: { value: 'my-gcs-bucket' } });
-
-      // Launch
-      const launchBtn = screen.getByRole('button', { name: /Launch Digitization Pipeline/i });
-      fireEvent.click(launchBtn);
-
-      await waitFor(() => {
-        expect(api.startPipeline).toHaveBeenCalledWith(
-          expect.objectContaining({
-            source_provider: 'gcs',
-            source_config: expect.objectContaining({ bucket_name: 'my-gcs-bucket' }),
-          })
-        );
-        expect(onStarted).toHaveBeenCalledWith('sess_gcs_101');
-      });
-    });
-
-    it('launches pipeline with S3 provider payload and custom prefix', async () => {
-      const onStarted = vi.fn();
-      vi.mocked(api.startPipeline).mockResolvedValueOnce({
-        session_id: 'sess_s3_303',
-        status: 'SCANNING',
-        total_scans_found: 20,
-        mode: 'parallel',
-        message: 'Started',
-      });
-
-      render(<SessionLauncher onSessionStarted={onStarted} />);
-
-      // Switch to Cloud Drive
-      const cloudTab = screen.getByText('Cloud Drive & Storage').closest('button');
-      if (cloudTab) fireEvent.click(cloudTab);
-
-      // Switch to Amazon S3
-      const s3Btn = screen.getByText('Amazon S3 / MinIO');
-      fireEvent.click(s3Btn);
-
-      // Enter bucket and prefix
-      const bucketInput = screen.getByPlaceholderText('recipeboxer-scans');
-      fireEvent.change(bucketInput, { target: { value: 'custom-scans-bucket' } });
-
-      const prefixInput = screen.getByPlaceholderText('batch-2026/box-1/');
-      fireEvent.change(prefixInput, { target: { value: 'vintage-recipes/' } });
-
-      const launchBtn = screen.getByRole('button', { name: /Launch Digitization Pipeline/i });
-      fireEvent.click(launchBtn);
-
-      await waitFor(() => {
-        expect(api.startPipeline).toHaveBeenCalledWith(
-          expect.objectContaining({
-            source_provider: 's3',
-            source_container_id: 'vintage-recipes/',
-            source_config: expect.objectContaining({
-              bucket_name: 'custom-scans-bucket',
-              prefix: 'vintage-recipes/',
-            }),
-          })
-        );
-        expect(onStarted).toHaveBeenCalledWith('sess_s3_303');
-      });
     });
 
     it('handles keyboard navigation and error displays in AlbumPickerModal', async () => {
@@ -439,5 +359,55 @@ describe('Phase 5: Cloud & External Source Providers UI', () => {
       expect(onClose).toHaveBeenCalled();
     });
   });
-});
 
+  describe('SessionLauncher Integration', () => {
+    it('verifies Google Photos and Google Drive buttons are disabled with Coming Soon badges in SessionLauncher, and launches pipeline with local directory', async () => {
+      const onStarted = vi.fn();
+      vi.mocked(api.startPipeline).mockResolvedValueOnce({
+        session_id: 'sess_local_101',
+        status: 'SCANNING',
+        total_scans_found: 15,
+        mode: 'parallel',
+        message: 'Started',
+      });
+
+      render(<SessionLauncher onSessionStarted={onStarted} />);
+
+      // Verify Google Photos button is disabled with "Support In Progress" tooltip and "Coming Soon" badge
+      const gpBtn = screen.getByText('Google Photos').closest('button');
+      expect(gpBtn).toBeDisabled();
+      expect(gpBtn).toHaveAttribute('title', 'Support In Progress');
+      expect(within(gpBtn!).getByText('Coming Soon')).toBeInTheDocument();
+
+      // Verify Google Drive button is disabled with "Support In Progress" tooltip and "Coming Soon" badge
+      const gdriveBtn = screen.getByText('Google Drive').closest('button');
+      expect(gdriveBtn).toBeDisabled();
+      expect(gdriveBtn).toHaveAttribute('title', 'Support In Progress');
+      expect(within(gdriveBtn!).getByText('Coming Soon')).toBeInTheDocument();
+
+      // Verify absence of S3 and GCS options
+      expect(screen.queryByText('Cloud Drive & Storage')).not.toBeInTheDocument();
+      expect(screen.queryByText(/Amazon S3/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Google Cloud Storage/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/S3 Bucket Name/i)).not.toBeInTheDocument();
+
+      // Enter local scans folder path
+      const folderInput = screen.getByLabelText(/Local Scans Directory Path/i);
+      fireEvent.change(folderInput, { target: { value: 'C:/scans/heirloom-box' } });
+
+      // Launch
+      const launchBtn = screen.getByRole('button', { name: /Launch Digitization Pipeline/i });
+      fireEvent.click(launchBtn);
+
+      await waitFor(() => {
+        expect(api.startPipeline).toHaveBeenCalledWith(
+          expect.objectContaining({
+            scans_dir: 'C:/scans/heirloom-box',
+            directory_path: 'C:/scans/heirloom-box',
+          })
+        );
+        expect(onStarted).toHaveBeenCalledWith('sess_local_101');
+      });
+    });
+  });
+});

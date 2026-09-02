@@ -22,8 +22,6 @@ export const SessionLauncher: React.FC<SessionLauncherProps> = ({
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [selectedContainer, setSelectedContainer] = useState<SourceContainer | null>(null);
   const [categoryFilter, setCategoryFilter] = useState<string>('FOOD');
-  const [bucketName, setBucketName] = useState<string>('');
-  const [prefix, setPrefix] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
 
@@ -163,27 +161,6 @@ export const SessionLauncher: React.FC<SessionLauncherProps> = ({
       } finally {
         setLoading(false);
       }
-    } else if (sourceType === 's3' || sourceType === 'gcs') {
-      setLoading(true);
-      try {
-        const payload: PipelineStartRequest = {
-          ...config,
-          source_provider: sourceType,
-          source_container_id: prefix.trim() || undefined,
-          source_config: {
-            bucket_name: bucketName.trim() || undefined,
-            prefix: prefix.trim() || undefined,
-          },
-          baseline_project_path: resolvedBaselinePath,
-          baseline_session_id: resolvedBaselineSid,
-        };
-        const res = await api.startPipeline(payload);
-        onSessionStarted(res.session_id);
-      } catch (err: any) {
-        setError(err.message || `Failed to launch ingestion from ${sourceType.toUpperCase()}`);
-      } finally {
-        setLoading(false);
-      }
     }
   };
 
@@ -203,10 +180,6 @@ export const SessionLauncher: React.FC<SessionLauncherProps> = ({
         onSelectContainer={setSelectedContainer}
         categoryFilter={categoryFilter}
         onCategoryFilterChange={setCategoryFilter}
-        bucketName={bucketName}
-        onBucketNameChange={setBucketName}
-        prefix={prefix}
-        onPrefixChange={setPrefix}
         disabled={loading || isStarting}
       />
 

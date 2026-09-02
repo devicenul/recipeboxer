@@ -21,7 +21,7 @@ import { requestGoogleAccessToken, GOOGLE_SCOPES } from '../../utils/googleAuth'
 export const isDirectoryPickerSupported = (): boolean =>
   typeof window !== 'undefined' && typeof (window as any).showDirectoryPicker === 'function';
 
-export type IngestionSourceType = 'local' | 'google_photos' | 'google_drive' | 's3' | 'gcs';
+export type IngestionSourceType = 'local' | 'google_photos' | 'google_drive';
 
 export interface SourceSelectorProps {
   sourceType: IngestionSourceType;
@@ -36,10 +36,10 @@ export interface SourceSelectorProps {
   onSelectContainer: (container: SourceContainer | null) => void;
   categoryFilter: string;
   onCategoryFilterChange: (cat: string) => void;
-  bucketName: string;
-  onBucketNameChange: (b: string) => void;
-  prefix: string;
-  onPrefixChange: (p: string) => void;
+  bucketName?: string;
+  onBucketNameChange?: (b: string) => void;
+  prefix?: string;
+  onPrefixChange?: (p: string) => void;
   disabled?: boolean;
 }
 
@@ -200,22 +200,10 @@ export const SourceSelector: React.FC<SourceSelectorProps> = ({
   };
 
   const activeProviderForModal =
-    sourceType === 'google_photos'
-      ? 'google_photos'
-      : sourceType === 'google_drive'
-      ? 'google_drive'
-      : sourceType === 's3'
-      ? 's3'
-      : 'gcs';
+    sourceType === 'google_photos' ? 'google_photos' : 'google_drive';
 
   const activeProviderName =
-    sourceType === 'google_photos'
-      ? 'Google Photos'
-      : sourceType === 'google_drive'
-      ? 'Google Drive'
-      : sourceType === 's3'
-      ? 'Amazon S3'
-      : 'Google Cloud Storage';
+    sourceType === 'google_photos' ? 'Google Photos' : 'Google Drive';
 
   const currentStatus = providerStatuses[sourceType];
   const isConnected = currentStatus ? currentStatus.connected : true;
@@ -253,39 +241,36 @@ export const SourceSelector: React.FC<SourceSelectorProps> = ({
           type="button"
           disabled={true}
           title="Support In Progress"
-          className="flex items-center gap-3 p-4 rounded-xl border transition-all text-left opacity-50 cursor-not-allowed border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300"
+          className="flex items-center gap-3 p-4 rounded-xl border transition-all text-left opacity-50 cursor-not-allowed border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 relative"
         >
           <div className="p-2.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
             <Camera className="w-5 h-5" />
           </div>
-          <div>
-            <p className="font-semibold text-sm">Google Photos</p>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between gap-2">
+              <p className="font-semibold text-sm truncate">Google Photos</p>
+              <Badge variant="neutral" size="sm">Coming Soon</Badge>
+            </div>
             <p className="text-xs text-slate-500 dark:text-slate-400">Albums &amp; food category filters</p>
           </div>
         </button>
 
-        {/* 3. Cloud Drive & Storage */}
+        {/* 3. Google Drive */}
         <button
           type="button"
-          onClick={() => {
-            if (sourceType !== 's3' && sourceType !== 'gcs') {
-              onSourceTypeChange('s3');
-            }
-            onSelectContainer(null);
-          }}
-          disabled={disabled}
-          className={`flex items-center gap-3 p-4 rounded-xl border transition-all text-left cursor-pointer ${
-            sourceType === 'google_drive' || sourceType === 's3' || sourceType === 'gcs'
-              ? 'border-blue-600 bg-blue-50/50 dark:bg-blue-950/30 ring-2 ring-blue-500/20 text-blue-700 dark:text-blue-300'
-              : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300'
-          }`}
+          disabled={true}
+          title="Support In Progress"
+          className="flex items-center gap-3 p-4 rounded-xl border transition-all text-left opacity-50 cursor-not-allowed border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 relative"
         >
-          <div className={`p-2.5 rounded-lg ${sourceType === 'google_drive' || sourceType === 's3' || sourceType === 'gcs' ? 'bg-blue-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'}`}>
+          <div className="p-2.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
             <Cloud className="w-5 h-5" />
           </div>
-          <div>
-            <p className="font-semibold text-sm">Cloud Drive &amp; Storage</p>
-            <p className="text-xs text-slate-500 dark:text-slate-400">Google Drive, S3, or GCS</p>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between gap-2">
+              <p className="font-semibold text-sm truncate">Google Drive</p>
+              <Badge variant="neutral" size="sm">Coming Soon</Badge>
+            </div>
+            <p className="text-xs text-slate-500 dark:text-slate-400">Folder &amp; file imports</p>
           </div>
         </button>
       </div>
@@ -479,174 +464,88 @@ export const SourceSelector: React.FC<SourceSelectorProps> = ({
         </div>
       )}
 
-      {(sourceType === 'google_drive' || sourceType === 's3' || sourceType === 'gcs') && (
+      {sourceType === 'google_drive' && (
         <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-5 shadow-xs flex flex-col gap-4">
-          {/* Cloud Sub-type Switcher */}
-          <div className="flex gap-2 border-b border-slate-200 dark:border-slate-800 pb-3">
-            <button
-              type="button"
-              disabled={true}
-              title="Support In Progress"
-              className="px-3 py-1.5 text-xs font-semibold rounded-lg transition-all opacity-50 cursor-not-allowed bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400"
-            >
-              Google Drive
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                onSourceTypeChange('s3');
-                onSelectContainer(null);
-              }}
-              className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
-                sourceType === 's3'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200'
-              }`}
-            >
-              Amazon S3 / MinIO
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                onSourceTypeChange('gcs');
-                onSelectContainer(null);
-              }}
-              className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
-                sourceType === 'gcs'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200'
-              }`}
-            >
-              Google Cloud Storage
-            </button>
-          </div>
-
-          {sourceType === 'google_drive' && (
-            <div className="flex flex-col gap-4">
-              <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Cloud className="w-5 h-5 text-blue-600" />
+              <span className="font-semibold text-sm text-slate-900 dark:text-slate-100">
+                Google Drive Connection
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              {isConnecting === 'google_drive' ? (
+                <Badge variant="neutral" size="sm">
+                  <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />
+                  Connecting...
+                </Badge>
+              ) : authRequired && !isConnected ? (
                 <div className="flex items-center gap-2">
-                  <Cloud className="w-5 h-5 text-blue-600" />
-                  <span className="font-semibold text-sm text-slate-900 dark:text-slate-100">
-                    Google Drive Connection
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  {isConnecting === 'google_drive' ? (
-                    <Badge variant="neutral" size="sm">
-                      <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />
-                      Connecting...
-                    </Badge>
-                  ) : authRequired && !isConnected ? (
-                    <div className="flex items-center gap-2">
-                      <Badge variant="warning" size="sm">
-                        <AlertCircle className="w-3.5 h-3.5 mr-1" />
-                        Auth Required
-                      </Badge>
-                      <Button
-                        type="button"
-                        variant="primary"
-                        size="sm"
-                        onClick={() => handleConnectProvider('google_drive')}
-                        disabled={true}
-                        title="Support In Progress"
-                        aria-label="Connect Google Drive"
-                      >
-                        Connect Account
-                      </Button>
-                    </div>
-                  ) : (
-                    <Badge variant="success" size="sm">
-                      <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
-                      Ready
-                    </Badge>
-                  )}
-                </div>
-              </div>
-
-              {authError && (
-                <div className="p-3 rounded-lg bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 flex items-center gap-2 text-xs text-rose-800 dark:text-rose-200">
-                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
-                  <span className="flex-1">{authError}</span>
-                </div>
-              )}
-
-              <div className="flex flex-col gap-3">
-                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                  Target Google Drive Folder
-                </label>
-                {selectedContainer ? (
-                  <div className="flex items-center justify-between p-3 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 rounded-lg">
-                    <div className="flex items-center gap-2">
-                      <Folder className="w-4 h-4 text-blue-600" />
-                      <span className="text-sm font-medium text-blue-900 dark:text-blue-200">
-                        {selectedContainer.name}
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => onSelectContainer(null)}
-                      className="text-xs text-blue-600 hover:text-blue-800 font-semibold"
-                    >
-                      Change Folder
-                    </button>
-                  </div>
-                ) : (
+                  <Badge variant="warning" size="sm">
+                    <AlertCircle className="w-3.5 h-3.5 mr-1" />
+                    Auth Required
+                  </Badge>
                   <Button
                     type="button"
-                    variant="secondary"
-                    onClick={() => setIsModalOpen(true)}
+                    variant="primary"
+                    size="sm"
+                    onClick={() => handleConnectProvider('google_drive')}
                     disabled={true}
                     title="Support In Progress"
-                    leftIcon={<Folder className="w-4 h-4" />}
+                    aria-label="Connect Google Drive"
                   >
-                    Browse &amp; Select Google Drive Folder...
+                    Connect Account
                   </Button>
-                )}
-              </div>
+                </div>
+              ) : (
+                <Badge variant="success" size="sm">
+                  <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
+                  Ready
+                </Badge>
+              )}
+            </div>
+          </div>
+
+          {authError && (
+            <div className="p-3 rounded-lg bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 flex items-center gap-2 text-xs text-rose-800 dark:text-rose-200">
+              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+              <span className="flex-1">{authError}</span>
             </div>
           )}
 
-          {(sourceType === 's3' || sourceType === 'gcs') && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                  {sourceType === 's3' ? 'S3 Bucket Name' : 'GCS Bucket Name'}
-                </label>
-                <input
-                  type="text"
-                  placeholder={sourceType === 's3' ? 'recipeboxer-scans' : 'recipeboxer-archive'}
-                  value={bucketName}
-                  onChange={(e) => onBucketNameChange(e.target.value)}
-                  disabled={disabled}
-                  className="px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 font-mono"
-                />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                  Folder / Key Prefix (Optional)
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    placeholder="batch-2026/box-1/"
-                    value={prefix}
-                    onChange={(e) => onPrefixChange(e.target.value)}
-                    disabled={disabled}
-                    className="flex-1 px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 font-mono"
-                  />
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => setIsModalOpen(true)}
-                    disabled={disabled}
-                  >
-                    Browse
-                  </Button>
+          <div className="flex flex-col gap-3">
+            <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+              Target Google Drive Folder
+            </label>
+            {selectedContainer ? (
+              <div className="flex items-center justify-between p-3 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 rounded-lg">
+                <div className="flex items-center gap-2">
+                  <Folder className="w-4 h-4 text-blue-600" />
+                  <span className="text-sm font-medium text-blue-900 dark:text-blue-200">
+                    {selectedContainer.name}
+                  </span>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => onSelectContainer(null)}
+                  className="text-xs text-blue-600 hover:text-blue-800 font-semibold"
+                >
+                  Change Folder
+                </button>
               </div>
-            </div>
-          )}
+            ) : (
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setIsModalOpen(true)}
+                disabled={true}
+                title="Support In Progress"
+                leftIcon={<Folder className="w-4 h-4" />}
+              >
+                Browse &amp; Select Google Drive Folder...
+              </Button>
+            )}
+          </div>
         </div>
       )}
 
@@ -657,12 +556,7 @@ export const SourceSelector: React.FC<SourceSelectorProps> = ({
         providerId={activeProviderForModal}
         providerName={activeProviderName}
         selectedContainerId={selectedContainer?.id}
-        onSelectContainer={(container) => {
-          onSelectContainer(container);
-          if (sourceType === 's3' || sourceType === 'gcs') {
-            onPrefixChange(container.id);
-          }
-        }}
+        onSelectContainer={onSelectContainer}
       />
     </div>
   );
