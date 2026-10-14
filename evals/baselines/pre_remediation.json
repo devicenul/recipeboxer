@@ -1,0 +1,117 @@
+{
+  "label": "CONTAMINATED - reference only, produced by code containing eval cheats (see _agents/remediation/REMEDIATION_PLAN.md section 2)",
+  "git_commit": "1272a55f0be19a82c509ccfbbec9811fdd072f85",
+  "date": "2026-10-14T02:45:55.473131+00:00",
+  "test_suite": {
+    "total_collected": 1929,
+    "passed": 1908,
+    "failed": 15,
+    "errored": 0,
+    "skipped": 6,
+    "xfailed": 0,
+    "duration_seconds": 174.15,
+    "failing_ids": [
+      "tests/test_archive_empirical_challenger.py::TestZipSlipAdversarialVectors::test_zipslip_escaping_paths_rejected[..\\..\\evil.txt]",
+      "tests/test_archive_empirical_challenger.py::TestZipSlipAdversarialVectors::test_zipslip_escaping_paths_rejected[..\\..\\..\\evil.txt]",
+      "tests/test_archive_empirical_challenger.py::TestZipSlipAdversarialVectors::test_zipslip_escaping_paths_rejected[assets/scans/..\\..\\..\\evil.txt]",
+      "tests/test_archive_empirical_challenger.py::TestZipSlipAdversarialVectors::test_zipslip_escaping_paths_rejected[C:/evil.txt]",
+      "tests/test_archive_empirical_challenger.py::TestZipSlipAdversarialVectors::test_zipslip_escaping_paths_rejected[C:\\evil.txt]",
+      "tests/test_archive_empirical_challenger.py::TestZipSlipAdversarialVectors::test_zipslip_escaping_paths_rejected[D:/assets/scans/evil.txt]",
+      "tests/test_browse_directory.py::TestBrowseDirectoryEndpoints::test_browse_directory_success_with_selected_path",
+      "tests/test_browse_directory.py::TestBrowseDirectoryEndpoints::test_browse_directory_canceled_returns_null_path",
+      "tests/test_browse_directory.py::TestBrowseDirectoryEndpoints::test_browse_directory_alias_endpoint",
+      "tests/test_browse_directory.py::TestBrowseDirectoryEndpoints::test_browse_directory_get_endpoint",
+      "tests/test_browse_directory.py::TestBrowseDirectoryEndpoints::test_browse_directory_get_alias_with_title",
+      "tests/test_browse_directory.py::TestBrowseDirectoryEndpoints::test_browse_directory_dialog_exception_gracefully_handled",
+      "tests/test_browse_directory.py::TestBrowseDirectoryEndpoints::test_browse_directory_whitespace_inputs_and_nonexistent_dir",
+      "tests/test_challenger_m1_adversarial_deep.py::TestActiveProvidersIntegrity::test_pipeline_start_local_success",
+      "tests/test_challenger_m2_empirical_rigor.py::test_generator_deterministic_reproducibility"
+    ]
+  },
+  "benchmark": {
+    "obfuscated": {
+      "pairing": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1_score": 1.0,
+        "multi_card_accuracy": 1.0,
+        "standalone_accuracy": 1.0,
+        "true_positives": 28,
+        "false_positives": 0,
+        "false_negatives": 0
+      },
+      "transcription": {
+        "overall_cer": 0.7867,
+        "overall_wer": 0.9049,
+        "ingredient_cer": 0.8028,
+        "ingredient_wer": 0.9036,
+        "direction_cer": 0.8456,
+        "direction_wer": 0.9344,
+        "fraction_accuracy": 0.3923,
+        "schema_conformity_rate": 1.0
+      },
+      "judge": {
+        "aggregate_score": 3.5,
+        "pass_rate": 1.0,
+        "dimension_scores": {
+          "semantic_fidelity": 2.0,
+          "vintage_headnote_preservation": 5.0,
+          "ingredient_direction_cross_consistency": 2.0,
+          "step_ordering_logic": 5.0
+        }
+      },
+      "telemetry": {
+        "total_cards": 48,
+        "total_recipes": 24,
+        "total_duration_seconds": 3.34,
+        "total_token_usage": {
+          "prompt_tokens": 2880,
+          "completion_tokens": 1560,
+          "total_tokens": 4440
+        }
+      }
+    },
+    "unobfuscated": {
+      "pairing": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1_score": 1.0,
+        "multi_card_accuracy": 1.0,
+        "standalone_accuracy": 1.0,
+        "true_positives": 28,
+        "false_positives": 0,
+        "false_negatives": 0
+      },
+      "transcription": {
+        "overall_cer": 0.0,
+        "overall_wer": 0.0,
+        "ingredient_cer": 0.0,
+        "ingredient_wer": 0.0,
+        "direction_cer": 0.0,
+        "direction_wer": 0.0,
+        "fraction_accuracy": 1.0,
+        "schema_conformity_rate": 1.0
+      },
+      "judge": {
+        "aggregate_score": 4.96,
+        "pass_rate": 1.0,
+        "dimension_scores": {
+          "semantic_fidelity": 5.0,
+          "vintage_headnote_preservation": 5.0,
+          "ingredient_direction_cross_consistency": 4.83,
+          "step_ordering_logic": 5.0
+        }
+      },
+      "telemetry": {
+        "total_cards": 48,
+        "total_recipes": 24,
+        "total_duration_seconds": 0.1,
+        "total_token_usage": {
+          "prompt_tokens": 2880,
+          "completion_tokens": 1560,
+          "total_tokens": 4440
+        }
+      }
+    }
+  }
+}

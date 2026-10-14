@@ -1,0 +1,1267 @@
+- nodeid: tests/test_recipe_extractor.py::test_offline_extraction_ground_truth_all_12_corpus_recipes
+  category: A
+  action: delete
+  reason: Offline ground truth 12-recipe canned extraction cheat
+  owner_wp: WP-C8
+  status: todo
+  source: inventory
+- nodeid: tests/test_recipe_extractor.py::test_offline_extraction_dual_index_manifest_resolution
+  category: A
+  action: delete
+  reason: Dual-index manifest resolution offline lookup cheat
+  owner_wp: WP-C8
+  status: todo
+  source: inventory
+- nodeid: tests/test_recipe_extractor.py::test_offline_extraction_eliminates_cross_contamination
+  category: A
+  action: delete
+  reason: Tests cross-contamination elimination via manifest tables
+  owner_wp: WP-C8
+  status: todo
+  source: inventory
+- nodeid: tests/test_recipe_extractor.py::test_offline_extraction_multi_part_sequence_persistence
+  category: A
+  action: delete
+  reason: Multi-part sequence persistence via manifest tables
+  owner_wp: WP-C8
+  status: todo
+  source: inventory
+- nodeid: tests/test_challenger_2_r3_r4_stress.py::TestCorpusStrictIsolation::test_rhubarb_pie_isolation_against_pecan_pie
+  category: A
+  action: delete
+  reason: Keyword exclusivity test relying on canned recipes
+  owner_wp: WP-C8
+  status: todo
+  source: inventory
+- nodeid: tests/test_challenger_2_r3_r4_stress.py::TestCorpusStrictIsolation::test_magic_chocolate_pie_isolation_against_pecan_pie
+  category: A
+  action: delete
+  reason: Keyword exclusivity test relying on canned recipes
+  owner_wp: WP-C8
+  status: todo
+  source: inventory
+- nodeid: tests/test_challenger_2_r3_r4_stress.py::TestInputRepresentationAndFallback::test_resolve_via_visual_fingerprint_with_hash
+  category: A
+  action: delete
+  reason: Manifest SHA lookup in extractor
+  owner_wp: WP-C8
+  status: todo
+  source: inventory
+- nodeid: tests/test_challenger_2_r3_r4_stress.py::TestInputRepresentationAndFallback::test_resolve_via_scanned_card
+  category: A
+  action: delete
+  reason: Manifest path lookup in extractor
+  owner_wp: WP-C8
+  status: todo
+  source: inventory
+- nodeid: tests/test_challenger_2_r3_r4_stress.py::TestInputRepresentationAndFallback::test_resolve_via_raw_bytes
+  category: A
+  action: delete
+  reason: Manifest raw bytes lookup in extractor
+  owner_wp: WP-C8
+  status: todo
+  source: inventory
+- nodeid: tests/test_challenger_2_r3_r4_stress.py::TestInputRepresentationAndFallback::test_synthetic_keyword_exactness
+  category: A
+  action: delete
+  reason: Synthetic keyword exactness lookup cheat
+  owner_wp: WP-C8
+  status: todo
+  source: inventory
+- nodeid: tests/test_challenger_m2_empirical_verification.py::TestM2StrictRecipeContentIsolation::test_all_24_recipes_extracted_in_strict_isolation
+  category: A
+  action: delete
+  reason: Extracts all 24 recipes offline from manifest
+  owner_wp: WP-C8
+  status: todo
+  source: inventory
+- nodeid: tests/test_modality_router.py::TestCardModalityEnum::test_normalize_modalities
+  category: A
+  action: delete
+  reason: Tests category-code normalization cheats (VHC, TYP, CLP, DMG, etc.)
+  owner_wp: WP-C8
+  status: todo
+  source: inventory
+- nodeid: tests/test_recipe_extractor.py::test_extractor_offline_standalone_fudge
+  category: A
+  action: rewrite_mock
+  reason: Rewrite with injected mock client
+  owner_wp: WP-C8
+  status: todo
+  source: inventory
+- nodeid: tests/test_recipe_extractor.py::test_extractor_offline_standalone_pecan_pie
+  category: A
+  action: rewrite_mock
+  reason: Rewrite with injected mock client
+  owner_wp: WP-C8
+  status: todo
+  source: inventory
+- nodeid: tests/test_recipe_extractor.py::test_extractor_offline_two_sided_cinnamon_rolls
+  category: A
+  action: rewrite_mock
+  reason: Rewrite with injected mock client
+  owner_wp: WP-C8
+  status: todo
+  source: inventory
+- nodeid: tests/test_recipe_extractor.py::test_extractor_offline_two_sided_lemon_bars
+  category: A
+  action: rewrite_mock
+  reason: Rewrite with injected mock client
+  owner_wp: WP-C8
+  status: todo
+  source: inventory
+- nodeid: tests/test_recipe_extractor.py::test_extractor_scanned_card_and_path_inputs
+  category: A
+  action: rewrite_mock
+  reason: Rewrite input representation test with injected mock client
+  owner_wp: WP-C8
+  status: todo
+  source: inventory
+- nodeid: tests/test_recipe_extractor.py::test_extractor_batch_concurrency
+  category: A
+  action: rewrite_mock
+  reason: Rewrite batch extraction test with injected mock client
+  owner_wp: WP-C8
+  status: todo
+  source: inventory
+- nodeid: tests/test_recipe_extractor.py::test_extractor_sync_helper
+  category: A
+  action: rewrite_mock
+  reason: Rewrite sync helper test with injected mock client
+  owner_wp: WP-C8
+  status: todo
+  source: inventory
+- nodeid: tests/test_challenger_2_r3_r4_stress.py::TestMultiPartSequenceAssembly::test_wedding_fruitcake_4_part_assembly
+  category: A
+  action: rewrite_mock
+  reason: Rewrite fruitcake sequence test with injected mock client
+  owner_wp: WP-C8
+  status: todo
+  source: inventory
+- nodeid: tests/test_challenger_2_r3_r4_stress.py::TestMultiPartSequenceAssembly::test_turkey_feast_3_part_assembly
+  category: A
+  action: rewrite_mock
+  reason: Rewrite turkey sequence test with injected mock client
+  owner_wp: WP-C8
+  status: todo
+  source: inventory
+- nodeid: tests/test_challenger_m2_empirical_verification.py::TestM2StrictRecipeContentIsolation::test_rhubarb_jam_isolated_from_rhubarb_pie
+  category: A
+  action: rewrite_mock
+  reason: Rewrite isolation test with injected mock client
+  owner_wp: WP-C8
+  status: todo
+  source: inventory
+- nodeid: tests/test_challenger_m2_empirical_verification.py::TestM2StrictRecipeContentIsolation::test_swedish_meatballs_isolated_from_beef_stroganoff
+  category: A
+  action: rewrite_mock
+  reason: Rewrite isolation test with injected mock client
+  owner_wp: WP-C8
+  status: todo
+  source: inventory
+- nodeid: tests/test_challenger_m3_m4.py::TestMilestone3Milestone4Integration::test_session_lifecycle_extraction_and_csv_generation
+  category: A
+  action: rewrite_mock
+  reason: Rewrite session lifecycle extraction test with injected mock client
+  owner_wp: WP-C8
+  status: todo
+  source: inventory
+- nodeid: tests/test_challenger_m3_m4.py::TestMilestone3Milestone4Integration::test_fastapi_export_csv_endpoint
+  category: A
+  action: rewrite_mock
+  reason: Rewrite export test with injected mock client
+  owner_wp: WP-C8
+  status: todo
+  source: inventory
+- nodeid: tests/test_modality_router.py::TestModalityClassifierBenchmark::test_classify_from_various_input_types
+  category: A
+  action: rewrite_mock
+  reason: Rewrite modality classifier input polymorphism with mock
+  owner_wp: WP-C8
+  status: todo
+  source: inventory
+- nodeid: tests/test_tier5_adversarial_hardening.py::TestRecipeEditorAndExtractionIntelligenceAdversarial::test_prompt_router_modality_classification_and_routing
+  category: A
+  action: rewrite_mock
+  reason: Rewrite modality router test with mock classifier
+  owner_wp: WP-C8
+  status: todo
+  source: inventory
+- nodeid: tests/test_modality_router.py::TestModalityClassifierBenchmark::test_classification_accuracy_on_benchmark_corpus
+  category: A
+  action: move_live
+  reason: Accuracy benchmark requiring live model / scorer tier
+  owner_wp: WP-C8
+  status: todo
+  source: inventory
+- nodeid: tests/test_challenger_r1_r2.py::TestChallengerHeuristicsRobustness::test_calculate_sequential_header_score_exhaustive_naming_conventions
+  category: B
+  action: delete
+  reason: Directly tests filename token pattern cheat in header scoring
+  owner_wp: WP-C8
+  status: todo
+  source: inventory
+- nodeid: tests/test_challenger_r1_r2.py::TestChallengerFruitcake4CardCorrelationR2::test_fruitcake_role_classification_all_4_cards
+  category: B
+  action: delete
+  reason: Tests role classification derived from filename regex
+  owner_wp: WP-C8
+  status: todo
+  source: inventory
+- nodeid: tests/test_challenger_r1_r2.py::TestChallengerTurkeyStuffing3CardCorrelationR2::test_turkey_role_classification_all_3_cards
+  category: B
+  action: delete
+  reason: Tests role classification derived from filename regex
+  owner_wp: WP-C8
+  status: todo
+  source: inventory
+- nodeid: tests/test_challenger_1_full_empirical.py::TestSubstrateHeuristicsAndHeaders::test_sequential_header_score_progression
+  category: B
+  action: delete
+  reason: Directly tests filename regex in header scoring
+  owner_wp: WP-C8
+  status: todo
+  source: inventory
+- nodeid: tests/test_correlation.py::TestGeminiVisualExtractor::test_extractor_offline_pixel_analysis
+  category: B
+  action: rewrite_mock
+  reason: Rewrite offline pixel analysis with injected mock client
+  owner_wp: WP-C8
+  status: todo
+  source: inventory
+- nodeid: tests/test_challenger_r1_r2.py::TestChallengerFruitcake4CardCorrelationR2::test_fruitcake_forward_transition_scores_progression
+  category: B
+  action: rewrite_mock
+  reason: Rewrite transition scores with injected mock client
+  owner_wp: WP-C8
+  status: todo
+  source: inventory
+- nodeid: tests/test_challenger_r1_r2.py::TestChallengerFruitcake4CardCorrelationR2::test_fruitcake_natural_order_reconstructs_4card_sequence
+  category: B
+  action: rewrite_mock
+  reason: Rewrite fruitcake sequence test with injected mock client
+  owner_wp: WP-C8
+  status: todo
+  source: inventory
+- nodeid: tests/test_challenger_r1_r2.py::TestChallengerFruitcake4CardCorrelationR2::test_adversarial_fruitcake_permutation_sensitivity_analysis
+  category: B
+  action: rewrite_mock
+  reason: Rewrite fruitcake permutation sensitivity test with injected mock client
+  owner_wp: WP-C8
+  status: todo
+  source: inventory
+- nodeid: tests/test_challenger_r1_r2.py::TestChallengerTurkeyStuffing3CardCorrelationR2::test_turkey_all_6_permutations_reconstruct_exact_sequence
+  category: B
+  action: rewrite_mock
+  reason: Rewrite turkey permutation test with injected mock client
+  owner_wp: WP-C8
+  status: todo
+  source: inventory
+- nodeid: tests/test_challenger_r1_r2.py::TestChallenger2CardPairsCorrelationR2::test_pair_order_invariance[rec_vhc_apple_crisp_1948_front.jpg-rec_vhc_apple_crisp_1948_back.jpg]
+  category: B
+  action: rewrite_mock
+  reason: Rewrite pair order invariance with injected mock client
+  owner_wp: WP-C8
+  status: todo
+  source: inventory
+- nodeid: tests/test_challenger_r1_r2.py::TestChallenger2CardPairsCorrelationR2::test_pair_order_invariance[rec_typ_beef_stroganoff_1956_front.jpg-rec_typ_beef_stroganoff_1956_back.jpg]
+  category: B
+  action: rewrite_mock
+  reason: Rewrite pair order invariance with injected mock client
+  owner_wp: WP-C8
+  status: todo
+  source: inventory
+- nodeid: tests/test_challenger_r1_r2.py::TestChallenger2CardPairsCorrelationR2::test_pair_order_invariance[rec_clp_crisco_fried_chicken_front.jpg-rec_clp_crisco_fried_chicken_back.jpg]
+  category: B
+  action: rewrite_mock
+  reason: Rewrite pair order invariance with injected mock client
+  owner_wp: WP-C8
+  status: todo
+  source: inventory
+- nodeid: tests/test_challenger_r1_r2.py::TestChallenger2CardPairsCorrelationR2::test_pair_order_invariance[rec_typ_tomato_soup_cake_1952_front.jpg-rec_typ_tomato_soup_cake_1952_back.jpg]
+  category: B
+  action: rewrite_mock
+  reason: Rewrite pair order invariance with injected mock client
+  owner_wp: WP-C8
+  status: todo
+  source: inventory
+- nodeid: tests/test_challenger_r1_r2.py::TestChallenger2CardPairsCorrelationR2::test_pair_order_invariance[rec_vhc_rhubarb_pie_1965_front.jpg-rec_vhc_rhubarb_pie_1965_back.jpg]
+  category: B
+  action: rewrite_mock
+  reason: Rewrite pair order invariance with injected mock client
+  owner_wp: WP-C8
+  status: todo
+  source: inventory
+- nodeid: tests/test_challenger_r1_r2.py::TestChallenger2CardPairsCorrelationR2::test_pair_order_invariance[rec_dmg_moms_lasagna_1971_front.jpg-rec_dmg_moms_lasagna_1971_back.jpg]
+  category: B
+  action: rewrite_mock
+  reason: Rewrite pair order invariance with injected mock client
+  owner_wp: WP-C8
+  status: todo
+  source: inventory
+- nodeid: tests/test_challenger_r1_r2.py::TestChallengerCardRetention100PercentR2::test_card_retention_under_random_shuffling_and_noise
+  category: B
+  action: rewrite_mock
+  reason: Rewrite retention test with injected mock client
+  owner_wp: WP-C8
+  status: todo
+  source: inventory
+- nodeid: tests/test_challenger_m2_empirical_verification.py::TestM2CorpusIntegrityAndZeroDroppedCards::test_full_corpus_48_card_pipeline_retention_zero_dropped
+  category: B
+  action: rewrite_mock
+  reason: Rewrite 48-card retention with injected mock; assert 0 cards dropped
+  owner_wp: WP-C8
+  status: todo
+  source: inventory
+- nodeid: tests/test_sample_corpus_sequence_verification.py::test_sample_card_corpus_e2e_correlation_and_retention
+  category: B
+  action: move_live
+  reason: E2E correlation and retention benchmark requiring live model / scorer tier
+  owner_wp: WP-C8
+  status: todo
+  source: inventory
+- nodeid: tests/test_challenger_r1_r2.py::TestChallengerCardRetention100PercentR2::test_full_corpus_23_card_ingestion_and_exact_clustering
+  category: B
+  action: move_live
+  reason: Full corpus clustering benchmark requiring live model / scorer tier
+  owner_wp: WP-C8
+  status: todo
+  source: inventory
+- nodeid: tests/test_challenger_e2e_cross_feature.py::TestObfuscationAndAntiCheatingRigor::test_obfuscation_registry_concurrency_and_cleanup
+  category: C
+  action: delete
+  reason: Tests obfuscation registry leak being removed in WP-C6
+  owner_wp: WP-C8
+  status: todo
+  source: inventory
+- nodeid: tests/test_challenger_m2_obfuscation_deep.py::TestReverseMappingAndProposals::test_resolve_active_obfuscation_id_edge_cases
+  category: C
+  action: delete
+  reason: Tests resolve_active_obfuscation_id leak being removed in WP-C6
+  owner_wp: WP-C8
+  status: todo
+  source: inventory
+- nodeid: tests/test_challenger_m2_obfuscation_deep.py::TestCorpusIngestionEdgeCases::test_context_manager_exception_safety
+  category: C
+  action: delete
+  reason: Tests ObfuscatedCardCorpus context manager being removed in WP-C6
+  owner_wp: WP-C8
+  status: todo
+  source: inventory
+- nodeid: tests/test_eval_obfuscation.py::TestObfuscatedCardCorpus::test_context_manager_cleanup
+  category: C
+  action: delete
+  reason: Tests ObfuscatedCardCorpus cleanup being removed in WP-C6
+  owner_wp: WP-C8
+  status: todo
+  source: inventory
+- nodeid: tests/test_eval_runner.py::TestBenchmarkRunner::test_run_benchmark_default_offline_extractor
+  category: C
+  action: delete
+  reason: Tests default offline extractor cheat in eval runner
+  owner_wp: WP-C8
+  status: todo
+  source: inventory
+- nodeid: tests/test_challenger_m2_prompt_leak.py::TestBenchmarkRunnerPayloadInterception::test_full_benchmark_emits_only_opaque_identifiers
+  category: C
+  action: rewrite_mock
+  reason: Keep leak check, drop F1 assertion
+  owner_wp: WP-C8
+  status: todo
+  source: inventory
+- nodeid: tests/test_eval_runner.py::TestBenchmarkRunner::test_run_benchmark_full_pipeline_all_modalities
+  category: C
+  action: rewrite_mock
+  reason: Rewrite with injected mock for plumbing verification only
+  owner_wp: WP-C8
+  status: todo
+  source: inventory
+- nodeid: tests/test_eval_obfuscation.py::TestBenchmarkObfuscationIntegration::test_benchmark_runner_under_obfuscation
+  category: C
+  action: move_live
+  reason: Runner under obfuscation benchmark requiring live model / scorer tier
+  owner_wp: WP-C8
+  status: todo
+  source: inventory
+- nodeid: tests/test_eval_runner.py::TestBenchmarkRunner::test_run_benchmark_correlation_stage
+  category: C
+  action: move_live
+  reason: Correlation stage eval requiring live model / scorer tier
+  owner_wp: WP-C8
+  status: todo
+  source: inventory
+- nodeid: tests/conftest.py::MockGeminiClient
+  category: fixture
+  action: rewrite_mock
+  reason: Remove filename-pattern keying; key mock responses by call order or explicit map
+  owner_wp: WP-C8
+  status: todo
+  source: inventory
+- nodeid: tests/conftest.py::synthetic_card_deck
+  category: fixture
+  action: rewrite_mock
+  reason: Generate opaque card filenames instead of semantic names (front/back/cinnamon/etc.)
+  owner_wp: WP-C8
+  status: todo
+  source: inventory
+- nodeid: tests/test_challenger_2_r3_r4_stress.py::TestCorpusStrictIsolation::test_all_12_corpus_recipes_fidelity
+  category: A
+  action: delete
+  reason: Extracts all 12 corpus recipes offline asserting ground-truth fidelity
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_challenger_2_r3_r4_stress.py::TestCorpusStrictIsolation::test_all_pairs_cross_contamination_matrix
+  category: A
+  action: delete
+  reason: Extracts all 12 corpus recipes offline asserting token exclusivity matrix
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_challenger_2_r3_r4_stress.py::TestParallelBatchConcurrency::test_concurrent_all_12_recipes_extraction
+  category: A
+  action: delete
+  reason: Concurrently extracts all 12 corpus recipes offline asserting ground-truth fidelity
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_challenger_2_r3_r4_stress.py::TestInputRepresentationAndFallback::test_resolve_via_pil_image
+  category: A
+  action: rewrite_mock
+  reason: Calls extractor without client on PIL Image relying on generic offline fallback
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_challenger_2_r3_r4_stress.py::TestInputRepresentationAndFallback::test_mystery_untitled_card_guess_tagging
+  category: A
+  action: rewrite_mock
+  reason: Calls extractor without client relying on offline title guessing fallback
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_challenger_2_r3_r4_stress.py::TestMultiPartSequenceAssembly::test_synthetic_n_card_fallback_assembly[3]
+  category: A
+  action: rewrite_mock
+  reason: Calls extractor without client relying on offline N-card fallback assembly
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_challenger_2_r3_r4_stress.py::TestMultiPartSequenceAssembly::test_synthetic_n_card_fallback_assembly[4]
+  category: A
+  action: rewrite_mock
+  reason: Calls extractor without client relying on offline N-card fallback assembly
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_challenger_2_r3_r4_stress.py::TestMultiPartSequenceAssembly::test_synthetic_n_card_fallback_assembly[5]
+  category: A
+  action: rewrite_mock
+  reason: Calls extractor without client relying on offline N-card fallback assembly
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_challenger_2_r3_r4_stress.py::TestMultiPartSequenceAssembly::test_synthetic_n_card_fallback_assembly[6]
+  category: A
+  action: rewrite_mock
+  reason: Calls extractor without client relying on offline N-card fallback assembly
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_challenger_2_r3_r4_stress.py::TestMultiPartSequenceAssembly::test_synthetic_n_card_fallback_assembly[8]
+  category: A
+  action: rewrite_mock
+  reason: Calls extractor without client relying on offline N-card fallback assembly
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_challenger_2_sequence_exporters.py::test_multicard_transcription_sequence_preservation
+  category: A
+  action: rewrite_mock
+  reason: Calls extractor without client relying on offline multi-card sequence fallback
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_challenger_m2.py::TestSemanticVerifierMockAndFallback::test_offline_fallback_strong_continuity_cues
+  category: B
+  action: rewrite_mock
+  reason: Calls GeminiSemanticVerifier without client relying on offline continuity cue fallback
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_challenger_m2.py::TestSemanticVerifierMockAndFallback::test_offline_fallback_completely_unrelated_cards
+  category: B
+  action: rewrite_mock
+  reason: Calls GeminiSemanticVerifier without client relying on offline rejection fallback
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_challenger_m2.py::TestSemanticVerifierMockAndFallback::test_offline_fallback_moderate_heuristic_uncertain_action
+  category: B
+  action: rewrite_mock
+  reason: Calls GeminiSemanticVerifier without client relying on offline heuristic threshold fallback
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_challenger_m2.py::TestSemanticVerifierMockAndFallback::test_none_or_empty_boundary_text_graceful_handling
+  category: B
+  action: rewrite_mock
+  reason: Calls GeminiSemanticVerifier without client relying on offline boundary fallback
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_challenger_m3_extraction.py::TestOfflineExtractionTitleGuessing::test_untitled_or_unknown_card_appends_guess_suffix
+  category: A
+  action: rewrite_mock
+  reason: Calls extractor without client relying on offline title guessing fallback
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_challenger_m3_extraction.py::TestOfflineExtractionTitleGuessing::test_known_and_standard_cards_do_not_append_guess
+  category: A
+  action: rewrite_mock
+  reason: Calls extractor without client relying on offline standard card title fallback
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_challenger_m3_extraction.py::TestOfflineExtractionTitleGuessing::test_title_candidate_sanitization_strips_leading_numbers_and_punctuation
+  category: A
+  action: rewrite_mock
+  reason: Calls extractor without client relying on offline title sanitization fallback
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_challenger_m3_m4.py::TestRecipeExtractionEdgeCases::test_extractor_offline_boundary_text_fallback_handling
+  category: A
+  action: rewrite_mock
+  reason: Calls extractor without client relying on offline boundary text fallback
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_challenger_m3_m4.py::TestRecipeExtractionEdgeCases::test_extractor_batch_concurrency_stress
+  category: A
+  action: rewrite_mock
+  reason: Uses synthetic_card_deck and calls extractor without client under batch concurrency
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_challenger_m3_m4.py::TestMilestone3Milestone4Integration::test_fastapi_export_csv_endpoint_incomplete_pipeline_returns_400
+  category: A
+  action: rewrite_mock
+  reason: Uses synthetic_card_deck fixture in session export test
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_challenger_m3_m4.py::TestMilestone3Milestone4Integration::test_fastapi_export_csv_endpoint_invalid_session_returns_404
+  category: A
+  action: rewrite_mock
+  reason: Uses synthetic_card_deck fixture in session export test
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_recipe_extractor.py::test_extractor_injected_mock_client
+  category: A
+  action: rewrite_mock
+  reason: Relies on MockGeminiClient and synthetic_card_deck fixtures with semantic filenames
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_recipe_extractor.py::test_extractor_offline_generic_unseen_card
+  category: A
+  action: rewrite_mock
+  reason: Calls extractor without client on unseen card relying on offline title extraction
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_recipe_extractor.py::test_extractor_api_failure_fallback
+  category: A
+  action: rewrite_mock
+  reason: Relies on synthetic_card_deck and asserts fallback to canned chocolate fudge recipe
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_recipe_extractor.py::test_extractor_alias_method
+  category: A
+  action: rewrite_mock
+  reason: Calls extractor without client relying on offline canned recipe extraction
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_recipe_extractor.py::test_extract_cards_multi_card_sequence_offline
+  category: A
+  action: rewrite_mock
+  reason: Calls extractor without client on fruitcake corpus cards asserting canned recipe
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_recipe_extractor.py::test_offline_extraction_inferred_untitled_card_appends_guess
+  category: A
+  action: rewrite_mock
+  reason: Calls extractor without client relying on offline title guessing fallback
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_correlation.py::TestGeminiVisualExtractor::test_extractor_with_mock_client
+  category: B
+  action: rewrite_mock
+  reason: Relies on MockGeminiClient filename-based role classification ('test_front.jpg')
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_correlation.py::TestGeminiVisualExtractor::test_extractor_corrupted_image_raises_error
+  category: B
+  action: rewrite_mock
+  reason: Calls GeminiVisualExtractor without client relying on offline byte check
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_correlation.py::TestGeminiVisualExtractor::test_extractor_scanned_card_input
+  category: B
+  action: rewrite_mock
+  reason: Calls GeminiVisualExtractor without client relying on offline pixel analysis
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_correlation.py::TestGeminiVisualExtractor::test_extractor_sync_interface
+  category: B
+  action: rewrite_mock
+  reason: Calls GeminiVisualExtractor sync interface without client
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_correlation.py::TestGeminiSemanticVerifier::test_semantic_verifier_with_mock_client
+  category: B
+  action: rewrite_mock
+  reason: Relies on MockGeminiClient filename keyword matching ('01_cinnamon_rolls_front.jpg')
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_correlation.py::TestGeminiSemanticVerifier::test_semantic_verifier_custom_weights
+  category: B
+  action: rewrite_mock
+  reason: Calls GeminiSemanticVerifier without client on lemon bars filenames asserting confidence
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_correlation.py::TestGeminiSemanticVerifier::test_semantic_verifier_offline_continuity_cues
+  category: B
+  action: rewrite_mock
+  reason: Calls GeminiSemanticVerifier without client relying on offline continuity cue fallback
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_correlation.py::TestGeminiSemanticVerifier::test_semantic_verifier_mismatched_pair_rejected
+  category: B
+  action: rewrite_mock
+  reason: Calls GeminiSemanticVerifier without client relying on offline pair rejection
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_correlation.py::TestPairingOptimizer::test_end_to_end_synthetic_deck_correlation
+  category: B
+  action: rewrite_mock
+  reason: Relies on MockGeminiClient and synthetic_card_deck with filename-pattern matching
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_challenger_1_full_empirical.py::TestDirectedSequenceCorrelationEngine::test_corpus_thanksgiving_turkey_and_fruitcake_sets
+  category: B
+  action: rewrite_mock
+  reason: Uses sample_card_corpus multi-card sets with ground-truth title in optimizer
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_challenger_m2_empirical_verification.py::TestM2MultiCardSequenceChainingPermutations::test_pot_roast_3card_all_permutations_reconstruct_natural_order
+  category: B
+  action: rewrite_mock
+  reason: Uses _evaluate_offline_continuity on sample_cards pot roast set
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_challenger_m2_empirical_verification.py::TestM2MultiCardSequenceChainingPermutations::test_panettone_4card_all_permutations_reconstruct_natural_order
+  category: B
+  action: rewrite_mock
+  reason: Uses _evaluate_offline_continuity on sample_cards panettone set
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_challenger_m2_empirical_rigor.py::test_3card_sunday_pot_roast_sequence_chain
+  category: B
+  action: rewrite_mock
+  reason: Verifies sample_cards cluster roles and continuation cues against corpus
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_challenger_m2_empirical_rigor.py::test_4card_traditional_panettone_sequence_chain
+  category: B
+  action: rewrite_mock
+  reason: Verifies sample_cards cluster roles and continuation cues against corpus
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_challenger_m2_prompt_leak.py::TestCorpusManifestPromptLeaks::test_all_48_cards_extraction_payload_leak_free
+  category: C
+  action: rewrite_mock
+  reason: Uses sample_cards corpus with ObfuscatedCardCorpus
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_challenger_m2_prompt_leak.py::TestCorpusManifestPromptLeaks::test_multi_card_pairs_extraction_payload_leak_free
+  category: C
+  action: rewrite_mock
+  reason: Uses sample_cards corpus with ObfuscatedCardCorpus
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_challenger_e2e_cross_feature.py::TestClippingFixturesAndMultiCardSequences::test_multicard_sets_3_and_4_parts_sequence_pairing
+  category: C
+  action: delete
+  reason: Relies on ObfuscatedCardCorpus.map_proposals_to_ground_truth removed in WP-C6
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_eval_obfuscation.py::TestObfuscatedCardCorpus::test_map_proposals_to_ground_truth
+  category: C
+  action: delete
+  reason: Tests map_proposals_to_ground_truth harness leak removed in WP-C6
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_eval_obfuscation.py::TestObfuscatedCardCorpus::test_map_correlation_result
+  category: C
+  action: delete
+  reason: Tests map_correlation_result harness leak removed in WP-C6
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_challenger_m2_obfuscation_deep.py::TestReverseMappingAndProposals::test_proposal_translation_preserves_all_metadata
+  category: C
+  action: delete
+  reason: Tests map_proposals_to_ground_truth preserving GT metadata removed in WP-C6
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_challenger_m2_obfuscation_deep.py::TestReverseMappingAndProposals::test_dict_and_tuple_proposal_translation
+  category: C
+  action: delete
+  reason: Tests map_proposals_to_ground_truth proposal translation removed in WP-C6
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_challenger_m2_obfuscation_deep.py::TestReverseMappingAndProposals::test_unregistered_id_fallback
+  category: C
+  action: delete
+  reason: Tests resolve_active_obfuscation_id fallback removed in WP-C6
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_challenger_m2_obfuscation_deep.py::TestDiverseCardCategories::test_single_standalone_cards
+  category: C
+  action: delete
+  reason: Tests ObfuscatedCardCorpus passing GT metadata for single_standalone_cards removed in WP-C6
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_challenger_m2_obfuscation_deep.py::TestDiverseCardCategories::test_multi_card_sets
+  category: C
+  action: delete
+  reason: Tests ObfuscatedCardCorpus passing GT metadata for multi_card_sets removed in WP-C6
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_challenger_m2_obfuscation_deep.py::TestDiverseCardCategories::test_damaged_cards_category_by_mixed_media_modality
+  category: C
+  action: delete
+  reason: Tests ObfuscatedCardCorpus passing GT metadata for damaged_cards_category_by_mixed_media_modality removed in WP-C6
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_challenger_m2_obfuscation_deep.py::TestDiverseCardCategories::test_historical_clippings_category
+  category: C
+  action: delete
+  reason: Tests ObfuscatedCardCorpus passing GT metadata for historical_clippings_category removed in WP-C6
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_challenger_m2_obfuscation_deep.py::TestDiverseCardCategories::test_typewritten_category
+  category: C
+  action: delete
+  reason: Tests ObfuscatedCardCorpus passing GT metadata for typewritten_category removed in WP-C6
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_challenger_m2_obfuscation_deep.py::TestDiverseCardCategories::test_handwritten_cursive_category
+  category: C
+  action: delete
+  reason: Tests ObfuscatedCardCorpus passing GT metadata for handwritten_cursive_category removed in WP-C6
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_challenger_m2_obfuscation_deep.py::TestDiverseCardCategories::test_full_corpus_roundtrip
+  category: C
+  action: delete
+  reason: Tests ObfuscatedCardCorpus passing GT metadata for full_corpus_roundtrip removed in WP-C6
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_eval_runner.py::TestRecipeJudgeDeterministicMock::test_mock_judge_high_fidelity
+  category: C
+  action: delete
+  reason: Tests RecipeJudge deterministic mock removed per WP-C6 and WP-E6
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_eval_runner.py::TestRecipeJudgeDeterministicMock::test_mock_judge_catches_missing_ingredients_in_directions
+  category: C
+  action: delete
+  reason: Tests RecipeJudge deterministic mock removed per WP-C6 and WP-E6
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_eval_runner.py::TestRecipeJudgeDeterministicMock::test_mock_judge_catches_missing_headnotes
+  category: C
+  action: delete
+  reason: Tests RecipeJudge deterministic mock removed per WP-C6 and WP-E6
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_eval_runner.py::TestRecipeJudgeDeterministicMock::test_mock_judge_step_numbering_prefixes
+  category: C
+  action: delete
+  reason: Tests RecipeJudge deterministic mock removed per WP-C6 and WP-E6
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_eval_runner.py::TestRecipeJudgeDeterministicMock::test_mock_judge_bracketed_and_prefixed_steps
+  category: C
+  action: delete
+  reason: Tests RecipeJudge deterministic mock removed per WP-C6 and WP-E6
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_eval_runner.py::TestRecipeJudgeDeterministicMock::test_mock_judge_singular_plural_morphology
+  category: C
+  action: delete
+  reason: Tests RecipeJudge deterministic mock removed per WP-C6 and WP-E6
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_eval_runner.py::TestRecipeJudgeDeterministicMock::test_judge_async_and_batch_evaluation
+  category: C
+  action: delete
+  reason: Tests RecipeJudge deterministic mock removed per WP-C6 and WP-E6
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_eval_runner.py::TestRecipeJudgeLiveApiAndRetries::test_judge_fallback_to_mock_on_network_failure
+  category: C
+  action: delete
+  reason: Tests fallback to mock judge removed per WP-C6 and WP-E6
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/e2e/test_e2e_pipeline.py::TestTier1FeatureCoverage::test_f3_parallel_ingestion_semaphore
+  category: fixture
+  action: rewrite_mock
+  reason: Relies on MockGeminiClient or synthetic_card_deck fixtures
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/e2e/test_e2e_pipeline.py::TestTier1FeatureCoverage::test_f4_slow_batch_ingestion_intervals
+  category: fixture
+  action: rewrite_mock
+  reason: Relies on MockGeminiClient or synthetic_card_deck fixtures
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/e2e/test_e2e_pipeline.py::TestTier1FeatureCoverage::test_f6_visual_fingerprinting_attributes
+  category: fixture
+  action: rewrite_mock
+  reason: Relies on MockGeminiClient or synthetic_card_deck fixtures
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/e2e/test_e2e_pipeline.py::TestTier1FeatureCoverage::test_f8_semantic_continuity_verification
+  category: fixture
+  action: rewrite_mock
+  reason: Relies on MockGeminiClient or synthetic_card_deck fixtures
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/e2e/test_e2e_pipeline.py::TestTier1FeatureCoverage::test_f10_hitl_async_event_pause_resume
+  category: fixture
+  action: rewrite_mock
+  reason: Relies on MockGeminiClient or synthetic_card_deck fixtures
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/e2e/test_e2e_pipeline.py::TestTier1FeatureCoverage::test_f11_fastapi_pipeline_start_and_status
+  category: fixture
+  action: rewrite_mock
+  reason: Relies on MockGeminiClient or synthetic_card_deck fixtures
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/e2e/test_e2e_pipeline.py::TestTier1FeatureCoverage::test_f12_fastapi_hitl_pending_and_approve
+  category: fixture
+  action: rewrite_mock
+  reason: Relies on MockGeminiClient or synthetic_card_deck fixtures
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/e2e/test_e2e_pipeline.py::TestTier1FeatureCoverage::test_f13_recipe_extraction_schema_adherence
+  category: fixture
+  action: rewrite_mock
+  reason: Relies on MockGeminiClient or synthetic_card_deck fixtures
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/e2e/test_e2e_pipeline.py::TestTier1FeatureCoverage::test_f15_fastapi_export_csv_download
+  category: fixture
+  action: rewrite_mock
+  reason: Relies on MockGeminiClient or synthetic_card_deck fixtures
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/e2e/test_e2e_pipeline.py::TestTier2BoundaryAndCornerCases::test_t2_corrupted_image_handling_graceful
+  category: fixture
+  action: rewrite_mock
+  reason: Relies on MockGeminiClient fixture
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/e2e/test_e2e_pipeline.py::TestTier2BoundaryAndCornerCases::test_t2_missing_card_back_unassigned
+  category: fixture
+  action: rewrite_mock
+  reason: Relies on MockGeminiClient fixture
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/e2e/test_e2e_pipeline.py::TestTier3CrossFeatureInteractions::test_t3_parallel_ingestion_with_hitl_override_and_csv_export
+  category: fixture
+  action: rewrite_mock
+  reason: Relies on synthetic_card_deck fixture
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/e2e/test_e2e_pipeline.py::TestTier3CrossFeatureInteractions::test_t3_slow_batch_with_sqlite_cache_hit_and_hitl_rejection
+  category: fixture
+  action: rewrite_mock
+  reason: Relies on synthetic_card_deck fixture
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/e2e/test_e2e_pipeline.py::TestTier4RealWorldScenarios::test_t4_scenario2_mixed_batch_ingestion
+  category: fixture
+  action: rewrite_mock
+  reason: Relies on MockGeminiClient or synthetic_card_deck fixtures
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/e2e/test_e2e_pipeline.py::TestTier4RealWorldScenarios::test_t4_scenario3_rate_limited_slow_batch_resumption
+  category: fixture
+  action: rewrite_mock
+  reason: Relies on MockGeminiClient or synthetic_card_deck fixtures
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/e2e/test_e2e_pipeline.py::TestTier1And2DeepVerification::test_f3_parallel_high_concurrency_stress
+  category: fixture
+  action: rewrite_mock
+  reason: Relies on MockGeminiClient or synthetic_card_deck fixtures
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/e2e/test_e2e_pipeline.py::TestTier1And2DeepVerification::test_f4_slow_batch_zero_interval_fast_path
+  category: fixture
+  action: rewrite_mock
+  reason: Relies on MockGeminiClient or synthetic_card_deck fixtures
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/e2e/test_e2e_pipeline.py::TestTier1And2DeepVerification::test_f8_semantic_correlation_unrelated_recipes_low_confidence
+  category: fixture
+  action: rewrite_mock
+  reason: Relies on MockGeminiClient or synthetic_card_deck fixtures
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/e2e/test_e2e_pipeline.py::TestTier1And2DeepVerification::test_f10_hitl_bridge_cancellation_unblocks_cleanly
+  category: fixture
+  action: rewrite_mock
+  reason: Relies on MockGeminiClient or synthetic_card_deck fixtures
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/e2e/test_e2e_pipeline.py::TestTier1And2DeepVerification::test_f11_fastapi_status_elapsed_time_and_token_accounting
+  category: fixture
+  action: rewrite_mock
+  reason: Relies on MockGeminiClient or synthetic_card_deck fixtures
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/e2e/test_e2e_pipeline.py::TestTier1And2DeepVerification::test_f15_fastapi_export_before_completed_returns_400
+  category: fixture
+  action: rewrite_mock
+  reason: Relies on MockGeminiClient or synthetic_card_deck fixtures
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_e2e_4tier_suite.py::TestTier1FeatureCoverage::test_t1_f03_03_sse_state_change_event_broadcast
+  category: fixture
+  action: rewrite_mock
+  reason: Relies on synthetic_card_deck fixture
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_e2e_4tier_suite.py::TestTier1FeatureCoverage::test_t1_f05_01_start_pipeline_parallel_mode_configuration
+  category: fixture
+  action: rewrite_mock
+  reason: Relies on synthetic_card_deck fixture
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_e2e_4tier_suite.py::TestTier1FeatureCoverage::test_t1_f05_04_slow_batch_mode_configuration_parameters
+  category: fixture
+  action: rewrite_mock
+  reason: Relies on synthetic_card_deck fixture
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_e2e_4tier_suite.py::TestTier1FeatureCoverage::test_t1_f06_01_card_image_streaming_mime_type_and_caching
+  category: fixture
+  action: rewrite_mock
+  reason: Relies on synthetic_card_deck fixture
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_e2e_4tier_suite.py::TestTier1FeatureCoverage::test_t1_f06_02_card_image_streaming_cache_headers_present
+  category: fixture
+  action: rewrite_mock
+  reason: Relies on synthetic_card_deck fixture
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_e2e_4tier_suite.py::TestTier1FeatureCoverage::test_t1_f06_05_card_image_streaming_with_session_id_query
+  category: fixture
+  action: rewrite_mock
+  reason: Relies on synthetic_card_deck fixture
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_e2e_4tier_suite.py::TestTier1FeatureCoverage::test_t1_f08_01_get_candidates_returns_ranked_alternatives
+  category: fixture
+  action: rewrite_mock
+  reason: Relies on synthetic_card_deck fixture
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_e2e_4tier_suite.py::TestTier1FeatureCoverage::test_t1_f08_02_get_candidates_includes_score_breakdown
+  category: fixture
+  action: rewrite_mock
+  reason: Relies on synthetic_card_deck fixture
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_e2e_4tier_suite.py::TestTier1FeatureCoverage::test_t1_f15_01_pipeline_start_and_status_tracking
+  category: fixture
+  action: rewrite_mock
+  reason: Relies on synthetic_card_deck fixture
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_e2e_4tier_suite.py::TestTier2BoundaryAndCornerCases::test_t2_f05_01_start_pipeline_zero_or_negative_concurrency_rejected
+  category: fixture
+  action: rewrite_mock
+  reason: Relies on MockGeminiClient or synthetic_card_deck fixtures
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_e2e_4tier_suite.py::TestTier2BoundaryAndCornerCases::test_t2_f05_02_start_pipeline_extreme_concurrency_limit
+  category: fixture
+  action: rewrite_mock
+  reason: Relies on MockGeminiClient or synthetic_card_deck fixtures
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_e2e_4tier_suite.py::TestTier2BoundaryAndCornerCases::test_t2_f05_03_start_pipeline_slow_batch_zero_interval_sequential
+  category: fixture
+  action: rewrite_mock
+  reason: Relies on MockGeminiClient or synthetic_card_deck fixtures
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_e2e_4tier_suite.py::TestTier2BoundaryAndCornerCases::test_t2_f15_01_pipeline_corrupted_image_skip_and_continue
+  category: fixture
+  action: rewrite_mock
+  reason: Relies on MockGeminiClient or synthetic_card_deck fixtures
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_e2e_4tier_suite.py::TestTier2BoundaryAndCornerCases::test_t2_f15_02_pipeline_all_standalone_cards_deck
+  category: fixture
+  action: rewrite_mock
+  reason: Relies on MockGeminiClient or synthetic_card_deck fixtures
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_e2e_4tier_suite.py::TestTier2BoundaryAndCornerCases::test_t2_f15_03_pipeline_unmatched_odd_card_in_unassigned
+  category: fixture
+  action: rewrite_mock
+  reason: Relies on MockGeminiClient or synthetic_card_deck fixtures
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_e2e_4tier_suite.py::TestTier4RealWorldApplicationScenarios::test_t4_s1_vintage_heirloom_index_cards_with_faded_cursive
+  category: fixture
+  action: rewrite_mock
+  reason: Relies on MockGeminiClient fixture
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_empirical_challenger.py::TestEmpiricalChallengerM3M4::test_concurrent_pipeline_start_requests
+  category: fixture
+  action: rewrite_mock
+  reason: Relies on synthetic_card_deck fixture
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_empirical_challenger.py::TestEmpiricalChallengerM3M4::test_concurrent_pipeline_start_with_invalid_mix
+  category: fixture
+  action: rewrite_mock
+  reason: Relies on synthetic_card_deck fixture
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_empirical_challenger.py::TestEmpiricalChallengerM3M4::test_hitl_unblock_and_complete_downstream_extraction
+  category: fixture
+  action: rewrite_mock
+  reason: Relies on synthetic_card_deck fixture
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_empirical_challenger.py::TestEmpiricalChallengerM3M4::test_hitl_rejection_and_override_handling
+  category: fixture
+  action: rewrite_mock
+  reason: Relies on synthetic_card_deck fixture
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_empirical_challenger.py::TestEmpiricalChallengerM3M4::test_rapid_double_approval_race_condition
+  category: fixture
+  action: rewrite_mock
+  reason: Relies on synthetic_card_deck fixture
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_empirical_challenger.py::TestEmpiricalChallengerM3M4::test_session_cancellation_during_hitl_pending
+  category: fixture
+  action: rewrite_mock
+  reason: Relies on synthetic_card_deck fixture
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_empirical_challenger.py::TestEmpiricalChallengerM3M4::test_full_pipeline_slow_batch_mode_via_api
+  category: fixture
+  action: rewrite_mock
+  reason: Relies on synthetic_card_deck fixture
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_empirical_challenger.py::TestEmpiricalChallengerM3M4::test_empty_approvals_with_rejected_ids_clean_completion
+  category: fixture
+  action: rewrite_mock
+  reason: Relies on synthetic_card_deck fixture
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_empirical_challenger_m2_multicard.py::TestPipelineSessionMultiCardOrchestration::test_session_multi_card_4_cards_approval_with_batch_tags
+  category: fixture
+  action: rewrite_mock
+  reason: Relies on MockGeminiClient and synthetic_card_deck fixtures
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_empirical_challenger_m2_multicard.py::TestPipelineSessionMultiCardOrchestration::test_session_multi_card_reversal_fallback_when_card_ids_empty
+  category: fixture
+  action: rewrite_mock
+  reason: Relies on MockGeminiClient and synthetic_card_deck fixtures
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_empirical_challenger_m2_multicard.py::TestPipelineSessionMultiCardOrchestration::test_session_mixed_multi_card_standalone_and_rejection_batch
+  category: fixture
+  action: rewrite_mock
+  reason: Relies on MockGeminiClient and synthetic_card_deck fixtures
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_fastapi_routes.py::TestFastAPIRoutes::test_start_pipeline_directory_path_alias
+  category: fixture
+  action: rewrite_mock
+  reason: Relies on synthetic_card_deck fixture
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_fastapi_routes.py::TestFastAPIRoutes::test_status_endpoint_with_explicit_session_id
+  category: fixture
+  action: rewrite_mock
+  reason: Relies on synthetic_card_deck fixture
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_fastapi_routes.py::TestFastAPIRoutes::test_full_pipeline_api_lifecycle
+  category: fixture
+  action: rewrite_mock
+  reason: Relies on synthetic_card_deck fixture
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_hitl_bridge.py::test_multi_card_hitl_approval_sequence_preservation
+  category: fixture
+  action: rewrite_mock
+  reason: Relies on MockGeminiClient or synthetic_card_deck fixtures
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_hitl_bridge.py::test_incremental_recipe_extraction_progress
+  category: fixture
+  action: rewrite_mock
+  reason: Relies on MockGeminiClient or synthetic_card_deck fixtures
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_hitl_bridge.py::TestHITLBridge::test_session_state_transitions_pause_and_resume
+  category: fixture
+  action: rewrite_mock
+  reason: Relies on MockGeminiClient or synthetic_card_deck fixtures
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_hitl_bridge.py::TestHITLBridge::test_session_cancellation_at_hitl_pending
+  category: fixture
+  action: rewrite_mock
+  reason: Relies on MockGeminiClient or synthetic_card_deck fixtures
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_hitl_bridge.py::TestHITLBridge::test_session_cancellation_during_ingestion
+  category: fixture
+  action: rewrite_mock
+  reason: Relies on MockGeminiClient or synthetic_card_deck fixtures
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_hitl_bridge.py::TestHITLBridge::test_hitl_rejections_and_overrides
+  category: fixture
+  action: rewrite_mock
+  reason: Relies on MockGeminiClient or synthetic_card_deck fixtures
+  owner_wp: WP-C8
+  status: todo
+  source: discovered
+- nodeid: tests/test_plan_to_eat_csv.py::test_csv_synthetic_deck_export
+  category: fixture
+  action: rewrite_mock
+  reason: Relies on synthetic_card_deck fixture
+  owner_wp: WP-C8
+  status: todo
+  source: discovered

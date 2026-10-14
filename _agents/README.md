@@ -26,6 +26,7 @@ The platform combines:
 | [**`INVARIANTS.md`**](INVARIANTS.md) | **Non-Negotiable Guardrails**: SQLite WAL concurrency & `threading.RLock()`, Plan To Eat RFC 4180 CSV escaping (9 columns, CRLF `\r\n`, `""` quoting), HITL async barrier semantics, keyboard focus trapping, Vite SPA static asset path contracts (`recipeboxer/api/static`), secure card image streaming, and ingestion throttling invariants. |
 | [**`TESTING_GUIDELINES.md`**](TESTING_GUIDELINES.md) | **Testing Standards & QA**: The 4-tier testing architecture (Tier 1 Feature Coverage, Tier 2 Boundary Cases, Tier 3 Pairwise Combinations, Tier 4 Real-World Scenarios) + Tier 5 Adversarial Hardening. Pytest test suites, core fixtures (`MockGeminiClient`, `synthetic_card_deck`), Vitest frontend test suites, setup mocks, and test execution commands. |
 | [**`EXTENDING_RECIPEBOXER.md`**](EXTENDING_RECIPEBOXER.md) | **Developer Extension Playbooks**: Step-by-step guides with complete code examples for adding external source providers (Google Photos, S3), implementing custom prompt branches / LLM customization, and creating new export format serializers (Markdown, Cooklang). |
+| [**`remediation/REMEDIATION_PLAN.md`**](remediation/REMEDIATION_PLAN.md) | **Evaluation Remediation Plan (v2)**: Phased plan to eliminate eval cheats, establish an encrypted ground-truth vault, enforce anti-cheat invariants (INV-AC1..AC6), implement honest benchmarks on T0–T4 corpora, and uplift grouping and extraction. |
 | [**`../ROADMAP.md`**](../ROADMAP.md) | **Canonical Milestone Roadmap**: Shared roadmap tracking milestones M1 to M16, standardized status tags (`[x] Completed`, `[~] In Progress`, `[ ] Planned`), future enhancement backlog (Phase 10), and roadmap update conventions. |
 | [**`../README.md`**](../README.md) | **Repository Root Overview**: High-level project summary, prerequisites, CLI usage, environment variables, test commands, and quick-start instructions. |
 
@@ -47,9 +48,11 @@ The platform combines:
 ├── _agents/                    # Authoritative AI agent & contributor guidance directory
 │   ├── README.md               # This index and onboarding guide
 │   ├── ARCHITECTURE.md         # Full backend & frontend architectural breakdown
-│   ├── INVARIANTS.md           # Critical system invariants and guardrails
-│   ├── TESTING_GUIDELINES.md   # 4-tier testing pyramid, pytest & Vitest guides
-│   └── EXTENDING_RECIPEBOXER.md# Playbooks for source providers, prompts, and exporters
+│   ├── INVARIANTS.md           # Critical system invariants and guardrails (incl. Anti-Cheat INV-AC1..AC6)
+│   ├── TESTING_GUIDELINES.md   # Testing standards, non-cheating tests, pytest & Vitest guides
+│   ├── EXTENDING_RECIPEBOXER.md# Playbooks for source providers, prompts, and exporters
+│   └── remediation/            # Evaluation remediation plan and work packages
+│       └── REMEDIATION_PLAN.md # Canonical evaluation remediation & cheat removal plan
 ├── recipeboxer/                # Core Python backend package
 │   ├── __init__.py             # Package version (__version__ = "0.1.0")
 │   ├── cli.py                  # CLI parser, uvicorn startup, freeze_support

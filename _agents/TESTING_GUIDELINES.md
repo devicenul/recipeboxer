@@ -14,6 +14,9 @@ The RecipeBoxer quality assurance framework is built upon four core principles:
    Production code paths (heuristic calculations, CIELAB color math, greedy bipartite optimization, CSV serialization, SQLite WAL operations) are never mocked or replaced with synthetic shortcuts.
 3. **100% Offline Testability**:
    All test suites run completely offline without an active internet connection or live `GEMINI_API_KEY`, using high-fidelity offline simulators (`MockGeminiClient` in `tests/conftest.py` and mock API handlers in `frontend/src/utils/api.ts`).
+
+   > [!WARNING] Superseded by Writing Non-Cheating Tests (2026-10)
+   > Offline tests must assert **system behavior only**, never extraction or correlation accuracy. Previous practices asserting 100% offline extraction or pairing on corpus images relied on prohibited manifest lookups and canned recipes (INV-AC1, INV-AC3). True accuracy is measured exclusively in live and scoring suites.
 4. **Zero Regression Policy**:
    The repository maintains **2,205 passing automated tests** (1,848 Python pytest tests across Tiers 1–5 + 357 Frontend Vitest tests across 29 suites). Every code change must preserve 100% pass rates across all test suites.
 
@@ -95,6 +98,9 @@ filterwarnings = [
 | `session_store` | `SessionStore` | Isolated SQLite WAL relational store for session state, proposals, and recipes. |
 | `create_test_fastapi_app` | Helper Function | Factory producing an isolated FastAPI ASGI application instance with mocked background task runners. |
 | `async_client` | `httpx.AsyncClient` | ASGI test client for executing asynchronous HTTP and SSE requests. |
+
+> [!WARNING] Superseded by Writing Non-Cheating Tests (2026-10)
+> Production code must never import or read `manifest.json` or fixture ground truth (INV-AC1). Furthermore, tests must never assert offline pairing or extraction accuracy on `sample_card_corpus` / `sample_card_pairs`. Corpus fixtures are designated as Tier T0 (train) and may only be used for behavioral tests, not quality claims.
 
 ### 3.3 Authoring Python Backend Tests
 
@@ -244,3 +250,143 @@ Before committing code or submitting a handoff report, verify:
 - [ ] No hardcoded bypasses or artificial mock logic were added to production source files.
 - [ ] Any newly created feature is covered by corresponding Tier 1 and Tier 2 tests.
 - [ ] All modified files conform to formatting standards.
+
+> [!WARNING] Superseded by Writing Non-Cheating Tests (2026-10)
+> Legacy test suites that assert extraction or correlation accuracy offline, rely on manifest lookups, or parse filename conventions (e.g., `front`/`back` tokens) are marked for deletion or rewriting under Phase 2 triage (WP-C8). Reviewers must verify tests against the Non-Cheating Tests Checklist in Section 7.
+
+---
+
+## 7. Writing Non-Cheating Tests
+
+Following the October 2026 evaluation audit, all tests across RecipeBoxer must strictly enforce anti-cheat invariants (INV-AC1 through INV-AC6). Ground truth is strictly segregated from production code, and tests must never synthesize answers or evaluate accuracy using offline shortcuts.
+
+### 7.1 Test Execution Tiers & Assertion Boundaries
+
+The test suite is partitioned into three distinct operational tiers. Each tier has strict boundaries regarding environment prerequisites and permitted assertions:
+
+| Test Tier | Marker / Execution | Environment & Secrets | Permitted Assertions | Prohibited Assertions |
+|---|---|---|---|---|
+| **Offline** | Default (`pytest tests/`) | No API keys; offline execution; scrubbed environment | **Behavior only**: API contracts, schema validation, state transitions, exception handling, DAG path chaining, card retention, and determinism | **NEVER accuracy**: CER, WER, line-level F1, exact cluster accuracy, pairing precision, or canned recipe verification |
+| **Live** | `@pytest.mark.live` | Requires `GEMINI_API_KEY`; adheres to spend budget & quality profile | **Live model interactions**: End-to-end inference, prompt formatting, multimodal response parsing, retry loops, and live API contracts | Unbounded spend; runs exceeding cost caps or rate limits |
+| **Score** | `evals/score.py` (CLI) | Requires `age` private key from `RB_EVAL_AGE_KEY_FILE` outside repo | **Evaluation metrics**: B-Cubed F1, ARI, CER, direction F1, order $\tau$, cost ledger verification against decrypted vault GT | Any execution inside the production runtime or PR workflow |
+
+> [!IMPORTANT]
+> **Cardinal Rule**: *Offline tests assert behavior; only live and scorer runs assert accuracy.* An offline test must verify that an algorithm correctly processes mock outputs without asserting whether the outputs match historical ground truth.
+
+### 7.2 Mocking Rules & Isolation
+
+1. **Keying Mocks**:
+   - Mocks (e.g., `MockGeminiClient`) must be keyed strictly by **call order** (invocation index) or an **explicit test-supplied mapping** passed directly inside the test body.
+   - Mocks must **NEVER** be keyed by filename, file path, card label, or image content hash (SHA-256) of corpus images. Keying by filename or hash turns the mock into an illicit answer key lookup.
+2. **Manifest Isolation**:
+   - Production code (`recipeboxer/`) must **NEVER** import from `tests/fixtures/`, read `manifest.json`, access the ground-truth vault (`evals/vault/`), or parse benchmark answer keys (INV-AC1).
+   - Any runtime attempt by production modules to access manifest or vault files triggers an immediate `CHEAT_DETECTED` termination via `sys.addaudithook`.
+3. **No SUT Contamination**:
+   - Tests must never feed ground-truth attributes, pre-grouped clusters, or de-obfuscation registries to the System Under Test (SUT).
+
+### 7.3 Corpus Tiers (T0..T4) & Implementer Visibility
+
+Evaluation datasets are divided into five distinct tiers to preserve evaluation integrity and prevent adaptive overfitting:
+
+| Tier | Dataset Description | Images Visible to Implementers? | Ground Truth Visible? | Primary Purpose | Feedback Policy |
+|---|---|---|---|---|---|
+| **T0 Train** | Existing 48 synthetic fixtures + local synthetic decks | **Yes** | **Yes** | Unit tests, feature weight calibration, prompt iteration, and debugging | Full per-image diffs and diagnostics allowed (labeled "train") |
+| **T1 Dev-Eval** | Curated synthetic decks from external recipe text with opaque names | **Yes** (enables integration runs) | **No** (encrypted in vault) | Daily honest development metrics | **Aggregate and per-category breakdown only**; never per-image diffs; rate-limited ($\le 10$ runs/day) |
+| **T2 Held-Out** | Held-out recipes, seeds, homogeneous decks, and distractors | **No** (encrypted in vault) | **No** (encrypted in vault) | Gate A & Gate B qualification decisions; anti-overfitting barrier | Aggregate only; run exclusively at release gates |
+| **T3 Real-Web** | Public-domain photos from Smithsonian, LoC, etc. with human transcriptions | **Yes** (public domain archives, opaque IDs in repo) | **No** (encrypted in vault) | Real-world handwritten & print extraction; standalone distractor resilience | Aggregate only |
+| **T4 Real-User** | User-contributed physical photo collections with skew, glare, timestamps | Per user preference | **No** (encrypted in vault) | Ultimate benchmark headline metric | Aggregate only |
+
+### 7.4 T1 Feedback Policy
+
+To prevent "hill-climbing" on evaluation data (adaptive manual or automated overfitting):
+- Scoring runs on Tier T1 return **only aggregate metrics** (e.g., overall B-Cubed F1, mean CER, stage failure counts) and per-category breakdowns.
+- Individual recipe error diffs, failed image filenames, or per-card predictions are **never** disclosed in T1 scoring reports.
+- If detailed per-image failure diagnostics are required, engineers must reproduce and debug the issue on **Tier T0** datasets.
+- Scoring T1 is rate-limited in CI (e.g., $\le 10$ runs per PR per day).
+
+### 7.5 Good vs. Bad Test Examples
+
+#### Bad Test Example: Filename Cheats, Offline Pairing & Canned Extraction Assertions
+```python
+# BAD: Violates INV-AC1, INV-AC2, and INV-AC3
+# 1. Names files with semantic role hints ("front", "back").
+# 2. Asserts correlation accuracy offline without an LLM mock.
+# 3. Asserts exact ground-truth recipe extraction offline (relying on manifest lookup cheats).
+import pytest
+from recipeboxer.models.card import ScannedCard
+from recipeboxer.correlation.optimizer import correlate_cards
+from recipeboxer.extraction.extractor import RecipeExtractor
+
+def test_apple_crisp_pairing_and_extraction_BAD():
+    # CHEAT: Filename provides front/back semantic cues
+    card_front = ScannedCard(id="apple_crisp_front.jpg", path="tests/fixtures/sample_cards/apple_crisp_front.jpg")
+    card_back = ScannedCard(id="apple_crisp_back.jpg", path="tests/fixtures/sample_cards/apple_crisp_back.jpg")
+
+    # CHEAT: Relies on filename substring heuristics inside correlate_cards
+    proposals = correlate_cards([card_front, card_back])
+    assert len(proposals) == 1
+    assert proposals[0].front_id == "apple_crisp_front.jpg"
+    assert proposals[0].back_id == "apple_crisp_back.jpg"
+
+    # CHEAT: Relies on offline manifest SHA lookup table returning canned recipe text
+    extractor = RecipeExtractor()
+    recipe = extractor.extract_from_cards([card_front, card_back])
+    assert recipe.title == "Old-Fashioned Apple Crisp"  # Asserts GT accuracy offline!
+    assert "4 cups sliced apples" in recipe.ingredients
+```
+
+#### Good Test Example: Opaque Identifiers, Injected Mock & Algorithmic Behavior Assertion
+```python
+# GOOD: Complies with INV-AC1, INV-AC2, and INV-AC3
+# 1. Uses completely opaque identifiers without semantic cues.
+# 2. Injects a mock LLM client with responses keyed strictly by call order.
+# 3. Asserts optimizer algorithmic behavior (chaining logic), NOT corpus accuracy.
+import pytest
+from recipeboxer.models.card import ScannedCard
+from recipeboxer.correlation.optimizer import SequenceOptimizer
+from tests.conftest import MockGeminiClient
+
+def test_optimizer_builds_chain_from_explicit_fingerprints_GOOD():
+    # Opaque IDs - no semantic cues, numbers, or roles
+    card_a = ScannedCard(id="card_01a8f9e2.jpg", path="/tmp/test_cards/card_01a8f9e2.jpg")
+    card_b = ScannedCard(id="card_09c3d4b1.jpg", path="/tmp/test_cards/card_09c3d4b1.jpg")
+
+    # Inject mock with explicit outputs keyed strictly by call order
+    mock_client = MockGeminiClient()
+    mock_client.set_ordered_responses([
+        # Call 1 (card_a): Fingerprint indicating front with continuation
+        {
+            "visible_title": "Grandma's Sugar Cookies",
+            "has_continuation_marker": True,
+            "is_back_side": False,
+            "ink_color": "blue",
+        },
+        # Call 2 (card_b): Fingerprint indicating back continuation
+        {
+            "visible_title": None,
+            "has_continuation_marker": False,
+            "is_back_side": True,
+            "ink_color": "blue",
+        },
+    ])
+
+    optimizer = SequenceOptimizer(client=mock_client)
+    chains = optimizer.build_chains([card_a, card_b])
+
+    # Assert behavior: optimizer correctly chains front -> back based on mock outputs
+    assert len(chains) == 1
+    assert chains[0].ordered_card_ids == ["card_01a8f9e2.jpg", "card_09c3d4b1.jpg"]
+    assert chains[0].is_complete is True
+```
+
+### 7.6 Reviewer Anti-Cheat Checklist
+
+When reviewing any pull request introducing or modifying tests, ensure the following checklist passes:
+
+- [ ] **No Answer Keys (INV-AC1)**: Does the test or code touch `tests/fixtures/sample_cards/manifest.json`, `evals/vault/`, or reference `RB_EVAL_KEY` / `RB_EVAL_AGE_KEY_FILE`?
+- [ ] **Opaque Identifiers (INV-AC2)**: Are all card IDs and test filenames opaque? Check that no test relies on keywords (`front`, `back`, `card1`, `part2`, `deck_`, recipe names) in filenames.
+- [ ] **Behavior vs. Accuracy**: Does this offline test assert system behavior (contracts, routing, error handling, schema properties) rather than model extraction accuracy, CER, or pairing accuracy?
+- [ ] **Mock Keying**: If `MockGeminiClient` or any simulator is used, is it keyed strictly by invocation order or an explicit in-test map? Verify it does NOT key by filename, image path, or SHA-256 hash.
+- [ ] **No Harness Leaks (INV-AC5)**: Does the test avoid passing ground-truth clusters, pre-grouped card pairs, or decrypted attributes to production methods?
+- [ ] **Proper Marking**: Are tests that call real LLMs marked with `@pytest.mark.live`? Are benchmark scoring utilities placed under `evals/` and restricted to the `score` tier?
+

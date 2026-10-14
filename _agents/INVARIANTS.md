@@ -217,3 +217,39 @@ The portable `.recipeboxer` project archive container (`recipeboxer/storage/arch
 4. **Idempotent Merge & Deduplication**:
    - Merging an archive into an existing session must match incoming card assets by SHA-256 digest to avoid duplicating image files or creating redundant cards.
 
+---
+
+## 10. Anti-Cheat Invariants (INV-AC1..INV-AC6)
+
+These non-negotiable invariants ensure all evaluation metrics, benchmarks, and model interactions reflect genuine machine intelligence operating solely from input pixels to model inference. Ground truth is strictly segregated from production systems and accessible only by trusted scorers.
+
+### 10.1 Invariant AC1 (INV-AC1): No Answer Key
+- **Statement**: Nothing under `recipeboxer/` may read `tests/`, `evals/`, any fixture or eval manifest, the ground-truth vault, or the scorer identity (an `age` key configured via `RB_EVAL_AGE_KEY_FILE` outside the workspace, historically referred to as `RB_EVAL_KEY`).
+- **Rationale**: October 2026 audit findings revealed hardcoded manifest SHA and filename lookups in `extractor.py:125-193,680-770`, `semantic.py:48-71,262-278`, and `router.py:35-58,337-392` that bypassed model execution.
+- **Enforced by**: `tests/anticheat/test_static_invariants.py`, canary tests in Phase 1 (import graph checks, audit-hook trip canary), and red-team review.
+
+### 10.2 Invariant AC2 (INV-AC2): No Filename Meaning
+- **Statement**: Filenames and card identifiers are strictly opaque keys; only their natural sort order may be used as a sequence prior. No substring, keyword matching, pattern parsing, or regex checks on names (e.g., `front`, `back`, `card\d`, category codes) are permitted in production code.
+- **Rationale**: October 2026 audit findings revealed filename heuristics in `fingerprint.py:~253-379`, `heuristics.py:512-567`, and `router.py:77-107,399-427` that synthesized card roles, rulings, ink, stains, continuation text, and pairings from filenames.
+- **Enforced by**: `tests/anticheat/test_static_invariants.py`, canary tests in Phase 1 (rename-invariance canary), and red-team review.
+
+### 10.3 Invariant AC3 (INV-AC3): No Corpus Content
+- **Statement**: No ground-truth recipe titles, distinctive recipe text phrases, or 64-hex SHA-256 corpus image hashes may appear as literals, lookup keys, or embedded assets anywhere within production code (`recipeboxer/`).
+- **Rationale**: October 2026 audit findings uncovered canned recipes (cinnamon rolls, lemon bars, fudge, pecan in `extractor.py:773-901`) and direct SHA lookups returning pre-computed outputs without visual analysis.
+- **Enforced by**: `tests/anticheat/test_static_invariants.py` (deny-list scanner generated from decrypted ground truth), canary tests in Phase 1 (prompt-leak scan), and red-team review.
+
+### 10.4 Invariant AC4 (INV-AC4): No Silent Fabrication
+- **Statement**: Any pipeline or model failure must produce an explicit, typed `StageFailure` routed directly to Human-in-the-Loop (HITL) review and session status; silent fallbacks to fabricated, placeholder, or synthetic recipes are strictly prohibited.
+- **Rationale**: October 2026 audit findings revealed silent fallbacks to fake output and canned recipe structures in all three pipeline stages when calls failed or keys were absent.
+- **Enforced by**: `tests/anticheat/test_static_invariants.py`, canary tests in Phase 1 (failure path propagation verification), and red-team review.
+
+### 10.5 Invariant AC5 (INV-AC5): Black-Box Evals
+- **Statement**: System Under Test (SUT) evaluation runs must execute in a scrubbed subprocess with an active runtime audit hook; ground truth is decrypted exclusively by the external scorer (`evals/score.py`) using the `age` identity from `RB_EVAL_AGE_KEY_FILE` (outside the workspace) strictly after the SUT completes execution.
+- **Rationale**: October 2026 audit findings showed harness leaks including original SHA preservation across obfuscation (`obfuscation.py:271`), GT attributes passed to the SUT (`runner.py:467-522,718-722`), and a global de-obfuscation registry (`tests/fixtures/loader.py:195`).
+- **Enforced by**: `tests/anticheat/test_static_invariants.py`, canary tests in Phase 1 (audit-hook trip canary, poisoned vault canary), and red-team review.
+
+### 10.6 Invariant AC6 (INV-AC6): LLM Required
+- **Statement**: An active LLM connection and valid API key are mandatory for recipe analysis and extraction; if no API key is provided, the pipeline enters a blocked onboarding state and executes no analysis. Local OCR may only provide complementary evidence (e.g. text cues or grounding checks), never stand in as a replacement model.
+- **Rationale**: October 2026 audit findings showed mock judges enabled by default and offline extraction paths returning full recipes without an API key, masking model dependency and cost.
+- **Enforced by**: `tests/anticheat/test_static_invariants.py`, canary tests in Phase 1 (blocked state verification on missing key), and red-team review.
+
