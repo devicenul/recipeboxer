@@ -27,8 +27,9 @@ logger = logging.getLogger(__name__)
 class GoogleDocsExporter:
     """Serializes RecipeSchema collections into Google Docs batch update requests, JSON and HTML archives."""
 
-    def __init__(self, encoding: str = "utf-8") -> None:
+    def __init__(self, encoding: str = "utf-8", include_transcription_notes: bool = False) -> None:
         self.encoding = encoding
+        self.include_transcription_notes = include_transcription_notes
 
     def build_batch_update_requests(
         self,
@@ -36,6 +37,7 @@ class GoogleDocsExporter:
         image_resolver: Optional[Callable[[str], Optional[Union[str, Path, bytes]]]] = None,
         include_page_breaks: bool = True,
         curation: Optional[CuratedCookbook] = None,
+        include_transcription_notes: Optional[bool] = None,
     ) -> List[Dict[str, Any]]:
         """Constructs ordered Google Docs API batchUpdate requests for the given recipes.
 
@@ -44,11 +46,13 @@ class GoogleDocsExporter:
             image_resolver: Optional callable that resolves a card_id to a file path, URI, or bytes.
             include_page_breaks: Whether to insert page breaks between recipes.
             curation: Optional CuratedCookbook model specifying grouping, TOC, and section dividers.
+            include_transcription_notes: Whether to include transcription notes and legibility warnings.
 
         Returns:
             List of Google Docs API request dicts (insertText, updateTextStyle,
             updateParagraphStyle, insertPageBreak, insertInlineImage, etc.).
         """
+        inc_notes = self.include_transcription_notes if include_transcription_notes is None else include_transcription_notes
         if curation:
             recipe_list = curation.all_recipes
         else:
@@ -323,14 +327,18 @@ class GoogleDocsExporter:
 
                 # 3. Metadata Table (Prep, Cook, Total Time, Yield)
                 meta_items = []
-                if recipe.yield_servings:
-                    meta_items.append(f"Yield: {recipe.yield_servings}")
-                if recipe.prep_time:
-                    meta_items.append(f"Prep: {recipe.prep_time}")
-                if recipe.cook_time:
-                    meta_items.append(f"Cook: {recipe.cook_time}")
-                if recipe.total_time:
-                    meta_items.append(f"Total: {recipe.total_time}")
+                yield_val = (recipe.yield_value.display_text if getattr(recipe, "yield_value", None) else None) or getattr(recipe, "yield_servings", None)
+                prep_val = (recipe.prep_time.display_text if getattr(recipe, "prep_time", None) else None)
+                cook_val = (recipe.cook_time.display_text if getattr(recipe, "cook_time", None) else None)
+                total_val = (recipe.total_time.display_text if getattr(recipe, "total_time", None) else None)
+                if yield_val:
+                    meta_items.append(f"Yield: {yield_val}")
+                if prep_val:
+                    meta_items.append(f"Prep: {prep_val}")
+                if cook_val:
+                    meta_items.append(f"Cook: {cook_val}")
+                if total_val:
+                    meta_items.append(f"Total: {total_val}")
 
                 if meta_items:
                     meta_header = " | ".join(meta_items) + "\n\n"
@@ -358,7 +366,8 @@ class GoogleDocsExporter:
                     current_index = m_end
 
                 # 4. Ingredients Section (HEADING_2 + dynamic bullets)
-                if recipe.ingredients:
+                all_ings = recipe.all_ingredients() if hasattr(recipe, "all_ingredients") else getattr(recipe, "ingredients", [])
+                if all_ings:
                     ing_heading = "Ingredients\n"
                     ih_start = current_index
                     ih_end = ih_start + len(ing_heading)
@@ -377,22 +386,52 @@ class GoogleDocsExporter:
                     })
                     current_index = ih_end
 
-                    ing_block = "".join(f"{item}\n" for item in recipe.ingredients)
-                    ib_start = current_index
-                    ib_end = ib_start + len(ing_block)
-                    requests.append({
-                        "insertText": {
-                            "location": {"index": ib_start},
-                            "text": ing_block,
-                        }
-                    })
-                    requests.append({
-                        "createParagraphBullets": {
-                            "range": {"startIndex": ib_start, "endIndex": ib_end},
-                            "bulletPreset": "BULLET_DISC_CIRCLE_SQUARE",
-                        }
-                    })
-                    current_index = ib_end
+                    sections = getattr(recipe, "sections", None)
+                    if sections:
+                        for sec in sections:
+                            if sec.title:
+                                sec_heading = f"{sec.title}\n"
+                                sh_start = current_index
+                                sh_end = sh_start + len(sec_heading)
+                                requests.append({
+                                    "insertText": {"location": {"index": sh_start}, "text": sec_heading}
+                                })
+                                requests.append({
+                                    "updateParagraphStyle": {
+                                        "range": {"startIndex": sh_start, "endIndex": sh_end},
+                                        "paragraphStyle": {"namedStyleType": "HEADING_3"},
+                                        "fields": "namedStyleType",
+                                    }
+                                })
+                                current_index = sh_end
+                            if sec.ingredients:
+                                ing_block = "".join(f"{item.display_text if hasattr(item, 'display_text') else str(item)}\n" for item in sec.ingredients)
+                                ib_start = current_index
+                                ib_end = ib_start + len(ing_block)
+                                requests.append({
+                                    "insertText": {"location": {"index": ib_start}, "text": ing_block}
+                                })
+                                requests.append({
+                                    "createParagraphBullets": {
+                                        "range": {"startIndex": ib_start, "endIndex": ib_end},
+                                        "bulletPreset": "BULLET_DISC_CIRCLE_SQUARE",
+                                    }
+                                })
+                                current_index = ib_end
+                    else:
+                        ing_block = "".join(f"{item.display_text if hasattr(item, 'display_text') else str(item)}\n" for item in all_ings)
+                        ib_start = current_index
+                        ib_end = ib_start + len(ing_block)
+                        requests.append({
+                            "insertText": {"location": {"index": ib_start}, "text": ing_block}
+                        })
+                        requests.append({
+                            "createParagraphBullets": {
+                                "range": {"startIndex": ib_start, "endIndex": ib_end},
+                                "bulletPreset": "BULLET_DISC_CIRCLE_SQUARE",
+                            }
+                        })
+                        current_index = ib_end
 
                     # Spacer newline
                     requests.append({
@@ -404,7 +443,8 @@ class GoogleDocsExporter:
                     current_index += 1
 
                 # 5. Directions Section (HEADING_2 + numbered instructions)
-                if recipe.directions:
+                all_steps = recipe.all_steps() if hasattr(recipe, "all_steps") else getattr(recipe, "directions", [])
+                if all_steps:
                     dir_heading = "Directions\n"
                     dh_start = current_index
                     dh_end = dh_start + len(dir_heading)
@@ -423,26 +463,60 @@ class GoogleDocsExporter:
                     })
                     current_index = dh_end
 
-                    cleaned_dir_steps = [
-                        re.sub(r"^(?:Step\s+)?\d+[\.\)\-:]\s*", "", s, flags=re.IGNORECASE).strip()
-                        for s in recipe.directions
-                    ]
-                    dir_block = "".join(f"{step}\n" for step in cleaned_dir_steps)
-                    db_start = current_index
-                    db_end = db_start + len(dir_block)
-                    requests.append({
-                        "insertText": {
-                            "location": {"index": db_start},
-                            "text": dir_block,
-                        }
-                    })
-                    requests.append({
-                        "createParagraphBullets": {
-                            "range": {"startIndex": db_start, "endIndex": db_end},
-                            "bulletPreset": "NUMBERED_DECIMAL_ALPHA_ROMAN",
-                        }
-                    })
-                    current_index = db_end
+                    sections = getattr(recipe, "sections", None)
+                    if sections:
+                        for sec in sections:
+                            if sec.title and len(sections) > 1:
+                                sec_heading = f"{sec.title}\n"
+                                sh_start = current_index
+                                sh_end = sh_start + len(sec_heading)
+                                requests.append({
+                                    "insertText": {"location": {"index": sh_start}, "text": sec_heading}
+                                })
+                                requests.append({
+                                    "updateParagraphStyle": {
+                                        "range": {"startIndex": sh_start, "endIndex": sh_end},
+                                        "paragraphStyle": {"namedStyleType": "HEADING_3"},
+                                        "fields": "namedStyleType",
+                                    }
+                                })
+                                current_index = sh_end
+                            if sec.steps:
+                                cleaned_dir_steps = [
+                                    re.sub(r"^(?:Step\s+)?\d+[\.\)\-:]\s*", "", s.display_text if hasattr(s, "display_text") else str(s), flags=re.IGNORECASE).strip()
+                                    for s in sec.steps
+                                ]
+                                dir_block = "".join(f"{step}\n" for step in cleaned_dir_steps)
+                                db_start = current_index
+                                db_end = db_start + len(dir_block)
+                                requests.append({
+                                    "insertText": {"location": {"index": db_start}, "text": dir_block}
+                                })
+                                requests.append({
+                                    "createParagraphBullets": {
+                                        "range": {"startIndex": db_start, "endIndex": db_end},
+                                        "bulletPreset": "NUMBERED_DECIMAL_ALPHA_ROMAN",
+                                    }
+                                })
+                                current_index = db_end
+                    else:
+                        cleaned_dir_steps = [
+                            re.sub(r"^(?:Step\s+)?\d+[\.\)\-:]\s*", "", s.display_text if hasattr(s, "display_text") else str(s), flags=re.IGNORECASE).strip()
+                            for s in all_steps
+                        ]
+                        dir_block = "".join(f"{step}\n" for step in cleaned_dir_steps)
+                        db_start = current_index
+                        db_end = db_start + len(dir_block)
+                        requests.append({
+                            "insertText": {"location": {"index": db_start}, "text": dir_block}
+                        })
+                        requests.append({
+                            "createParagraphBullets": {
+                                "range": {"startIndex": db_start, "endIndex": db_end},
+                                "bulletPreset": "NUMBERED_DECIMAL_ALPHA_ROMAN",
+                            }
+                        })
+                        current_index = db_end
 
                     # Spacer newline
                     requests.append({
@@ -453,8 +527,12 @@ class GoogleDocsExporter:
                     })
                     current_index += 1
 
-                # 6. Tags & Source Notes
+                # 6. Tags, Notes & Source Notes
                 extra_lines = []
+                if recipe.notes:
+                    notes_list = recipe.notes if isinstance(recipe.notes, list) else [recipe.notes]
+                    for n in notes_list:
+                        extra_lines.append(f"Note: {n}")
                 if recipe.tags:
                     extra_lines.append(f"Tags: {', '.join(recipe.tags)}")
                 if recipe.source_notes:
@@ -484,6 +562,58 @@ class GoogleDocsExporter:
                         }
                     })
                     current_index = n_end
+
+                # 6b. Transcription Notes & Warnings
+                if inc_notes:
+                    t_notes: List[str] = []
+                    if getattr(recipe, "transcription_notes", None):
+                        t_notes.extend(recipe.transcription_notes)
+                    if getattr(recipe, "warnings", None):
+                        for w in recipe.warnings:
+                            msg = w.message if hasattr(w, "message") else str(w)
+                            t_notes.append(f"Warning: {msg}")
+                    if hasattr(recipe, "all_ingredients"):
+                        for ing in recipe.all_ingredients():
+                            if getattr(ing, "legibility", None) and ing.legibility.value != "clear":
+                                t_notes.append(f"Ingredient [{ing.legibility.value}]: {ing.display_text}")
+                    if hasattr(recipe, "all_steps"):
+                        for st in recipe.all_steps():
+                            if getattr(st, "legibility", None) and st.legibility.value != "clear":
+                                t_notes.append(f"Step [{st.legibility.value}]: {st.display_text}")
+
+                    if t_notes:
+                        tn_heading = "Transcription Notes\n"
+                        tnh_start = current_index
+                        tnh_end = tnh_start + len(tn_heading)
+                        requests.append({
+                            "insertText": {"location": {"index": tnh_start}, "text": tn_heading}
+                        })
+                        requests.append({
+                            "updateParagraphStyle": {
+                                "range": {"startIndex": tnh_start, "endIndex": tnh_end},
+                                "paragraphStyle": {"namedStyleType": "HEADING_3"},
+                                "fields": "namedStyleType",
+                            }
+                        })
+                        current_index = tnh_end
+
+                        tn_block = "".join(f"{tn}\n" for tn in t_notes)
+                        tnb_start = current_index
+                        tnb_end = tnb_start + len(tn_block)
+                        requests.append({
+                            "insertText": {"location": {"index": tnb_start}, "text": tn_block}
+                        })
+                        requests.append({
+                            "createParagraphBullets": {
+                                "range": {"startIndex": tnb_start, "endIndex": tnb_end},
+                                "bulletPreset": "BULLET_DISC_CIRCLE_SQUARE",
+                            }
+                        })
+                        current_index = tnb_end
+                        requests.append({
+                            "insertText": {"location": {"index": current_index}, "text": "\n"}
+                        })
+                        current_index += 1
 
                 # 7. Embedded Card Scans (front, back, attachments)
                 card_images: List[str] = []
@@ -542,6 +672,7 @@ class GoogleDocsExporter:
         title: str = "RecipeBoxer Archival Cookbook",
         image_resolver: Optional[Callable[[str], Optional[Union[str, Path, bytes]]]] = None,
         curation: Optional[CuratedCookbook] = None,
+        include_transcription_notes: Optional[bool] = None,
     ) -> Dict[str, Any]:
         """Exports Google Docs interchange document dictionary containing metadata and batch requests."""
         if curation:
@@ -552,6 +683,7 @@ class GoogleDocsExporter:
             recipes=recipe_list,
             image_resolver=image_resolver,
             curation=curation,
+            include_transcription_notes=include_transcription_notes,
         )
 
         return {
@@ -570,9 +702,16 @@ class GoogleDocsExporter:
         indent: int = 2,
         image_resolver: Optional[Callable[[str], Optional[Union[str, Path, bytes]]]] = None,
         curation: Optional[CuratedCookbook] = None,
+        include_transcription_notes: Optional[bool] = None,
     ) -> str:
         """Serializes Google Docs archive into JSON formatted string."""
-        data = self.export_to_json_dict(recipes, title=title, image_resolver=image_resolver, curation=curation)
+        data = self.export_to_json_dict(
+            recipes,
+            title=title,
+            image_resolver=image_resolver,
+            curation=curation,
+            include_transcription_notes=include_transcription_notes,
+        )
         return json.dumps(data, indent=indent, ensure_ascii=False)
 
     def export_to_html(
@@ -582,8 +721,10 @@ class GoogleDocsExporter:
         embed_images_base64: bool = True,
         image_resolver: Optional[Callable[[str], Optional[Union[str, Path, bytes]]]] = None,
         curation: Optional[CuratedCookbook] = None,
+        include_transcription_notes: Optional[bool] = None,
     ) -> str:
         """Generates self-contained Google Docs compatible HTML interchange archive with TOC and dividers."""
+        inc_notes = self.include_transcription_notes if include_transcription_notes is None else include_transcription_notes
         if curation:
             recipe_list = curation.all_recipes
         else:
@@ -853,32 +994,70 @@ ol.direction-list li {
                     html_out.write(f'<p class="recipe-desc">{html.escape(recipe.description)}</p>\n')
 
                 # Metadata table
+                yield_str = (recipe.yield_value.display_text if getattr(recipe, "yield_value", None) else None) or getattr(recipe, "yield_servings", None) or "—"
+                prep_str = (recipe.prep_time.display_text if getattr(recipe, "prep_time", None) else None) or "—"
+                cook_str = (recipe.cook_time.display_text if getattr(recipe, "cook_time", None) else None) or "—"
+                total_str = (recipe.total_time.display_text if getattr(recipe, "total_time", None) else None) or "—"
+
                 html_out.write('<table class="meta-table"><tr>\n')
-                html_out.write(f'<td><strong>Yield:</strong> {html.escape(recipe.yield_servings or "—")}</td>\n')
-                html_out.write(f'<td><strong>Prep Time:</strong> {html.escape(recipe.prep_time or "—")}</td>\n')
-                html_out.write(f'<td><strong>Cook Time:</strong> {html.escape(recipe.cook_time or "—")}</td>\n')
-                html_out.write(f'<td><strong>Total Time:</strong> {html.escape(recipe.total_time or "—")}</td>\n')
+                html_out.write(f'<td><strong>Yield:</strong> {html.escape(yield_str)}</td>\n')
+                html_out.write(f'<td><strong>Prep Time:</strong> {html.escape(prep_str)}</td>\n')
+                html_out.write(f'<td><strong>Cook Time:</strong> {html.escape(cook_str)}</td>\n')
+                html_out.write(f'<td><strong>Total Time:</strong> {html.escape(total_str)}</td>\n')
                 html_out.write('</tr></table>\n')
 
                 # Ingredients
-                if recipe.ingredients:
+                all_ings = recipe.all_ingredients() if hasattr(recipe, "all_ingredients") else getattr(recipe, "ingredients", [])
+                if all_ings:
                     html_out.write('<h2 class="section-heading">Ingredients</h2>\n')
-                    html_out.write('<ul class="ingredient-list">\n')
-                    for item in recipe.ingredients:
-                        html_out.write(f'  <li>{html.escape(item)}</li>\n')
-                    html_out.write('</ul>\n')
+                    sections = getattr(recipe, "sections", None)
+                    if sections:
+                        for sec in sections:
+                            if sec.title:
+                                html_out.write(f'<h3 class="section-subheading" style="margin-top:8px;font-size:1.05em;color:#2e5a36;">{html.escape(sec.title)}</h3>\n')
+                            if sec.ingredients:
+                                html_out.write('<ul class="ingredient-list">\n')
+                                for item in sec.ingredients:
+                                    text = item.display_text if hasattr(item, "display_text") else str(item)
+                                    html_out.write(f'  <li>{html.escape(text)}</li>\n')
+                                html_out.write('</ul>\n')
+                    else:
+                        html_out.write('<ul class="ingredient-list">\n')
+                        for item in all_ings:
+                            text = item.display_text if hasattr(item, "display_text") else str(item)
+                            html_out.write(f'  <li>{html.escape(text)}</li>\n')
+                        html_out.write('</ul>\n')
 
                 # Directions
-                if recipe.directions:
+                all_steps = recipe.all_steps() if hasattr(recipe, "all_steps") else getattr(recipe, "directions", [])
+                if all_steps:
                     html_out.write('<h2 class="section-heading">Directions</h2>\n')
-                    html_out.write('<ol class="direction-list">\n')
-                    for step in recipe.directions:
-                        cleaned_step = re.sub(r"^(?:Step\s+)?\d+[\.\)\-:]\s*", "", step, flags=re.IGNORECASE).strip()
-                        html_out.write(f'  <li>{html.escape(cleaned_step)}</li>\n')
-                    html_out.write('</ol>\n')
+                    sections = getattr(recipe, "sections", None)
+                    if sections:
+                        for sec in sections:
+                            if sec.title and len(sections) > 1:
+                                html_out.write(f'<h3 class="section-subheading" style="margin-top:8px;font-size:1.05em;color:#2e5a36;">{html.escape(sec.title)}</h3>\n')
+                            if sec.steps:
+                                html_out.write('<ol class="direction-list">\n')
+                                for step in sec.steps:
+                                    raw_text = step.display_text if hasattr(step, "display_text") else str(step)
+                                    cleaned_step = re.sub(r"^(?:Step\s+)?\d+[\.\)\-:]\s*", "", raw_text, flags=re.IGNORECASE).strip()
+                                    html_out.write(f'  <li>{html.escape(cleaned_step)}</li>\n')
+                                html_out.write('</ol>\n')
+                    else:
+                        html_out.write('<ol class="direction-list">\n')
+                        for step in all_steps:
+                            raw_text = step.display_text if hasattr(step, "display_text") else str(step)
+                            cleaned_step = re.sub(r"^(?:Step\s+)?\d+[\.\)\-:]\s*", "", raw_text, flags=re.IGNORECASE).strip()
+                            html_out.write(f'  <li>{html.escape(cleaned_step)}</li>\n')
+                        html_out.write('</ol>\n')
 
-                # Tags & Source
+                # Tags, Notes & Source
                 html_out.write('<div class="tags-source">\n')
+                if recipe.notes:
+                    notes_list = recipe.notes if isinstance(recipe.notes, list) else [recipe.notes]
+                    for n in notes_list:
+                        html_out.write(f'  <div style="margin-bottom:4px;"><em>Note: {html.escape(n)}</em></div>\n')
                 if recipe.tags:
                     html_out.write('  <div>Tags: ')
                     for tag in recipe.tags:
@@ -887,6 +1066,31 @@ ol.direction-list li {
                 if recipe.source_notes:
                     html_out.write(f'  <div style="margin-top:4px;">Source: {html.escape(recipe.source_notes)}</div>\n')
                 html_out.write('</div>\n')
+
+                # Transcription Notes & Warnings
+                if inc_notes:
+                    t_notes: List[str] = []
+                    if getattr(recipe, "transcription_notes", None):
+                        t_notes.extend(recipe.transcription_notes)
+                    if getattr(recipe, "warnings", None):
+                        for w in recipe.warnings:
+                            msg = w.message if hasattr(w, "message") else str(w)
+                            t_notes.append(f"Warning: {msg}")
+                    if hasattr(recipe, "all_ingredients"):
+                        for ing in recipe.all_ingredients():
+                            if getattr(ing, "legibility", None) and ing.legibility.value != "clear":
+                                t_notes.append(f"Ingredient [{ing.legibility.value}]: {ing.display_text}")
+                    if hasattr(recipe, "all_steps"):
+                        for st in recipe.all_steps():
+                            if getattr(st, "legibility", None) and st.legibility.value != "clear":
+                                t_notes.append(f"Step [{st.legibility.value}]: {st.display_text}")
+
+                    if t_notes:
+                        html_out.write('<h2 class="section-heading" style="color:#7a3b3b;">Transcription Notes &amp; Verification</h2>\n')
+                        html_out.write('<ul class="transcription-notes-list" style="color:#555;font-size:0.95em;">\n')
+                        for tn in t_notes:
+                            html_out.write(f'  <li>{html.escape(tn)}</li>\n')
+                        html_out.write('</ul>\n')
 
                 # Card Scans
                 resolved_images: List[tuple[str, str]] = []
@@ -935,15 +1139,28 @@ ol.direction-list li {
         title: str = "RecipeBoxer Archival Cookbook",
         image_resolver: Optional[Callable[[str], Optional[Union[str, Path, bytes]]]] = None,
         curation: Optional[CuratedCookbook] = None,
+        include_transcription_notes: Optional[bool] = None,
     ) -> Path:
         """Writes Google Docs archive to a JSON or HTML file on disk."""
         path = Path(output_path).resolve()
         path.parent.mkdir(parents=True, exist_ok=True)
 
         if as_html or path.suffix.lower() in (".html", ".htm"):
-            content = self.export_to_html(recipes, title=title, image_resolver=image_resolver, curation=curation)
+            content = self.export_to_html(
+                recipes,
+                title=title,
+                image_resolver=image_resolver,
+                curation=curation,
+                include_transcription_notes=include_transcription_notes,
+            )
         else:
-            content = self.export_to_json_string(recipes, title=title, image_resolver=image_resolver, curation=curation)
+            content = self.export_to_json_string(
+                recipes,
+                title=title,
+                image_resolver=image_resolver,
+                curation=curation,
+                include_transcription_notes=include_transcription_notes,
+            )
 
         path.write_text(content, encoding=self.encoding)
         count = curation.total_recipe_count if curation else (1 if isinstance(recipes, RecipeSchema) else len(recipes))
@@ -957,11 +1174,24 @@ ol.direction-list li {
         title: str = "RecipeBoxer Archival Cookbook",
         image_resolver: Optional[Callable[[str], Optional[Union[str, Path, bytes]]]] = None,
         curation: Optional[CuratedCookbook] = None,
+        include_transcription_notes: Optional[bool] = None,
     ) -> bytes:
         """Serializes Google Docs archive into UTF-8 encoded bytes."""
         if as_html:
-            return self.export_to_html(recipes, title=title, image_resolver=image_resolver, curation=curation).encode(self.encoding)
-        return self.export_to_json_string(recipes, title=title, image_resolver=image_resolver, curation=curation).encode(self.encoding)
+            return self.export_to_html(
+                recipes,
+                title=title,
+                image_resolver=image_resolver,
+                curation=curation,
+                include_transcription_notes=include_transcription_notes,
+            ).encode(self.encoding)
+        return self.export_to_json_string(
+            recipes,
+            title=title,
+            image_resolver=image_resolver,
+            curation=curation,
+            include_transcription_notes=include_transcription_notes,
+        ).encode(self.encoding)
 
     def create_google_document(
         self,
@@ -972,6 +1202,7 @@ ol.direction-list li {
         drive_folder_name: str = "RecipeBoxer Scans",
         http_client: Optional[httpx.Client] = None,
         curation: Optional[CuratedCookbook] = None,
+        include_transcription_notes: Optional[bool] = None,
     ) -> Dict[str, Any]:
         """Creates an authentic Google Doc in the user's account using Google Docs & Drive APIs.
 
@@ -1154,6 +1385,7 @@ ol.direction-list li {
                 image_resolver=drive_image_resolver,
                 include_page_breaks=True,
                 curation=curation,
+                include_transcription_notes=include_transcription_notes,
             )
 
             # Step 5: Execute Batch Update Requests
@@ -1187,9 +1419,15 @@ def export_recipes_to_google_docs_batch_requests(
     recipes: Union[RecipeSchema, List[RecipeSchema]],
     image_resolver: Optional[Callable[[str], Optional[Union[str, Path, bytes]]]] = None,
     curation: Optional[CuratedCookbook] = None,
+    include_transcription_notes: bool = False,
 ) -> List[Dict[str, Any]]:
     """Convenience helper to generate Google Docs API batchUpdate requests."""
-    return GoogleDocsExporter().build_batch_update_requests(recipes, image_resolver=image_resolver, curation=curation)
+    return GoogleDocsExporter(include_transcription_notes=include_transcription_notes).build_batch_update_requests(
+        recipes,
+        image_resolver=image_resolver,
+        curation=curation,
+        include_transcription_notes=include_transcription_notes,
+    )
 
 
 def export_recipes_to_google_docs_json(
@@ -1197,9 +1435,16 @@ def export_recipes_to_google_docs_json(
     title: str = "RecipeBoxer Archival Cookbook",
     image_resolver: Optional[Callable[[str], Optional[Union[str, Path, bytes]]]] = None,
     curation: Optional[CuratedCookbook] = None,
+    include_transcription_notes: bool = False,
 ) -> str:
     """Convenience helper to export Google Docs JSON archive string."""
-    return GoogleDocsExporter().export_to_json_string(recipes, title=title, image_resolver=image_resolver, curation=curation)
+    return GoogleDocsExporter(include_transcription_notes=include_transcription_notes).export_to_json_string(
+        recipes,
+        title=title,
+        image_resolver=image_resolver,
+        curation=curation,
+        include_transcription_notes=include_transcription_notes,
+    )
 
 
 def export_recipes_to_google_docs_html(
@@ -1207,9 +1452,16 @@ def export_recipes_to_google_docs_html(
     title: str = "RecipeBoxer Archival Cookbook",
     image_resolver: Optional[Callable[[str], Optional[Union[str, Path, bytes]]]] = None,
     curation: Optional[CuratedCookbook] = None,
+    include_transcription_notes: bool = False,
 ) -> str:
     """Convenience helper to export Google Docs HTML archive string."""
-    return GoogleDocsExporter().export_to_html(recipes, title=title, image_resolver=image_resolver, curation=curation)
+    return GoogleDocsExporter(include_transcription_notes=include_transcription_notes).export_to_html(
+        recipes,
+        title=title,
+        image_resolver=image_resolver,
+        curation=curation,
+        include_transcription_notes=include_transcription_notes,
+    )
 
 
 def create_google_docs_archival_document(
@@ -1220,9 +1472,10 @@ def create_google_docs_archival_document(
     drive_folder_name: str = "RecipeBoxer Scans",
     http_client: Optional[httpx.Client] = None,
     curation: Optional[CuratedCookbook] = None,
+    include_transcription_notes: bool = False,
 ) -> Dict[str, Any]:
     """Convenience helper to create a real Google Doc in the user's account."""
-    return GoogleDocsExporter().create_google_document(
+    return GoogleDocsExporter(include_transcription_notes=include_transcription_notes).create_google_document(
         access_token=access_token,
         recipes=recipes,
         title=title,
@@ -1230,6 +1483,7 @@ def create_google_docs_archival_document(
         drive_folder_name=drive_folder_name,
         http_client=http_client,
         curation=curation,
+        include_transcription_notes=include_transcription_notes,
     )
 
 

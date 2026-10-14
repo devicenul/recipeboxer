@@ -26,21 +26,55 @@ logger = logging.getLogger(__name__)
 class PaprikaExporter:
     """Serializes RecipeSchema collections to Paprika .paprikarecipes gzip format."""
 
-    def __init__(self, encoding: str = "utf-8") -> None:
+    def __init__(self, encoding: str = "utf-8", include_transcription_notes: bool = False) -> None:
         self.encoding = encoding
+        self.include_transcription_notes = include_transcription_notes
 
     def recipe_to_paprika_dict(
         self,
         recipe: RecipeSchema,
         image_resolver: Optional[Callable[[str], Optional[Union[str, Path, bytes]]]] = None,
+        include_transcription_notes: Optional[bool] = None,
     ) -> Dict[str, Any]:
         """Converts a single RecipeSchema into Paprika JSON dictionary format."""
+        inc_notes = self.include_transcription_notes if include_transcription_notes is None else include_transcription_notes
         uid = f"{uuid.uuid4()}".upper()
         now_str = recipe.created_at or datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
 
         # Paprika expects ingredients and directions as newline-separated strings
-        ingredients_str = "\n".join(recipe.ingredients) if recipe.ingredients else ""
-        directions_str = "\n".join(recipe.directions) if recipe.directions else ""
+        all_ings = recipe.all_ingredients() if hasattr(recipe, "all_ingredients") else []
+        if all_ings:
+            ingredients_str = "\n".join(ing.display_text for ing in all_ings if ing.display_text)
+        else:
+            ingredients_str = "\n".join(recipe.ingredients) if recipe.ingredients else ""
+
+        all_steps = recipe.all_steps() if hasattr(recipe, "all_steps") else []
+        if all_steps:
+            directions_str = "\n".join(step.display_text for step in all_steps if step.display_text)
+        else:
+            directions_str = "\n".join(recipe.directions) if recipe.directions else ""
+
+        prep_str = recipe.prep_time.display_text if (hasattr(recipe, "prep_time") and recipe.prep_time) else (getattr(recipe, "prep_time_str", "") or "")
+        cook_str = recipe.cook_time.display_text if (hasattr(recipe, "cook_time") and recipe.cook_time) else (getattr(recipe, "cook_time_str", "") or "")
+        total_str = recipe.total_time.display_text if (hasattr(recipe, "total_time") and recipe.total_time) else (getattr(recipe, "total_time_str", "") or "")
+        servings_str = recipe.yield_value.display_text if (hasattr(recipe, "yield_value") and recipe.yield_value) else (recipe.yield_servings or "")
+
+        notes_parts: List[str] = []
+        if recipe.source_notes:
+            notes_parts.append(recipe.source_notes)
+        if hasattr(recipe, "headnote") and recipe.headnote and recipe.headnote.text:
+            notes_parts.append(recipe.headnote.text)
+
+        if inc_notes:
+            notes = getattr(recipe, "notes", [])
+            for n in notes:
+                if hasattr(n, "text") and n.text:
+                    notes_parts.append(f"[Note]: {n.text}")
+            warnings = getattr(recipe, "warnings", [])
+            for w in warnings:
+                notes_parts.append(f"[Warning {w.code}]: {w.message}")
+
+        notes_str = "\n".join(notes_parts)
 
         paprika_data: Dict[str, Any] = {
             "uid": uid,
@@ -48,12 +82,12 @@ class PaprikaExporter:
             "description": recipe.description or "",
             "ingredients": ingredients_str,
             "directions": directions_str,
-            "prep_time": recipe.prep_time or "",
-            "cook_time": recipe.cook_time or "",
-            "total_time": recipe.total_time or "",
-            "servings": recipe.yield_servings or "",
+            "prep_time": prep_str,
+            "cook_time": cook_str,
+            "total_time": total_str,
+            "servings": servings_str,
             "categories": list(recipe.tags) if recipe.tags else [],
-            "notes": recipe.source_notes or "",
+            "notes": notes_str,
             "source": "RecipeBoxer Scanned Card",
             "source_url": "",
             "difficulty": "",
@@ -114,21 +148,16 @@ class PaprikaExporter:
         recipes: Union[RecipeSchema, List[RecipeSchema]],
         image_resolver: Optional[Callable[[str], Optional[Union[str, Path, bytes]]]] = None,
         as_zip_archive: bool = False,
+        include_transcription_notes: Optional[bool] = None,
     ) -> bytes:
-        """Serializes recipes into .paprikarecipes gzip/zip archive bytes.
-
-        Args:
-            recipes: Single or list of RecipeSchema models.
-            image_resolver: Optional callable to load card image data.
-            as_zip_archive: If True, packages individual gzipped .paprikarecipe files inside a zip.
-                           If False (default), generates standard gzipped Paprika JSON payload.
-
-        Returns:
-            Compressed archive bytes.
-        """
+        """Serializes recipes into .paprikarecipes gzip/zip archive bytes."""
         recipe_list = [recipes] if isinstance(recipes, RecipeSchema) else list(recipes)
         paprika_dicts = [
-            self.recipe_to_paprika_dict(r, image_resolver=image_resolver)
+            self.recipe_to_paprika_dict(
+                r,
+                image_resolver=image_resolver,
+                include_transcription_notes=include_transcription_notes,
+            )
             for r in recipe_list
         ]
 
@@ -144,7 +173,6 @@ class PaprikaExporter:
             return zip_buf.getvalue()
 
         # Standard canonical .paprikarecipes: gzipped JSON payload
-        # For a single recipe, dict; for multiple, list of dicts
         payload = paprika_dicts[0] if len(paprika_dicts) == 1 else paprika_dicts
         raw_json = json.dumps(payload, indent=2, ensure_ascii=False).encode(self.encoding)
         return gzip.compress(raw_json)
@@ -155,6 +183,7 @@ class PaprikaExporter:
         output_path: Union[str, Path],
         image_resolver: Optional[Callable[[str], Optional[Union[str, Path, bytes]]]] = None,
         as_zip_archive: bool = False,
+        include_transcription_notes: Optional[bool] = None,
     ) -> Path:
         """Writes .paprikarecipes gzip archive to file on disk."""
         path = Path(output_path).resolve()
@@ -163,6 +192,7 @@ class PaprikaExporter:
             recipes,
             image_resolver=image_resolver,
             as_zip_archive=as_zip_archive,
+            include_transcription_notes=include_transcription_notes,
         )
         path.write_bytes(archive_bytes)
         count = 1 if isinstance(recipes, RecipeSchema) else len(recipes)
@@ -171,14 +201,7 @@ class PaprikaExporter:
 
     @staticmethod
     def decompress_paprika_archive(archive_bytes: bytes) -> List[Dict[str, Any]]:
-        """Decompresses and parses a .paprikarecipes archive (supports both gzip and zip formats).
-
-        Args:
-            archive_bytes: Binary bytes of a .paprikarecipes file.
-
-        Returns:
-            List of parsed Paprika recipe dictionaries.
-        """
+        """Decompresses and parses a .paprikarecipes archive (supports both gzip and zip formats)."""
         # Try gzip decompression first
         try:
             decompressed = gzip.decompress(archive_bytes)
@@ -214,9 +237,10 @@ def export_recipes_to_paprika(
     recipes: Union[RecipeSchema, List[RecipeSchema]],
     image_resolver: Optional[Callable[[str], Optional[Union[str, Path, bytes]]]] = None,
     as_zip_archive: bool = False,
+    include_transcription_notes: bool = False,
 ) -> bytes:
     """Convenience helper to export recipes into .paprikarecipes gzip archive bytes."""
-    return PaprikaExporter().export_to_paprika_bytes(
+    return PaprikaExporter(include_transcription_notes=include_transcription_notes).export_to_paprika_bytes(
         recipes,
         image_resolver=image_resolver,
         as_zip_archive=as_zip_archive,

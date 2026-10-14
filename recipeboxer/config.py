@@ -47,6 +47,28 @@ QUALITY_PROFILES: Dict[str, Dict[str, str]] = {
     },
 }
 
+PROFILE_PARAMS: Dict[str, Dict[str, Any]] = {
+    "economy": {
+        "image_long_edge": 1280,
+        "thinking_budget_transcribe": 0,
+        "self_consistency": "off",
+        "grounding": False,
+    },
+    "balanced": {
+        "image_long_edge": 1600,
+        "thinking_budget_transcribe": -1,
+        "self_consistency": "flagged",
+        "grounding": True,
+    },
+    "best": {
+        "image_long_edge": 2000,
+        "thinking_budget_transcribe": 2048,
+        "self_consistency": "flagged_other_model",
+        "grounding": True,
+    },
+}
+
+
 DEFAULT_STAGE_TIMEOUTS: Dict[str, float] = {
     "FINGERPRINT": 30.0,
     "SET_VERIFY": 45.0,
@@ -109,6 +131,23 @@ class Settings(BaseSettings):
         description="Whether to dynamically allocate thinking budget tokens based on card modality",
     )
 
+    # --- Multimodal & Text Embeddings (WP-G4) ---
+    embeddings_enabled: bool = Field(
+        default=False,
+        description="Feature flag controlling multimodal embedding generation",
+    )
+    embedding_model: str = Field(
+        default="text-embedding-004",
+        description="Provisional embedding model identifier; validated at startup against live API list",
+    )
+    embedding_batch_size: int = Field(
+        default=16,
+        ge=1,
+        le=128,
+        description="Batch size for text and image embedding requests",
+    )
+
+
     # --- Unified LLM Client Settings (WP-X1) ---
     llm_max_retries: int = Field(
         default=4,
@@ -140,6 +179,28 @@ class Settings(BaseSettings):
         default="balanced",
         description="Active quality profile ('economy', 'balanced', 'best')",
     )
+
+    # --- Budget & Spend Cap Settings (WP-B1) ---
+    spend_cap_usd: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        description="Per-run spending cap ceiling in USD",
+    )
+    monthly_cap_usd: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        description="Monthly spending cap ceiling in USD",
+    )
+    max_calls: Optional[int] = Field(
+        default=None,
+        ge=0,
+        description="Maximum number of LLM generation calls allowed in a run",
+    )
+    pricing_path: Path = Field(
+        default=Path("config/pricing.toml"),
+        description="Path to user-editable pricing configuration file",
+    )
+
 
     # --- Ingestion & Throttling Settings ---
     max_concurrency: int = Field(
@@ -266,6 +327,12 @@ class Settings(BaseSettings):
             return profile_map[stage_upper]
 
         return self.default_model
+
+    def profile_params(self) -> Dict[str, Any]:
+        """Returns parameters dictionary for the active quality_profile (WP-B1, §1.2)."""
+        prof = (self.quality_profile or "balanced").lower()
+        return dict(PROFILE_PARAMS.get(prof, PROFILE_PARAMS["balanced"]))
+
 
     def get_stage_timeout(self, stage: Any) -> float:
         """Returns the effective timeout in seconds for a given pipeline/LLM stage."""

@@ -23,6 +23,14 @@ from recipeboxer.ai.client import (
     create_stage_error,
     sniff_mime_type,
 )
+from recipeboxer.ai.cost import (
+    BudgetExceeded,
+    BudgetGuard,
+    CostLedger,
+    PriceTable,
+    estimate_run_cost,
+)
+
 from recipeboxer.ai.gemini import (
     sanitize_prompt_card_id,
     sanitize_prompt_text,
@@ -79,4 +87,10 @@ __all__ = [
     "RecordingLLMClient",
     "ReplayLLMClient",
     "CassetteFingerprintMismatchError",
+    "PriceTable",
+    "CostLedger",
+    "BudgetGuard",
+    "BudgetExceeded",
+    "estimate_run_cost",
 ]
+

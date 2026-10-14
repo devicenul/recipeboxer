@@ -202,11 +202,17 @@ def annotate_timers_in_step(step_text: str) -> str:
 class CooklangExporter:
     """Serializes RecipeSchema models into Cooklang (.cook) specification."""
 
-    def __init__(self, encoding: str = "utf-8") -> None:
+    def __init__(self, encoding: str = "utf-8", include_transcription_notes: bool = False) -> None:
         self.encoding = encoding
+        self.include_transcription_notes = include_transcription_notes
 
-    def export_single_recipe(self, recipe: RecipeSchema) -> str:
+    def export_single_recipe(
+        self,
+        recipe: RecipeSchema,
+        include_transcription_notes: Optional[bool] = None,
+    ) -> str:
         """Serializes a single RecipeSchema into a Cooklang (.cook) formatted document."""
+        inc_notes = self.include_transcription_notes if include_transcription_notes is None else include_transcription_notes
         lines: List[str] = []
 
         # 1. Metadata Headers (>> key: value)
@@ -215,17 +221,21 @@ class CooklangExporter:
         if recipe.description:
             lines.append(f">> description: {recipe.description}")
 
-        if recipe.prep_time:
-            lines.append(f">> prep time: {recipe.prep_time}")
+        prep_str = recipe.prep_time.display_text if (hasattr(recipe, "prep_time") and recipe.prep_time) else (getattr(recipe, "prep_time_str", "") or "")
+        if prep_str:
+            lines.append(f">> prep time: {prep_str}")
 
-        if recipe.cook_time:
-            lines.append(f">> cook time: {recipe.cook_time}")
+        cook_str = recipe.cook_time.display_text if (hasattr(recipe, "cook_time") and recipe.cook_time) else (getattr(recipe, "cook_time_str", "") or "")
+        if cook_str:
+            lines.append(f">> cook time: {cook_str}")
 
-        if recipe.total_time:
-            lines.append(f">> total time: {recipe.total_time}")
+        total_str = recipe.total_time.display_text if (hasattr(recipe, "total_time") and recipe.total_time) else (getattr(recipe, "total_time_str", "") or "")
+        if total_str:
+            lines.append(f">> total time: {total_str}")
 
-        if recipe.yield_servings:
-            lines.append(f">> servings: {recipe.yield_servings}")
+        servings_str = recipe.yield_value.display_text if (hasattr(recipe, "yield_value") and recipe.yield_value) else (recipe.yield_servings or "")
+        if servings_str:
+            lines.append(f">> servings: {servings_str}")
 
         if recipe.tags:
             lines.append(f">> tags: {', '.join(recipe.tags)}")
@@ -233,17 +243,38 @@ class CooklangExporter:
         if recipe.source_notes:
             lines.append(f">> source: {recipe.source_notes}")
 
+        if inc_notes:
+            if hasattr(recipe, "headnote") and recipe.headnote and recipe.headnote.text:
+                lines.append(f">> headnote: {recipe.headnote.text}")
+            for n in getattr(recipe, "notes", []):
+                if hasattr(n, "text") and n.text:
+                    lines.append(f">> note: {n.text}")
+            for w in getattr(recipe, "warnings", []):
+                lines.append(f">> warning: [{w.code}] {w.message}")
+
         if recipe.created_at:
             lines.append(f">> created_at: {recipe.created_at}")
 
         lines.append("")
 
-        # 2. Parsed ingredients mapping
+        # 2. Parsed ingredients mapping (uses normalized_text when present else original_text)
         parsed_ingredients = []
-        for ing in recipe.ingredients:
-            name, qty, unit = parse_ingredient_components(ing)
-            cook_repr = format_cooklang_ingredient(name, qty, unit)
-            parsed_ingredients.append((name, cook_repr))
+        all_ings = recipe.all_ingredients() if hasattr(recipe, "all_ingredients") else []
+        if all_ings:
+            for ing in all_ings:
+                if ing.item and (ing.quantity or ing.unit):
+                    name = ing.item
+                    qty = ing.quantity
+                    unit = ing.unit
+                else:
+                    name, qty, unit = parse_ingredient_components(ing.display_text)
+                cook_repr = format_cooklang_ingredient(name, qty, unit)
+                parsed_ingredients.append((name, cook_repr))
+        elif recipe.ingredients:
+            for raw_ing in recipe.ingredients:
+                name, qty, unit = parse_ingredient_components(raw_ing)
+                cook_repr = format_cooklang_ingredient(name, qty, unit)
+                parsed_ingredients.append((name, cook_repr))
 
         # Sort ingredients descending by length so longer phrases (e.g. 'melted butter') match before 'butter'
         sorted_for_matching = sorted(parsed_ingredients, key=lambda x: len(x[0]), reverse=True)
@@ -252,7 +283,10 @@ class CooklangExporter:
         annotated_steps: List[str] = []
         used_ingredients = set()
 
-        for step in recipe.directions:
+        all_steps = recipe.all_steps() if hasattr(recipe, "all_steps") else []
+        steps_text_list = [step.display_text for step in all_steps] if all_steps else recipe.directions
+
+        for step in steps_text_list:
             # Clean leading step numbers
             cleaned_step = re.sub(r"^(?:Step\s+)?\d+[\.\)\-:]\s*", "", step, flags=re.IGNORECASE).strip()
 
@@ -307,7 +341,11 @@ class CooklangExporter:
 
         return "\n".join(lines).strip() + "\n"
 
-    def export_to_cooklang_string(self, recipes: Union[RecipeSchema, List[RecipeSchema]]) -> str:
+    def export_to_cooklang_string(
+        self,
+        recipes: Union[RecipeSchema, List[RecipeSchema]],
+        include_transcription_notes: Optional[bool] = None,
+    ) -> str:
         """Serializes recipe(s) into Cooklang string."""
         recipe_list = [recipes] if isinstance(recipes, RecipeSchema) else list(recipes)
 
@@ -315,30 +353,38 @@ class CooklangExporter:
             return ""
 
         if len(recipe_list) == 1:
-            return self.export_single_recipe(recipe_list[0])
+            return self.export_single_recipe(recipe_list[0], include_transcription_notes=include_transcription_notes)
 
-        docs = [self.export_single_recipe(r) for r in recipe_list]
+        docs = [self.export_single_recipe(r, include_transcription_notes=include_transcription_notes) for r in recipe_list]
         return "\n\n---\n\n".join(docs) + "\n"
 
     def export_to_file(
         self,
         recipes: Union[RecipeSchema, List[RecipeSchema]],
         output_path: Union[str, Path],
+        include_transcription_notes: Optional[bool] = None,
     ) -> Path:
         """Writes Cooklang markup to file on disk."""
         path = Path(output_path).resolve()
         path.parent.mkdir(parents=True, exist_ok=True)
-        content = self.export_to_cooklang_string(recipes)
+        content = self.export_to_cooklang_string(recipes, include_transcription_notes=include_transcription_notes)
         path.write_text(content, encoding=self.encoding)
         count = 1 if isinstance(recipes, RecipeSchema) else len(recipes)
         logger.info(f"Exported {count} recipe(s) to Cooklang: {path}")
         return path
 
-    def export_to_bytes(self, recipes: Union[RecipeSchema, List[RecipeSchema]]) -> bytes:
+    def export_to_bytes(
+        self,
+        recipes: Union[RecipeSchema, List[RecipeSchema]],
+        include_transcription_notes: Optional[bool] = None,
+    ) -> bytes:
         """Serializes Cooklang recipes into UTF-8 encoded bytes."""
-        return self.export_to_cooklang_string(recipes).encode(self.encoding)
+        return self.export_to_cooklang_string(recipes, include_transcription_notes=include_transcription_notes).encode(self.encoding)
 
 
-def export_recipes_to_cooklang(recipes: Union[RecipeSchema, List[RecipeSchema]]) -> str:
+def export_recipes_to_cooklang(
+    recipes: Union[RecipeSchema, List[RecipeSchema]],
+    include_transcription_notes: bool = False,
+) -> str:
     """Convenience helper to export recipes to Cooklang (.cook) format string."""
-    return CooklangExporter().export_to_cooklang_string(recipes)
+    return CooklangExporter(include_transcription_notes=include_transcription_notes).export_to_cooklang_string(recipes)

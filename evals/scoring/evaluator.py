@@ -52,12 +52,25 @@ def evaluate_deck(
         gold_struct = gold_rec.get("structured", {}) if gold_rec else {}
         gold_verb = gold_rec.get("verbatim", []) if gold_rec else None
         pred_struct = pred_rec_obj.get("recipe", {}) if pred_rec_obj else None
+        schema_invalid = False
+        if pred_struct is not None:
+            if hasattr(pred_struct, "to_scoring_dict"):
+                pred_struct = pred_struct.to_scoring_dict()
+            elif isinstance(pred_struct, dict) and "sections" in pred_struct:
+                try:
+                    from recipeboxer.models.recipe import Recipe
+                    pred_struct = Recipe.model_validate(pred_struct).to_scoring_dict()
+                except Exception:
+                    # Malformed SUT output counts as an omission, and is flagged.
+                    pred_struct = None
+                    schema_invalid = True
 
         row = score_recipe(
             pred=pred_struct,
             gold_structured=gold_struct,
             gold_verbatim=gold_verb,
         )
+        row["schema_invalid"] = schema_invalid
 
         # Attach metadata for category aggregation
         if gold_rec:

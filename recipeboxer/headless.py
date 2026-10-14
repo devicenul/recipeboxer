@@ -45,7 +45,9 @@ from recipeboxer.extraction.extractor import RecipeExtractor
 from recipeboxer.models.correlation import CorrelationProposal, CorrelationResult
 from recipeboxer.models.domain import VisualFingerprint
 from recipeboxer.vision.fingerprint import GeminiVisualExtractor
+from recipeboxer.ai.cost import BudgetGuard, CostLedger, PriceTable
 from recipeboxer.models.failures import (
+    BudgetExceeded,
     ExtractionUnavailable,
     FailureReason,
     FingerprintUnavailable,
@@ -53,11 +55,12 @@ from recipeboxer.models.failures import (
     StageFailure,
     StageUnavailableError,
 )
-from recipeboxer.models.hitl import CardPairApproval, HITLDecision
+from recipeboxer.models.hitl import CardPairApproval, HITLDecision, HitlItemType
 from recipeboxer.models.pipeline import PipelineState
 from recipeboxer.models.recipe import RecipeSchema
 
 logger = logging.getLogger("recipeboxer.headless")
+
 
 
 class OracleGroupingOptimizer:
@@ -129,6 +132,12 @@ class _LedgerRecordingClient(LLMClient):
         return getattr(self._inner, "requests", [])
 
     async def generate(self, request: LLMRequest) -> LLMResponse[Any]:
+        # Enforce budget guard before call
+        guard = getattr(self._ledger, "guard", None)
+        if guard is not None:
+            est_usd = float(request.metadata.get("est_usd", 0.0)) if request.metadata else 0.0
+            guard.check_before_call(self._ledger, est_usd=est_usd)
+
         resp = await self._inner.generate(request)
         if self._ledger is not None and hasattr(self._ledger, "record"):
             self._ledger.record(
@@ -139,6 +148,7 @@ class _LedgerRecordingClient(LLMClient):
                 attempts=resp.attempts,
             )
         return resp
+
 
 
 class HeadlessClientAdapter:
@@ -228,6 +238,8 @@ async def run_headless_analysis(
     *,
     injected_client: Optional[Any] = None,
     settings: Optional[Settings] = None,
+    budget_usd: Optional[float] = None,
+    max_calls: Optional[int] = None,
 ) -> Dict[str, Any]:
     """Executes the full RecipeBoxer digitization pipeline headlessly.
 
@@ -239,6 +251,8 @@ async def run_headless_analysis(
         image_sets: Optional path or data structure of image sets for oracle grouping.
         injected_client: Test-only LLM client instance (e.g. ScriptedLLMClient).
         settings: Optional Settings instance override.
+        budget_usd: Optional spend cap limit in USD (WP-B1, WP-B3).
+        max_calls: Optional maximum LLM calls limit (WP-B1, WP-B3).
 
     Returns:
         Structured prediction output dictionary with recipes, failures, ledger, and status.
@@ -248,7 +262,19 @@ async def run_headless_analysis(
         raise FileNotFoundError(f"Input directory does not exist: {input_path}")
 
     eff_settings = settings or get_settings()
-    ledger = InMemoryUsageLedger()
+
+    # Load PriceTable and configure CostLedger with BudgetGuard
+    price_path = getattr(eff_settings, "pricing_path", None)
+    price_table = PriceTable.load(price_path)
+
+    eff_cap_usd = budget_usd if budget_usd is not None else getattr(eff_settings, "spend_cap_usd", None)
+    eff_max_calls = max_calls if max_calls is not None else getattr(eff_settings, "max_calls", None)
+
+    guard = None
+    if eff_cap_usd is not None or eff_max_calls is not None:
+        guard = BudgetGuard(cap_usd=eff_cap_usd, max_calls=eff_max_calls)
+
+    ledger = CostLedger(prices=price_table, guard=guard)
 
     # Determine key availability (INV-AC6)
     has_key = has_usable_gemini_key(eff_settings)
@@ -265,6 +291,8 @@ async def run_headless_analysis(
         "scans_dir": str(input_path),
         "auto_approve": auto_approve,
         "profile": profile,
+        "spend_cap_usd": eff_cap_usd,
+        "max_calls": eff_max_calls,
     }
 
     from recipeboxer.storage.cache import FingerprintCache
@@ -322,6 +350,29 @@ async def run_headless_analysis(
             session.extractor = injected_client
             agent_kwargs["visual_extractor"] = injected_client
             agent_kwargs["recipe_extractor"] = injected_client
+    elif has_key:
+        from recipeboxer.ai.client import GenAIClient
+        prod_client = GenAIClient(ledger=ledger, guard=guard, settings=eff_settings)
+        vis_extractor = GeminiVisualExtractor(
+            llm_client=prod_client,
+            model_name=eff_settings.get_stage_model(LLMStage.FINGERPRINT),
+        )
+        sem_verifier = GeminiSemanticVerifier(
+            llm_client=prod_client,
+            model_name=eff_settings.get_stage_model(LLMStage.SET_VERIFY),
+        )
+        rec_extractor = RecipeExtractor(
+            llm_client=prod_client,
+            model_name=eff_settings.get_stage_model(LLMStage.STRUCTURE),
+            settings=eff_settings,
+        )
+        pairing_opt = PairingOptimizer(verifier=sem_verifier)
+        session.extractor = vis_extractor
+        session.recipe_extractor_fn = rec_extractor.extract
+        agent_kwargs["visual_extractor"] = vis_extractor
+        agent_kwargs["semantic_verifier"] = sem_verifier
+        agent_kwargs["pairing_optimizer"] = pairing_opt
+        agent_kwargs["recipe_extractor"] = rec_extractor
 
     # Configure oracle grouping if image sets provided AND we have a usable key/client
     # (If no key/client, do not bypass INV-AC6 fail-fast)
@@ -334,26 +385,51 @@ async def run_headless_analysis(
 
     # Background task to auto-approve in the event pause_for_hitl is ever triggered
     async def _auto_hitl_bridge() -> None:
-        while not session.is_completed and not session.is_failed:
-            if session.state == PipelineState.HITL_PENDING and auto_approve:
-                approvals = [
-                    CardPairApproval(
-                        proposal_id=p.proposal_id,
-                        card_ids=p.ordered_card_ids,
-                        decision=HITLDecision.APPROVE,
+        terminal_states = (
+            PipelineState.COMPLETED,
+            PipelineState.FAILED,
+            PipelineState.CANCELLED,
+        )
+        try:
+            while session.state not in terminal_states and not session.is_cancelled:
+                if session.state == PipelineState.HITL_PENDING:
+                    # If paused due to budget cap, stop cleanly in headless mode
+                    has_budget = any(
+                        getattr(it, "item_type", None) == HitlItemType.BUDGET or getattr(it, "kind", "") == "budget"
+                        for it in session.hitl_queue
                     )
-                    for p in session.proposals
-                ]
-                try:
-                    session.resume_with_approvals(approvals)
-                except Exception:
-                    session.approvals = approvals
-                    session.approval_event.set()
-            await asyncio.sleep(0.02)
+                    if has_budget:
+                        session.cancel()
+                        break
+                    elif auto_approve:
+                        approvals = [
+                            CardPairApproval(
+                                proposal_id=p.proposal_id,
+                                card_ids=p.ordered_card_ids,
+                                decision=HITLDecision.APPROVE,
+                            )
+                            for p in session.proposals
+                        ]
+                        try:
+                            session.resume_with_approvals(approvals)
+                        except Exception:
+                            session.approvals = approvals
+                            session.approval_event.set()
+                await asyncio.sleep(0.02)
+        except asyncio.CancelledError:
+            pass
+        except Exception as bridge_exc:
+            logger.warning(f"[_auto_hitl_bridge] Exception in bridge: {bridge_exc}")
 
     bridge_task = asyncio.create_task(_auto_hitl_bridge())
+    budget_exceeded_caught = False
     try:
         await agent.run_pipeline(session)
+    except BudgetExceeded as be:
+        budget_exceeded_caught = True
+        fail = be.to_failure()
+        if fail not in session.failures:
+            session.add_failure(fail)
     finally:
         bridge_task.cancel()
 
@@ -367,7 +443,16 @@ async def run_headless_analysis(
     if not has_key and not has_client:
         is_no_live_model = True
 
-    if is_no_live_model:
+    is_budget_exceeded = budget_exceeded_caught or any(
+        f.reason == FailureReason.BUDGET_EXCEEDED for f in session.failures
+    ) or any(
+        getattr(it, "item_type", None) == HitlItemType.BUDGET or getattr(it, "kind", "") == "budget"
+        for it in session.hitl_queue
+    )
+
+    if is_budget_exceeded:
+        status = "budget_exceeded"
+    elif is_no_live_model:
         status = "no_live_model"
     elif session.state == PipelineState.FAILED:
         status = "error"
@@ -436,8 +521,9 @@ async def run_headless_analysis(
 
     # Assemble ledger output
     records = ledger.get_records()
-    ledger_calls = [
-        {
+    ledger_calls = []
+    for r in records:
+        call_entry = {
             "stage": r.stage,
             "model": r.model,
             "input_tokens": r.usage.input_tokens,
@@ -446,19 +532,27 @@ async def run_headless_analysis(
             "latency_ms": r.latency_ms,
             "attempts": r.attempts,
         }
-        for r in records
-    ]
+        cost = getattr(r, "cost_usd", None) or r.metadata.get("cost_usd")
+        if cost is not None:
+            call_entry["cost_usd"] = float(cost)
+        ledger_calls.append(call_entry)
+
+    totals: Dict[str, Any] = {
+        "calls": len(records),
+        "input_tokens": ledger.total_input_tokens,
+        "output_tokens": ledger.total_output_tokens,
+        "thinking_tokens": ledger.total_thinking_tokens,
+        "total_tokens": ledger.total_tokens,
+        "latency_ms": ledger.total_latency_ms,
+    }
+    if hasattr(ledger, "total_usd"):
+        totals["total_usd"] = round(ledger.total_usd, 6)
+
     ledger_out = {
         "calls": ledger_calls,
-        "totals": {
-            "calls": len(records),
-            "input_tokens": ledger.total_input_tokens,
-            "output_tokens": ledger.total_output_tokens,
-            "thinking_tokens": ledger.total_thinking_tokens,
-            "total_tokens": ledger.total_tokens,
-            "latency_ms": ledger.total_latency_ms,
-        },
+        "totals": totals,
     }
+
 
     result = {
         "status": status,

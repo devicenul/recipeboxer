@@ -163,6 +163,11 @@ def score_recipe(
     Returns:
         Structured dictionary conforming to contract §5.
     """
+    # Conversion of schema-v2 recipes to the scoring dict happens in evals/scoring/evaluator.py;
+    # this module stays pure (contract §5). Objects exposing to_scoring_dict() are still accepted.
+    if pred is not None and hasattr(pred, "to_scoring_dict"):
+        pred = pred.to_scoring_dict()
+
     is_omitted = pred is None or not isinstance(pred, dict)
     pred_dict: Dict[str, Any] = pred if not is_omitted else {}
 

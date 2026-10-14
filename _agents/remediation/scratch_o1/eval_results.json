@@ -1,0 +1,3051 @@
+{
+  "modalities": {
+    "HANDWRITTEN_CURSIVE": {
+      "num_cards": 25,
+      "num_recipes": 11,
+      "mean_latency_ms": 2128.8,
+      "median_latency_ms": 1915.8,
+      "mean_lines": 8.7,
+      "mean_cer": 0.6445,
+      "median_cer": 0.6981,
+      "cue_tp": 14,
+      "cue_fp": 0,
+      "cue_fn": 0,
+      "cue_tn": 11,
+      "cue_precision": 1.0,
+      "cue_recall": 1.0,
+      "cue_f1": 1.0,
+      "cue_accuracy": 1.0
+    },
+    "MIXED_MEDIA": {
+      "num_cards": 7,
+      "num_recipes": 4,
+      "mean_latency_ms": 1474.7,
+      "median_latency_ms": 1431.5,
+      "mean_lines": 10.4,
+      "mean_cer": 0.6709,
+      "median_cer": 0.7022,
+      "cue_tp": 2,
+      "cue_fp": 0,
+      "cue_fn": 1,
+      "cue_tn": 4,
+      "cue_precision": 1.0,
+      "cue_recall": 0.667,
+      "cue_f1": 0.8,
+      "cue_accuracy": 0.857
+    },
+    "PRINTED_CLIPPING": {
+      "num_cards": 7,
+      "num_recipes": 4,
+      "mean_latency_ms": 1795.6,
+      "median_latency_ms": 1748.1,
+      "mean_lines": 9.6,
+      "mean_cer": 0.7225,
+      "median_cer": 0.7518,
+      "cue_tp": 0,
+      "cue_fp": 0,
+      "cue_fn": 3,
+      "cue_tn": 4,
+      "cue_precision": 1.0,
+      "cue_recall": 0.0,
+      "cue_f1": 0.0,
+      "cue_accuracy": 0.571
+    },
+    "TYPEWRITTEN": {
+      "num_cards": 9,
+      "num_recipes": 5,
+      "mean_latency_ms": 1956.9,
+      "median_latency_ms": 2028.7,
+      "mean_lines": 10.8,
+      "mean_cer": 0.6182,
+      "median_cer": 0.7702,
+      "cue_tp": 4,
+      "cue_fp": 0,
+      "cue_fn": 0,
+      "cue_tn": 5,
+      "cue_precision": 1.0,
+      "cue_recall": 1.0,
+      "cue_f1": 1.0,
+      "cue_accuracy": 1.0
+    }
+  },
+  "high_level": {
+    "typed_and_clipping": {
+      "group": "Typed / Clipping",
+      "num_cards": 16,
+      "num_recipes": 9,
+      "mean_latency_ms": 1886.4,
+      "mean_cer": 0.6646,
+      "median_cer": 0.7702,
+      "cue_tp": 4,
+      "cue_fp": 0,
+      "cue_fn": 3,
+      "cue_tn": 9,
+      "cue_precision": 1.0,
+      "cue_recall": 0.571,
+      "cue_f1": 0.727,
+      "cue_accuracy": 0.812
+    },
+    "handwritten": {
+      "group": "Handwritten Cursive",
+      "num_cards": 25,
+      "num_recipes": 11,
+      "mean_latency_ms": 2128.8,
+      "mean_cer": 0.6445,
+      "median_cer": 0.6981,
+      "cue_tp": 14,
+      "cue_fp": 0,
+      "cue_fn": 0,
+      "cue_tn": 11,
+      "cue_precision": 1.0,
+      "cue_recall": 1.0,
+      "cue_f1": 1.0,
+      "cue_accuracy": 1.0
+    }
+  },
+  "cards": [
+    {
+      "card_id": "rec_vhc_apple_crisp_1948_front.jpg",
+      "filename": "rec_vhc_apple_crisp_1948_front.jpg",
+      "recipe_id": "rec_vhc_apple_crisp_1948",
+      "modality": "HANDWRITTEN_CURSIVE",
+      "role": "SEQUENCE_START",
+      "latency_ms": 1415.9182319999672,
+      "num_ocr_lines": 14,
+      "ocr_text": "Grandma's1948Old-FashionedAppleCrisp\nIngredients:\n5mediumbakingapples,peeled&sliced\n1tbsplemonjuice\n1/2cupgranulatedsugar\n1tspground cinnamon\n3/4cupall-purposeflour\n1/2cuprolledoats\n1/2cupbrownsugar,packed\nMethod:\n1.Preheatovento375\u00b0Fand greasean8-inchsquaredish.\n2.Tossappleswithlemon juice,sugar,andcinnamon.\n3.Combineflour,oats,brownsugar,andsaltinbowl.\n(over->)",
+      "gt_cue": "(over ->)",
+      "has_gt_forward_cue": true,
+      "detected_forward_cue": true,
+      "detected_start_cue": false,
+      "cues": {
+        "has_continuation_cue": true,
+        "has_continuation_start": false,
+        "continuation_tokens": [
+          "(over"
+        ],
+        "page_numbers": [],
+        "page_markers": [],
+        "top_page_marker": null,
+        "bottom_page_marker": null,
+        "step_numbers": [
+          1,
+          2,
+          3
+        ],
+        "first_step": 1,
+        "last_step": 3,
+        "is_cutoff": false,
+        "cues": [
+          "forward_cue:(over"
+        ]
+      },
+      "gt_title": "Grandma's 1948 Old-Fashioned Apple Crisp",
+      "gt_ingredients": [
+        "5 medium baking apples, peeled & sliced",
+        "1 tbsp lemon juice",
+        "1/2 cup granulated sugar",
+        "1 tsp ground cinnamon",
+        "3/4 cup all-purpose flour",
+        "1/2 cup rolled oats",
+        "1/2 cup brown sugar, packed",
+        "1/3 cup cold butter, cubed",
+        "1/4 tsp salt"
+      ],
+      "gt_directions": [
+        "1. Preheat oven to 375\u00b0F and grease an 8-inch square dish.",
+        "2. Toss apples with lemon juice, sugar, and cinnamon.",
+        "3. Combine flour, oats, brown sugar, and salt in bowl.",
+        "4. Cut in butter until mixture resembles coarse crumbs.",
+        "5. Spread topping over apples and bake 35 mins until golden.",
+        "6. Serve warm with fresh cream or vanilla ice cream."
+      ]
+    },
+    {
+      "card_id": "rec_vhc_apple_crisp_1948_back.jpg",
+      "filename": "rec_vhc_apple_crisp_1948_back.jpg",
+      "recipe_id": "rec_vhc_apple_crisp_1948",
+      "modality": "HANDWRITTEN_CURSIVE",
+      "role": "SEQUENCE_CONTINUATION",
+      "latency_ms": 974.8753040003066,
+      "num_ocr_lines": 5,
+      "ocr_text": "(Directionscontinued-Grandma's1948Old-Fashio...)\n4.Cut inbutteruntilmixtureresemblescoarsecrumbs.\n5.Spreadtoppingoverapplesandbake35minsuntil golden.\n6.Servewarmwithfreshcreamorvanillaicecream.\nYield:6servingsTotal Time:55mins",
+      "gt_cue": null,
+      "has_gt_forward_cue": false,
+      "detected_forward_cue": false,
+      "detected_start_cue": true,
+      "cues": {
+        "has_continuation_cue": false,
+        "has_continuation_start": true,
+        "continuation_tokens": [],
+        "page_numbers": [],
+        "page_markers": [],
+        "top_page_marker": null,
+        "bottom_page_marker": null,
+        "step_numbers": [
+          4,
+          5,
+          6
+        ],
+        "first_step": 4,
+        "last_step": 6,
+        "is_cutoff": false,
+        "cues": [
+          "continuation_header:directionscontinued"
+        ]
+      },
+      "gt_title": "Grandma's 1948 Old-Fashioned Apple Crisp",
+      "gt_ingredients": [
+        "5 medium baking apples, peeled & sliced",
+        "1 tbsp lemon juice",
+        "1/2 cup granulated sugar",
+        "1 tsp ground cinnamon",
+        "3/4 cup all-purpose flour",
+        "1/2 cup rolled oats",
+        "1/2 cup brown sugar, packed",
+        "1/3 cup cold butter, cubed",
+        "1/4 tsp salt"
+      ],
+      "gt_directions": [
+        "1. Preheat oven to 375\u00b0F and grease an 8-inch square dish.",
+        "2. Toss apples with lemon juice, sugar, and cinnamon.",
+        "3. Combine flour, oats, brown sugar, and salt in bowl.",
+        "4. Cut in butter until mixture resembles coarse crumbs.",
+        "5. Spread topping over apples and bake 35 mins until golden.",
+        "6. Serve warm with fresh cream or vanilla ice cream."
+      ]
+    },
+    {
+      "card_id": "rec_vhc_rhubarb_pie_1965_front.jpg",
+      "filename": "rec_vhc_rhubarb_pie_1965_front.jpg",
+      "recipe_id": "rec_vhc_rhubarb_pie_1965",
+      "modality": "HANDWRITTEN_CURSIVE",
+      "role": "SEQUENCE_START",
+      "latency_ms": 1782.6165149999724,
+      "num_ocr_lines": 14,
+      "ocr_text": "AuntClara's1965RhubarbCustardPie\nIngredients:\n1unbaked9-inchpieshell\n3cupsfreshrhubarb,choppedinto1/2-inchpieces\n2large eggs,beaten\n1cupgranulatedsugar\n3tbspall-purposeflour\n1/4tspgroundnutmeg\n1tbspmeltedbutter\nMethod:\n1.Preheatovento400\u00b0F.\n2.Arrangechopped rhubarb evenlyinunbakedpieshell.\n3.Whisk eggs,sugar,flour,nutmeg.and melted butteruntil smooth.\n(over ->)",
+      "gt_cue": "(over ->)",
+      "has_gt_forward_cue": true,
+      "detected_forward_cue": true,
+      "detected_start_cue": false,
+      "cues": {
+        "has_continuation_cue": true,
+        "has_continuation_start": false,
+        "continuation_tokens": [
+          "(over"
+        ],
+        "page_numbers": [],
+        "page_markers": [],
+        "top_page_marker": null,
+        "bottom_page_marker": null,
+        "step_numbers": [
+          1,
+          2,
+          3
+        ],
+        "first_step": 1,
+        "last_step": 3,
+        "is_cutoff": false,
+        "cues": [
+          "forward_cue:(over"
+        ]
+      },
+      "gt_title": "Aunt Clara's 1965 Rhubarb Custard Pie",
+      "gt_ingredients": [
+        "1 unbaked 9-inch pie shell",
+        "3 cups fresh rhubarb, chopped into 1/2-inch pieces",
+        "2 large eggs, beaten",
+        "1 cup granulated sugar",
+        "3 tbsp all-purpose flour",
+        "1/4 tsp ground nutmeg",
+        "1 tbsp melted butter"
+      ],
+      "gt_directions": [
+        "1. Preheat oven to 400\u00b0F.",
+        "2. Arrange chopped rhubarb evenly in unbaked pie shell.",
+        "3. Whisk eggs, sugar, flour, nutmeg, and melted butter until smooth.",
+        "4. Pour custard mixture over rhubarb.",
+        "5. Bake at 400\u00b0F for 15 minutes, then reduce heat to 350\u00b0F and bake 35 minutes longer until set.",
+        "6. Cool completely on wire rack before serving."
+      ]
+    },
+    {
+      "card_id": "rec_vhc_rhubarb_pie_1965_back.jpg",
+      "filename": "rec_vhc_rhubarb_pie_1965_back.jpg",
+      "recipe_id": "rec_vhc_rhubarb_pie_1965",
+      "modality": "HANDWRITTEN_CURSIVE",
+      "role": "SEQUENCE_CONTINUATION",
+      "latency_ms": 1963.70373299942,
+      "num_ocr_lines": 5,
+      "ocr_text": "(Directionscontinued-AuntClara's1965Rhubarb...)\n4.Pourcustardmixtureoverrhubarb\n5.Bake at 400\u00b0Ffor15minutes,then reduceheatto350\u00b0Fand bake35minutes longeruntil set.\n6.Coolcompletelyonwirerackbeforeserving.\nYield:8slicesTotalTime:1hr15mins",
+      "gt_cue": null,
+      "has_gt_forward_cue": false,
+      "detected_forward_cue": false,
+      "detected_start_cue": true,
+      "cues": {
+        "has_continuation_cue": false,
+        "has_continuation_start": true,
+        "continuation_tokens": [],
+        "page_numbers": [],
+        "page_markers": [],
+        "top_page_marker": null,
+        "bottom_page_marker": null,
+        "step_numbers": [
+          4,
+          5,
+          6
+        ],
+        "first_step": 4,
+        "last_step": 6,
+        "is_cutoff": false,
+        "cues": [
+          "continuation_header:directionscontinued"
+        ]
+      },
+      "gt_title": "Aunt Clara's 1965 Rhubarb Custard Pie",
+      "gt_ingredients": [
+        "1 unbaked 9-inch pie shell",
+        "3 cups fresh rhubarb, chopped into 1/2-inch pieces",
+        "2 large eggs, beaten",
+        "1 cup granulated sugar",
+        "3 tbsp all-purpose flour",
+        "1/4 tsp ground nutmeg",
+        "1 tbsp melted butter"
+      ],
+      "gt_directions": [
+        "1. Preheat oven to 400\u00b0F.",
+        "2. Arrange chopped rhubarb evenly in unbaked pie shell.",
+        "3. Whisk eggs, sugar, flour, nutmeg, and melted butter until smooth.",
+        "4. Pour custard mixture over rhubarb.",
+        "5. Bake at 400\u00b0F for 15 minutes, then reduce heat to 350\u00b0F and bake 35 minutes longer until set.",
+        "6. Cool completely on wire rack before serving."
+      ]
+    },
+    {
+      "card_id": "rec_vhc_strawberry_rhubarb_jam_1954_front.jpg",
+      "filename": "rec_vhc_strawberry_rhubarb_jam_1954_front.jpg",
+      "recipe_id": "rec_vhc_strawberry_rhubarb_jam_1954",
+      "modality": "HANDWRITTEN_CURSIVE",
+      "role": "SEQUENCE_START",
+      "latency_ms": 1998.3485159991687,
+      "num_ocr_lines": 11,
+      "ocr_text": "Eleanor's1954SummerStrawberryRhubarbJam\nIngredients:\n4cupsfreshstrawberries,hulledandcrushed\n4cupsfreshrhubarb,finelychopped\n1package(1.75oz)powderedfruitpectin\n7cupsgranulatedsugar\n1/2tspunsaltedbutter(toreducefoaming)\nMethod:\n1.Combinecrushedstrawberries,choppedrhubarb,andpowderedpectininlargeheawybottompot.\n2.Bringmixturetorollingboil overhighheat,stirringconstantly.\n(over-)",
+      "gt_cue": "(over ->)",
+      "has_gt_forward_cue": true,
+      "detected_forward_cue": true,
+      "detected_start_cue": false,
+      "cues": {
+        "has_continuation_cue": true,
+        "has_continuation_start": false,
+        "continuation_tokens": [
+          "(over"
+        ],
+        "page_numbers": [],
+        "page_markers": [],
+        "top_page_marker": null,
+        "bottom_page_marker": null,
+        "step_numbers": [
+          1,
+          2
+        ],
+        "first_step": 1,
+        "last_step": 2,
+        "is_cutoff": false,
+        "cues": [
+          "forward_cue:(over"
+        ]
+      },
+      "gt_title": "Eleanor's 1954 Summer Strawberry Rhubarb Jam",
+      "gt_ingredients": [
+        "4 cups fresh strawberries, hulled and crushed",
+        "4 cups fresh rhubarb, finely chopped",
+        "1 package (1.75 oz) powdered fruit pectin",
+        "7 cups granulated sugar",
+        "1/2 tsp unsalted butter (to reduce foaming)"
+      ],
+      "gt_directions": [
+        "1. Combine crushed strawberries, chopped rhubarb, and powdered pectin in large heavy bottom pot.",
+        "2. Bring mixture to rolling boil over high heat, stirring constantly.",
+        "3. Add sugar quickly and return to rolling boil for 1 full minute.",
+        "4. Remove from heat, skim foam, ladle into sterilized jars leaving 1/4 inch headspace.",
+        "5. Process jars in boiling water bath for 10 minutes."
+      ]
+    },
+    {
+      "card_id": "rec_vhc_strawberry_rhubarb_jam_1954_back.jpg",
+      "filename": "rec_vhc_strawberry_rhubarb_jam_1954_back.jpg",
+      "recipe_id": "rec_vhc_strawberry_rhubarb_jam_1954",
+      "modality": "HANDWRITTEN_CURSIVE",
+      "role": "SEQUENCE_CONTINUATION",
+      "latency_ms": 1588.226071000463,
+      "num_ocr_lines": 5,
+      "ocr_text": "(Directionscontinued-Eleanor's1954SummerStr...)\n3.Addsugarquicklyandreturntorollingboil for1fullminute\n4.Removefromheat,skimfoam,ladleintosterilizedjarsleaving1/4inchheadspace\n5.Process jarsinboilingwaterbathfor10minutes.\nYield:6half-pintjars|TotalTime:45mins",
+      "gt_cue": null,
+      "has_gt_forward_cue": false,
+      "detected_forward_cue": false,
+      "detected_start_cue": true,
+      "cues": {
+        "has_continuation_cue": false,
+        "has_continuation_start": true,
+        "continuation_tokens": [],
+        "page_numbers": [],
+        "page_markers": [],
+        "top_page_marker": null,
+        "bottom_page_marker": null,
+        "step_numbers": [
+          3,
+          4,
+          5
+        ],
+        "first_step": 3,
+        "last_step": 5,
+        "is_cutoff": false,
+        "cues": [
+          "continuation_header:directionscontinued"
+        ]
+      },
+      "gt_title": "Eleanor's 1954 Summer Strawberry Rhubarb Jam",
+      "gt_ingredients": [
+        "4 cups fresh strawberries, hulled and crushed",
+        "4 cups fresh rhubarb, finely chopped",
+        "1 package (1.75 oz) powdered fruit pectin",
+        "7 cups granulated sugar",
+        "1/2 tsp unsalted butter (to reduce foaming)"
+      ],
+      "gt_directions": [
+        "1. Combine crushed strawberries, chopped rhubarb, and powdered pectin in large heavy bottom pot.",
+        "2. Bring mixture to rolling boil over high heat, stirring constantly.",
+        "3. Add sugar quickly and return to rolling boil for 1 full minute.",
+        "4. Remove from heat, skim foam, ladle into sterilized jars leaving 1/4 inch headspace.",
+        "5. Process jars in boiling water bath for 10 minutes."
+      ]
+    },
+    {
+      "card_id": "rec_vhc_amish_cinnamon_bread_1973_front.jpg",
+      "filename": "rec_vhc_amish_cinnamon_bread_1973_front.jpg",
+      "recipe_id": "rec_vhc_amish_cinnamon_bread_1973",
+      "modality": "HANDWRITTEN_CURSIVE",
+      "role": "SEQUENCE_START",
+      "latency_ms": 2149.4054890008556,
+      "num_ocr_lines": 15,
+      "ocr_text": "AmishFriendshipCinnamonStreuselBread(1973)\nIngredients:\n1cupAmishfriendshipbreadstarter\n2/3cupvegetableoil\n3largeeggs\n2cupsall-purposeflour\n1 cupgranulatedsugar\n11/2tspbakingpowder\n1/2tspbaking soda\nMethod:\n1.Preheatovento325\u00b0F:greaseandsugartwo8x4-inchloafpans.\n2.Inlargebowl,combinestareroil,eggs,floursugar,bakingpowderbakingsoda,salt,andpuddingm\n3.In small bowl,mix cinnamon and brown sugar forstreusel.\nRECIPECLUB 1960\n(over-)",
+      "gt_cue": "(over ->)",
+      "has_gt_forward_cue": true,
+      "detected_forward_cue": true,
+      "detected_start_cue": false,
+      "cues": {
+        "has_continuation_cue": true,
+        "has_continuation_start": false,
+        "continuation_tokens": [
+          "(over"
+        ],
+        "page_numbers": [],
+        "page_markers": [],
+        "top_page_marker": null,
+        "bottom_page_marker": null,
+        "step_numbers": [
+          1,
+          1,
+          2,
+          3
+        ],
+        "first_step": 1,
+        "last_step": 3,
+        "is_cutoff": false,
+        "cues": [
+          "forward_cue:(over"
+        ]
+      },
+      "gt_title": "Amish Friendship Cinnamon Streusel Bread (1973)",
+      "gt_ingredients": [
+        "1 cup Amish friendship bread starter",
+        "2/3 cup vegetable oil",
+        "3 large eggs",
+        "2 cups all-purpose flour",
+        "1 cup granulated sugar",
+        "1 1/2 tsp baking powder",
+        "1/2 tsp baking soda",
+        "1/2 tsp salt",
+        "1 box (3.4 oz) vanilla instant pudding mix",
+        "1 tbsp ground cinnamon",
+        "1/2 cup brown sugar (for streusel topping)"
+      ],
+      "gt_directions": [
+        "1. Preheat oven to 325\u00b0F; grease and sugar two 8x4-inch loaf pans.",
+        "2. In large bowl, combine starter, oil, eggs, flour, sugar, baking powder, baking soda, salt, and pudding mix.",
+        "3. In small bowl, mix cinnamon and brown sugar for streusel.",
+        "4. Pour half batter into pans, sprinkle half streusel, add remaining batter, and top with remaining streusel.",
+        "5. Bake at 325\u00b0F for 50-55 minutes until toothpick inserted in center comes out clean.",
+        "6. Cool in pans 10 minutes before turning out onto wire racks."
+      ]
+    },
+    {
+      "card_id": "rec_vhc_amish_cinnamon_bread_1973_back.jpg",
+      "filename": "rec_vhc_amish_cinnamon_bread_1973_back.jpg",
+      "recipe_id": "rec_vhc_amish_cinnamon_bread_1973",
+      "modality": "HANDWRITTEN_CURSIVE",
+      "role": "SEQUENCE_CONTINUATION",
+      "latency_ms": 1887.8819500005193,
+      "num_ocr_lines": 5,
+      "ocr_text": "(Directionscontinued-AmishFriendshipCinnamon..)\n4.Pourhalfbatterintopans,sprinklehalfstreusel,addremainingbatter,andtopwithremaining\n5.Bakeat325\u00b0Ffor50-55minutesuntiltoothpick inserted incentercomesoutclean.\n6.Cool inpans10minutesbeforeturningoutontowireracks.\nYield:2loaves(16slices)/TotalTime:1hr20mins",
+      "gt_cue": null,
+      "has_gt_forward_cue": false,
+      "detected_forward_cue": false,
+      "detected_start_cue": true,
+      "cues": {
+        "has_continuation_cue": false,
+        "has_continuation_start": true,
+        "continuation_tokens": [],
+        "page_numbers": [],
+        "page_markers": [],
+        "top_page_marker": null,
+        "bottom_page_marker": null,
+        "step_numbers": [
+          4,
+          5,
+          6
+        ],
+        "first_step": 4,
+        "last_step": 6,
+        "is_cutoff": false,
+        "cues": [
+          "continuation_header:directionscontinued"
+        ]
+      },
+      "gt_title": "Amish Friendship Cinnamon Streusel Bread (1973)",
+      "gt_ingredients": [
+        "1 cup Amish friendship bread starter",
+        "2/3 cup vegetable oil",
+        "3 large eggs",
+        "2 cups all-purpose flour",
+        "1 cup granulated sugar",
+        "1 1/2 tsp baking powder",
+        "1/2 tsp baking soda",
+        "1/2 tsp salt",
+        "1 box (3.4 oz) vanilla instant pudding mix",
+        "1 tbsp ground cinnamon",
+        "1/2 cup brown sugar (for streusel topping)"
+      ],
+      "gt_directions": [
+        "1. Preheat oven to 325\u00b0F; grease and sugar two 8x4-inch loaf pans.",
+        "2. In large bowl, combine starter, oil, eggs, flour, sugar, baking powder, baking soda, salt, and pudding mix.",
+        "3. In small bowl, mix cinnamon and brown sugar for streusel.",
+        "4. Pour half batter into pans, sprinkle half streusel, add remaining batter, and top with remaining streusel.",
+        "5. Bake at 325\u00b0F for 50-55 minutes until toothpick inserted in center comes out clean.",
+        "6. Cool in pans 10 minutes before turning out onto wire racks."
+      ]
+    },
+    {
+      "card_id": "rec_typ_beef_stroganoff_1956_front.jpg",
+      "filename": "rec_typ_beef_stroganoff_1956_front.jpg",
+      "recipe_id": "rec_typ_beef_stroganoff_1956",
+      "modality": "TYPEWRITTEN",
+      "role": "SEQUENCE_START",
+      "latency_ms": 2063.5559800011833,
+      "num_ocr_lines": 14,
+      "ocr_text": "1956 CLASSIC BEEF STROGANOFF\nINGREDIENTS\nl l/2 lbs beef sirloin,cut into thin strips\n1/2cup butter\nl medium yeliowonion,thinly sliced\nl/2 lb fresh button mushrooms, sliced\n2 tbsp all-purpose flour\nl l/2 cups beef broth\nPREPARATION -\nl, Melt 2 tbsp butter in heavy skiilet over high heat.\n2,Sear beef strips quickly 2-3 mins until browned; remove.\n3, Saute onions and mushrooms in remaining butter until tender.\nRECIPE CLUB1956\nPTO >>>",
+      "gt_cue": "PTO >>>",
+      "has_gt_forward_cue": true,
+      "detected_forward_cue": true,
+      "detected_start_cue": false,
+      "cues": {
+        "has_continuation_cue": true,
+        "has_continuation_start": false,
+        "continuation_tokens": [
+          "pto"
+        ],
+        "page_numbers": [],
+        "page_markers": [],
+        "top_page_marker": null,
+        "bottom_page_marker": null,
+        "step_numbers": [
+          1,
+          1,
+          2,
+          1,
+          1,
+          2,
+          3
+        ],
+        "first_step": 1,
+        "last_step": 3,
+        "is_cutoff": false,
+        "cues": [
+          "forward_cue:pto"
+        ]
+      },
+      "gt_title": "1956 Classic Beef Stroganoff",
+      "gt_ingredients": [
+        "1 1/2 lbs beef sirloin, cut into thin strips",
+        "1/2 cup butter",
+        "1 medium yellow onion, thinly sliced",
+        "1/2 lb fresh button mushrooms, sliced",
+        "2 tbsp all-purpose flour",
+        "1 1/2 cups beef broth",
+        "1 tbsp tomato paste",
+        "1 tsp Dijon mustard",
+        "3/4 cup sour cream",
+        "12 oz egg noodles, cooked and buttered"
+      ],
+      "gt_directions": [
+        "1. Melt 2 tbsp butter in heavy skillet over high heat.",
+        "2. Sear beef strips quickly 2-3 mins until browned; remove.",
+        "3. Saut\u00e9 onions and mushrooms in remaining butter until tender.",
+        "4. Stir in flour, then gradually whisk in beef broth.",
+        "5. Simmer 5 mins until sauce thickens; blend in mustard and tomato paste.",
+        "6. Reduce heat to low, fold in sour cream and returned beef.",
+        "7. Heat gently without boiling; serve over hot buttered egg noodles."
+      ]
+    },
+    {
+      "card_id": "rec_typ_beef_stroganoff_1956_back.jpg",
+      "filename": "rec_typ_beef_stroganoff_1956_back.jpg",
+      "recipe_id": "rec_typ_beef_stroganoff_1956",
+      "modality": "TYPEWRITTEN",
+      "role": "SEQUENCE_CONTINUATION",
+      "latency_ms": 1928.6515530002362,
+      "num_ocr_lines": 7,
+      "ocr_text": "(CONTINUED FROM FRONT)\n4. stir in filour, then gradually whisk in beef broth.\n5. Simmer 5 mins untii sauce thickensi biend in mustard and tomato paste.\n6,Reduce heat to iow, foid in sour cream and returned beef.\n7, Heat gently without boilingi serve over hot buttered egg noodles.\nYIELD:4servings\nTIME:4omins",
+      "gt_cue": null,
+      "has_gt_forward_cue": false,
+      "detected_forward_cue": false,
+      "detected_start_cue": true,
+      "cues": {
+        "has_continuation_cue": false,
+        "has_continuation_start": true,
+        "continuation_tokens": [],
+        "page_numbers": [],
+        "page_markers": [],
+        "top_page_marker": null,
+        "bottom_page_marker": null,
+        "step_numbers": [
+          4,
+          5,
+          6,
+          7
+        ],
+        "first_step": 4,
+        "last_step": 7,
+        "is_cutoff": false,
+        "cues": [
+          "continuation_header:continued from"
+        ]
+      },
+      "gt_title": "1956 Classic Beef Stroganoff",
+      "gt_ingredients": [
+        "1 1/2 lbs beef sirloin, cut into thin strips",
+        "1/2 cup butter",
+        "1 medium yellow onion, thinly sliced",
+        "1/2 lb fresh button mushrooms, sliced",
+        "2 tbsp all-purpose flour",
+        "1 1/2 cups beef broth",
+        "1 tbsp tomato paste",
+        "1 tsp Dijon mustard",
+        "3/4 cup sour cream",
+        "12 oz egg noodles, cooked and buttered"
+      ],
+      "gt_directions": [
+        "1. Melt 2 tbsp butter in heavy skillet over high heat.",
+        "2. Sear beef strips quickly 2-3 mins until browned; remove.",
+        "3. Saut\u00e9 onions and mushrooms in remaining butter until tender.",
+        "4. Stir in flour, then gradually whisk in beef broth.",
+        "5. Simmer 5 mins until sauce thickens; blend in mustard and tomato paste.",
+        "6. Reduce heat to low, fold in sour cream and returned beef.",
+        "7. Heat gently without boiling; serve over hot buttered egg noodles."
+      ]
+    },
+    {
+      "card_id": "rec_typ_tomato_soup_cake_1952_front.jpg",
+      "filename": "rec_typ_tomato_soup_cake_1952_front.jpg",
+      "recipe_id": "rec_typ_tomato_soup_cake_1952",
+      "modality": "TYPEWRITTEN",
+      "role": "SEQUENCE_START",
+      "latency_ms": 1765.4058569987683,
+      "num_ocr_lines": 15,
+      "ocr_text": "1952 TOMATOSOUP MYSTERY SPICE CAKE\nINGREDIENTS\ncups sifted ali-purpose flour\nl/3 cups granuiated sugar\ntsp bakingpowder\ntsp baking soda\n1/2tsp ground cinnamon\ntspground cioves &nutmeg\n1can (io 3/4 oz) condensed tomato soup\nPREPARATION\nl. Preheat oven to 35o'F: grease and flour two 8-inch round cake pans.\n2, Sift flour, sugar, baking powder, baking soda, and spices into large bowl.\n3. Add tomato soup, shorteningr eggs, and water; beat on medium speed 2 mins.\nRECIPE-CLUB 1974\nPTO >>>",
+      "gt_cue": "PTO >>>",
+      "has_gt_forward_cue": true,
+      "detected_forward_cue": true,
+      "detected_start_cue": false,
+      "cues": {
+        "has_continuation_cue": true,
+        "has_continuation_start": false,
+        "continuation_tokens": [
+          "pto"
+        ],
+        "page_numbers": [],
+        "page_markers": [],
+        "top_page_marker": null,
+        "bottom_page_marker": null,
+        "step_numbers": [
+          1,
+          2,
+          3
+        ],
+        "first_step": 1,
+        "last_step": 3,
+        "is_cutoff": false,
+        "cues": [
+          "forward_cue:pto"
+        ]
+      },
+      "gt_title": "1952 Tomato Soup Mystery Spice Cake",
+      "gt_ingredients": [
+        "2 cups sifted all-purpose flour",
+        "1 1/3 cups granulated sugar",
+        "4 tsp baking powder",
+        "1 tsp baking soda",
+        "1 1/2 tsp ground cinnamon",
+        "1/2 tsp ground cloves & nutmeg",
+        "1 can (10 3/4 oz) condensed tomato soup",
+        "1/2 cup shortening",
+        "2 large eggs",
+        "1/4 cup water",
+        "1 cup raisins or chopped walnuts"
+      ],
+      "gt_directions": [
+        "1. Preheat oven to 350\u00b0F; grease and flour two 8-inch round cake pans.",
+        "2. Sift flour, sugar, baking powder, baking soda, and spices into large bowl.",
+        "3. Add tomato soup, shortening, eggs, and water; beat on medium speed 2 mins.",
+        "4. Fold in raisins and walnuts.",
+        "5. Pour into prepared pans and bake at 350\u00b0F for 30-35 mins.",
+        "6. Cool and frost with cream cheese frosting."
+      ]
+    },
+    {
+      "card_id": "rec_typ_tomato_soup_cake_1952_back.jpg",
+      "filename": "rec_typ_tomato_soup_cake_1952_back.jpg",
+      "recipe_id": "rec_typ_tomato_soup_cake_1952",
+      "modality": "TYPEWRITTEN",
+      "role": "SEQUENCE_CONTINUATION",
+      "latency_ms": 1730.882510999436,
+      "num_ocr_lines": 6,
+      "ocr_text": "(CONTINUED FROM FRONT)\n4,Foid in raisins and walnuts.\n5.Pour into prepared pans and bake at 35oeF for 3o-35 mins.\n6,Cooi and frost with cream cheesefrosting.\nYIELD:12 servings\nTIME:55mins",
+      "gt_cue": null,
+      "has_gt_forward_cue": false,
+      "detected_forward_cue": false,
+      "detected_start_cue": true,
+      "cues": {
+        "has_continuation_cue": false,
+        "has_continuation_start": true,
+        "continuation_tokens": [],
+        "page_numbers": [],
+        "page_markers": [],
+        "top_page_marker": null,
+        "bottom_page_marker": null,
+        "step_numbers": [
+          4,
+          5,
+          6
+        ],
+        "first_step": 4,
+        "last_step": 6,
+        "is_cutoff": false,
+        "cues": [
+          "continuation_header:continued from"
+        ]
+      },
+      "gt_title": "1952 Tomato Soup Mystery Spice Cake",
+      "gt_ingredients": [
+        "2 cups sifted all-purpose flour",
+        "1 1/3 cups granulated sugar",
+        "4 tsp baking powder",
+        "1 tsp baking soda",
+        "1 1/2 tsp ground cinnamon",
+        "1/2 tsp ground cloves & nutmeg",
+        "1 can (10 3/4 oz) condensed tomato soup",
+        "1/2 cup shortening",
+        "2 large eggs",
+        "1/4 cup water",
+        "1 cup raisins or chopped walnuts"
+      ],
+      "gt_directions": [
+        "1. Preheat oven to 350\u00b0F; grease and flour two 8-inch round cake pans.",
+        "2. Sift flour, sugar, baking powder, baking soda, and spices into large bowl.",
+        "3. Add tomato soup, shortening, eggs, and water; beat on medium speed 2 mins.",
+        "4. Fold in raisins and walnuts.",
+        "5. Pour into prepared pans and bake at 350\u00b0F for 30-35 mins.",
+        "6. Cool and frost with cream cheese frosting."
+      ]
+    },
+    {
+      "card_id": "rec_typ_swedish_meatballs_1961_front.jpg",
+      "filename": "rec_typ_swedish_meatballs_1961_front.jpg",
+      "recipe_id": "rec_typ_swedish_meatballs_1961",
+      "modality": "TYPEWRITTEN",
+      "role": "SEQUENCE_START",
+      "latency_ms": 1726.0542759995587,
+      "num_ocr_lines": 15,
+      "ocr_text": "1961SCANDINAVIAN SWEDISH MEATBALLS\nINGREDIENTS\nlb ground chuck beef\n1/2 lb groundpork\nl/2 cup fine dry breadcrumbs\n1/2 cup heavy cream\nl small onion,grated fine\niiarge egg\nl/4 tsp ground alispice & nutmeg\nPREPARATION-\nl. Soak breadcrumbs in heavy cream in large bowl for lo minutes.\n2,Add ground meatsrgrated onion,egg,alispice,nutmeg,salt,and whitepepperi\n3. Shape into l-inch uniform meatballs.\nBETTER HOVES CLUB OCT 1\nPTO >>>",
+      "gt_cue": "PTO >>>",
+      "has_gt_forward_cue": true,
+      "detected_forward_cue": true,
+      "detected_start_cue": false,
+      "cues": {
+        "has_continuation_cue": true,
+        "has_continuation_start": false,
+        "continuation_tokens": [
+          "pto"
+        ],
+        "page_numbers": [
+          1
+        ],
+        "page_markers": [
+          {
+            "number": 1,
+            "total": 2,
+            "token": "1/2",
+            "position": "top"
+          }
+        ],
+        "top_page_marker": 1,
+        "bottom_page_marker": null,
+        "step_numbers": [
+          1,
+          1,
+          2,
+          3
+        ],
+        "first_step": 1,
+        "last_step": 3,
+        "is_cutoff": false,
+        "cues": [
+          "page_marker:top:1_of_2",
+          "forward_cue:pto"
+        ]
+      },
+      "gt_title": "1961 Scandinavian Swedish Meatballs",
+      "gt_ingredients": [
+        "1 lb ground chuck beef",
+        "1/2 lb ground pork",
+        "1/2 cup fine dry breadcrumbs",
+        "1/2 cup heavy cream",
+        "1 small onion, grated fine",
+        "1 large egg",
+        "1/4 tsp ground allspice & nutmeg",
+        "1 tsp salt & 1/2 tsp white pepper",
+        "3 tbsp butter for pan frying",
+        "2 tbsp flour & 1 1/2 cups beef broth for cream gravy",
+        "1/2 cup sour cream for finishing"
+      ],
+      "gt_directions": [
+        "1. Soak breadcrumbs in heavy cream in large bowl for 10 minutes.",
+        "2. Add ground meats, grated onion, egg, allspice, nutmeg, salt, and white pepper; mix thoroughly.",
+        "3. Shape into 1-inch uniform meatballs.",
+        "4. Melt butter in heavy skillet; brown meatballs on all sides in batches, transfer to dish.",
+        "5. Whisk flour into pan drippings, gradually add beef broth and simmer until thickened.",
+        "6. Stir in sour cream, return meatballs to skillet, and simmer gently 10 minutes.",
+        "7. Serve hot over buttered egg noodles with lingonberry jam."
+      ]
+    },
+    {
+      "card_id": "rec_typ_swedish_meatballs_1961_back.jpg",
+      "filename": "rec_typ_swedish_meatballs_1961_back.jpg",
+      "recipe_id": "rec_typ_swedish_meatballs_1961",
+      "modality": "TYPEWRITTEN",
+      "role": "SEQUENCE_CONTINUATION",
+      "latency_ms": 2060.980866999671,
+      "num_ocr_lines": 7,
+      "ocr_text": "(CONTINUED FROM FRONT)\n4. Melt butter in heavy skilleti brown meatballs on all sides in batches,\n5. Whisk flour into pan drippings,gradualiy add beef broth and simmer un\n6,stir in sour cream,return meatbalis to skiliet,and simmer gentiy io\n7. Serve hot over buttered egg noodles with lingonberry jam.\nYIELD:6 servings (3omeatballs)\nTIME:55mins",
+      "gt_cue": null,
+      "has_gt_forward_cue": false,
+      "detected_forward_cue": false,
+      "detected_start_cue": true,
+      "cues": {
+        "has_continuation_cue": false,
+        "has_continuation_start": true,
+        "continuation_tokens": [],
+        "page_numbers": [],
+        "page_markers": [],
+        "top_page_marker": null,
+        "bottom_page_marker": null,
+        "step_numbers": [
+          4,
+          5,
+          6,
+          7
+        ],
+        "first_step": 4,
+        "last_step": 7,
+        "is_cutoff": false,
+        "cues": [
+          "continuation_header:continued from"
+        ]
+      },
+      "gt_title": "1961 Scandinavian Swedish Meatballs",
+      "gt_ingredients": [
+        "1 lb ground chuck beef",
+        "1/2 lb ground pork",
+        "1/2 cup fine dry breadcrumbs",
+        "1/2 cup heavy cream",
+        "1 small onion, grated fine",
+        "1 large egg",
+        "1/4 tsp ground allspice & nutmeg",
+        "1 tsp salt & 1/2 tsp white pepper",
+        "3 tbsp butter for pan frying",
+        "2 tbsp flour & 1 1/2 cups beef broth for cream gravy",
+        "1/2 cup sour cream for finishing"
+      ],
+      "gt_directions": [
+        "1. Soak breadcrumbs in heavy cream in large bowl for 10 minutes.",
+        "2. Add ground meats, grated onion, egg, allspice, nutmeg, salt, and white pepper; mix thoroughly.",
+        "3. Shape into 1-inch uniform meatballs.",
+        "4. Melt butter in heavy skillet; brown meatballs on all sides in batches, transfer to dish.",
+        "5. Whisk flour into pan drippings, gradually add beef broth and simmer until thickened.",
+        "6. Stir in sour cream, return meatballs to skillet, and simmer gently 10 minutes.",
+        "7. Serve hot over buttered egg noodles with lingonberry jam."
+      ]
+    },
+    {
+      "card_id": "rec_typ_lemon_chiffon_pie_1958_front.jpg",
+      "filename": "rec_typ_lemon_chiffon_pie_1958_front.jpg",
+      "recipe_id": "rec_typ_lemon_chiffon_pie_1958",
+      "modality": "TYPEWRITTEN",
+      "role": "SEQUENCE_START",
+      "latency_ms": 2247.887620000256,
+      "num_ocr_lines": 16,
+      "ocr_text": "1958MILE-HIGH LEMON CHIFFON PIE\nINGREDIENTS\nenveiopeunflavored gelatin\nl/4 cup cold water\n4 large eggs, separated\ncup granulated sugar, divided\n1/2 cupfresh lemonJuice\ntbsp grated lemon zest\n1 /2\ntsp salt\nPREPARATION\nl.soften gelatin inl/4cup coidwaterinsmail bowl.\n2.In top of double boiier,beat egg yolks with l/2 cup sugar,lemon Juice, zest,\n3.Cook over simmering water, stirring constantiy untii thick and custardy (about\nLADIESAUXILIARY1958\nPTO >>>",
+      "gt_cue": "PTO >>>",
+      "has_gt_forward_cue": true,
+      "detected_forward_cue": true,
+      "detected_start_cue": true,
+      "cues": {
+        "has_continuation_cue": true,
+        "has_continuation_start": true,
+        "continuation_tokens": [
+          "pto"
+        ],
+        "page_numbers": [],
+        "page_markers": [],
+        "top_page_marker": null,
+        "bottom_page_marker": null,
+        "step_numbers": [
+          4,
+          1,
+          1,
+          2,
+          3
+        ],
+        "first_step": 4,
+        "last_step": 3,
+        "is_cutoff": false,
+        "cues": [
+          "forward_cue:pto"
+        ]
+      },
+      "gt_title": "1958 Mile-High Lemon Chiffon Pie",
+      "gt_ingredients": [
+        "1 envelope unflavored gelatin",
+        "1/4 cup cold water",
+        "4 large eggs, separated",
+        "1 cup granulated sugar, divided",
+        "1/2 cup fresh lemon juice",
+        "1 tbsp grated lemon zest",
+        "1/2 tsp salt",
+        "1 pre-baked 9-inch pastry crust",
+        "1 cup whipped cream for topping"
+      ],
+      "gt_directions": [
+        "1. Soften gelatin in 1/4 cup cold water in small bowl.",
+        "2. In top of double boiler, beat egg yolks with 1/2 cup sugar, lemon juice, zest, and salt.",
+        "3. Cook over simmering water, stirring constantly until thick and custardy (about 8 mins).",
+        "4. Remove from heat; stir in softened gelatin until completely dissolved; cool until mixture begins to congeal.",
+        "5. Beat egg whites until stiff peaks form, gradually adding remaining 1/2 cup sugar.",
+        "6. Fold meringue gently into cooled lemon gelatin mixture.",
+        "7. Pile high into baked pastry shell and refrigerate at least 3 hours until set."
+      ]
+    },
+    {
+      "card_id": "rec_typ_lemon_chiffon_pie_1958_back.jpg",
+      "filename": "rec_typ_lemon_chiffon_pie_1958_back.jpg",
+      "recipe_id": "rec_typ_lemon_chiffon_pie_1958",
+      "modality": "TYPEWRITTEN",
+      "role": "SEQUENCE_CONTINUATION",
+      "latency_ms": 2060.1388640006917,
+      "num_ocr_lines": 7,
+      "ocr_text": "(CONTINUED FROM FRONT)\n4. Remove from heat; stir in softened geiatin untii completely dissolved;\n5. Beat egg whites untii stiff peaks form, gradualiy adding remaining l/2\n6.Foid meringue gently into cooled lemon gelatin mixture.\n7. Pile high into baked pastry shell and refrigerate at least 3 hours unti\nYIELD:8slices\nTIME: 3 hrs 4o mins",
+      "gt_cue": null,
+      "has_gt_forward_cue": false,
+      "detected_forward_cue": false,
+      "detected_start_cue": true,
+      "cues": {
+        "has_continuation_cue": false,
+        "has_continuation_start": true,
+        "continuation_tokens": [],
+        "page_numbers": [],
+        "page_markers": [],
+        "top_page_marker": null,
+        "bottom_page_marker": null,
+        "step_numbers": [
+          4,
+          5,
+          6,
+          7
+        ],
+        "first_step": 4,
+        "last_step": 7,
+        "is_cutoff": false,
+        "cues": [
+          "continuation_header:continued from"
+        ]
+      },
+      "gt_title": "1958 Mile-High Lemon Chiffon Pie",
+      "gt_ingredients": [
+        "1 envelope unflavored gelatin",
+        "1/4 cup cold water",
+        "4 large eggs, separated",
+        "1 cup granulated sugar, divided",
+        "1/2 cup fresh lemon juice",
+        "1 tbsp grated lemon zest",
+        "1/2 tsp salt",
+        "1 pre-baked 9-inch pastry crust",
+        "1 cup whipped cream for topping"
+      ],
+      "gt_directions": [
+        "1. Soften gelatin in 1/4 cup cold water in small bowl.",
+        "2. In top of double boiler, beat egg yolks with 1/2 cup sugar, lemon juice, zest, and salt.",
+        "3. Cook over simmering water, stirring constantly until thick and custardy (about 8 mins).",
+        "4. Remove from heat; stir in softened gelatin until completely dissolved; cool until mixture begins to congeal.",
+        "5. Beat egg whites until stiff peaks form, gradually adding remaining 1/2 cup sugar.",
+        "6. Fold meringue gently into cooled lemon gelatin mixture.",
+        "7. Pile high into baked pastry shell and refrigerate at least 3 hours until set."
+      ]
+    },
+    {
+      "card_id": "rec_clp_crisco_fried_chicken_front.jpg",
+      "filename": "rec_clp_crisco_fried_chicken_front.jpg",
+      "recipe_id": "rec_clp_crisco_fried_chicken",
+      "modality": "PRINTED_CLIPPING",
+      "role": "SEQUENCE_START",
+      "latency_ms": 1176.5207420012302,
+      "num_ocr_lines": 15,
+      "ocr_text": "Crisco Golden SouthernFriedChicken\nINGREDIENTS:\n1wholechicken (3 lbs),cut into pieces\nMETHOD:\n.1cupbuttermilk\n1. Soak chicken pieces in buttermilk for a...\n\u00b72cupsall-purposeflour\n2. Inpaperbag orbowl, combineflour,pa...\n.2tsppaprika\n3. Heat i/2 inch Crisco in cast iron skill...\n\u20221tspgarlicpowder\n-11/2tspsalt\n.1tspblackpepper\n.Crisco shortening fordeep skilletfrying\nRECIPE CLUB 1973",
+      "gt_cue": "PTO >>>",
+      "has_gt_forward_cue": true,
+      "detected_forward_cue": false,
+      "detected_start_cue": false,
+      "cues": {
+        "has_continuation_cue": false,
+        "has_continuation_start": false,
+        "continuation_tokens": [],
+        "page_numbers": [],
+        "page_markers": [],
+        "top_page_marker": null,
+        "bottom_page_marker": null,
+        "step_numbers": [
+          1,
+          2,
+          3
+        ],
+        "first_step": 1,
+        "last_step": 3,
+        "is_cutoff": false,
+        "cues": []
+      },
+      "gt_title": "Crisco Golden Southern Fried Chicken",
+      "gt_ingredients": [
+        "1 whole chicken (3 lbs), cut into pieces",
+        "1 cup buttermilk",
+        "2 cups all-purpose flour",
+        "2 tsp paprika",
+        "1 tsp garlic powder",
+        "1 1/2 tsp salt",
+        "1 tsp black pepper",
+        "Crisco shortening for deep skillet frying"
+      ],
+      "gt_directions": [
+        "1. Soak chicken pieces in buttermilk for at least 15 minutes.",
+        "2. In paper bag or bowl, combine flour, paprika, garlic powder, salt, and pepper.",
+        "3. Heat 1/2 inch Crisco in cast iron skillet to 365\u00b0F.",
+        "4. Shake chicken in seasoned flour to coat thoroughly.",
+        "5. Fry chicken pieces 12-15 mins per side until golden brown and crisp.",
+        "6. Drain on brown paper bags before serving."
+      ]
+    },
+    {
+      "card_id": "rec_clp_crisco_fried_chicken_back.jpg",
+      "filename": "rec_clp_crisco_fried_chicken_back.jpg",
+      "recipe_id": "rec_clp_crisco_fried_chicken",
+      "modality": "PRINTED_CLIPPING",
+      "role": "SEQUENCE_CONTINUATION",
+      "latency_ms": 1518.7866920005035,
+      "num_ocr_lines": 4,
+      "ocr_text": "(Directionscontinued)\n4.Shake chicken in seasoned fiour to coat thoroughly.\n5. Fry chicken pieces i2-i5 mins per side until goiden brown and crisp.\n6.Drain onbrownpaperbagsbeforeserving.",
+      "gt_cue": null,
+      "has_gt_forward_cue": false,
+      "detected_forward_cue": false,
+      "detected_start_cue": true,
+      "cues": {
+        "has_continuation_cue": false,
+        "has_continuation_start": true,
+        "continuation_tokens": [],
+        "page_numbers": [],
+        "page_markers": [],
+        "top_page_marker": null,
+        "bottom_page_marker": null,
+        "step_numbers": [
+          4,
+          5,
+          6
+        ],
+        "first_step": 4,
+        "last_step": 6,
+        "is_cutoff": false,
+        "cues": [
+          "continuation_header:directionscontinued"
+        ]
+      },
+      "gt_title": "Crisco Golden Southern Fried Chicken",
+      "gt_ingredients": [
+        "1 whole chicken (3 lbs), cut into pieces",
+        "1 cup buttermilk",
+        "2 cups all-purpose flour",
+        "2 tsp paprika",
+        "1 tsp garlic powder",
+        "1 1/2 tsp salt",
+        "1 tsp black pepper",
+        "Crisco shortening for deep skillet frying"
+      ],
+      "gt_directions": [
+        "1. Soak chicken pieces in buttermilk for at least 15 minutes.",
+        "2. In paper bag or bowl, combine flour, paprika, garlic powder, salt, and pepper.",
+        "3. Heat 1/2 inch Crisco in cast iron skillet to 365\u00b0F.",
+        "4. Shake chicken in seasoned flour to coat thoroughly.",
+        "5. Fry chicken pieces 12-15 mins per side until golden brown and crisp.",
+        "6. Drain on brown paper bags before serving."
+      ]
+    },
+    {
+      "card_id": "rec_clp_condensed_milk_pie_1962_standalone.jpg",
+      "filename": "rec_clp_condensed_milk_pie_1962_standalone.jpg",
+      "recipe_id": "rec_clp_condensed_milk_pie_1962",
+      "modality": "PRINTED_CLIPPING",
+      "role": "STANDALONE",
+      "latency_ms": 1748.0929530011053,
+      "num_ocr_lines": 14,
+      "ocr_text": "1962Borden'sEagleBrandMagicChocolatePie\nINGREDIENTS:\nMETHOD:\n.1can (14oz)Borden EagleBrand Sweetened Conddnstapldiflipubleboiler,melt chocolate...\n-11/2cupssemi-sweetchocolatemorsels\n2. Gradually blend in hot water and vanill..\n-1/2cuphotwater\n3. Remove from heat; cool to room temperat...\n-1tspvanillaextract\n4.Pour intopreparedgraham crackercrust.\n\u00b71 pre-baked g-inch graham cracker crust\n.1cupheavywhipping cream, whipped\n5. Chill in refrigerator at least 3 hours ...\n6. Garnish with fresh whipped cream and ch..",
+      "gt_cue": null,
+      "has_gt_forward_cue": false,
+      "detected_forward_cue": false,
+      "detected_start_cue": true,
+      "cues": {
+        "has_continuation_cue": false,
+        "has_continuation_start": true,
+        "continuation_tokens": [],
+        "page_numbers": [],
+        "page_markers": [],
+        "top_page_marker": null,
+        "bottom_page_marker": null,
+        "step_numbers": [
+          2,
+          3,
+          4,
+          5,
+          6
+        ],
+        "first_step": 2,
+        "last_step": 6,
+        "is_cutoff": false,
+        "cues": []
+      },
+      "gt_title": "1962 Borden's Eagle Brand Magic Chocolate Pie",
+      "gt_ingredients": [
+        "1 can (14 oz) Borden Eagle Brand Sweetened Condensed Milk",
+        "1 1/2 cups semi-sweet chocolate morsels",
+        "1/2 cup hot water",
+        "1 tsp vanilla extract",
+        "1 pre-baked 9-inch graham cracker crust",
+        "1 cup heavy whipping cream, whipped"
+      ],
+      "gt_directions": [
+        "1. In top of double boiler, melt chocolate morsels with sweetened condensed milk, stirring until smooth.",
+        "2. Gradually blend in hot water and vanilla extract.",
+        "3. Remove from heat; cool to room temperature.",
+        "4. Pour into prepared graham cracker crust.",
+        "5. Chill in refrigerator at least 3 hours until set.",
+        "6. Garnish with fresh whipped cream and chocolate curls."
+      ]
+    },
+    {
+      "card_id": "rec_clp_green_bean_casserole_1968_front.jpg",
+      "filename": "rec_clp_green_bean_casserole_1968_front.jpg",
+      "recipe_id": "rec_clp_green_bean_casserole_1968",
+      "modality": "PRINTED_CLIPPING",
+      "role": "SEQUENCE_START",
+      "latency_ms": 1565.0323390000267,
+      "num_ocr_lines": 10,
+      "ocr_text": "1968Campbell'sClassicGreenBeanCasserole\nINGREDIENTS:\nMETHOD:\n-1can (101/2oz)Campbell'sCondensedCreamofBfuhbaoomefdaj85o\u00b0F.\n-1/2cupwholemilk\n2.In11/2-quartbakingdish,mixmushroo...\n\u00b71tspsoysauce\n.1dashblackpepper\n\u00b74cups cookedcut greenbeans (fresh or frozen)\n\u00b711/3cupsFrench'sCrispyFriedOnions,divided",
+      "gt_cue": "PTO >>>",
+      "has_gt_forward_cue": true,
+      "detected_forward_cue": false,
+      "detected_start_cue": true,
+      "cues": {
+        "has_continuation_cue": false,
+        "has_continuation_start": true,
+        "continuation_tokens": [],
+        "page_numbers": [],
+        "page_markers": [],
+        "top_page_marker": null,
+        "bottom_page_marker": null,
+        "step_numbers": [
+          2
+        ],
+        "first_step": 2,
+        "last_step": 2,
+        "is_cutoff": false,
+        "cues": []
+      },
+      "gt_title": "1968 Campbell's Classic Green Bean Casserole",
+      "gt_ingredients": [
+        "1 can (10 1/2 oz) Campbell's Condensed Cream of Mushroom Soup",
+        "1/2 cup whole milk",
+        "1 tsp soy sauce",
+        "1 dash black pepper",
+        "4 cups cooked cut green beans (fresh or frozen)",
+        "1 1/3 cups French's Crispy Fried Onions, divided"
+      ],
+      "gt_directions": [
+        "1. Preheat oven to 350\u00b0F.",
+        "2. In 1 1/2-quart baking dish, mix mushroom soup, milk, soy sauce, black pepper, green beans, and 2/3 cup fried onions.",
+        "3. Bake at 350\u00b0F for 25 minutes until hot and bubbling.",
+        "4. Stir casserole gently; scatter remaining 2/3 cup crispy fried onions over top.",
+        "5. Bake 5 minutes longer until golden brown."
+      ]
+    },
+    {
+      "card_id": "rec_clp_green_bean_casserole_1968_back.jpg",
+      "filename": "rec_clp_green_bean_casserole_1968_back.jpg",
+      "recipe_id": "rec_clp_green_bean_casserole_1968",
+      "modality": "PRINTED_CLIPPING",
+      "role": "SEQUENCE_CONTINUATION",
+      "latency_ms": 2682.95709800077,
+      "num_ocr_lines": 4,
+      "ocr_text": "(Directionscontinued)\n3.Bake at 35o'F for 25minutesuntilhotand bubbling.\n4.Stir casserole gently: scatter remaining 2/3 cup crispy fried onions o\n5.Bake5 minutes longer until goiden brown.",
+      "gt_cue": null,
+      "has_gt_forward_cue": false,
+      "detected_forward_cue": false,
+      "detected_start_cue": true,
+      "cues": {
+        "has_continuation_cue": false,
+        "has_continuation_start": true,
+        "continuation_tokens": [],
+        "page_numbers": [
+          2
+        ],
+        "page_markers": [
+          {
+            "number": 2,
+            "total": 3,
+            "token": "2/3",
+            "position": "bottom"
+          }
+        ],
+        "top_page_marker": null,
+        "bottom_page_marker": 2,
+        "step_numbers": [
+          3,
+          4,
+          5
+        ],
+        "first_step": 3,
+        "last_step": 5,
+        "is_cutoff": false,
+        "cues": [
+          "continuation_header:directionscontinued",
+          "page_marker:bottom:2_of_3"
+        ]
+      },
+      "gt_title": "1968 Campbell's Classic Green Bean Casserole",
+      "gt_ingredients": [
+        "1 can (10 1/2 oz) Campbell's Condensed Cream of Mushroom Soup",
+        "1/2 cup whole milk",
+        "1 tsp soy sauce",
+        "1 dash black pepper",
+        "4 cups cooked cut green beans (fresh or frozen)",
+        "1 1/3 cups French's Crispy Fried Onions, divided"
+      ],
+      "gt_directions": [
+        "1. Preheat oven to 350\u00b0F.",
+        "2. In 1 1/2-quart baking dish, mix mushroom soup, milk, soy sauce, black pepper, green beans, and 2/3 cup fried onions.",
+        "3. Bake at 350\u00b0F for 25 minutes until hot and bubbling.",
+        "4. Stir casserole gently; scatter remaining 2/3 cup crispy fried onions over top.",
+        "5. Bake 5 minutes longer until golden brown."
+      ]
+    },
+    {
+      "card_id": "rec_clp_toll_house_cookies_1975_front.jpg",
+      "filename": "rec_clp_toll_house_cookies_1975_front.jpg",
+      "recipe_id": "rec_clp_toll_house_cookies_1975",
+      "modality": "PRINTED_CLIPPING",
+      "role": "SEQUENCE_START",
+      "latency_ms": 2108.919453999988,
+      "num_ocr_lines": 15,
+      "ocr_text": "1975OriginalToll HouseChocolate ChipCookies\nINGREDIENTS:\nMETHOD:\n-21/4cupsall-purposeflour\n1.Preheatoven to375\u00b0F.\n-1tsp baking soda\n2.Combineflour, baking soda, and saltin...\n-1tspsalt\n3.Beatsoftened butter,granulatedsugar,...\n.1cup (2 sticks)butter,softened\n\u00b73/4cupgranulatedsugar\n3/4cup packedbrown sugar\n1tsp vanilla extract\n.2largeeggs\nRECIPE CLUB 1958",
+      "gt_cue": "PTO >>>",
+      "has_gt_forward_cue": true,
+      "detected_forward_cue": false,
+      "detected_start_cue": false,
+      "cues": {
+        "has_continuation_cue": false,
+        "has_continuation_start": false,
+        "continuation_tokens": [],
+        "page_numbers": [],
+        "page_markers": [],
+        "top_page_marker": null,
+        "bottom_page_marker": null,
+        "step_numbers": [
+          1,
+          2,
+          3
+        ],
+        "first_step": 1,
+        "last_step": 3,
+        "is_cutoff": false,
+        "cues": []
+      },
+      "gt_title": "1975 Original Toll House Chocolate Chip Cookies",
+      "gt_ingredients": [
+        "2 1/4 cups all-purpose flour",
+        "1 tsp baking soda",
+        "1 tsp salt",
+        "1 cup (2 sticks) butter, softened",
+        "3/4 cup granulated sugar",
+        "3/4 cup packed brown sugar",
+        "1 tsp vanilla extract",
+        "2 large eggs",
+        "2 cups (12 oz package) Nestl\u00e9 Toll House Semi-Sweet Morsels",
+        "1 cup chopped walnuts (optional)"
+      ],
+      "gt_directions": [
+        "1. Preheat oven to 375\u00b0F.",
+        "2. Combine flour, baking soda, and salt in small bowl.",
+        "3. Beat softened butter, granulated sugar, brown sugar, and vanilla extract in large bowl until creamy.",
+        "4. Add eggs one at a time, beating well after each addition.",
+        "5. Gradually beat in flour mixture; stir in chocolate morsels and nuts.",
+        "6. Drop by rounded tablespoon onto ungreased baking sheets.",
+        "7. Bake at 375\u00b0F for 9 to 11 minutes until golden brown; cool on wire racks."
+      ]
+    },
+    {
+      "card_id": "rec_clp_toll_house_cookies_1975_back.jpg",
+      "filename": "rec_clp_toll_house_cookies_1975_back.jpg",
+      "recipe_id": "rec_clp_toll_house_cookies_1975",
+      "modality": "PRINTED_CLIPPING",
+      "role": "SEQUENCE_CONTINUATION",
+      "latency_ms": 1769.2195029994764,
+      "num_ocr_lines": 5,
+      "ocr_text": "(Directionscontinued)\n4. Add eggs one at a time, beating weli after each addition.\n5. Graduaiiy beat in flour mixturei stir in chocolate morsels and nuts.\n6.Drop by rounded tablespoon onto ungreased baking sheets.\n7.Bake at 375'Ffor 9 to ll minutes until golden brown;cool on wire racks",
+      "gt_cue": null,
+      "has_gt_forward_cue": false,
+      "detected_forward_cue": false,
+      "detected_start_cue": true,
+      "cues": {
+        "has_continuation_cue": false,
+        "has_continuation_start": true,
+        "continuation_tokens": [],
+        "page_numbers": [],
+        "page_markers": [],
+        "top_page_marker": null,
+        "bottom_page_marker": null,
+        "step_numbers": [
+          4,
+          5,
+          6,
+          7
+        ],
+        "first_step": 4,
+        "last_step": 7,
+        "is_cutoff": false,
+        "cues": [
+          "continuation_header:directionscontinued"
+        ]
+      },
+      "gt_title": "1975 Original Toll House Chocolate Chip Cookies",
+      "gt_ingredients": [
+        "2 1/4 cups all-purpose flour",
+        "1 tsp baking soda",
+        "1 tsp salt",
+        "1 cup (2 sticks) butter, softened",
+        "3/4 cup granulated sugar",
+        "3/4 cup packed brown sugar",
+        "1 tsp vanilla extract",
+        "2 large eggs",
+        "2 cups (12 oz package) Nestl\u00e9 Toll House Semi-Sweet Morsels",
+        "1 cup chopped walnuts (optional)"
+      ],
+      "gt_directions": [
+        "1. Preheat oven to 375\u00b0F.",
+        "2. Combine flour, baking soda, and salt in small bowl.",
+        "3. Beat softened butter, granulated sugar, brown sugar, and vanilla extract in large bowl until creamy.",
+        "4. Add eggs one at a time, beating well after each addition.",
+        "5. Gradually beat in flour mixture; stir in chocolate morsels and nuts.",
+        "6. Drop by rounded tablespoon onto ungreased baking sheets.",
+        "7. Bake at 375\u00b0F for 9 to 11 minutes until golden brown; cool on wire racks."
+      ]
+    },
+    {
+      "card_id": "rec_dmg_moms_lasagna_1971_front.jpg",
+      "filename": "rec_dmg_moms_lasagna_1971_front.jpg",
+      "recipe_id": "rec_dmg_moms_lasagna_1971",
+      "modality": "MIXED_MEDIA",
+      "role": "SEQUENCE_START",
+      "latency_ms": 1317.81001499985,
+      "num_ocr_lines": 15,
+      "ocr_text": "Mom's Sunday Homemade Lasagna\nINGREDIENTS:\n1lb groundItalian sweet sausage\nMETHOD:\n.lb lean groundbeef\n1. Brown sausage and ground beef with onio...\n.i large onion, minced\n2.Stirin crushedtomatoes,tomato paste...\n\u00b73cloves garlic, minced\n3.Combine ricotta, beaten egg, and 1/2 cu...\n.2cans (28ozeach)crushedtomatoes\n4. Spread 1 cup meat sauce in bottom of gx...\n2tbsptomatopaste\n\u00b71tbspdriedoregano&basil\n\u202215ozwholemilk ricotta cheese",
+      "gt_cue": "PTO >>>",
+      "has_gt_forward_cue": true,
+      "detected_forward_cue": true,
+      "detected_start_cue": false,
+      "cues": {
+        "has_continuation_cue": true,
+        "has_continuation_start": false,
+        "continuation_tokens": [
+          "pto"
+        ],
+        "page_numbers": [],
+        "page_markers": [],
+        "top_page_marker": null,
+        "bottom_page_marker": null,
+        "step_numbers": [
+          1,
+          2,
+          3,
+          4
+        ],
+        "first_step": 1,
+        "last_step": 4,
+        "is_cutoff": false,
+        "cues": [
+          "forward_cue:pto"
+        ]
+      },
+      "gt_title": "Mom's Sunday Homemade Lasagna",
+      "gt_ingredients": [
+        "1 lb ground Italian sweet sausage",
+        "1 lb lean ground beef",
+        "1 large onion, minced",
+        "3 cloves garlic, minced",
+        "2 cans (28 oz each) crushed tomatoes",
+        "2 tbsp tomato paste",
+        "1 tbsp dried oregano & basil",
+        "15 oz whole milk ricotta cheese",
+        "1 large egg, beaten",
+        "16 oz mozzarella cheese, shredded",
+        "1 cup freshly grated parmesan",
+        "12 lasagna noodles, boiled al dente"
+      ],
+      "gt_directions": [
+        "1. Brown sausage and ground beef with onion and garlic; drain excess fat.",
+        "2. Stir in crushed tomatoes, tomato paste, oregano, and basil; simmer 30 mins.",
+        "3. Combine ricotta, beaten egg, and 1/2 cup parmesan in bowl.",
+        "4. Spread 1 cup meat sauce in bottom of 9x13 inch baking pan.",
+        "5. Layer 4 noodles, 1/3 ricotta mixture, mozzarella, and meat sauce.",
+        "6. Repeat layers twice, finishing with mozzarella and parmesan.",
+        "7. Cover loosely with foil; bake at 375\u00b0F for 35 mins.",
+        "8. Remove foil and bake 15 mins more until bubbling and golden."
+      ]
+    },
+    {
+      "card_id": "rec_dmg_moms_lasagna_1971_back.jpg",
+      "filename": "rec_dmg_moms_lasagna_1971_back.jpg",
+      "recipe_id": "rec_dmg_moms_lasagna_1971",
+      "modality": "MIXED_MEDIA",
+      "role": "SEQUENCE_CONTINUATION",
+      "latency_ms": 1645.2709200002573,
+      "num_ocr_lines": 5,
+      "ocr_text": "(Directionscontinued)\n5. Layer 4 noodles,i/3 ricotta mixture, mozzarelia, and meat sauce.\n6.Repeat layers twice, finishing with mozzarella and parmesan.\n7.Cover ioosely with foii;bake at 37s'F for 35 mins.\n8, Remove foii and bake ls mins more until bubbling and goiden.",
+      "gt_cue": null,
+      "has_gt_forward_cue": false,
+      "detected_forward_cue": false,
+      "detected_start_cue": true,
+      "cues": {
+        "has_continuation_cue": false,
+        "has_continuation_start": true,
+        "continuation_tokens": [],
+        "page_numbers": [],
+        "page_markers": [],
+        "top_page_marker": null,
+        "bottom_page_marker": null,
+        "step_numbers": [
+          5,
+          6,
+          7,
+          8
+        ],
+        "first_step": 5,
+        "last_step": 8,
+        "is_cutoff": false,
+        "cues": [
+          "continuation_header:directionscontinued"
+        ]
+      },
+      "gt_title": "Mom's Sunday Homemade Lasagna",
+      "gt_ingredients": [
+        "1 lb ground Italian sweet sausage",
+        "1 lb lean ground beef",
+        "1 large onion, minced",
+        "3 cloves garlic, minced",
+        "2 cans (28 oz each) crushed tomatoes",
+        "2 tbsp tomato paste",
+        "1 tbsp dried oregano & basil",
+        "15 oz whole milk ricotta cheese",
+        "1 large egg, beaten",
+        "16 oz mozzarella cheese, shredded",
+        "1 cup freshly grated parmesan",
+        "12 lasagna noodles, boiled al dente"
+      ],
+      "gt_directions": [
+        "1. Brown sausage and ground beef with onion and garlic; drain excess fat.",
+        "2. Stir in crushed tomatoes, tomato paste, oregano, and basil; simmer 30 mins.",
+        "3. Combine ricotta, beaten egg, and 1/2 cup parmesan in bowl.",
+        "4. Spread 1 cup meat sauce in bottom of 9x13 inch baking pan.",
+        "5. Layer 4 noodles, 1/3 ricotta mixture, mozzarella, and meat sauce.",
+        "6. Repeat layers twice, finishing with mozzarella and parmesan.",
+        "7. Cover loosely with foil; bake at 375\u00b0F for 35 mins.",
+        "8. Remove foil and bake 15 mins more until bubbling and golden."
+      ]
+    },
+    {
+      "card_id": "rec_dmg_butter_shortbread_standalone.jpg",
+      "filename": "rec_dmg_butter_shortbread_standalone.jpg",
+      "recipe_id": "rec_dmg_butter_shortbread",
+      "modality": "MIXED_MEDIA",
+      "role": "STANDALONE",
+      "latency_ms": 1482.2400960001687,
+      "num_ocr_lines": 15,
+      "ocr_text": "TraditionalScottishButterShortbread\nINGREDIENTS:\n-1 cup (2 sticks)salted butter, softened\nMETHOD:\n.1/2cupsuperfine caster sugar\n1.Preheatovento325\u00b0F(165C)\n\u00b72cupsall-purposeflour\n2.Creamsoftened butterandcastersugar...\n\u00b71/4cupcomstarch\n3. Sift flour and cornstarch together, fol...\n\u00b71/4tsppurealmondextract\n4.Pressdough evenlyintoungreased g-inc...\n.Granulated sugarforsprinkling\n5. Prick surface all over with tines ofa ...\n6. Bake at 325F for 30-35 minutes until p...",
+      "gt_cue": null,
+      "has_gt_forward_cue": false,
+      "detected_forward_cue": false,
+      "detected_start_cue": false,
+      "cues": {
+        "has_continuation_cue": false,
+        "has_continuation_start": false,
+        "continuation_tokens": [],
+        "page_numbers": [],
+        "page_markers": [],
+        "top_page_marker": null,
+        "bottom_page_marker": null,
+        "step_numbers": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6
+        ],
+        "first_step": 1,
+        "last_step": 6,
+        "is_cutoff": false,
+        "cues": []
+      },
+      "gt_title": "Traditional Scottish Butter Shortbread",
+      "gt_ingredients": [
+        "1 cup (2 sticks) salted butter, softened",
+        "1/2 cup superfine caster sugar",
+        "2 cups all-purpose flour",
+        "1/4 cup cornstarch",
+        "1/4 tsp pure almond extract",
+        "Granulated sugar for sprinkling"
+      ],
+      "gt_directions": [
+        "1. Preheat oven to 325\u00b0F (165\u00b0C).",
+        "2. Cream softened butter and caster sugar together until pale and fluffy.",
+        "3. Sift flour and cornstarch together; fold into butter mixture with almond extract until dough comes together.",
+        "4. Press dough evenly into ungreased 9-inch round shortbread pan or cake tin.",
+        "5. Prick surface all over with tines of a fork in decorative pattern.",
+        "6. Bake at 325\u00b0F for 30-35 minutes until pale golden.",
+        "7. Cut into 16 wedges while still warm; sprinkle lightly with sugar."
+      ]
+    },
+    {
+      "card_id": "rec_dmg_buttermilk_pancakes_1969_front.jpg",
+      "filename": "rec_dmg_buttermilk_pancakes_1969_front.jpg",
+      "recipe_id": "rec_dmg_buttermilk_pancakes_1969",
+      "modality": "MIXED_MEDIA",
+      "role": "SEQUENCE_START",
+      "latency_ms": 1431.5229730000283,
+      "num_ocr_lines": 14,
+      "ocr_text": "SundayMorning SourdoughButtermilkPancakes(ig69)\nINGREDIENTS:\nMETHOD:\n\u20222cupsall-purposeflour\n1.Inlargebowl, whiskflour, sugar,baki...\n-2tbspgranulatedsugar\n2. In separate bowl, beat buttermilk, eggs...\n- 2tsp baking powder\n3. Pour wet ingredients into dry, whisk ge...\n.1 tsp baking soda\n-1/2tspsalt\n\u20222cupsthickbuttermilk\n.2largeeggs\n\u00b71/4 cup unsalted butter, melted&cooled",
+      "gt_cue": "PTO >>>",
+      "has_gt_forward_cue": true,
+      "detected_forward_cue": false,
+      "detected_start_cue": false,
+      "cues": {
+        "has_continuation_cue": false,
+        "has_continuation_start": false,
+        "continuation_tokens": [],
+        "page_numbers": [
+          1
+        ],
+        "page_markers": [
+          {
+            "number": 1,
+            "total": 4,
+            "token": "1/4",
+            "position": "bottom"
+          }
+        ],
+        "top_page_marker": null,
+        "bottom_page_marker": 1,
+        "step_numbers": [
+          1,
+          2,
+          3
+        ],
+        "first_step": 1,
+        "last_step": 3,
+        "is_cutoff": false,
+        "cues": [
+          "page_marker:bottom:1_of_4"
+        ]
+      },
+      "gt_title": "Sunday Morning Sourdough Buttermilk Pancakes (1969)",
+      "gt_ingredients": [
+        "2 cups all-purpose flour",
+        "2 tbsp granulated sugar",
+        "2 tsp baking powder",
+        "1 tsp baking soda",
+        "1/2 tsp salt",
+        "2 cups thick buttermilk",
+        "2 large eggs",
+        "1/4 cup unsalted butter, melted & cooled",
+        "1 tsp pure vanilla extract",
+        "Warm pure maple syrup for serving"
+      ],
+      "gt_directions": [
+        "1. In large bowl, whisk flour, sugar, baking powder, baking soda, and salt.",
+        "2. In separate bowl, beat buttermilk, eggs, melted butter, and vanilla.",
+        "3. Pour wet ingredients into dry; whisk gently just until combined (batter should remain lumpy).",
+        "4. Heat cast-iron griddle over medium heat and grease lightly with butter.",
+        "5. Pour 1/4 cup batter per pancake onto hot griddle.",
+        "6. Cook until bubbles pop on surface and edges look set (2-3 mins); flip and cook 1-2 mins longer until golden.",
+        "7. Serve warm immediately with whipped butter and maple syrup."
+      ]
+    },
+    {
+      "card_id": "rec_dmg_buttermilk_pancakes_1969_back.jpg",
+      "filename": "rec_dmg_buttermilk_pancakes_1969_back.jpg",
+      "recipe_id": "rec_dmg_buttermilk_pancakes_1969",
+      "modality": "MIXED_MEDIA",
+      "role": "SEQUENCE_CONTINUATION",
+      "latency_ms": 1784.6478430001298,
+      "num_ocr_lines": 5,
+      "ocr_text": "(Directionscontinued)\nA. Heat cast-iron griddle over medium heat and grease lightiy with butter.\n5. Pour l/4 cup batter per pancake onto hot griddie.\n6.Cook until bubbles pop on surfaceand edges look set (2-3 mins);fiip a!\n7.Serve warm immediately with whipped butter and maple syrup.",
+      "gt_cue": null,
+      "has_gt_forward_cue": false,
+      "detected_forward_cue": false,
+      "detected_start_cue": true,
+      "cues": {
+        "has_continuation_cue": false,
+        "has_continuation_start": true,
+        "continuation_tokens": [],
+        "page_numbers": [],
+        "page_markers": [],
+        "top_page_marker": null,
+        "bottom_page_marker": null,
+        "step_numbers": [
+          5,
+          6,
+          7
+        ],
+        "first_step": 5,
+        "last_step": 7,
+        "is_cutoff": false,
+        "cues": [
+          "continuation_header:directionscontinued"
+        ]
+      },
+      "gt_title": "Sunday Morning Sourdough Buttermilk Pancakes (1969)",
+      "gt_ingredients": [
+        "2 cups all-purpose flour",
+        "2 tbsp granulated sugar",
+        "2 tsp baking powder",
+        "1 tsp baking soda",
+        "1/2 tsp salt",
+        "2 cups thick buttermilk",
+        "2 large eggs",
+        "1/4 cup unsalted butter, melted & cooled",
+        "1 tsp pure vanilla extract",
+        "Warm pure maple syrup for serving"
+      ],
+      "gt_directions": [
+        "1. In large bowl, whisk flour, sugar, baking powder, baking soda, and salt.",
+        "2. In separate bowl, beat buttermilk, eggs, melted butter, and vanilla.",
+        "3. Pour wet ingredients into dry; whisk gently just until combined (batter should remain lumpy).",
+        "4. Heat cast-iron griddle over medium heat and grease lightly with butter.",
+        "5. Pour 1/4 cup batter per pancake onto hot griddle.",
+        "6. Cook until bubbles pop on surface and edges look set (2-3 mins); flip and cook 1-2 mins longer until golden.",
+        "7. Serve warm immediately with whipped butter and maple syrup."
+      ]
+    },
+    {
+      "card_id": "rec_dmg_beef_bourguignon_1974_front.jpg",
+      "filename": "rec_dmg_beef_bourguignon_1974_front.jpg",
+      "recipe_id": "rec_dmg_beef_bourguignon_1974",
+      "modality": "MIXED_MEDIA",
+      "role": "SEQUENCE_START",
+      "latency_ms": 1321.9791840001562,
+      "num_ocr_lines": 15,
+      "ocr_text": "HeirloomFrenchBeefBourguignon(1974)\nINGREDIENTS:\nMETHOD:\n.3lbsbeefchuckroast,cut into2-inchchunks\ns1.SautedicedbaconinlargeDutchoven o...\n.6ozthick-cutbacon,diced\n2.Dry beef chunks thoroughly, sear in hot...\n\u00b71largeyellowonion,sliced\n3. Saute sliced onion and carrots in pot S...\n.2largecarrots,slicedinto1/2-inchrounds\n\u00b73 cloves garlic, minced\n\u00b71bottle(75oml)dryredBurgundywine\n.2cupsbeefstock\n\u00b72tbsptomatopaste\nRECIPE CLUB 1952",
+      "gt_cue": "PTO >>>",
+      "has_gt_forward_cue": true,
+      "detected_forward_cue": true,
+      "detected_start_cue": true,
+      "cues": {
+        "has_continuation_cue": true,
+        "has_continuation_start": true,
+        "continuation_tokens": [
+          "pto"
+        ],
+        "page_numbers": [],
+        "page_markers": [],
+        "top_page_marker": null,
+        "bottom_page_marker": null,
+        "step_numbers": [
+          2,
+          3
+        ],
+        "first_step": 2,
+        "last_step": 3,
+        "is_cutoff": false,
+        "cues": [
+          "forward_cue:pto"
+        ]
+      },
+      "gt_title": "Heirloom French Beef Bourguignon (1974)",
+      "gt_ingredients": [
+        "3 lbs beef chuck roast, cut into 2-inch chunks",
+        "6 oz thick-cut bacon, diced",
+        "1 large yellow onion, sliced",
+        "2 large carrots, sliced into 1/2-inch rounds",
+        "3 cloves garlic, minced",
+        "1 bottle (750 ml) dry red Burgundy wine",
+        "2 cups beef stock",
+        "2 tbsp tomato paste",
+        "1 bouquet garni (thyme, parsley, bay leaf)",
+        "1 lb fresh button mushrooms, quartered & saut\u00e9ed in butter",
+        "18 small pearl onions, peeled"
+      ],
+      "gt_directions": [
+        "1. Saut\u00e9 diced bacon in large Dutch oven over medium heat until crisp; remove with slotted spoon.",
+        "2. Dry beef chunks thoroughly; sear in hot bacon fat in batches until deeply browned on all sides; remove.",
+        "3. Saut\u00e9 sliced onion and carrots in pot 5 mins; stir in minced garlic and tomato paste for 1 min.",
+        "4. Return beef and bacon to pot; pour in red wine and beef stock to cover; add bouquet garni.",
+        "5. Cover tightly and simmer over low heat (or in 325\u00b0F oven) for 2 to 2 1/2 hours until beef is fork-tender.",
+        "6. Fold in saut\u00e9ed mushrooms and glazed pearl onions; simmer 15 minutes longer until sauce is glossy."
+      ]
+    },
+    {
+      "card_id": "rec_dmg_beef_bourguignon_1974_back.jpg",
+      "filename": "rec_dmg_beef_bourguignon_1974_back.jpg",
+      "recipe_id": "rec_dmg_beef_bourguignon_1974",
+      "modality": "MIXED_MEDIA",
+      "role": "SEQUENCE_CONTINUATION",
+      "latency_ms": 1339.4671959995321,
+      "num_ocr_lines": 4,
+      "ocr_text": "(Directionscontinued)\nA. Return beef and bacon to pot; pour in red wine and beef stock to cover;\n5.Cover tightlyand simmer over low heat (or in 325'F oven) for 2 to 2 l/2\n6.Foid in sauteed mushrooms and glazed pearl onionsi simmer l5 minutes lo",
+      "gt_cue": null,
+      "has_gt_forward_cue": false,
+      "detected_forward_cue": false,
+      "detected_start_cue": true,
+      "cues": {
+        "has_continuation_cue": false,
+        "has_continuation_start": true,
+        "continuation_tokens": [],
+        "page_numbers": [],
+        "page_markers": [],
+        "top_page_marker": null,
+        "bottom_page_marker": null,
+        "step_numbers": [
+          5,
+          6
+        ],
+        "first_step": 5,
+        "last_step": 6,
+        "is_cutoff": false,
+        "cues": [
+          "continuation_header:directionscontinued"
+        ]
+      },
+      "gt_title": "Heirloom French Beef Bourguignon (1974)",
+      "gt_ingredients": [
+        "3 lbs beef chuck roast, cut into 2-inch chunks",
+        "6 oz thick-cut bacon, diced",
+        "1 large yellow onion, sliced",
+        "2 large carrots, sliced into 1/2-inch rounds",
+        "3 cloves garlic, minced",
+        "1 bottle (750 ml) dry red Burgundy wine",
+        "2 cups beef stock",
+        "2 tbsp tomato paste",
+        "1 bouquet garni (thyme, parsley, bay leaf)",
+        "1 lb fresh button mushrooms, quartered & saut\u00e9ed in butter",
+        "18 small pearl onions, peeled"
+      ],
+      "gt_directions": [
+        "1. Saut\u00e9 diced bacon in large Dutch oven over medium heat until crisp; remove with slotted spoon.",
+        "2. Dry beef chunks thoroughly; sear in hot bacon fat in batches until deeply browned on all sides; remove.",
+        "3. Saut\u00e9 sliced onion and carrots in pot 5 mins; stir in minced garlic and tomato paste for 1 min.",
+        "4. Return beef and bacon to pot; pour in red wine and beef stock to cover; add bouquet garni.",
+        "5. Cover tightly and simmer over low heat (or in 325\u00b0F oven) for 2 to 2 1/2 hours until beef is fork-tender.",
+        "6. Fold in saut\u00e9ed mushrooms and glazed pearl onions; simmer 15 minutes longer until sauce is glossy."
+      ]
+    },
+    {
+      "card_id": "rec_mcs_turkey_stuffing_feast_card1_front.jpg",
+      "filename": "rec_mcs_turkey_stuffing_feast_card1_front.jpg",
+      "recipe_id": "rec_mcs_turkey_stuffing_feast",
+      "modality": "HANDWRITTEN_CURSIVE",
+      "role": "SEQUENCE_START",
+      "latency_ms": 1851.4954979982576,
+      "num_ocr_lines": 13,
+      "ocr_text": "Grandma'sThanksgivingRoastTurkey&SageStuffing\nIngredients:\n1wholeturkey(12-14Ibs),thawedandgibletsremoved\n1/2cupunsaltedbutter,softened\n1tbspfreshrosemary.minced\n1tbspfreshthyme,minced\n1 loaf day-oldwhitebread,cubed(8cups)\n1cupcelery,diced\nDirections (Parti):\n1.Rinseturkeyandpatdry insideand outwithpapertowels.\n2.Saute onionand celeryin butteruntil tender;toss with breadcubes,sage,and broth.\n3.Stuffturkey cavity looselywithpreparedbread stuffing.\n(overtoCard1Back-)",
+      "gt_cue": "(over to Card 1 Back ->)",
+      "has_gt_forward_cue": true,
+      "detected_forward_cue": true,
+      "detected_start_cue": false,
+      "cues": {
+        "has_continuation_cue": true,
+        "has_continuation_start": false,
+        "continuation_tokens": [
+          "(over"
+        ],
+        "page_numbers": [],
+        "page_markers": [],
+        "top_page_marker": null,
+        "bottom_page_marker": null,
+        "step_numbers": [
+          1,
+          1,
+          2,
+          3
+        ],
+        "first_step": 1,
+        "last_step": 3,
+        "is_cutoff": false,
+        "cues": [
+          "forward_cue:(over"
+        ]
+      },
+      "gt_title": "Grandma's Thanksgiving Roast Turkey & Sage Stuffing",
+      "gt_ingredients": [
+        "1 whole turkey (12-14 lbs), thawed and giblets removed",
+        "1/2 cup unsalted butter, softened",
+        "1 tbsp fresh rosemary, minced",
+        "1 tbsp fresh thyme, minced",
+        "1 loaf day-old white bread, cubed (8 cups)",
+        "1 cup celery, diced",
+        "1 large yellow onion, diced",
+        "2 tbsp rubbed sage",
+        "1 1/2 cups turkey or chicken broth",
+        "1/4 cup pan drippings for gravy",
+        "3 tbsp flour for gravy",
+        "2 cups hot turkey stock for gravy"
+      ],
+      "gt_directions": [
+        "1. Rinse turkey and pat dry inside and out with paper towels.",
+        "2. Saut\u00e9 onion and celery in butter until tender; toss with bread cubes, sage, and broth.",
+        "3. Stuff turkey cavity loosely with prepared bread stuffing.",
+        "4. Rub softened butter, minced rosemary, and thyme under turkey skin and over breast.",
+        "5. Truss legs with kitchen twine; place breast-side up on roasting rack in roasting pan.",
+        "6. Roast at 325\u00b0F for 3 1/2 to 4 hours (basting every 30 mins) until thermometer reads 165\u00b0F in thigh.",
+        "7. Transfer turkey to carving board; let rest 25 mins before carving.",
+        "8. Pan Gravy: Pour pan drippings into skillet, whisk in flour over medium heat 2 mins, slowly whisk in hot stock until rich and smooth."
+      ]
+    },
+    {
+      "card_id": "rec_mcs_turkey_stuffing_feast_card1_back.jpg",
+      "filename": "rec_mcs_turkey_stuffing_feast_card1_back.jpg",
+      "recipe_id": "rec_mcs_turkey_stuffing_feast",
+      "modality": "HANDWRITTEN_CURSIVE",
+      "role": "SEQUENCE_CONTINUATION",
+      "latency_ms": 1828.6637279998104,
+      "num_ocr_lines": 6,
+      "ocr_text": "(Continued-Grandma'sThanksgivi...)\nDirections (Part2):\n4.Rub softenedbutter,minced rosemary.andthymeunderturkeyskinandoverbreast.\n5.Truss legs withkitchentwine;placebreast-sideupon roasting rack in roasting pan.\n6.Roastatf325\u00b0Ffor31/2to4hours(bastingevery30mins)until thermometer reads165\u00b0Fin thigh.\n(SeeCard2Front-)",
+      "gt_cue": "(See Card 2 Front ->)",
+      "has_gt_forward_cue": true,
+      "detected_forward_cue": true,
+      "detected_start_cue": true,
+      "cues": {
+        "has_continuation_cue": true,
+        "has_continuation_start": true,
+        "continuation_tokens": [
+          "(see"
+        ],
+        "page_numbers": [],
+        "page_markers": [],
+        "top_page_marker": null,
+        "bottom_page_marker": null,
+        "step_numbers": [
+          4,
+          5,
+          6
+        ],
+        "first_step": 4,
+        "last_step": 6,
+        "is_cutoff": false,
+        "cues": [
+          "continuation_header:continued",
+          "forward_cue:(see"
+        ]
+      },
+      "gt_title": "Grandma's Thanksgiving Roast Turkey & Sage Stuffing",
+      "gt_ingredients": [
+        "1 whole turkey (12-14 lbs), thawed and giblets removed",
+        "1/2 cup unsalted butter, softened",
+        "1 tbsp fresh rosemary, minced",
+        "1 tbsp fresh thyme, minced",
+        "1 loaf day-old white bread, cubed (8 cups)",
+        "1 cup celery, diced",
+        "1 large yellow onion, diced",
+        "2 tbsp rubbed sage",
+        "1 1/2 cups turkey or chicken broth",
+        "1/4 cup pan drippings for gravy",
+        "3 tbsp flour for gravy",
+        "2 cups hot turkey stock for gravy"
+      ],
+      "gt_directions": [
+        "1. Rinse turkey and pat dry inside and out with paper towels.",
+        "2. Saut\u00e9 onion and celery in butter until tender; toss with bread cubes, sage, and broth.",
+        "3. Stuff turkey cavity loosely with prepared bread stuffing.",
+        "4. Rub softened butter, minced rosemary, and thyme under turkey skin and over breast.",
+        "5. Truss legs with kitchen twine; place breast-side up on roasting rack in roasting pan.",
+        "6. Roast at 325\u00b0F for 3 1/2 to 4 hours (basting every 30 mins) until thermometer reads 165\u00b0F in thigh.",
+        "7. Transfer turkey to carving board; let rest 25 mins before carving.",
+        "8. Pan Gravy: Pour pan drippings into skillet, whisk in flour over medium heat 2 mins, slowly whisk in hot stock until rich and smooth."
+      ]
+    },
+    {
+      "card_id": "rec_mcs_turkey_stuffing_feast_card2_front.jpg",
+      "filename": "rec_mcs_turkey_stuffing_feast_card2_front.jpg",
+      "recipe_id": "rec_mcs_turkey_stuffing_feast",
+      "modality": "HANDWRITTEN_CURSIVE",
+      "role": "SEQUENCE_CONTINUATION",
+      "latency_ms": 1710.888467998302,
+      "num_ocr_lines": 5,
+      "ocr_text": "Card2:Grandma'sThanksgivingRoastTurkey&SageStuffing(Part3)\nDirections(Part3&Gravy):\n7.Transferturkeytocarvingboard;letrest25minsbeforecarving\n8.Pan Gravy:Pourpan drippings intoskillet,whisk inflourovermediumheat2mins,slowlywhisk inhot:\nYield:10-12servings/4hrs15mins",
+      "gt_cue": null,
+      "has_gt_forward_cue": false,
+      "detected_forward_cue": false,
+      "detected_start_cue": true,
+      "cues": {
+        "has_continuation_cue": false,
+        "has_continuation_start": true,
+        "continuation_tokens": [],
+        "page_numbers": [],
+        "page_markers": [],
+        "top_page_marker": null,
+        "bottom_page_marker": null,
+        "step_numbers": [
+          7,
+          8
+        ],
+        "first_step": 7,
+        "last_step": 8,
+        "is_cutoff": false,
+        "cues": []
+      },
+      "gt_title": "Grandma's Thanksgiving Roast Turkey & Sage Stuffing",
+      "gt_ingredients": [
+        "1 whole turkey (12-14 lbs), thawed and giblets removed",
+        "1/2 cup unsalted butter, softened",
+        "1 tbsp fresh rosemary, minced",
+        "1 tbsp fresh thyme, minced",
+        "1 loaf day-old white bread, cubed (8 cups)",
+        "1 cup celery, diced",
+        "1 large yellow onion, diced",
+        "2 tbsp rubbed sage",
+        "1 1/2 cups turkey or chicken broth",
+        "1/4 cup pan drippings for gravy",
+        "3 tbsp flour for gravy",
+        "2 cups hot turkey stock for gravy"
+      ],
+      "gt_directions": [
+        "1. Rinse turkey and pat dry inside and out with paper towels.",
+        "2. Saut\u00e9 onion and celery in butter until tender; toss with bread cubes, sage, and broth.",
+        "3. Stuff turkey cavity loosely with prepared bread stuffing.",
+        "4. Rub softened butter, minced rosemary, and thyme under turkey skin and over breast.",
+        "5. Truss legs with kitchen twine; place breast-side up on roasting rack in roasting pan.",
+        "6. Roast at 325\u00b0F for 3 1/2 to 4 hours (basting every 30 mins) until thermometer reads 165\u00b0F in thigh.",
+        "7. Transfer turkey to carving board; let rest 25 mins before carving.",
+        "8. Pan Gravy: Pour pan drippings into skillet, whisk in flour over medium heat 2 mins, slowly whisk in hot stock until rich and smooth."
+      ]
+    },
+    {
+      "card_id": "rec_mcs_wedding_fruitcake_1942_card1_front.jpg",
+      "filename": "rec_mcs_wedding_fruitcake_1942_card1_front.jpg",
+      "recipe_id": "rec_mcs_wedding_fruitcake_1942",
+      "modality": "HANDWRITTEN_CURSIVE",
+      "role": "SEQUENCE_START",
+      "latency_ms": 2487.7981429999636,
+      "num_ocr_lines": 12,
+      "ocr_text": "1942HeirloomDarkHolidayWeddingFruitcake\nIngredients:\n2 cups dark seedlessraisins\n2cupsgolden sultanas\n1cupcandiedorangepeel,diced\n1cupglacecherries,halved\n1/2cupdarkrumorbrandyformaceration\n1cupunsaltedbutter,softened\nDirections (Parti):\n1.Combineraisins,sultanas,orangepeel,and cherries inbowlwith rum; soak overnightcovered.\n2.Preheatovento300\u00b0F(150\u00b0C):double line9-inchspringformpanwithbutteredparchmentpaper\n(overtoCard1Back-)",
+      "gt_cue": "(over to Card 1 Back ->)",
+      "has_gt_forward_cue": true,
+      "detected_forward_cue": true,
+      "detected_start_cue": true,
+      "cues": {
+        "has_continuation_cue": true,
+        "has_continuation_start": true,
+        "continuation_tokens": [
+          "(over"
+        ],
+        "page_numbers": [],
+        "page_markers": [],
+        "top_page_marker": null,
+        "bottom_page_marker": null,
+        "step_numbers": [
+          2,
+          1,
+          2
+        ],
+        "first_step": 2,
+        "last_step": 2,
+        "is_cutoff": false,
+        "cues": [
+          "forward_cue:(over"
+        ]
+      },
+      "gt_title": "1942 Heirloom Dark Holiday Wedding Fruitcake",
+      "gt_ingredients": [
+        "2 cups dark seedless raisins",
+        "2 cups golden sultanas",
+        "1 cup candied orange peel, diced",
+        "1 cup glac\u00e9 cherries, halved",
+        "1/2 cup dark rum or brandy for maceration",
+        "1 cup unsalted butter, softened",
+        "1 cup dark muscovado sugar",
+        "4 large eggs",
+        "2 1/4 cups all-purpose flour",
+        "1 tsp ground allspice & nutmeg",
+        "1/2 cup dark molasses",
+        "Cheesecloth and brandy for weekly curing"
+      ],
+      "gt_directions": [
+        "1. Combine raisins, sultanas, orange peel, and cherries in bowl with rum; soak overnight covered.",
+        "2. Preheat oven to 300\u00b0F (150\u00b0C); double line 9-inch springform pan with buttered parchment paper.",
+        "3. Cream softened butter with dark muscovado sugar until fluffy; beat in eggs one at a time.",
+        "4. Sift flour with allspice and nutmeg; fold half into creamed mixture.",
+        "5. Toss soaked fruits with remaining flour, then gently fold into batter with dark molasses.",
+        "6. Spoon into prepared pan, smoothing top with wet spatula.",
+        "7. Bake at 300\u00b0F for 2 1/2 to 3 hours until skewer inserted in center comes out clean.",
+        "8. Cool cake in tin for 24 hours. Wrap in brandy-soaked cheesecloth and foil; store in cool tin for 6 weeks."
+      ]
+    },
+    {
+      "card_id": "rec_mcs_wedding_fruitcake_1942_card1_back.jpg",
+      "filename": "rec_mcs_wedding_fruitcake_1942_card1_back.jpg",
+      "recipe_id": "rec_mcs_wedding_fruitcake_1942",
+      "modality": "HANDWRITTEN_CURSIVE",
+      "role": "SEQUENCE_CONTINUATION",
+      "latency_ms": 2060.1815000009083,
+      "num_ocr_lines": 5,
+      "ocr_text": "(Continued-1942HeirloomDarkH...)\nDirections(Part2):\n3.Cream softenedbutter with dark muscovado sugaruntil fluffy:beat in eggs oneat a time.\n4.Siftflourwithallspiceandnutmeg:foldhalfintocreamedmixture.\n(SeeCard2Front-)",
+      "gt_cue": "(See Card 2 Front ->)",
+      "has_gt_forward_cue": true,
+      "detected_forward_cue": true,
+      "detected_start_cue": true,
+      "cues": {
+        "has_continuation_cue": true,
+        "has_continuation_start": true,
+        "continuation_tokens": [
+          "(see"
+        ],
+        "page_numbers": [],
+        "page_markers": [],
+        "top_page_marker": null,
+        "bottom_page_marker": null,
+        "step_numbers": [
+          3,
+          4
+        ],
+        "first_step": 3,
+        "last_step": 4,
+        "is_cutoff": false,
+        "cues": [
+          "continuation_header:continued",
+          "forward_cue:(see"
+        ]
+      },
+      "gt_title": "1942 Heirloom Dark Holiday Wedding Fruitcake",
+      "gt_ingredients": [
+        "2 cups dark seedless raisins",
+        "2 cups golden sultanas",
+        "1 cup candied orange peel, diced",
+        "1 cup glac\u00e9 cherries, halved",
+        "1/2 cup dark rum or brandy for maceration",
+        "1 cup unsalted butter, softened",
+        "1 cup dark muscovado sugar",
+        "4 large eggs",
+        "2 1/4 cups all-purpose flour",
+        "1 tsp ground allspice & nutmeg",
+        "1/2 cup dark molasses",
+        "Cheesecloth and brandy for weekly curing"
+      ],
+      "gt_directions": [
+        "1. Combine raisins, sultanas, orange peel, and cherries in bowl with rum; soak overnight covered.",
+        "2. Preheat oven to 300\u00b0F (150\u00b0C); double line 9-inch springform pan with buttered parchment paper.",
+        "3. Cream softened butter with dark muscovado sugar until fluffy; beat in eggs one at a time.",
+        "4. Sift flour with allspice and nutmeg; fold half into creamed mixture.",
+        "5. Toss soaked fruits with remaining flour, then gently fold into batter with dark molasses.",
+        "6. Spoon into prepared pan, smoothing top with wet spatula.",
+        "7. Bake at 300\u00b0F for 2 1/2 to 3 hours until skewer inserted in center comes out clean.",
+        "8. Cool cake in tin for 24 hours. Wrap in brandy-soaked cheesecloth and foil; store in cool tin for 6 weeks."
+      ]
+    },
+    {
+      "card_id": "rec_mcs_wedding_fruitcake_1942_card2_front.jpg",
+      "filename": "rec_mcs_wedding_fruitcake_1942_card2_front.jpg",
+      "recipe_id": "rec_mcs_wedding_fruitcake_1942",
+      "modality": "HANDWRITTEN_CURSIVE",
+      "role": "SEQUENCE_CONTINUATION",
+      "latency_ms": 1768.9311760004784,
+      "num_ocr_lines": 4,
+      "ocr_text": "Card2:1942HeirloomDarkHolidayWeddingFruitcake(Part3)\nDirections(Part3&Gravy):\n5.Tosssoakedfruitswith remainingflour,thengentlyfold intobatterwithdark molasses.\n(overtoCard2Back-)",
+      "gt_cue": "(over to Card 2 Back ->)",
+      "has_gt_forward_cue": true,
+      "detected_forward_cue": true,
+      "detected_start_cue": true,
+      "cues": {
+        "has_continuation_cue": true,
+        "has_continuation_start": true,
+        "continuation_tokens": [
+          "(over"
+        ],
+        "page_numbers": [],
+        "page_markers": [],
+        "top_page_marker": null,
+        "bottom_page_marker": null,
+        "step_numbers": [
+          5
+        ],
+        "first_step": 5,
+        "last_step": 5,
+        "is_cutoff": false,
+        "cues": [
+          "forward_cue:(over"
+        ]
+      },
+      "gt_title": "1942 Heirloom Dark Holiday Wedding Fruitcake",
+      "gt_ingredients": [
+        "2 cups dark seedless raisins",
+        "2 cups golden sultanas",
+        "1 cup candied orange peel, diced",
+        "1 cup glac\u00e9 cherries, halved",
+        "1/2 cup dark rum or brandy for maceration",
+        "1 cup unsalted butter, softened",
+        "1 cup dark muscovado sugar",
+        "4 large eggs",
+        "2 1/4 cups all-purpose flour",
+        "1 tsp ground allspice & nutmeg",
+        "1/2 cup dark molasses",
+        "Cheesecloth and brandy for weekly curing"
+      ],
+      "gt_directions": [
+        "1. Combine raisins, sultanas, orange peel, and cherries in bowl with rum; soak overnight covered.",
+        "2. Preheat oven to 300\u00b0F (150\u00b0C); double line 9-inch springform pan with buttered parchment paper.",
+        "3. Cream softened butter with dark muscovado sugar until fluffy; beat in eggs one at a time.",
+        "4. Sift flour with allspice and nutmeg; fold half into creamed mixture.",
+        "5. Toss soaked fruits with remaining flour, then gently fold into batter with dark molasses.",
+        "6. Spoon into prepared pan, smoothing top with wet spatula.",
+        "7. Bake at 300\u00b0F for 2 1/2 to 3 hours until skewer inserted in center comes out clean.",
+        "8. Cool cake in tin for 24 hours. Wrap in brandy-soaked cheesecloth and foil; store in cool tin for 6 weeks."
+      ]
+    },
+    {
+      "card_id": "rec_mcs_wedding_fruitcake_1942_card2_back.jpg",
+      "filename": "rec_mcs_wedding_fruitcake_1942_card2_back.jpg",
+      "recipe_id": "rec_mcs_wedding_fruitcake_1942",
+      "modality": "HANDWRITTEN_CURSIVE",
+      "role": "SEQUENCE_CONTINUATION",
+      "latency_ms": 2019.2926559993793,
+      "num_ocr_lines": 5,
+      "ocr_text": "Card2Back:1942HeirloomDark HolidayWeddingFruitcake(Finishing)\nDirections(Finishing&Carving):\n7.Bakeat300\u00b0Ffor21/2to3hoursuntilskewerinsertedincentercomesoutclean.\n8.Cool cake in tin for24hours.Wrap in brandy-soaked cheesecloth and foil;store in cool tin for 6 weel\nYield:24servings/4hrs",
+      "gt_cue": null,
+      "has_gt_forward_cue": false,
+      "detected_forward_cue": false,
+      "detected_start_cue": true,
+      "cues": {
+        "has_continuation_cue": false,
+        "has_continuation_start": true,
+        "continuation_tokens": [],
+        "page_numbers": [],
+        "page_markers": [],
+        "top_page_marker": null,
+        "bottom_page_marker": null,
+        "step_numbers": [
+          7,
+          8
+        ],
+        "first_step": 7,
+        "last_step": 8,
+        "is_cutoff": false,
+        "cues": []
+      },
+      "gt_title": "1942 Heirloom Dark Holiday Wedding Fruitcake",
+      "gt_ingredients": [
+        "2 cups dark seedless raisins",
+        "2 cups golden sultanas",
+        "1 cup candied orange peel, diced",
+        "1 cup glac\u00e9 cherries, halved",
+        "1/2 cup dark rum or brandy for maceration",
+        "1 cup unsalted butter, softened",
+        "1 cup dark muscovado sugar",
+        "4 large eggs",
+        "2 1/4 cups all-purpose flour",
+        "1 tsp ground allspice & nutmeg",
+        "1/2 cup dark molasses",
+        "Cheesecloth and brandy for weekly curing"
+      ],
+      "gt_directions": [
+        "1. Combine raisins, sultanas, orange peel, and cherries in bowl with rum; soak overnight covered.",
+        "2. Preheat oven to 300\u00b0F (150\u00b0C); double line 9-inch springform pan with buttered parchment paper.",
+        "3. Cream softened butter with dark muscovado sugar until fluffy; beat in eggs one at a time.",
+        "4. Sift flour with allspice and nutmeg; fold half into creamed mixture.",
+        "5. Toss soaked fruits with remaining flour, then gently fold into batter with dark molasses.",
+        "6. Spoon into prepared pan, smoothing top with wet spatula.",
+        "7. Bake at 300\u00b0F for 2 1/2 to 3 hours until skewer inserted in center comes out clean.",
+        "8. Cool cake in tin for 24 hours. Wrap in brandy-soaked cheesecloth and foil; store in cool tin for 6 weeks."
+      ]
+    },
+    {
+      "card_id": "rec_mcs_sunday_pot_roast_gravy_card1_front.jpg",
+      "filename": "rec_mcs_sunday_pot_roast_gravy_card1_front.jpg",
+      "recipe_id": "rec_mcs_sunday_pot_roast_gravy",
+      "modality": "HANDWRITTEN_CURSIVE",
+      "role": "SEQUENCE_START",
+      "latency_ms": 3270.1889660002053,
+      "num_ocr_lines": 14,
+      "ocr_text": "Grandina'sAll-DaySundayPotRoast&RootVegetables\nIngredients:\n4Ibsbonelessbeefchuckroast,tied\n2tbspvegetableoil\n2tspcoarsekoshersalt&1tspfreshlycrackedblackpepper\n2 largeyellowonions,quartered\n4clovesgarlic,smashed\n2cupsrichbeefbonebroth\nDirections (Parti):\n1.Preheatovento300\u00b0F(150\u00b0C)\n2.Seasonchuckroastaggressivelyonall surfaceswithcoarsesaltandblackpepper.\n3.Heatoil inheawy cast-iron Dutchoven over high heat;sear roast4-5minsper sideuntil deepmahogar\n4.Removebeef;addquarteredonionsandsmashedgarlictopot,cooking3minsuntil fragrant.\n(overtoCard1Back-)",
+      "gt_cue": "(over to Card 1 Back ->)",
+      "has_gt_forward_cue": true,
+      "detected_forward_cue": true,
+      "detected_start_cue": true,
+      "cues": {
+        "has_continuation_cue": true,
+        "has_continuation_start": true,
+        "continuation_tokens": [
+          "(over"
+        ],
+        "page_numbers": [],
+        "page_markers": [],
+        "top_page_marker": null,
+        "bottom_page_marker": null,
+        "step_numbers": [
+          2,
+          1,
+          2,
+          3,
+          4
+        ],
+        "first_step": 2,
+        "last_step": 4,
+        "is_cutoff": false,
+        "cues": [
+          "forward_cue:(over"
+        ]
+      },
+      "gt_title": "Grandma's All-Day Sunday Pot Roast & Root Vegetables",
+      "gt_ingredients": [
+        "4 lbs boneless beef chuck roast, tied",
+        "2 tbsp vegetable oil",
+        "2 tsp coarse kosher salt & 1 tsp freshly cracked black pepper",
+        "2 large yellow onions, quartered",
+        "4 cloves garlic, smashed",
+        "2 cups rich beef bone broth",
+        "1 cup dry red wine",
+        "2 tbsp Worcestershire sauce",
+        "1 lb small red potatoes, halved",
+        "1 lb whole carrots, peeled and cut into 2-inch lengths",
+        "3 stalks celery, cut into chunks",
+        "3 tbsp all-purpose flour for gravy reduction"
+      ],
+      "gt_directions": [
+        "1. Preheat oven to 300\u00b0F (150\u00b0C).",
+        "2. Season chuck roast aggressively on all surfaces with coarse salt and black pepper.",
+        "3. Heat oil in heavy cast-iron Dutch oven over high heat; sear roast 4-5 mins per side until deep mahogany crust develops.",
+        "4. Remove beef; add quartered onions and smashed garlic to pot, cooking 3 mins until fragrant.",
+        "5. Pour in red wine, scraping up browned fond from bottom of pot; add beef broth and Worcestershire sauce.",
+        "6. Return roast to pot, cover with tight-fitting lid, and braise at 300\u00b0F for 2 hours.",
+        "7. Scatter red potatoes, carrots, and celery around roast in pot, spooning braising juices over vegetables.",
+        "8. Cover and return to oven for 1 to 1 1/2 hours longer until beef is melt-in-the-mouth tender.",
+        "9. Transfer beef and vegetables to large warm serving platter; tent loosely with foil.",
+        "10. Skim fat from pot juices; bring to a simmer over medium heat, whisk in flour slurry, and reduce 5 mins until rich, velvety brown gravy forms."
+      ]
+    },
+    {
+      "card_id": "rec_mcs_sunday_pot_roast_gravy_card1_back.jpg",
+      "filename": "rec_mcs_sunday_pot_roast_gravy_card1_back.jpg",
+      "recipe_id": "rec_mcs_sunday_pot_roast_gravy",
+      "modality": "HANDWRITTEN_CURSIVE",
+      "role": "SEQUENCE_CONTINUATION",
+      "latency_ms": 2590.542173000358,
+      "num_ocr_lines": 7,
+      "ocr_text": "(Continued-Grandma'sAll-DaySu...)\nDirections(Part2):\n5.Pour in redwine,scrapingup browned fondfrombottomof pot;add beef brothandWorcestershire\n6.Returnroasttopot,coverwithtight-fittinglid,andbraiseat3oo\u00b0Ffor2hours.\n7.Scatterredpotatoes,carrots,andceleryaroundroastinpotspooningbraising juicesovervegetables\n8.Coverandreturnto ovenfor1to11/2hourslongeruntil beef ismelt-in-the-mouthtender.\n(SeeCard2Front-)",
+      "gt_cue": "(See Card 2 Front ->)",
+      "has_gt_forward_cue": true,
+      "detected_forward_cue": true,
+      "detected_start_cue": true,
+      "cues": {
+        "has_continuation_cue": true,
+        "has_continuation_start": true,
+        "continuation_tokens": [
+          "(see"
+        ],
+        "page_numbers": [],
+        "page_markers": [],
+        "top_page_marker": null,
+        "bottom_page_marker": null,
+        "step_numbers": [
+          5,
+          6,
+          7,
+          8
+        ],
+        "first_step": 5,
+        "last_step": 8,
+        "is_cutoff": false,
+        "cues": [
+          "continuation_header:continued",
+          "forward_cue:(see"
+        ]
+      },
+      "gt_title": "Grandma's All-Day Sunday Pot Roast & Root Vegetables",
+      "gt_ingredients": [
+        "4 lbs boneless beef chuck roast, tied",
+        "2 tbsp vegetable oil",
+        "2 tsp coarse kosher salt & 1 tsp freshly cracked black pepper",
+        "2 large yellow onions, quartered",
+        "4 cloves garlic, smashed",
+        "2 cups rich beef bone broth",
+        "1 cup dry red wine",
+        "2 tbsp Worcestershire sauce",
+        "1 lb small red potatoes, halved",
+        "1 lb whole carrots, peeled and cut into 2-inch lengths",
+        "3 stalks celery, cut into chunks",
+        "3 tbsp all-purpose flour for gravy reduction"
+      ],
+      "gt_directions": [
+        "1. Preheat oven to 300\u00b0F (150\u00b0C).",
+        "2. Season chuck roast aggressively on all surfaces with coarse salt and black pepper.",
+        "3. Heat oil in heavy cast-iron Dutch oven over high heat; sear roast 4-5 mins per side until deep mahogany crust develops.",
+        "4. Remove beef; add quartered onions and smashed garlic to pot, cooking 3 mins until fragrant.",
+        "5. Pour in red wine, scraping up browned fond from bottom of pot; add beef broth and Worcestershire sauce.",
+        "6. Return roast to pot, cover with tight-fitting lid, and braise at 300\u00b0F for 2 hours.",
+        "7. Scatter red potatoes, carrots, and celery around roast in pot, spooning braising juices over vegetables.",
+        "8. Cover and return to oven for 1 to 1 1/2 hours longer until beef is melt-in-the-mouth tender.",
+        "9. Transfer beef and vegetables to large warm serving platter; tent loosely with foil.",
+        "10. Skim fat from pot juices; bring to a simmer over medium heat, whisk in flour slurry, and reduce 5 mins until rich, velvety brown gravy forms."
+      ]
+    },
+    {
+      "card_id": "rec_mcs_sunday_pot_roast_gravy_card2_front.jpg",
+      "filename": "rec_mcs_sunday_pot_roast_gravy_card2_front.jpg",
+      "recipe_id": "rec_mcs_sunday_pot_roast_gravy",
+      "modality": "HANDWRITTEN_CURSIVE",
+      "role": "SEQUENCE_CONTINUATION",
+      "latency_ms": 1754.6906859988667,
+      "num_ocr_lines": 5,
+      "ocr_text": "Card2:Grandma'sAll-DaySundayPotRoast&RootVegetables(Part3)\nDirections(Part3&Gravy):\n9.Transferbeef andvegetablesto large warm serving platter;tent looselywithfoil.\n10.Skimfatfrompot juices;bringtoa simmerovermediumheat,whisk inflour slurry.andreduce5mir\nYield:8servings/4hrs",
+      "gt_cue": null,
+      "has_gt_forward_cue": false,
+      "detected_forward_cue": false,
+      "detected_start_cue": true,
+      "cues": {
+        "has_continuation_cue": false,
+        "has_continuation_start": true,
+        "continuation_tokens": [],
+        "page_numbers": [],
+        "page_markers": [],
+        "top_page_marker": null,
+        "bottom_page_marker": null,
+        "step_numbers": [
+          9,
+          10
+        ],
+        "first_step": 9,
+        "last_step": 10,
+        "is_cutoff": false,
+        "cues": []
+      },
+      "gt_title": "Grandma's All-Day Sunday Pot Roast & Root Vegetables",
+      "gt_ingredients": [
+        "4 lbs boneless beef chuck roast, tied",
+        "2 tbsp vegetable oil",
+        "2 tsp coarse kosher salt & 1 tsp freshly cracked black pepper",
+        "2 large yellow onions, quartered",
+        "4 cloves garlic, smashed",
+        "2 cups rich beef bone broth",
+        "1 cup dry red wine",
+        "2 tbsp Worcestershire sauce",
+        "1 lb small red potatoes, halved",
+        "1 lb whole carrots, peeled and cut into 2-inch lengths",
+        "3 stalks celery, cut into chunks",
+        "3 tbsp all-purpose flour for gravy reduction"
+      ],
+      "gt_directions": [
+        "1. Preheat oven to 300\u00b0F (150\u00b0C).",
+        "2. Season chuck roast aggressively on all surfaces with coarse salt and black pepper.",
+        "3. Heat oil in heavy cast-iron Dutch oven over high heat; sear roast 4-5 mins per side until deep mahogany crust develops.",
+        "4. Remove beef; add quartered onions and smashed garlic to pot, cooking 3 mins until fragrant.",
+        "5. Pour in red wine, scraping up browned fond from bottom of pot; add beef broth and Worcestershire sauce.",
+        "6. Return roast to pot, cover with tight-fitting lid, and braise at 300\u00b0F for 2 hours.",
+        "7. Scatter red potatoes, carrots, and celery around roast in pot, spooning braising juices over vegetables.",
+        "8. Cover and return to oven for 1 to 1 1/2 hours longer until beef is melt-in-the-mouth tender.",
+        "9. Transfer beef and vegetables to large warm serving platter; tent loosely with foil.",
+        "10. Skim fat from pot juices; bring to a simmer over medium heat, whisk in flour slurry, and reduce 5 mins until rich, velvety brown gravy forms."
+      ]
+    },
+    {
+      "card_id": "rec_mcs_traditional_panettone_1955_card1_front.jpg",
+      "filename": "rec_mcs_traditional_panettone_1955_card1_front.jpg",
+      "recipe_id": "rec_mcs_traditional_panettone_1955",
+      "modality": "HANDWRITTEN_CURSIVE",
+      "role": "SEQUENCE_START",
+      "latency_ms": 1915.7729629987443,
+      "num_ocr_lines": 12,
+      "ocr_text": "1955ArtisanalMilaneseHolidayPanettone\nIngredients:\n1cupactivesourdoughstarter(pastamadre)\n41/2cupsManitoba/high-proteinbreadflour\n1cupwholemilk,lukewarm\n1cupunsaltedEuropeanbutter,softened\n1 cupgranulated sugar\n6largeeggyolks\nDirections (Parti):\n1.Part1(PrimoImpasto):Dissolvesourdoughstarter inlukewarmmilkwith1cupflour:proof3hoursat\n2.Beat3eggyolkswith1/2cupsugar;knead intoproofedstarterwith2cupsflourand1/2cupsoftene\n(overtoCard1Back-)",
+      "gt_cue": "(over to Card 1 Back ->)",
+      "has_gt_forward_cue": true,
+      "detected_forward_cue": true,
+      "detected_start_cue": false,
+      "cues": {
+        "has_continuation_cue": true,
+        "has_continuation_start": false,
+        "continuation_tokens": [
+          "(over"
+        ],
+        "page_numbers": [],
+        "page_markers": [],
+        "top_page_marker": null,
+        "bottom_page_marker": null,
+        "step_numbers": [
+          1,
+          1,
+          2
+        ],
+        "first_step": 1,
+        "last_step": 2,
+        "is_cutoff": false,
+        "cues": [
+          "forward_cue:(over"
+        ]
+      },
+      "gt_title": "1955 Artisanal Milanese Holiday Panettone",
+      "gt_ingredients": [
+        "1 cup active sourdough starter (pasta madre)",
+        "4 1/2 cups Manitoba / high-protein bread flour",
+        "1 cup whole milk, lukewarm",
+        "1 cup unsalted European butter, softened",
+        "1 cup granulated sugar",
+        "6 large egg yolks",
+        "1 vanilla bean, split and scraped",
+        "1 tsp fine sea salt",
+        "1 1/2 cups golden raisins, rum-soaked",
+        "1 cup candied orange and citron peel, diced",
+        "1 tbsp honey and 1 orange zest",
+        "Melted butter for scoring cross"
+      ],
+      "gt_directions": [
+        "1. Part 1 (Primo Impasto): Dissolve sourdough starter in lukewarm milk with 1 cup flour; proof 3 hours at 80\u00b0F until tripled.",
+        "2. Beat 3 egg yolks with 1/2 cup sugar; knead into proofed starter with 2 cups flour and 1/2 cup softened butter until smooth and elastic.",
+        "3. Cover dough tightly and let rise overnight in warm draft-free place (12 hours) until quadrupled in volume.",
+        "4. Part 2 (Secondo Impasto): Deflate first dough; knead in honey, orange zest, scraped vanilla bean, remaining 3 egg yolks, 1/2 cup sugar, and salt.",
+        "5. Gradually work in remaining 1 1/2 cups flour and remaining 1/2 cup softened butter until shiny dough forms windowpane.",
+        "6. Drain rum-soaked raisins and toss with candied citron; gently fold fruits evenly throughout dough.",
+        "7. Divide dough into 2 equal portions; shape into tight boules and place into tall 6-inch panettone paper molds.",
+        "8. Proof in warm humid area 4-6 hours until dough reaches 1/2 inch below mold rim.",
+        "9. Cut shallow cross in top of each dome with sharp razor; place pat of butter in center of cross.",
+        "10. Bake at 350\u00b0F (175\u00b0C) for 40-45 minutes until deep mahogany and internal temp reaches 190\u00b0F.",
+        "11. Part 3 (Curing & Hanging): Pierce bottom of each panettone with two long metal skewers; hang upside down suspended between chairs for 10 hours to prevent collapse."
+      ]
+    },
+    {
+      "card_id": "rec_mcs_traditional_panettone_1955_card1_back.jpg",
+      "filename": "rec_mcs_traditional_panettone_1955_card1_back.jpg",
+      "recipe_id": "rec_mcs_traditional_panettone_1955",
+      "modality": "HANDWRITTEN_CURSIVE",
+      "role": "SEQUENCE_CONTINUATION",
+      "latency_ms": 2901.6706999991584,
+      "num_ocr_lines": 6,
+      "ocr_text": "(Continued-1955ArtisanalMilan...)\nDirections(Part2):\n4.Part2(SecondoImpasto):Deflatefirstdough;knead inhoney.orangezest,scrapedvanillabean,ren\n5.Graduallyworkinremaining11/2cupsflourandremaining1/2cupsoftenedbutteruntil shinydough\n6.Drain rum-soakedraisinsandtosswithcandiedcitron;gentlyfold fruitsevenlythroughoutdough.\n(SeeCard2Front->)",
+      "gt_cue": "(See Card 2 Front ->)",
+      "has_gt_forward_cue": true,
+      "detected_forward_cue": true,
+      "detected_start_cue": true,
+      "cues": {
+        "has_continuation_cue": true,
+        "has_continuation_start": true,
+        "continuation_tokens": [
+          "(see"
+        ],
+        "page_numbers": [],
+        "page_markers": [],
+        "top_page_marker": null,
+        "bottom_page_marker": null,
+        "step_numbers": [
+          4,
+          5,
+          6
+        ],
+        "first_step": 4,
+        "last_step": 6,
+        "is_cutoff": false,
+        "cues": [
+          "continuation_header:continued",
+          "forward_cue:(see"
+        ]
+      },
+      "gt_title": "1955 Artisanal Milanese Holiday Panettone",
+      "gt_ingredients": [
+        "1 cup active sourdough starter (pasta madre)",
+        "4 1/2 cups Manitoba / high-protein bread flour",
+        "1 cup whole milk, lukewarm",
+        "1 cup unsalted European butter, softened",
+        "1 cup granulated sugar",
+        "6 large egg yolks",
+        "1 vanilla bean, split and scraped",
+        "1 tsp fine sea salt",
+        "1 1/2 cups golden raisins, rum-soaked",
+        "1 cup candied orange and citron peel, diced",
+        "1 tbsp honey and 1 orange zest",
+        "Melted butter for scoring cross"
+      ],
+      "gt_directions": [
+        "1. Part 1 (Primo Impasto): Dissolve sourdough starter in lukewarm milk with 1 cup flour; proof 3 hours at 80\u00b0F until tripled.",
+        "2. Beat 3 egg yolks with 1/2 cup sugar; knead into proofed starter with 2 cups flour and 1/2 cup softened butter until smooth and elastic.",
+        "3. Cover dough tightly and let rise overnight in warm draft-free place (12 hours) until quadrupled in volume.",
+        "4. Part 2 (Secondo Impasto): Deflate first dough; knead in honey, orange zest, scraped vanilla bean, remaining 3 egg yolks, 1/2 cup sugar, and salt.",
+        "5. Gradually work in remaining 1 1/2 cups flour and remaining 1/2 cup softened butter until shiny dough forms windowpane.",
+        "6. Drain rum-soaked raisins and toss with candied citron; gently fold fruits evenly throughout dough.",
+        "7. Divide dough into 2 equal portions; shape into tight boules and place into tall 6-inch panettone paper molds.",
+        "8. Proof in warm humid area 4-6 hours until dough reaches 1/2 inch below mold rim.",
+        "9. Cut shallow cross in top of each dome with sharp razor; place pat of butter in center of cross.",
+        "10. Bake at 350\u00b0F (175\u00b0C) for 40-45 minutes until deep mahogany and internal temp reaches 190\u00b0F.",
+        "11. Part 3 (Curing & Hanging): Pierce bottom of each panettone with two long metal skewers; hang upside down suspended between chairs for 10 hours to prevent collapse."
+      ]
+    },
+    {
+      "card_id": "rec_mcs_traditional_panettone_1955_card2_front.jpg",
+      "filename": "rec_mcs_traditional_panettone_1955_card2_front.jpg",
+      "recipe_id": "rec_mcs_traditional_panettone_1955",
+      "modality": "HANDWRITTEN_CURSIVE",
+      "role": "SEQUENCE_CONTINUATION",
+      "latency_ms": 4632.626140999491,
+      "num_ocr_lines": 6,
+      "ocr_text": "Card2:1955ArtisanalMilaneseHolidayPanettone(Part3)\nDirections(Part3&Gravy):\n7.Dividedough into2equal portions;shape intotightboules andplace intotall 6-inch panettonepaper\n8.Proof inwarmhumidarea4-6hoursuntildoughreaches1/2inchbelowmoldrim.\n9.Cutshallowcrossintopofeachdomewithsharprazor:placepatof butterincenterofcross.\n(overtoCard2Back-)",
+      "gt_cue": "(over to Card 2 Back ->)",
+      "has_gt_forward_cue": true,
+      "detected_forward_cue": true,
+      "detected_start_cue": true,
+      "cues": {
+        "has_continuation_cue": true,
+        "has_continuation_start": true,
+        "continuation_tokens": [
+          "(over"
+        ],
+        "page_numbers": [],
+        "page_markers": [],
+        "top_page_marker": null,
+        "bottom_page_marker": null,
+        "step_numbers": [
+          7,
+          8,
+          9
+        ],
+        "first_step": 7,
+        "last_step": 9,
+        "is_cutoff": false,
+        "cues": [
+          "forward_cue:(over"
+        ]
+      },
+      "gt_title": "1955 Artisanal Milanese Holiday Panettone",
+      "gt_ingredients": [
+        "1 cup active sourdough starter (pasta madre)",
+        "4 1/2 cups Manitoba / high-protein bread flour",
+        "1 cup whole milk, lukewarm",
+        "1 cup unsalted European butter, softened",
+        "1 cup granulated sugar",
+        "6 large egg yolks",
+        "1 vanilla bean, split and scraped",
+        "1 tsp fine sea salt",
+        "1 1/2 cups golden raisins, rum-soaked",
+        "1 cup candied orange and citron peel, diced",
+        "1 tbsp honey and 1 orange zest",
+        "Melted butter for scoring cross"
+      ],
+      "gt_directions": [
+        "1. Part 1 (Primo Impasto): Dissolve sourdough starter in lukewarm milk with 1 cup flour; proof 3 hours at 80\u00b0F until tripled.",
+        "2. Beat 3 egg yolks with 1/2 cup sugar; knead into proofed starter with 2 cups flour and 1/2 cup softened butter until smooth and elastic.",
+        "3. Cover dough tightly and let rise overnight in warm draft-free place (12 hours) until quadrupled in volume.",
+        "4. Part 2 (Secondo Impasto): Deflate first dough; knead in honey, orange zest, scraped vanilla bean, remaining 3 egg yolks, 1/2 cup sugar, and salt.",
+        "5. Gradually work in remaining 1 1/2 cups flour and remaining 1/2 cup softened butter until shiny dough forms windowpane.",
+        "6. Drain rum-soaked raisins and toss with candied citron; gently fold fruits evenly throughout dough.",
+        "7. Divide dough into 2 equal portions; shape into tight boules and place into tall 6-inch panettone paper molds.",
+        "8. Proof in warm humid area 4-6 hours until dough reaches 1/2 inch below mold rim.",
+        "9. Cut shallow cross in top of each dome with sharp razor; place pat of butter in center of cross.",
+        "10. Bake at 350\u00b0F (175\u00b0C) for 40-45 minutes until deep mahogany and internal temp reaches 190\u00b0F.",
+        "11. Part 3 (Curing & Hanging): Pierce bottom of each panettone with two long metal skewers; hang upside down suspended between chairs for 10 hours to prevent collapse."
+      ]
+    },
+    {
+      "card_id": "rec_mcs_traditional_panettone_1955_card2_back.jpg",
+      "filename": "rec_mcs_traditional_panettone_1955_card2_back.jpg",
+      "recipe_id": "rec_mcs_traditional_panettone_1955",
+      "modality": "HANDWRITTEN_CURSIVE",
+      "role": "SEQUENCE_CONTINUATION",
+      "latency_ms": 2861.0139280008298,
+      "num_ocr_lines": 5,
+      "ocr_text": "Card2Back:1955Artisanal MilaneseHolidayPanettone(Finishing)\nDirections(Finishing&Carving):\n10.Bakeat350\u00b0F(175\u00b0C)for40-45minutesuntil deepmahoganyand internal temp reaches190\u00b0F.\n11.Part3(Curing&Hanging):Piercebottomof eachpanettonewithtwo longmetal skewers;hangupsid\nYield:2largepanettoni(20servings)/18hrs",
+      "gt_cue": null,
+      "has_gt_forward_cue": false,
+      "detected_forward_cue": false,
+      "detected_start_cue": true,
+      "cues": {
+        "has_continuation_cue": false,
+        "has_continuation_start": true,
+        "continuation_tokens": [],
+        "page_numbers": [],
+        "page_markers": [],
+        "top_page_marker": null,
+        "bottom_page_marker": null,
+        "step_numbers": [
+          10,
+          11
+        ],
+        "first_step": 10,
+        "last_step": 11,
+        "is_cutoff": false,
+        "cues": []
+      },
+      "gt_title": "1955 Artisanal Milanese Holiday Panettone",
+      "gt_ingredients": [
+        "1 cup active sourdough starter (pasta madre)",
+        "4 1/2 cups Manitoba / high-protein bread flour",
+        "1 cup whole milk, lukewarm",
+        "1 cup unsalted European butter, softened",
+        "1 cup granulated sugar",
+        "6 large egg yolks",
+        "1 vanilla bean, split and scraped",
+        "1 tsp fine sea salt",
+        "1 1/2 cups golden raisins, rum-soaked",
+        "1 cup candied orange and citron peel, diced",
+        "1 tbsp honey and 1 orange zest",
+        "Melted butter for scoring cross"
+      ],
+      "gt_directions": [
+        "1. Part 1 (Primo Impasto): Dissolve sourdough starter in lukewarm milk with 1 cup flour; proof 3 hours at 80\u00b0F until tripled.",
+        "2. Beat 3 egg yolks with 1/2 cup sugar; knead into proofed starter with 2 cups flour and 1/2 cup softened butter until smooth and elastic.",
+        "3. Cover dough tightly and let rise overnight in warm draft-free place (12 hours) until quadrupled in volume.",
+        "4. Part 2 (Secondo Impasto): Deflate first dough; knead in honey, orange zest, scraped vanilla bean, remaining 3 egg yolks, 1/2 cup sugar, and salt.",
+        "5. Gradually work in remaining 1 1/2 cups flour and remaining 1/2 cup softened butter until shiny dough forms windowpane.",
+        "6. Drain rum-soaked raisins and toss with candied citron; gently fold fruits evenly throughout dough.",
+        "7. Divide dough into 2 equal portions; shape into tight boules and place into tall 6-inch panettone paper molds.",
+        "8. Proof in warm humid area 4-6 hours until dough reaches 1/2 inch below mold rim.",
+        "9. Cut shallow cross in top of each dome with sharp razor; place pat of butter in center of cross.",
+        "10. Bake at 350\u00b0F (175\u00b0C) for 40-45 minutes until deep mahogany and internal temp reaches 190\u00b0F.",
+        "11. Part 3 (Curing & Hanging): Pierce bottom of each panettone with two long metal skewers; hang upside down suspended between chairs for 10 hours to prevent collapse."
+      ]
+    },
+    {
+      "card_id": "rec_sta_quick_chocolate_fudge_standalone.jpg",
+      "filename": "rec_sta_quick_chocolate_fudge_standalone.jpg",
+      "recipe_id": "rec_sta_quick_chocolate_fudge",
+      "modality": "HANDWRITTEN_CURSIVE",
+      "role": "STANDALONE",
+      "latency_ms": 2075.1585739999427,
+      "num_ocr_lines": 13,
+      "ocr_text": "1o-MinuteQuickChocolateFudge\nIngredients:\n3cupssemi-sweetchocolatechips\n1can(14oz)sweetenedcondensedmilk\n1tsppurevanillaextract\nPinchof seasalt\n1/2cupchoppedwalnuts(optional)\nDirections:\n1.Linean8x8 inchbakingpan with aluminumfoil and lightlybutter.\n2.Combinechocolatechipsandsweetenedcondensedmilkinheawysaucepanoverlowheat.\n3.Stirconstantlyuntilchocolateiscompletelymeltedandsmooth.\n4.Removefromheat;stirinvanilla,salt,andoptionalwalnuts.\nRECIPE-CLUB-1974",
+      "gt_cue": null,
+      "has_gt_forward_cue": false,
+      "detected_forward_cue": false,
+      "detected_start_cue": false,
+      "cues": {
+        "has_continuation_cue": false,
+        "has_continuation_start": false,
+        "continuation_tokens": [],
+        "page_numbers": [],
+        "page_markers": [],
+        "top_page_marker": null,
+        "bottom_page_marker": null,
+        "step_numbers": [
+          1,
+          2,
+          3,
+          4
+        ],
+        "first_step": 1,
+        "last_step": 4,
+        "is_cutoff": false,
+        "cues": []
+      },
+      "gt_title": "10-Minute Quick Chocolate Fudge",
+      "gt_ingredients": [
+        "3 cups semi-sweet chocolate chips",
+        "1 can (14 oz) sweetened condensed milk",
+        "1 tsp pure vanilla extract",
+        "Pinch of sea salt",
+        "1/2 cup chopped walnuts (optional)"
+      ],
+      "gt_directions": [
+        "1. Line an 8x8 inch baking pan with aluminum foil and lightly butter.",
+        "2. Combine chocolate chips and sweetened condensed milk in heavy saucepan over low heat.",
+        "3. Stir constantly until chocolate is completely melted and smooth.",
+        "4. Remove from heat; stir in vanilla, salt, and optional walnuts.",
+        "5. Spread evenly into prepared pan; chill in refrigerator 2 hours until firm."
+      ]
+    },
+    {
+      "card_id": "rec_sta_southern_pecan_pie_standalone.jpg",
+      "filename": "rec_sta_southern_pecan_pie_standalone.jpg",
+      "recipe_id": "rec_sta_southern_pecan_pie",
+      "modality": "HANDWRITTEN_CURSIVE",
+      "role": "STANDALONE",
+      "latency_ms": 1884.4665710003028,
+      "num_ocr_lines": 12,
+      "ocr_text": "SouthernPecanPie\nIngredients:\n1 unbaked9-inchdeep-dishpiecrust\n3largeeggs\n1cupdarkcornsyrup\n1 cupgranulated sugar\n2tbspunsaltedbutter,melted\nDirections:\n1.Preheat oven to 350\u00b0F.\n2.Inmixingbowl,beat eggs,darkcorn syrup,sugar,meltedbutter,and vanillauntil smooth.\n3.Fold in pecan halvesand pour filling intounbaked piecrust.\n4.Bake at350\u00b0F for 55-60minutes until center is slightly set with gentle jiggle.",
+      "gt_cue": null,
+      "has_gt_forward_cue": false,
+      "detected_forward_cue": false,
+      "detected_start_cue": false,
+      "cues": {
+        "has_continuation_cue": false,
+        "has_continuation_start": false,
+        "continuation_tokens": [],
+        "page_numbers": [],
+        "page_markers": [],
+        "top_page_marker": null,
+        "bottom_page_marker": null,
+        "step_numbers": [
+          1,
+          1,
+          1,
+          2,
+          3,
+          4
+        ],
+        "first_step": 1,
+        "last_step": 4,
+        "is_cutoff": false,
+        "cues": []
+      },
+      "gt_title": "Southern Pecan Pie",
+      "gt_ingredients": [
+        "1 unbaked 9-inch deep-dish pie crust",
+        "3 large eggs",
+        "1 cup dark corn syrup",
+        "1 cup granulated sugar",
+        "2 tbsp unsalted butter, melted",
+        "1 tsp pure vanilla extract",
+        "1 1/2 cups pecan halves"
+      ],
+      "gt_directions": [
+        "1. Preheat oven to 350\u00b0F.",
+        "2. In mixing bowl, beat eggs, dark corn syrup, sugar, melted butter, and vanilla until smooth.",
+        "3. Fold in pecan halves and pour filling into unbaked pie crust.",
+        "4. Bake at 350\u00b0F for 55-60 minutes until center is slightly set with gentle jiggle.",
+        "5. Cool completely on wire rack 2 hours before slicing."
+      ]
+    },
+    {
+      "card_id": "rec_sta_classic_banana_bread_standalone.jpg",
+      "filename": "rec_sta_classic_banana_bread_standalone.jpg",
+      "recipe_id": "rec_sta_classic_banana_bread",
+      "modality": "HANDWRITTEN_CURSIVE",
+      "role": "STANDALONE",
+      "latency_ms": 1846.3745909994032,
+      "num_ocr_lines": 13,
+      "ocr_text": "ClassicMoistWalnutBananaBread\nIngredients:\n3veryripebananas, mashed (about11/2cups)\n1/3cupmeltedunsaltedbutter\n3/4cupgranulated sugar\n1 largeegg,beaten\n1tsppurevanillaextract\nDirections:\n1.Preheatovento350\u00b0F;butteran8x4-inchloafpan.\n2.Inlargebowl,mash ripebananaswithaforkuntil smooth;stir inmeltedbutter.\n3.Mixinsugar,beatenegg,andvanillaextract.\n4.Sprinklebaking sodaand saltovermixture;fold inflouruntil justcombined.\nRECIPE CLUB1971",
+      "gt_cue": null,
+      "has_gt_forward_cue": false,
+      "detected_forward_cue": false,
+      "detected_start_cue": false,
+      "cues": {
+        "has_continuation_cue": false,
+        "has_continuation_start": false,
+        "continuation_tokens": [],
+        "page_numbers": [],
+        "page_markers": [],
+        "top_page_marker": null,
+        "bottom_page_marker": null,
+        "step_numbers": [
+          1,
+          1,
+          2,
+          3,
+          4
+        ],
+        "first_step": 1,
+        "last_step": 4,
+        "is_cutoff": false,
+        "cues": []
+      },
+      "gt_title": "Classic Moist Walnut Banana Bread",
+      "gt_ingredients": [
+        "3 very ripe bananas, mashed (about 1 1/2 cups)",
+        "1/3 cup melted unsalted butter",
+        "3/4 cup granulated sugar",
+        "1 large egg, beaten",
+        "1 tsp pure vanilla extract",
+        "1 tsp baking soda",
+        "Pinch of salt",
+        "1 1/2 cups all-purpose flour",
+        "1/2 cup toasted walnuts, chopped"
+      ],
+      "gt_directions": [
+        "1. Preheat oven to 350\u00b0F; butter an 8x4-inch loaf pan.",
+        "2. In large bowl, mash ripe bananas with a fork until smooth; stir in melted butter.",
+        "3. Mix in sugar, beaten egg, and vanilla extract.",
+        "4. Sprinkle baking soda and salt over mixture; fold in flour until just combined.",
+        "5. Fold in chopped walnuts; pour batter into prepared pan.",
+        "6. Bake at 350\u00b0F for 55-60 minutes until golden brown and cake tester comes out clean."
+      ]
+    },
+    {
+      "card_id": "rec_sta_old_fashioned_lemonade_standalone.jpg",
+      "filename": "rec_sta_old_fashioned_lemonade_standalone.jpg",
+      "recipe_id": "rec_sta_old_fashioned_lemonade",
+      "modality": "TYPEWRITTEN",
+      "role": "STANDALONE",
+      "latency_ms": 2028.7250700002915,
+      "num_ocr_lines": 10,
+      "ocr_text": "OLD-FASHIONED COUNTRY FAIR LEMONADE\nl l/2 cups freshly squeezed iemon juice (from 6-8 large lemons)\nl l/4 cups granulated sugar\nl cup boiling water (for simple syrup)\n5 cups ice-coid filtered water\nLemon wheeis and fresh mint sprigs for garnish\nl. In heatproof pitcher, stir sugar into l cup boiling water until completely diss\n2. strain fresh lemon juice to remove seeds and pulp; add to simple syrup in pitci\n3. Stir in s cups cold filtered wateri chill in refrigerator at least l hour.\n4. Serve over ice with lemon slices and mint.",
+      "gt_cue": null,
+      "has_gt_forward_cue": false,
+      "detected_forward_cue": false,
+      "detected_start_cue": false,
+      "cues": {
+        "has_continuation_cue": false,
+        "has_continuation_start": false,
+        "continuation_tokens": [],
+        "page_numbers": [],
+        "page_markers": [],
+        "top_page_marker": null,
+        "bottom_page_marker": null,
+        "step_numbers": [
+          1,
+          1,
+          1,
+          5,
+          1,
+          2,
+          3,
+          4
+        ],
+        "first_step": 1,
+        "last_step": 4,
+        "is_cutoff": false,
+        "cues": []
+      },
+      "gt_title": "Old-Fashioned Country Fair Lemonade",
+      "gt_ingredients": [
+        "1 1/2 cups freshly squeezed lemon juice (from 6-8 large lemons)",
+        "1 1/4 cups granulated sugar",
+        "1 cup boiling water (for simple syrup)",
+        "5 cups ice-cold filtered water",
+        "Lemon wheels and fresh mint sprigs for garnish",
+        "Plenty of ice cubes"
+      ],
+      "gt_directions": [
+        "1. In heatproof pitcher, stir sugar into 1 cup boiling water until completely dissolved to create simple syrup.",
+        "2. Strain fresh lemon juice to remove seeds and pulp; add to simple syrup in pitcher.",
+        "3. Stir in 5 cups cold filtered water; chill in refrigerator at least 1 hour.",
+        "4. Serve over ice with lemon slices and mint."
+      ]
+    }
+  ],
+  "recipes": [
+    {
+      "recipe_id": "rec_vhc_apple_crisp_1948",
+      "modality": "HANDWRITTEN_CURSIVE",
+      "num_cards": 2,
+      "cer": 0.8210702341137124,
+      "ref_len": 598,
+      "ocr_len": 592
+    },
+    {
+      "recipe_id": "rec_vhc_rhubarb_pie_1965",
+      "modality": "HANDWRITTEN_CURSIVE",
+      "num_cards": 2,
+      "cer": 0.8502673796791443,
+      "ref_len": 561,
+      "ocr_len": 602
+    },
+    {
+      "recipe_id": "rec_vhc_strawberry_rhubarb_jam_1954",
+      "modality": "HANDWRITTEN_CURSIVE",
+      "num_cards": 2,
+      "cer": 0.8676470588235294,
+      "ref_len": 612,
+      "ocr_len": 640
+    },
+    {
+      "recipe_id": "rec_vhc_amish_cinnamon_bread_1973",
+      "modality": "HANDWRITTEN_CURSIVE",
+      "num_cards": 2,
+      "cer": 0.8064903846153846,
+      "ref_len": 832,
+      "ocr_len": 736
+    },
+    {
+      "recipe_id": "rec_typ_beef_stroganoff_1956",
+      "modality": "TYPEWRITTEN",
+      "num_cards": 2,
+      "cer": 0.7959731543624161,
+      "ref_len": 745,
+      "ocr_len": 743
+    },
+    {
+      "recipe_id": "rec_typ_tomato_soup_cake_1952",
+      "modality": "TYPEWRITTEN",
+      "num_cards": 2,
+      "cer": 0.6281481481481481,
+      "ref_len": 675,
+      "ocr_len": 674
+    },
+    {
+      "recipe_id": "rec_typ_swedish_meatballs_1961",
+      "modality": "TYPEWRITTEN",
+      "num_cards": 2,
+      "cer": 0.7857961053837342,
+      "ref_len": 873,
+      "ocr_len": 772
+    },
+    {
+      "recipe_id": "rec_typ_lemon_chiffon_pie_1958",
+      "modality": "TYPEWRITTEN",
+      "num_cards": 2,
+      "cer": 0.7702380952380953,
+      "ref_len": 840,
+      "ocr_len": 791
+    },
+    {
+      "recipe_id": "rec_clp_crisco_fried_chicken",
+      "modality": "PRINTED_CLIPPING",
+      "num_cards": 2,
+      "cer": 0.7233333333333334,
+      "ref_len": 600,
+      "ocr_len": 571
+    },
+    {
+      "recipe_id": "rec_clp_condensed_milk_pie_1962",
+      "modality": "PRINTED_CLIPPING",
+      "num_cards": 1,
+      "cer": 0.5889967637540453,
+      "ref_len": 618,
+      "ocr_len": 515
+    },
+    {
+      "recipe_id": "rec_clp_green_bean_casserole_1968",
+      "modality": "PRINTED_CLIPPING",
+      "num_cards": 2,
+      "cer": 0.797274275979557,
+      "ref_len": 587,
+      "ocr_len": 488
+    },
+    {
+      "recipe_id": "rec_clp_toll_house_cookies_1975",
+      "modality": "PRINTED_CLIPPING",
+      "num_cards": 2,
+      "cer": 0.7803617571059431,
+      "ref_len": 774,
+      "ocr_len": 643
+    },
+    {
+      "recipe_id": "rec_dmg_moms_lasagna_1971",
+      "modality": "MIXED_MEDIA",
+      "num_cards": 2,
+      "cer": 0.6915367483296214,
+      "ref_len": 898,
+      "ocr_len": 702
+    },
+    {
+      "recipe_id": "rec_dmg_butter_shortbread",
+      "modality": "MIXED_MEDIA",
+      "num_cards": 1,
+      "cer": 0.5333333333333333,
+      "ref_len": 705,
+      "ocr_len": 468
+    },
+    {
+      "recipe_id": "rec_dmg_buttermilk_pancakes_1969",
+      "modality": "MIXED_MEDIA",
+      "num_cards": 2,
+      "cer": 0.7458233890214797,
+      "ref_len": 838,
+      "ocr_len": 657
+    },
+    {
+      "recipe_id": "rec_dmg_beef_bourguignon_1974",
+      "modality": "MIXED_MEDIA",
+      "num_cards": 2,
+      "cer": 0.7129000969932104,
+      "ref_len": 1031,
+      "ocr_len": 674
+    },
+    {
+      "recipe_id": "rec_mcs_turkey_stuffing_feast",
+      "modality": "HANDWRITTEN_CURSIVE",
+      "num_cards": 3,
+      "cer": 0.6648936170212766,
+      "ref_len": 1128,
+      "ocr_len": 1053
+    },
+    {
+      "recipe_id": "rec_mcs_wedding_fruitcake_1942",
+      "modality": "HANDWRITTEN_CURSIVE",
+      "num_cards": 4,
+      "cer": 0.7188065099457505,
+      "ref_len": 1106,
+      "ocr_len": 1114
+    },
+    {
+      "recipe_id": "rec_mcs_sunday_pot_roast_gravy",
+      "modality": "HANDWRITTEN_CURSIVE",
+      "num_cards": 3,
+      "cer": 0.6708333333333333,
+      "ref_len": 1440,
+      "ocr_len": 1234
+    },
+    {
+      "recipe_id": "rec_mcs_traditional_panettone_1955",
+      "modality": "HANDWRITTEN_CURSIVE",
+      "num_cards": 4,
+      "cer": 0.6981132075471698,
+      "ref_len": 1749,
+      "ocr_len": 1425
+    },
+    {
+      "recipe_id": "rec_sta_quick_chocolate_fudge",
+      "modality": "HANDWRITTEN_CURSIVE",
+      "num_cards": 1,
+      "cer": 0.2828828828828829,
+      "ref_len": 555,
+      "ocr_len": 457
+    },
+    {
+      "recipe_id": "rec_sta_southern_pecan_pie",
+      "modality": "HANDWRITTEN_CURSIVE",
+      "num_cards": 1,
+      "cer": 0.28598848368522073,
+      "ref_len": 521,
+      "ocr_len": 403
+    },
+    {
+      "recipe_id": "rec_sta_classic_banana_bread",
+      "modality": "HANDWRITTEN_CURSIVE",
+      "num_cards": 1,
+      "cer": 0.42302158273381296,
+      "ref_len": 695,
+      "ocr_len": 436
+    },
+    {
+      "recipe_id": "rec_sta_old_fashioned_lemonade",
+      "modality": "TYPEWRITTEN",
+      "num_cards": 1,
+      "cer": 0.11092150170648464,
+      "ref_len": 586,
+      "ocr_len": 534
+    }
+  ]
+}

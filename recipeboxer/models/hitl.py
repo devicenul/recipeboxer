@@ -17,6 +17,8 @@ class HitlItemType(str, Enum):
     STAGE_FAILURE = "STAGE_FAILURE"
     UNASSIGNED_CARD = "UNASSIGNED_CARD"
     MANUAL_REVIEW = "MANUAL_REVIEW"
+    BUDGET = "BUDGET"
+
 
 
 class HitlItem(BaseModel):

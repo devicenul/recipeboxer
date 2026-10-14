@@ -99,27 +99,45 @@ def human_duration_to_iso8601(duration_str: Optional[str]) -> Optional[str]:
 class JsonLdExporter:
     """Serializes RecipeSchema models to Schema.org JSON-LD structured data."""
 
-    def __init__(self, encoding: str = "utf-8") -> None:
+    def __init__(self, encoding: str = "utf-8", include_transcription_notes: bool = False) -> None:
         self.encoding = encoding
+        self.include_transcription_notes = include_transcription_notes
 
-    def recipe_to_json_ld_dict(self, recipe: RecipeSchema) -> Dict[str, Any]:
+    def recipe_to_json_ld_dict(
+        self,
+        recipe: RecipeSchema,
+        include_transcription_notes: Optional[bool] = None,
+    ) -> Dict[str, Any]:
         """Converts a single RecipeSchema into a Schema.org Recipe JSON-LD dictionary.
 
         Args:
             recipe: RecipeSchema model.
+            include_transcription_notes: Optional flag override.
 
         Returns:
             JSON-LD dictionary conforming to Schema.org Recipe specifications.
         """
+        inc_notes = self.include_transcription_notes if include_transcription_notes is None else include_transcription_notes
+
+        all_steps = recipe.all_steps() if hasattr(recipe, "all_steps") else []
         instructions = []
-        for idx, step in enumerate(recipe.directions, start=1):
-            # Clean leading step numbers
-            cleaned_step = re.sub(r"^\d+\.\s*", "", step).strip()
-            instructions.append({
-                "@type": "HowToStep",
-                "position": idx,
-                "text": cleaned_step,
-            })
+        if all_steps:
+            for idx, step_obj in enumerate(all_steps, start=1):
+                text_val = step_obj.display_text
+                cleaned_step = re.sub(r"^\d+\.\s*", "", text_val).strip()
+                instructions.append({
+                    "@type": "HowToStep",
+                    "position": idx,
+                    "text": cleaned_step,
+                })
+        else:
+            for idx, step in enumerate(recipe.directions, start=1):
+                cleaned_step = re.sub(r"^\d+\.\s*", "", step).strip()
+                instructions.append({
+                    "@type": "HowToStep",
+                    "position": idx,
+                    "text": cleaned_step,
+                })
 
         data: Dict[str, Any] = {
             "@context": "https://schema.org",
@@ -130,22 +148,26 @@ class JsonLdExporter:
         if recipe.description:
             data["description"] = recipe.description
 
-        if recipe.yield_servings:
-            data["recipeYield"] = recipe.yield_servings
+        yield_str = recipe.yield_value.display_text if (hasattr(recipe, "yield_value") and recipe.yield_value) else (recipe.yield_servings or "")
+        if yield_str:
+            data["recipeYield"] = yield_str
 
-        prep_iso = human_duration_to_iso8601(recipe.prep_time)
+        prep_iso = (recipe.prep_time.normalized_iso or human_duration_to_iso8601(recipe.prep_time.display_text)) if (hasattr(recipe, "prep_time") and recipe.prep_time) else human_duration_to_iso8601(getattr(recipe, "prep_time_str", "") or "")
         if prep_iso:
             data["prepTime"] = prep_iso
 
-        cook_iso = human_duration_to_iso8601(recipe.cook_time)
+        cook_iso = (recipe.cook_time.normalized_iso or human_duration_to_iso8601(recipe.cook_time.display_text)) if (hasattr(recipe, "cook_time") and recipe.cook_time) else human_duration_to_iso8601(getattr(recipe, "cook_time_str", "") or "")
         if cook_iso:
             data["cookTime"] = cook_iso
 
-        total_iso = human_duration_to_iso8601(recipe.total_time)
+        total_iso = (recipe.total_time.normalized_iso or human_duration_to_iso8601(recipe.total_time.display_text)) if (hasattr(recipe, "total_time") and recipe.total_time) else human_duration_to_iso8601(getattr(recipe, "total_time_str", "") or "")
         if total_iso:
             data["totalTime"] = total_iso
 
-        if recipe.ingredients:
+        all_ings = recipe.all_ingredients() if hasattr(recipe, "all_ingredients") else []
+        if all_ings:
+            data["recipeIngredient"] = [ing.display_text for ing in all_ings if ing.display_text]
+        elif recipe.ingredients:
             data["recipeIngredient"] = list(recipe.ingredients)
 
         if instructions:
@@ -155,8 +177,23 @@ class JsonLdExporter:
             data["keywords"] = ", ".join(recipe.tags)
             data["recipeCategory"] = recipe.tags[0]
 
+        comments: List[str] = []
         if recipe.source_notes:
-            data["comment"] = recipe.source_notes
+            comments.append(recipe.source_notes)
+        if hasattr(recipe, "headnote") and recipe.headnote and recipe.headnote.text:
+            comments.append(recipe.headnote.text)
+
+        if inc_notes:
+            notes = getattr(recipe, "notes", [])
+            for n in notes:
+                if hasattr(n, "text") and n.text:
+                    comments.append(f"[Note]: {n.text}")
+            warnings = getattr(recipe, "warnings", [])
+            for w in warnings:
+                comments.append(f"[Warning {w.code}]: {w.message}")
+
+        if comments:
+            data["comment"] = "\n".join(comments)
 
         if recipe.created_at:
             data["datePublished"] = recipe.created_at
@@ -166,18 +203,19 @@ class JsonLdExporter:
     def export_to_json_ld_dict(
         self,
         recipes: Union[RecipeSchema, List[RecipeSchema]],
+        include_transcription_notes: Optional[bool] = None,
     ) -> Dict[str, Any]:
         """Serializes single recipe or recipe collection into Schema.org format.
 
         For multiple recipes, packages them inside a `@graph` array.
         """
         if isinstance(recipes, RecipeSchema):
-            return self.recipe_to_json_ld_dict(recipes)
+            return self.recipe_to_json_ld_dict(recipes, include_transcription_notes=include_transcription_notes)
 
         if len(recipes) == 1:
-            return self.recipe_to_json_ld_dict(recipes[0])
+            return self.recipe_to_json_ld_dict(recipes[0], include_transcription_notes=include_transcription_notes)
 
-        graph = [self.recipe_to_json_ld_dict(r) for r in recipes]
+        graph = [self.recipe_to_json_ld_dict(r, include_transcription_notes=include_transcription_notes) for r in recipes]
         return {
             "@context": "https://schema.org",
             "@graph": graph,
@@ -187,9 +225,10 @@ class JsonLdExporter:
         self,
         recipes: Union[RecipeSchema, List[RecipeSchema]],
         indent: int = 2,
+        include_transcription_notes: Optional[bool] = None,
     ) -> str:
         """Serializes recipes into formatted JSON-LD string."""
-        data = self.export_to_json_ld_dict(recipes)
+        data = self.export_to_json_ld_dict(recipes, include_transcription_notes=include_transcription_notes)
         return json.dumps(data, indent=indent, ensure_ascii=False)
 
     def export_to_file(
@@ -197,11 +236,12 @@ class JsonLdExporter:
         recipes: Union[RecipeSchema, List[RecipeSchema]],
         output_path: Union[str, Path],
         indent: int = 2,
+        include_transcription_notes: Optional[bool] = None,
     ) -> Path:
         """Serializes recipes and writes JSON-LD to file."""
         path = Path(output_path).resolve()
         path.parent.mkdir(parents=True, exist_ok=True)
-        content = self.export_to_json_ld_string(recipes, indent=indent)
+        content = self.export_to_json_ld_string(recipes, indent=indent, include_transcription_notes=include_transcription_notes)
         path.write_text(content, encoding=self.encoding)
         count = 1 if isinstance(recipes, RecipeSchema) else len(recipes)
         logger.info(f"Exported {count} recipe(s) to JSON-LD: {path}")
@@ -211,9 +251,10 @@ class JsonLdExporter:
         self,
         recipes: Union[RecipeSchema, List[RecipeSchema]],
         indent: int = 2,
+        include_transcription_notes: Optional[bool] = None,
     ) -> bytes:
         """Serializes recipes into UTF-8 encoded bytes."""
-        return self.export_to_json_ld_string(recipes, indent=indent).encode(self.encoding)
+        return self.export_to_json_ld_string(recipes, indent=indent, include_transcription_notes=include_transcription_notes).encode(self.encoding)
 
     def validate_json_ld(self, json_content: Union[str, Dict[str, Any]]) -> bool:
         """Validates that content is valid Schema.org Recipe JSON-LD.
@@ -251,6 +292,9 @@ class JsonLdExporter:
         return True
 
 
-def export_recipes_to_json_ld(recipes: Union[RecipeSchema, List[RecipeSchema]]) -> str:
+def export_recipes_to_json_ld(
+    recipes: Union[RecipeSchema, List[RecipeSchema]],
+    include_transcription_notes: bool = False,
+) -> str:
     """Convenience function for JSON-LD export."""
-    return JsonLdExporter().export_to_json_ld_string(recipes)
+    return JsonLdExporter(include_transcription_notes=include_transcription_notes).export_to_json_ld_string(recipes)

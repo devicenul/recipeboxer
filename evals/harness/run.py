@@ -212,12 +212,15 @@ def run_benchmark(
     model_profile: Optional[str] = None,
     timeout_s: int = 600,
     seed: int = 42,
+    budget_usd: Optional[float] = None,
+    max_calls: Optional[int] = None,
 ) -> Dict[str, Any]:
     """Runs black-box SUT evaluation across deck corpora and outputs rb-out/1 artifacts."""
     eff_profile = model_profile or profile
     out_path = Path(out_dir).resolve()
     out_path.mkdir(parents=True, exist_ok=True)
     run_log_path = out_path / "run.log"
+
     log_fp = open(run_log_path, "w", encoding="utf-8")
 
     def _log(msg: str) -> None:
@@ -315,6 +318,10 @@ def run_benchmark(
                 "--profile",
                 eff_profile,
             ]
+            if budget_usd is not None:
+                cmd.extend(["--budget-usd", str(budget_usd)])
+            if max_calls is not None:
+                cmd.extend(["--max-calls", str(max_calls)])
             if oracle_file_path:
                 cmd.extend(["--image-sets", str(oracle_file_path)])
 
@@ -359,10 +366,14 @@ def run_benchmark(
                     sut_res = json.loads(temp_out.read_text(encoding="utf-8"))
                     sut_status = sut_res.get("status", "ok")
 
-                    if sut_status == "no_live_model" and overall_status != "cheat_detected":
+                    if sut_status == "budget_exceeded":
+                        _log(f"Budget cap exceeded in SUT execution for deck '{deck_id}'. Halting further deck runs.")
+                        overall_status = "budget_exceeded"
+                    elif sut_status == "no_live_model" and overall_status not in ("cheat_detected", "budget_exceeded"):
                         overall_status = "no_live_model"
                     elif sut_status == "error" and overall_status == "ok":
                         overall_status = "error"
+
 
                     # Map temp image names back to original corpus image IDs
                     mapped_recipes: List[Dict[str, Any]] = []
@@ -398,6 +409,9 @@ def run_benchmark(
                     # Ledger calls
                     deck_ledger = sut_res.get("ledger", {})
                     all_ledger_calls.extend(deck_ledger.get("calls", []))
+
+                    if sut_status == "budget_exceeded":
+                        break
                 else:
                     _log(f"ERROR: SUT failed to produce output file {temp_out}")
                     if overall_status == "ok":
@@ -437,19 +451,31 @@ def run_benchmark(
     total_out = sum(c.get("output_tokens", 0) for c in all_ledger_calls)
     total_think = sum(c.get("thinking_tokens", 0) for c in all_ledger_calls)
     total_lat = sum(c.get("latency_ms", 0.0) for c in all_ledger_calls)
+    total_usd = 0.0
+    has_usd = False
+    for c in all_ledger_calls:
+        cost = c.get("cost_usd")
+        if cost is not None:
+            total_usd += float(cost)
+            has_usd = True
+
+    totals_payload: Dict[str, Any] = {
+        "calls": len(all_ledger_calls),
+        "input_tokens": total_in,
+        "output_tokens": total_out,
+        "thinking_tokens": total_think,
+        "total_tokens": total_in + total_out,
+        "latency_ms": total_lat,
+    }
+    if has_usd:
+        totals_payload["total_usd"] = round(total_usd, 6)
 
     ledger_payload = {
         "calls": all_ledger_calls,
-        "totals": {
-            "calls": len(all_ledger_calls),
-            "input_tokens": total_in,
-            "output_tokens": total_out,
-            "thinking_tokens": total_think,
-            "total_tokens": total_in + total_out,
-            "latency_ms": total_lat,
-        },
+        "totals": totals_payload,
     }
     (out_path / "ledger.json").write_text(json.dumps(ledger_payload, indent=2), encoding="utf-8")
+
 
     outputs_payload = {
         "schema": "rb-out/1",
@@ -471,15 +497,15 @@ def run_benchmark(
 execute_run = run_benchmark
 
 
-def main(argv: Optional[List[str]] = None) -> int:
-    """CLI execution entry point for evals.harness.run."""
+def create_run_parser() -> argparse.ArgumentParser:
+    """Creates the CLI argument parser for evals.harness.run."""
     parser = argparse.ArgumentParser(
         prog="python -m evals.harness.run",
         description="Black-box evaluation harness for RecipeBoxer.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    parser.add_argument("--tier", type=str, required=True, help="Evaluation benchmark tier (e.g. T0, T1, T2)")
-    parser.add_argument("--out", type=str, required=True, help="Output directory for outputs.json and ledger.json")
+    parser.add_argument("--tier", type=str, default="T0", help="Evaluation benchmark tier (e.g. T0, T1, T2)")
+    parser.add_argument("--out", type=str, default="rb-out", help="Output directory for outputs.json and ledger.json")
     parser.add_argument("--decks", type=str, default=None, help="Comma-separated deck IDs to evaluate (e.g. d01,d02)")
     parser.add_argument("--images-dir", type=str, default=None, help="Explicit path to images directory")
     parser.add_argument("--oracle-plan", type=str, default=None, help="Path to oracle plan JSON file")
@@ -497,8 +523,15 @@ def main(argv: Optional[List[str]] = None) -> int:
         choices=["economy", "balanced", "best"],
         help="Model quality profile",
     )
+    parser.add_argument("--budget-usd", type=float, default=None, help="Evaluation run spending cap in USD (WP-B3)")
+    parser.add_argument("--max-calls", type=int, default=None, help="Maximum number of LLM generation calls (WP-B3)")
     parser.add_argument("--timeout", type=int, default=600, help="Per-deck timeout in seconds")
+    return parser
 
+
+def main(argv: Optional[List[str]] = None) -> int:
+    """CLI execution entry point for evals.harness.run."""
+    parser = create_run_parser()
     args = parser.parse_args(args=argv)
     deck_list = [d.strip() for d in args.decks.split(",") if d.strip()] if args.decks else None
 
@@ -514,7 +547,10 @@ def main(argv: Optional[List[str]] = None) -> int:
             variant=args.variant,
             profile=args.profile,
             timeout_s=args.timeout,
+            budget_usd=args.budget_usd,
+            max_calls=args.max_calls,
         )
+
         print(f"Benchmark run complete. Status: {res.get('status')}. Artifacts in {args.out}")
         return 0
     except Exception as exc:

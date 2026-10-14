@@ -7,13 +7,20 @@ from recipeboxer.agent.skills.vintage_handwriting_ocr.parser import (
     get_vintage_handwriting_prompt,
     normalize_archaic_units,
     normalize_fractions,
+    normalize_ingredient_line,
+    normalize_step,
+    normalize_recipe_fields,
 )
 
 __all__ = [
     "normalize_fractions",
     "normalize_archaic_units",
+    "normalize_ingredient_line",
+    "normalize_step",
+    "normalize_recipe_fields",
     "get_vintage_handwriting_prompt",
     "UNICODE_FRACTION_MAP",
     "ARCHAIC_UNIT_PATTERNS",
     "ABBREVIATION_PATTERNS",
 ]
+

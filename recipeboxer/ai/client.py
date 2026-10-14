@@ -464,6 +464,7 @@ class GenAIClient(LLMClient):
         settings: Optional[Settings] = None,
         genai_client: Optional[Any] = None,
         ledger: Optional[UsageLedger] = None,
+        guard: Optional[Any] = None,
         max_retries: Optional[int] = None,
         max_concurrency: Optional[int] = None,
         rpm_limit: Optional[int] = None,
@@ -472,6 +473,8 @@ class GenAIClient(LLMClient):
         self.settings = settings or get_settings()
         self.api_key = api_key or self.settings.gemini_api_key
         self.ledger = ledger
+        self.guard = guard
+
 
         self.max_retries = max_retries if max_retries is not None else self.settings.llm_max_retries
         self.max_concurrency = max_concurrency if max_concurrency is not None else self.settings.llm_max_concurrency
@@ -554,8 +557,17 @@ class GenAIClient(LLMClient):
         req_fingerprint = request.compute_fingerprint()
 
         while attempts < max_attempts:
+            # Check budget guard before initiating call attempt (WP-B1)
+            eff_guard = self.guard
+            if eff_guard is None and hasattr(self.ledger, "guard"):
+                eff_guard = getattr(self.ledger, "guard", None)
+            if eff_guard is not None and self.ledger is not None:
+                est_usd = float(request.metadata.get("est_usd", 0.0)) if request.metadata else 0.0
+                eff_guard.check_before_call(self.ledger, est_usd=est_usd)
+
             attempts += 1
             await self._rate_limiter.acquire()
+
             start_time = time.monotonic()
 
             try:

@@ -59,8 +59,9 @@ def _escape_xml(text: str) -> str:
 class DocxExporter:
     """Builds standard OpenXML .docx cookbook documents from RecipeSchema collections."""
 
-    def __init__(self, encoding: str = "utf-8") -> None:
+    def __init__(self, encoding: str = "utf-8", include_transcription_notes: bool = False) -> None:
         self.encoding = encoding
+        self.include_transcription_notes = include_transcription_notes
 
     def _build_content_types_xml(self, media_files: List[Tuple[str, str, bytes]]) -> str:
         """Generates [Content_Types].xml for the docx package."""
@@ -222,8 +223,10 @@ class DocxExporter:
         recipes: List[RecipeSchema],
         image_map: Dict[str, Tuple[Any, ...]],  # card_id -> (rel_id, media_target, cx, cy)
         curation: Optional[CuratedCookbook] = None,
+        include_transcription_notes: Optional[bool] = None,
     ) -> str:
         """Constructs word/document.xml with heirloom cookbook formatting, TOC, and section dividers."""
+        inc_notes = self.include_transcription_notes if include_transcription_notes is None else include_transcription_notes
         p_elements: List[str] = []
         doc_img_counter = 1
 
@@ -315,11 +318,16 @@ class DocxExporter:
 </w:p>""")
 
                 # 3. Metadata Table (Yield, Prep Time, Cook Time, Total Time)
+                prep_str = recipe.prep_time.display_text if (hasattr(recipe, "prep_time") and recipe.prep_time) else (getattr(recipe, "prep_time_str", "") or "—")
+                cook_str = recipe.cook_time.display_text if (hasattr(recipe, "cook_time") and recipe.cook_time) else (getattr(recipe, "cook_time_str", "") or "—")
+                total_str = recipe.total_time.display_text if (hasattr(recipe, "total_time") and recipe.total_time) else (getattr(recipe, "total_time_str", "") or "—")
+                yield_str = recipe.yield_value.display_text if (hasattr(recipe, "yield_value") and recipe.yield_value) else (recipe.yield_servings or "—")
+
                 meta_cells = [
-                    ("Yield", recipe.yield_servings or "—"),
-                    ("Prep Time", recipe.prep_time or "—"),
-                    ("Cook Time", recipe.cook_time or "—"),
-                    ("Total Time", recipe.total_time or "—"),
+                    ("Yield", yield_str),
+                    ("Prep Time", prep_str),
+                    ("Cook Time", cook_str),
+                    ("Total Time", total_str),
                 ]
                 tbl_xml = ['<w:tbl>',
                            '  <w:tblPr>',
@@ -352,15 +360,36 @@ class DocxExporter:
                 # Spacer
                 p_elements.append('<w:p><w:pPr><w:spacing w:after="120"/></w:pPr></w:p>')
 
-                # 4. Ingredients Heading & List
-                if recipe.ingredients:
+                # 4. Ingredients Heading & List (supports section headings)
+                all_ings = recipe.all_ingredients() if hasattr(recipe, "all_ingredients") else []
+                if all_ings or recipe.ingredients:
                     p_elements.append("""<w:p>
   <w:pPr><w:pStyle w:val="Heading2"/></w:pPr>
   <w:r><w:t>Ingredients</w:t></w:r>
 </w:p>""")
-                    for item in recipe.ingredients:
-                        item_esc = _escape_xml(item)
-                        p_elements.append(f"""<w:p>
+                    sections = getattr(recipe, "sections", None)
+                    if sections:
+                        for sec in sections:
+                            sec_title = sec.title or sec.name
+                            if sec_title:
+                                sec_esc = _escape_xml(sec_title)
+                                p_elements.append(f"""<w:p>
+  <w:pPr><w:pStyle w:val="Heading3"/><w:spacing w:before="80" w:after="40"/></w:pPr>
+  <w:r><w:rPr><w:b/><w:color w:val="23432B"/></w:rPr><w:t>{sec_esc}</w:t></w:r>
+</w:p>""")
+                            for ing in sec.ingredients:
+                                text = ing.display_text if hasattr(ing, "display_text") else str(ing)
+                                item_esc = _escape_xml(text)
+                                p_elements.append(f"""<w:p>
+  <w:pPr><w:spacing w:after="60"/><w:ind w:left="280"/></w:pPr>
+  <w:r><w:rPr><w:color w:val="2D5A2D"/></w:rPr><w:t>• </w:t></w:r>
+  <w:r><w:t>{item_esc}</w:t></w:r>
+</w:p>""")
+                    else:
+                        ings_to_render = [ing.display_text for ing in all_ings if ing.display_text] if all_ings else recipe.ingredients
+                        for item in ings_to_render:
+                            item_esc = _escape_xml(item)
+                            p_elements.append(f"""<w:p>
   <w:pPr><w:spacing w:after="60"/><w:ind w:left="280"/></w:pPr>
   <w:r><w:rPr><w:color w:val="2D5A2D"/></w:rPr><w:t>• </w:t></w:r>
   <w:r><w:t>{item_esc}</w:t></w:r>
@@ -369,15 +398,35 @@ class DocxExporter:
                 # Spacer
                 p_elements.append('<w:p><w:pPr><w:spacing w:after="120"/></w:pPr></w:p>')
 
-                # 5. Directions Heading & List
-                if recipe.directions:
+                # 5. Directions Heading & List (supports section headings)
+                all_steps = recipe.all_steps() if hasattr(recipe, "all_steps") else []
+                if all_steps or recipe.directions:
                     p_elements.append("""<w:p>
   <w:pPr><w:pStyle w:val="Heading2"/></w:pPr>
   <w:r><w:t>Directions</w:t></w:r>
 </w:p>""")
-                    for step in recipe.directions:
-                        step_esc = _escape_xml(step)
-                        p_elements.append(f"""<w:p>
+                    sections = getattr(recipe, "sections", None)
+                    if sections:
+                        for sec in sections:
+                            sec_title = sec.title or sec.name
+                            if sec_title and len(sections) > 1:
+                                sec_esc = _escape_xml(sec_title)
+                                p_elements.append(f"""<w:p>
+  <w:pPr><w:pStyle w:val="Heading3"/><w:spacing w:before="80" w:after="40"/></w:pPr>
+  <w:r><w:rPr><w:b/><w:color w:val="23432B"/></w:rPr><w:t>{sec_esc}</w:t></w:r>
+</w:p>""")
+                            for step in sec.steps:
+                                text = step.display_text if hasattr(step, "display_text") else str(step)
+                                step_esc = _escape_xml(text)
+                                p_elements.append(f"""<w:p>
+  <w:pPr><w:spacing w:after="100"/><w:ind w:left="280"/></w:pPr>
+  <w:r><w:t>{step_esc}</w:t></w:r>
+</w:p>""")
+                    else:
+                        steps_to_render = [step.display_text for step in all_steps if step.display_text] if all_steps else recipe.directions
+                        for step in steps_to_render:
+                            step_esc = _escape_xml(step)
+                            p_elements.append(f"""<w:p>
   <w:pPr><w:spacing w:after="100"/><w:ind w:left="280"/></w:pPr>
   <w:r><w:t>{step_esc}</w:t></w:r>
 </w:p>""")
@@ -389,6 +438,17 @@ class DocxExporter:
                 if recipe.source_notes:
                     meta_notes.append(f"Source: {recipe.source_notes}")
 
+                # Transcription notes if enabled
+                t_notes = []
+                if inc_notes:
+                    if hasattr(recipe, "headnote") and recipe.headnote and recipe.headnote.text:
+                        t_notes.append(f"Headnote: {recipe.headnote.text}")
+                    for n in getattr(recipe, "notes", []):
+                        if hasattr(n, "text") and n.text:
+                            t_notes.append(f"Note: {n.text}")
+                    for w in getattr(recipe, "warnings", []):
+                        t_notes.append(f"Warning [{w.code}]: {w.message}")
+
                 if meta_notes:
                     p_elements.append('<w:p><w:pPr><w:spacing w:before="120" w:after="60"/></w:pPr></w:p>')
                     for note in meta_notes:
@@ -396,6 +456,18 @@ class DocxExporter:
                         p_elements.append(f"""<w:p>
   <w:pPr><w:spacing w:after="40"/></w:pPr>
   <w:r><w:rPr><w:i/><w:sz w:val="18"/><w:color w:val="666666"/></w:rPr><w:t>{note_esc}</w:t></w:r>
+</w:p>""")
+
+                if t_notes:
+                    p_elements.append("""<w:p>
+  <w:pPr><w:pStyle w:val="Heading3"/><w:spacing w:before="120" w:after="40"/></w:pPr>
+  <w:r><w:t>Transcription Notes</w:t></w:r>
+</w:p>""")
+                    for tn in t_notes:
+                        tn_esc = _escape_xml(tn)
+                        p_elements.append(f"""<w:p>
+  <w:pPr><w:spacing w:after="40"/><w:ind w:left="280"/></w:pPr>
+  <w:r><w:rPr><w:i/><w:sz w:val="18"/><w:color w:val="666666"/></w:rPr><w:t>{tn_esc}</w:t></w:r>
 </w:p>""")
 
                 # 7. Embedded Card Scans
@@ -449,8 +521,10 @@ class DocxExporter:
         recipes: Union[RecipeSchema, List[RecipeSchema]],
         image_resolver: Optional[Callable[[str], Optional[Union[str, Path, bytes]]]] = None,
         curation: Optional[CuratedCookbook] = None,
+        include_transcription_notes: Optional[bool] = None,
     ) -> bytes:
         """Serializes RecipeSchema models into a standalone OpenXML .docx file bytes."""
+        inc_notes = self.include_transcription_notes if include_transcription_notes is None else include_transcription_notes
         if curation:
             recipe_list = curation.all_recipes
         else:
@@ -509,7 +583,12 @@ class DocxExporter:
         root_rels_xml = self._build_root_rels_xml()
         document_rels_xml = self._build_document_rels_xml(image_relationships)
         styles_xml = self._build_styles_xml()
-        document_xml = self._build_document_xml(recipe_list, image_map, curation=curation)
+        document_xml = self._build_document_xml(
+            recipe_list,
+            image_map,
+            curation=curation,
+            include_transcription_notes=inc_notes,
+        )
 
         # Pack into ZIP archive (.docx)
         zip_buffer = io.BytesIO()
@@ -531,11 +610,17 @@ class DocxExporter:
         output_path: Union[str, Path],
         image_resolver: Optional[Callable[[str], Optional[Union[str, Path, bytes]]]] = None,
         curation: Optional[CuratedCookbook] = None,
+        include_transcription_notes: Optional[bool] = None,
     ) -> Path:
         """Writes .docx cookbook to file on disk."""
         path = Path(output_path).resolve()
         path.parent.mkdir(parents=True, exist_ok=True)
-        docx_bytes = self.export_to_bytes(recipes, image_resolver=image_resolver, curation=curation)
+        docx_bytes = self.export_to_bytes(
+            recipes,
+            image_resolver=image_resolver,
+            curation=curation,
+            include_transcription_notes=include_transcription_notes,
+        )
         path.write_bytes(docx_bytes)
         count = curation.total_recipe_count if curation else (1 if isinstance(recipes, RecipeSchema) else len(recipes))
         logger.info(f"Exported {count} recipe(s) to DOCX: {path}")
@@ -546,7 +631,13 @@ def export_recipes_to_docx(
     recipes: Union[RecipeSchema, List[RecipeSchema]],
     image_resolver: Optional[Callable[[str], Optional[Union[str, Path, bytes]]]] = None,
     curation: Optional[CuratedCookbook] = None,
+    include_transcription_notes: bool = False,
 ) -> bytes:
     """Convenience helper to export recipes as .docx binary bytes."""
-    return DocxExporter().export_to_bytes(recipes, image_resolver=image_resolver, curation=curation)
+    return DocxExporter(include_transcription_notes=include_transcription_notes).export_to_bytes(
+        recipes,
+        image_resolver=image_resolver,
+        curation=curation,
+        include_transcription_notes=include_transcription_notes,
+    )
 

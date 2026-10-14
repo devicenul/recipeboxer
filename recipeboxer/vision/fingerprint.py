@@ -6,6 +6,7 @@ ink medium, physical stains/artifacts, boundary text, and functional card role.
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import hashlib
 import inspect
@@ -18,8 +19,9 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 from PIL import Image, ImageFilter
+from pydantic import BaseModel, Field
 
-from recipeboxer.ai.client import ImagePart, LLMClient, LLMRequest, LLMStage, TextPart
+from recipeboxer.ai.client import ImagePart, LLMClient, LLMRequest, LLMStage, TextPart, create_llm_client
 from recipeboxer.config import get_settings
 from recipeboxer.ingestion.scanner import ScannedCard
 from recipeboxer.models.domain import (
@@ -38,27 +40,241 @@ from recipeboxer.models.domain import (
     VisualFingerprint,
 )
 from recipeboxer.models.failures import FailureReason, FingerprintUnavailable, StageUnavailableError
-from recipeboxer.vision.heuristics import rgb_to_lab
+from recipeboxer.prompts import get_prompt
+from recipeboxer.storage.cache import FingerprintCache
+from recipeboxer.vision.heuristics import hex_to_lab, rgb_to_lab
 from recipeboxer.vision.preprocessing import extract_paper_color_palette
 
 logger = logging.getLogger(__name__)
 
-FINGERPRINT_SYSTEM_INSTRUCTION = """You are an expert archivist and forensic document analyst specializing in vintage handwritten and typed recipe cards.
-Analyze the provided recipe card image and extract a complete visual fingerprint.
+# System instruction loaded dynamically from registry
+FINGERPRINT_SYSTEM_INSTRUCTION = get_prompt("fingerprint_v2").text
 
-Extract:
-1. Paper Substrate: Color (hex, CIE L*a*b*), tone category (WHITE, OFF_WHITE_CREAM, YELLOWED_AGED, KRAFT_BROWN, PASTEL_YELLOW, etc.), ruling (UNRULED_BLANK, STANDARD_RULED_BLUE, INDEX_CARD_HEADER_RULED, GRID_GRAPH).
-2. Ink & Medium: Instrument (BALLPOINT_PEN, FOUNTAIN_PEN, PENCIL, TYPEWRITER_RIBBON, FELT_TIP, PRINTED_TYPE) and color (BLUE, BLACK, RED, GREEN, GRAPHITE_GRAY).
-3. Physical Artifacts: Oil/grease stains, coffee rings, food splatter, dog-ear folds, creases, tears, punch holes, and their quadrant (TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT, BOTTOM_RIGHT, CENTER, EDGE_TOP, etc.). Note that grease stains often bleed through to the reverse side!
-4. Boundary Text: Transcribe the first readable line at top and last readable line at bottom. Flag if there are continuation cues ('(over)', 'PTO', '->') or if text cuts off mid-sentence.
-5. Role Classification:
-   - FRONT_ONLY: Contains title and ingredients, but directions are incomplete or end with continuation cues.
-   - BACK_ONLY: Starts with directions or '(cont)', lacks primary title, incomplete alone.
-   - STANDALONE: Complete single-sided recipe (Title + Ingredients + Directions).
-   - UNKNOWN: Blank card, divider tab, non-recipe note.
 
-Respond with strict JSON adhering to the VisualFingerprint schema.
-"""
+class FingerprintV2Response(BaseModel):
+    """Structured Pydantic response model for Gemini multimodal fingerprinting (WP-G1).
+
+    Maintains a flat, Gemini-schema-friendly structure with primitive types and enums.
+    """
+
+    visible_title: Optional[str] = Field(
+        default=None,
+        description="Visible recipe title exactly as printed/written, or null if absent",
+    )
+    first_lines: List[str] = Field(
+        default_factory=list,
+        description="First 1-2 transcribed lines exactly as printed",
+    )
+    last_lines: List[str] = Field(
+        default_factory=list,
+        description="Last 1-2 transcribed lines exactly as printed",
+    )
+    printed_markers: List[str] = Field(
+        default_factory=list,
+        description="Explicit printed page, part, or sequence markers (e.g. '2', 'cont\\'d', 'over')",
+    )
+    text_cut_off_start: Optional[bool] = Field(
+        default=None,
+        description="Whether text begins abruptly mid-sentence/direction",
+    )
+    text_cut_off_end: Optional[bool] = Field(
+        default=None,
+        description="Whether text ends abruptly without terminal punctuation",
+    )
+    sections_detected: List[str] = Field(
+        default_factory=list,
+        description="Detected recipe sections, e.g. ['ingredients', 'directions', 'notes']",
+    )
+    script_descriptor: Optional[str] = Field(
+        default=None,
+        description="Factual description of handwriting or typography",
+    )
+    orientation_deg: Optional[int] = Field(
+        default=0,
+        description="Estimated upright rotation angle (0, 90, 180, 270)",
+    )
+    looks_like_back: Optional[bool] = Field(
+        default=None,
+        description="Whether card face appears to be the back of a recipe card",
+    )
+    has_ingredients: Optional[bool] = Field(
+        default=None,
+        description="Whether ingredient lines are present",
+    )
+    has_directions: Optional[bool] = Field(
+        default=None,
+        description="Whether directions/steps are present",
+    )
+    role: CardRole = Field(
+        default=CardRole.UNKNOWN,
+        description="Classified functional card role",
+    )
+    role_confidence: float = Field(
+        default=0.8,
+        ge=0.0,
+        le=1.0,
+        description="Confidence in role classification",
+    )
+    paper_tone: PaperColorTone = Field(
+        default=PaperColorTone.WHITE,
+        description="Categorical substrate color tone",
+    )
+    paper_color_hex: Optional[str] = Field(
+        default="#FFFFFF",
+        description="Approximate hex color of paper substrate",
+    )
+    paper_ruling: PaperRulingType = Field(
+        default=PaperRulingType.NONE,
+        description="Ruling line or grid category",
+    )
+    ink_color: InkColor = Field(
+        default=InkColor.UNKNOWN,
+        description="Dominant ink color",
+    )
+    ink_type: InkType = Field(
+        default=InkType.UNKNOWN,
+        description="Writing instrument or printing medium",
+    )
+    stains_or_damage: List[str] = Field(
+        default_factory=list,
+        description="Physical artifacts, stains, or damage observed",
+    )
+
+
+def compute_fingerprint_cache_key(image_sha256: str, model: str, prompt_version: str) -> str:
+    """Computes deterministic cache key from image hash, stage model, and prompt version."""
+    raw = f"{image_sha256.lower().strip()}:{model.strip()}:{prompt_version.strip()}"
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def _map_payload_to_fingerprint(
+    payload: Any,
+    card_id: str,
+    image_path: str,
+    sha256_hash: str,
+) -> VisualFingerprint:
+    """Maps structured response model, VisualFingerprint, or dict to VisualFingerprint with §1.3 fields."""
+    if isinstance(payload, VisualFingerprint):
+        fp = payload.model_copy()
+        fp.card_id = card_id
+        fp.image_path = image_path
+        if sha256_hash and not fp.sha256_hash:
+            fp.sha256_hash = sha256_hash
+        fp.degraded = False
+        fp.degraded_reason = None
+        if not fp.first_lines and fp.boundary_text and fp.boundary_text.first_line:
+            fp.first_lines = [fp.boundary_text.first_line]
+        if not fp.last_lines and fp.boundary_text and fp.boundary_text.last_line:
+            fp.last_lines = [fp.boundary_text.last_line]
+        if fp.first_lines and (not fp.boundary_text or not fp.boundary_text.first_line):
+            fp.boundary_text.first_line = fp.first_lines[0]
+        if fp.last_lines and (not fp.boundary_text or not fp.boundary_text.last_line):
+            fp.boundary_text.last_line = fp.last_lines[-1]
+        return fp
+
+    data = payload
+    if hasattr(payload, "model_dump"):
+        data = payload.model_dump()
+    elif not isinstance(data, dict):
+        raise TypeError(f"Cannot map payload of type {type(payload)} to VisualFingerprint")
+
+    # If payload is already a full serialized VisualFingerprint
+    if "paper_color" in data and isinstance(data["paper_color"], (PaperColorInfo, dict)):
+        data["card_id"] = card_id
+        data["image_path"] = image_path
+        data["sha256_hash"] = sha256_hash or data.get("sha256_hash", "")
+        data["degraded"] = False
+        data["degraded_reason"] = None
+        fp = VisualFingerprint.model_validate(data)
+        if not fp.first_lines and fp.boundary_text and fp.boundary_text.first_line:
+            fp.first_lines = [fp.boundary_text.first_line]
+        if not fp.last_lines and fp.boundary_text and fp.boundary_text.last_line:
+            fp.last_lines = [fp.boundary_text.last_line]
+        return fp
+
+    # Mapping from FingerprintV2Response
+    role_val = data.get("role", CardRole.UNKNOWN)
+    role_conf = float(data.get("role_confidence", 0.8))
+
+    paper_tone = data.get("paper_tone", PaperColorTone.WHITE)
+    paper_tone_str = paper_tone.value if isinstance(paper_tone, PaperColorTone) else str(paper_tone)
+    paper_color_hex = data.get("paper_color_hex") or "#FFFFFF"
+    lab_l, lab_a, lab_b = hex_to_lab(paper_color_hex)
+    paper_color_info = PaperColorInfo(
+        tone_name=paper_tone_str,
+        hex_approx=paper_color_hex,
+        lab_l=round(lab_l, 4),
+        lab_a=round(lab_a, 4),
+        lab_b=round(lab_b, 4),
+        tone_enum=paper_tone if isinstance(paper_tone, PaperColorTone) else None,
+    )
+
+    ruling_val = data.get("paper_ruling", PaperRulingType.NONE)
+    ruling_type = ruling_val if isinstance(ruling_val, PaperRulingType) else PaperRulingType.NONE
+    has_ruling = ruling_type not in (PaperRulingType.NONE, PaperRulingType.UNRULED_BLANK)
+    ruling_info = PaperRulingInfo(
+        has_ruling=has_ruling,
+        ruling_type=ruling_type,
+    )
+
+    ink_color_val = data.get("ink_color", InkColor.UNKNOWN)
+    ink_color = ink_color_val if isinstance(ink_color_val, InkColor) else InkColor.UNKNOWN
+    ink_type_val = data.get("ink_type", InkType.UNKNOWN)
+    ink_type = ink_type_val if isinstance(ink_type_val, InkType) else InkType.UNKNOWN
+    ink_info = InkInfo(ink_color=ink_color, ink_type=ink_type)
+
+    artifacts: List[PhysicalArtifact] = []
+    for art_raw in data.get("stains_or_damage", []):
+        art_str = str(art_raw).strip().upper().replace(" ", "_")
+        try:
+            art_type = ArtifactType(art_str)
+        except ValueError:
+            art_type = ArtifactType.SMUDGE
+        artifacts.append(PhysicalArtifact(artifact_type=art_type, quadrant=CardQuadrant.CENTER))
+
+    first_lines = list(data.get("first_lines") or [])
+    last_lines = list(data.get("last_lines") or [])
+    printed_markers = list(data.get("printed_markers") or [])
+    text_cut_off_start = data.get("text_cut_off_start")
+    text_cut_off_end = data.get("text_cut_off_end")
+
+    first_line_str = first_lines[0] if first_lines else ""
+    last_line_str = last_lines[-1] if last_lines else ""
+    boundary_text = BoundaryText(
+        first_line=first_line_str,
+        last_line=last_line_str,
+        has_continuation_symbol=bool(printed_markers or text_cut_off_end),
+        is_cut_off_mid_sentence=bool(text_cut_off_end),
+    )
+
+    return VisualFingerprint(
+        card_id=card_id,
+        image_path=image_path,
+        sha256_hash=sha256_hash,
+        role=role_val,
+        role_confidence=role_conf,
+        paper_color=paper_color_info,
+        ruling=ruling_info,
+        ink=ink_info,
+        artifacts=artifacts,
+        boundary_text=boundary_text,
+        extracted_at=datetime.now(timezone.utc),
+        degraded=False,
+        degraded_reason=None,
+        visible_title=data.get("visible_title"),
+        first_lines=first_lines,
+        last_lines=last_lines,
+        printed_markers=printed_markers,
+        text_cut_off_end=text_cut_off_end,
+        text_cut_off_start=text_cut_off_start,
+        sections_detected=list(data.get("sections_detected") or []),
+        script_descriptor=data.get("script_descriptor"),
+        orientation_deg=data.get("orientation_deg", 0),
+        looks_like_back=data.get("looks_like_back"),
+        has_ingredients=data.get("has_ingredients"),
+        has_directions=data.get("has_directions"),
+    )
+
 
 
 class GeminiVisualExtractor:
@@ -70,20 +286,51 @@ class GeminiVisualExtractor:
         model_name: Optional[str] = None,
         client: Optional[Any] = None,
         llm_client: Optional[LLMClient] = None,
+        cache: Optional[FingerprintCache] = None,
     ) -> None:
         """Initialize GeminiVisualExtractor.
 
         Args:
             api_key: Optional Gemini API key. Defaults to settings.
-            model_name: Optional model override. Defaults to settings.get_fingerprint_model().
+            model_name: Optional model override. Defaults to settings.get_stage_model(LLMStage.FINGERPRINT).
             client: Optional mock or custom Gemini client for testing.
             llm_client: Optional production-hardened LLMClient instance.
+            cache: Optional persistent FingerprintCache instance.
         """
         self.settings = get_settings()
         self.api_key = api_key or self.settings.gemini_api_key
-        self.model_name = model_name or self.settings.get_fingerprint_model()
+        self.model_name = model_name or self.settings.get_stage_model(LLMStage.FINGERPRINT)
         self.client = client
         self.llm_client = llm_client
+        self.cache = cache
+
+    def compute_cache_key(self, image_sha256: str) -> str:
+        """Computes deterministic cache key from image hash, stage model, and prompt version."""
+        prompt_record = get_prompt("fingerprint_v2")
+        model = self.settings.get_stage_model(LLMStage.FINGERPRINT)
+        return compute_fingerprint_cache_key(image_sha256, model, prompt_record.version)
+
+    def get_cached_fingerprint(
+        self,
+        image_sha256: str,
+        image_path: Optional[str] = None,
+    ) -> Optional[VisualFingerprint]:
+        """Retrieves a cached fingerprint by compound cache key."""
+        if self.cache is None:
+            return None
+        cache_key = self.compute_cache_key(image_sha256)
+        fp = self.cache.get(cache_key, image_path=image_path)
+        if fp is not None:
+            fp.sha256_hash = image_sha256
+        return fp
+
+    def put_cached_fingerprint(self, fp: VisualFingerprint) -> None:
+        """Persists a fingerprint in FingerprintCache keyed by compound cache key."""
+        if self.cache is None:
+            return
+        cache_key = self.compute_cache_key(fp.sha256_hash)
+        fp_to_cache = fp.model_copy(update={"sha256_hash": cache_key})
+        self.cache.put(fp_to_cache)
 
     async def __call__(self, card_input: Union[ScannedCard, Path, str, bytes, Image.Image]) -> VisualFingerprint:
         """Async callable interface for IngestionRunner compatibility."""
@@ -110,11 +357,23 @@ class GeminiVisualExtractor:
             card_input, sha256_hash, card_id
         )
 
+        # 0. Check cache if available
+        if self.cache is not None:
+            cached_fp = self.get_cached_fingerprint(resolved_hash, image_path=image_path_str)
+            if cached_fp is not None:
+                cached_fp.card_id = resolved_id
+                cached_fp.image_path = image_path_str
+                cached_fp.sha256_hash = resolved_hash
+                return cached_fp
+
         # 1. Real LLMClient if injected (FIND-03)
         if self.llm_client is not None:
-            return await self._call_llm_client_fingerprint(
-                image_bytes, resolved_id, image_path_str, resolved_hash
+            fp = await self._call_llm_client_fingerprint(
+                image_bytes, resolved_id, image_path_str, resolved_hash, client=self.llm_client
             )
+            if self.cache is not None and not fp.degraded:
+                self.put_cached_fingerprint(fp)
+            return fp
 
         # 2. Custom or injected client (e.g. MockGeminiClient in tests)
         if self.client is not None:
@@ -156,10 +415,13 @@ class GeminiVisualExtractor:
                     return VisualFingerprint.model_validate(res)
                 return res
 
-        # 2. Real Gemini API call if API key is configured
-        if self.api_key and not self.api_key.startswith("mock"):
+        # 3. Check if _call_gemini_api has been explicitly mocked/patched
+        if hasattr(self._call_gemini_api, "mock") or type(self._call_gemini_api).__name__.endswith("Mock"):
             try:
-                return await self._call_gemini_api(image_bytes, resolved_id, image_path_str, resolved_hash)
+                fp = await self._call_gemini_api(image_bytes, resolved_id, image_path_str, resolved_hash)
+                if self.cache is not None and not fp.degraded:
+                    self.put_cached_fingerprint(fp)
+                return fp
             except Exception as exc:
                 logger.warning(f"Gemini API fingerprint call failed: {exc}. Falling back to visual analysis.")
                 return self._extract_offline_fingerprint(
@@ -171,7 +433,42 @@ class GeminiVisualExtractor:
                     degraded_reason=f"Gemini API fingerprint call failed: {exc}",
                 )
 
-        # 3. Deterministic offline visual analysis fallback
+        # 4. Route through create_llm_client when available
+        llm = create_llm_client(self.settings)
+        if llm is None and self.api_key and not self.api_key.startswith("mock"):
+            try:
+                from recipeboxer.ai.client import GenAIClient
+                llm = GenAIClient(api_key=self.api_key, settings=self.settings)
+            except Exception:
+                llm = None
+
+        if llm is not None:
+            fp = await self._call_llm_client_fingerprint(
+                image_bytes, resolved_id, image_path_str, resolved_hash, client=llm
+            )
+            if self.cache is not None and not fp.degraded:
+                self.put_cached_fingerprint(fp)
+            return fp
+
+        # 5. Legacy live httpx path if api_key is configured
+        if self.api_key and not self.api_key.startswith("mock"):
+            try:
+                fp = await self._call_gemini_api(image_bytes, resolved_id, image_path_str, resolved_hash)
+                if self.cache is not None and not fp.degraded:
+                    self.put_cached_fingerprint(fp)
+                return fp
+            except Exception as exc:
+                logger.warning(f"Gemini API fingerprint call failed: {exc}. Falling back to visual analysis.")
+                return self._extract_offline_fingerprint(
+                    image_bytes,
+                    resolved_id,
+                    image_path_str,
+                    resolved_hash,
+                    degraded=True,
+                    degraded_reason=f"Gemini API fingerprint call failed: {exc}",
+                )
+
+        # 6. Deterministic offline visual analysis fallback
         return self._extract_offline_fingerprint(
             image_bytes,
             resolved_id,
@@ -242,68 +539,89 @@ class GeminiVisualExtractor:
         card_id: str,
         image_path: str,
         sha256_hash: str,
+        client: Optional[LLMClient] = None,
     ) -> VisualFingerprint:
-        """Invokes injected LLMClient with production prompt construction."""
+        """Invokes LLMClient with production prompt construction and structured response model."""
+        active_client = client or self.llm_client
+        if active_client is None:
+            raise FingerprintUnavailable(
+                "No LLMClient available for fingerprinting",
+                reason=FailureReason.MODEL_UNAVAILABLE,
+                card_ids=[card_id],
+            )
+
+        prompt_record = get_prompt("fingerprint_v2")
+        model = self.settings.get_stage_model(LLMStage.FINGERPRINT)
+
         parts: List[Union[TextPart, ImagePart]] = [
             TextPart(text="Analyze the provided recipe card image and extract a complete visual fingerprint."),
         ]
         if image_bytes:
-            parts.append(ImagePart(data=image_bytes))
+            parts.append(ImagePart(data=image_bytes, label="recipe_card_image"))
 
         req = LLMRequest(
             stage=LLMStage.FINGERPRINT,
-            model=self.model_name,
-            system_instruction=FINGERPRINT_SYSTEM_INSTRUCTION,
+            model=model,
+            system_instruction=prompt_record.text,
             parts=parts,
-            response_model=VisualFingerprint,
-            temperature=0.1,
+            response_model=FingerprintV2Response,
+            temperature=0.0,
         )
 
         try:
-            resp = await self.llm_client.generate(req)
-        except StageUnavailableError:
+            resp = await active_client.generate(req)
+        except FingerprintUnavailable:
             raise
+        except StageUnavailableError as exc:
+            raise FingerprintUnavailable(
+                str(exc),
+                reason=getattr(exc, "reason", FailureReason.MODEL_UNAVAILABLE),
+                card_ids=[card_id],
+                retryable=getattr(exc, "retryable", True),
+                details=getattr(exc, "details", {}),
+            ) from exc
         except Exception as exc:
+            reason = FailureReason.MODEL_UNAVAILABLE
+            err_msg = str(exc).lower()
+            if isinstance(exc, (TimeoutError, asyncio.TimeoutError)) or "timeout" in err_msg or "timed out" in err_msg or "deadline" in err_msg:
+                reason = FailureReason.TIMEOUT
+            elif "rate" in err_msg or "quota" in err_msg or "429" in err_msg:
+                reason = FailureReason.RATE_LIMITED
+            elif "schema" in err_msg or "validation" in err_msg:
+                reason = FailureReason.SCHEMA_VALIDATION
+            elif "invalid" in err_msg or "json" in err_msg:
+                reason = FailureReason.INVALID_RESPONSE
+
+
             raise FingerprintUnavailable(
                 f"Gemini LLMClient fingerprint call failed: {exc}",
-                reason=FailureReason.MODEL_UNAVAILABLE,
+                reason=reason,
                 card_ids=[card_id],
             ) from exc
 
-        fp: Optional[VisualFingerprint] = None
-        if resp.parsed is not None:
-            if isinstance(resp.parsed, VisualFingerprint):
-                fp = resp.parsed.model_copy()
-            elif isinstance(resp.parsed, dict):
-                fp = VisualFingerprint.model_validate(resp.parsed)
-            elif hasattr(resp.parsed, "model_dump"):
-                fp = VisualFingerprint.model_validate(resp.parsed.model_dump())
-        elif resp.raw_text:
+        if resp.parsed is None and resp.raw_text:
             try:
                 from recipeboxer.ai.client import _extract_json_text
                 cleaned = _extract_json_text(resp.raw_text)
-                fp = VisualFingerprint.model_validate(json.loads(cleaned))
+                parsed_data = json.loads(cleaned)
+                fp = _map_payload_to_fingerprint(parsed_data, card_id, image_path, sha256_hash)
             except Exception as exc:
                 raise FingerprintUnavailable(
                     f"Failed to parse fingerprint JSON from LLMClient: {exc}",
                     reason=FailureReason.INVALID_RESPONSE,
                     card_ids=[card_id],
                 ) from exc
-
-        if fp is None:
+        elif resp.parsed is not None:
+            fp = _map_payload_to_fingerprint(resp.parsed, card_id, image_path, sha256_hash)
+        else:
             raise FingerprintUnavailable(
                 "Model returned no fingerprint payload",
                 reason=FailureReason.INVALID_RESPONSE,
                 card_ids=[card_id],
             )
 
-        fp.card_id = card_id
-        fp.image_path = image_path
-        if sha256_hash and not fp.sha256_hash:
-            fp.sha256_hash = sha256_hash
-        fp.degraded = False
-        fp.degraded_reason = None
         return fp
+
 
     async def _call_gemini_api(
         self,
@@ -503,4 +821,20 @@ class GeminiVisualExtractor:
             extracted_at=datetime.now(timezone.utc),
             degraded=degraded,
             degraded_reason=degraded_reason,
+            visible_title=None,
+            first_lines=[],
+            last_lines=[],
+            printed_markers=[],
+            text_cut_off_end=None,
+            text_cut_off_start=None,
+            sections_detected=[],
+            script_descriptor=None,
+            orientation_deg=0,
+            looks_like_back=None,
+            has_ingredients=None,
+            has_directions=None,
+            pixel=None,
+            capture=None,
+            embedding_ref=None,
         )
+

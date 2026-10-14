@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from typing import Any, Dict, List, Optional, Tuple, Union
 
-from recipeboxer.models.recipe import RecipeSchema
+from recipeboxer.models.recipe import IngredientLine, Recipe, RecipeSchema, Step
 
 
 # Unicode vulgar fraction mappings
@@ -148,5 +148,33 @@ Transcribe this recipe card with deep attention to historical handwriting nuance
 - Format directions sequentially with clear '1. ', '2. ', '3. ' step numbering.
 - Preserve card author, dates, and historical attribution in 'source_notes'.
 
-Respond strictly with valid JSON conforming to the RecipeSchema.
-"""
+    Respond strictly with valid JSON conforming to the RecipeSchema.
+    """
+
+
+def normalize_ingredient_line(line: IngredientLine) -> IngredientLine:
+    """Post-processes an IngredientLine by updating normalized_* fields while preserving original_text."""
+    source_text = line.original_text or line.item or ""
+    norm_text = normalize_archaic_units(source_text)
+    return line.model_copy(update={"normalized_text": norm_text})
+
+
+def normalize_step(step: Step) -> Step:
+    """Post-processes a Step by updating normalized_text while preserving original_text."""
+    source_text = step.original_text or step.text or ""
+    norm_text = normalize_archaic_units(source_text)
+    return step.model_copy(update={"normalized_text": norm_text})
+
+
+def normalize_recipe_fields(recipe: Recipe) -> Recipe:
+    """Post-processes recipe ingredients and steps, writing only to normalized_* fields.
+
+    Leaves original_text bit-for-bit verbatim.
+    """
+    new_sections = []
+    for sec in recipe.sections:
+        new_ings = [normalize_ingredient_line(ing) for ing in sec.ingredients]
+        new_steps = [normalize_step(st) for st in sec.steps]
+        new_sections.append(sec.model_copy(update={"ingredients": new_ings, "steps": new_steps}))
+    return recipe.model_copy(update={"sections": new_sections})
+

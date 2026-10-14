@@ -21,8 +21,9 @@ logger = logging.getLogger(__name__)
 class MarkdownExporter:
     """Serializes RecipeSchema models into Obsidian-compatible Markdown with YAML frontmatter."""
 
-    def __init__(self, encoding: str = "utf-8") -> None:
+    def __init__(self, encoding: str = "utf-8", include_transcription_notes: bool = False) -> None:
         self.encoding = encoding
+        self.include_transcription_notes = include_transcription_notes
 
     def recipe_to_frontmatter_dict(self, recipe: RecipeSchema) -> Dict[str, Any]:
         """Builds YAML frontmatter dictionary conforming to Obsidian recipe standards."""
@@ -36,17 +37,21 @@ class MarkdownExporter:
         if recipe.tags:
             fm["tags"] = list(recipe.tags)
 
-        if recipe.prep_time:
-            fm["prep_time"] = recipe.prep_time
+        prep_str = recipe.prep_time.display_text if (hasattr(recipe, "prep_time") and recipe.prep_time) else (getattr(recipe, "prep_time_str", "") or "")
+        if prep_str:
+            fm["prep_time"] = prep_str
 
-        if recipe.cook_time:
-            fm["cook_time"] = recipe.cook_time
+        cook_str = recipe.cook_time.display_text if (hasattr(recipe, "cook_time") and recipe.cook_time) else (getattr(recipe, "cook_time_str", "") or "")
+        if cook_str:
+            fm["cook_time"] = cook_str
 
-        if recipe.total_time:
-            fm["total_time"] = recipe.total_time
+        total_str = recipe.total_time.display_text if (hasattr(recipe, "total_time") and recipe.total_time) else (getattr(recipe, "total_time_str", "") or "")
+        if total_str:
+            fm["total_time"] = total_str
 
-        if recipe.yield_servings:
-            fm["yield"] = recipe.yield_servings
+        yield_str = recipe.yield_value.display_text if (hasattr(recipe, "yield_value") and recipe.yield_value) else (recipe.yield_servings or "")
+        if yield_str:
+            fm["yield"] = yield_str
 
         if recipe.source_notes:
             fm["source"] = recipe.source_notes
@@ -64,8 +69,10 @@ class MarkdownExporter:
         recipe: RecipeSchema,
         use_wikilinks: bool = True,
         image_resolver: Optional[Callable[[str], Optional[Union[str, Path, bytes]]]] = None,
+        include_transcription_notes: Optional[bool] = None,
     ) -> str:
         """Serializes a single RecipeSchema into an Obsidian Markdown document."""
+        inc_notes = self.include_transcription_notes if include_transcription_notes is None else include_transcription_notes
         fm_dict = self.recipe_to_frontmatter_dict(recipe)
         fm_yaml = yaml.dump(
             fm_dict,
@@ -89,34 +96,74 @@ class MarkdownExporter:
 
         # Metadata summary
         meta_parts = []
-        if recipe.yield_servings:
-            meta_parts.append(f"**Yield:** {recipe.yield_servings}")
-        if recipe.prep_time:
-            meta_parts.append(f"**Prep Time:** {recipe.prep_time}")
-        if recipe.cook_time:
-            meta_parts.append(f"**Cook Time:** {recipe.cook_time}")
-        if recipe.total_time:
-            meta_parts.append(f"**Total Time:** {recipe.total_time}")
+        yield_str = recipe.yield_value.display_text if (hasattr(recipe, "yield_value") and recipe.yield_value) else (recipe.yield_servings or "")
+        if yield_str:
+            meta_parts.append(f"**Yield:** {yield_str}")
+        prep_str = recipe.prep_time.display_text if (hasattr(recipe, "prep_time") and recipe.prep_time) else (getattr(recipe, "prep_time_str", "") or "")
+        if prep_str:
+            meta_parts.append(f"**Prep Time:** {prep_str}")
+        cook_str = recipe.cook_time.display_text if (hasattr(recipe, "cook_time") and recipe.cook_time) else (getattr(recipe, "cook_time_str", "") or "")
+        if cook_str:
+            meta_parts.append(f"**Cook Time:** {cook_str}")
+        total_str = recipe.total_time.display_text if (hasattr(recipe, "total_time") and recipe.total_time) else (getattr(recipe, "total_time_str", "") or "")
+        if total_str:
+            meta_parts.append(f"**Total Time:** {total_str}")
 
         if meta_parts:
             lines.append(" | ".join(meta_parts))
             lines.append("")
 
-        # Ingredients
-        if recipe.ingredients:
+        # Ingredients (uses normalized_text when present else original_text)
+        has_sections = hasattr(recipe, "sections") and bool(recipe.sections)
+        all_ings = recipe.all_ingredients() if hasattr(recipe, "all_ingredients") else []
+
+        if all_ings or recipe.ingredients:
             lines.append("## Ingredients")
             lines.append("")
-            for ing in recipe.ingredients:
-                lines.append(f"- {ing}")
-            lines.append("")
+            if has_sections and len(recipe.sections) > 1:
+                for sec in recipe.sections:
+                    if sec.name:
+                        lines.append(f"### {sec.name}")
+                    for ing in sec.ingredients:
+                        lines.append(f"- {ing.display_text}")
+                    lines.append("")
+            elif all_ings:
+                for ing in all_ings:
+                    lines.append(f"- {ing.display_text}")
+                lines.append("")
+            elif recipe.ingredients:
+                for ing_str in recipe.ingredients:
+                    lines.append(f"- {ing_str}")
+                lines.append("")
 
-        # Directions
-        if recipe.directions:
+        # Directions (uses normalized_text when present else text / original_text)
+        all_steps = recipe.all_steps() if hasattr(recipe, "all_steps") else []
+        if all_steps or recipe.directions:
             lines.append("## Directions")
             lines.append("")
-            for step in recipe.directions:
-                lines.append(step)
-            lines.append("")
+            if has_sections and len(recipe.sections) > 1:
+                step_idx = 1
+                for sec in recipe.sections:
+                    if sec.name:
+                        lines.append(f"### {sec.name}")
+                    for step in sec.steps:
+                        txt = step.display_text
+                        if not re.match(r"^\d+[\.\)]", txt):
+                            txt = f"{step_idx}. {txt}"
+                            step_idx += 1
+                        lines.append(txt)
+                    lines.append("")
+            elif all_steps:
+                for idx, step in enumerate(all_steps, start=1):
+                    txt = step.display_text
+                    if not re.match(r"^\d+[\.\)]", txt):
+                        txt = f"{idx}. {txt}"
+                    lines.append(txt)
+                lines.append("")
+            elif recipe.directions:
+                for step_str in recipe.directions:
+                    lines.append(step_str)
+                lines.append("")
 
         # Source / Notes
         if recipe.source_notes:
@@ -124,6 +171,23 @@ class MarkdownExporter:
             lines.append("")
             lines.append(recipe.source_notes)
             lines.append("")
+
+        # Transcription notes & warnings
+        if inc_notes:
+            trans_lines: List[str] = []
+            if hasattr(recipe, "headnote") and recipe.headnote and recipe.headnote.text:
+                trans_lines.append(f"- **Headnote:** {recipe.headnote.text}")
+            for n in getattr(recipe, "notes", []):
+                if hasattr(n, "text") and n.text:
+                    trans_lines.append(f"- **Note:** {n.text}")
+            for w in getattr(recipe, "warnings", []):
+                trans_lines.append(f"- **Warning [{w.code}]:** {w.message}")
+
+            if trans_lines:
+                lines.append("## Transcription Notes & Verification")
+                lines.append("")
+                lines.extend(trans_lines)
+                lines.append("")
 
         # Card Scans
         card_scans: List[str] = []
@@ -207,11 +271,69 @@ class MarkdownExporter:
                         div_lines.append("")
                     parts.append("\n".join(div_lines).strip())
 
+    def export_to_markdown_string(
+        self,
+        recipes: Union[RecipeSchema, List[RecipeSchema]],
+        use_wikilinks: bool = True,
+        image_resolver: Optional[Callable[[str], Optional[Union[str, Path, bytes]]]] = None,
+        curation: Optional[CuratedCookbook] = None,
+        include_transcription_notes: Optional[bool] = None,
+    ) -> str:
+        """Serializes single recipe, list of recipes, or CuratedCookbook into formatted Markdown string."""
+        if curation:
+            recipe_list = curation.all_recipes
+        else:
+            recipe_list = [recipes] if isinstance(recipes, RecipeSchema) else list(recipes)
+
+        if not recipe_list and not curation:
+            return ""
+
+        if curation:
+            parts: List[str] = []
+
+            # 1. Table of Contents
+            if curation.include_toc and curation.total_recipe_count > 0:
+                toc_lines: List[str] = [
+                    f"# {curation.toc_title or 'Table of Contents'}",
+                    "",
+                ]
+                show_sec_headers = len(curation.sections) > 1 or curation.grouping_preset != GroupingPreset.NONE
+                for sec in curation.sections:
+                    if show_sec_headers:
+                        toc_lines.append(f"## {sec.title}")
+                        toc_lines.append("")
+                    for rec in sec.recipes:
+                        title_text = rec.title or "Untitled Recipe"
+                        if use_wikilinks:
+                            toc_lines.append(f"- [[#{title_text}]]")
+                        else:
+                            slug = re.sub(r"[^a-zA-Z0-9\-_]+", "-", title_text.lower()).strip("-")
+                            toc_lines.append(f"- [{title_text}](#{slug})")
+                    toc_lines.append("")
+                parts.append("\n".join(toc_lines).strip())
+
+            # 2. Sections and Recipes
+            for sec in curation.sections:
+                show_divider = bool(
+                    curation.include_section_dividers
+                    and (len(curation.sections) > 1 or curation.grouping_preset != GroupingPreset.NONE)
+                )
+                if show_divider:
+                    div_lines: List[str] = [
+                        f"# {sec.title}",
+                        "",
+                    ]
+                    if sec.subtitle:
+                        div_lines.append(f"*{sec.subtitle}*")
+                        div_lines.append("")
+                    parts.append("\n".join(div_lines).strip())
+
                 for rec in sec.recipes:
                     rec_md = self.export_single_recipe(
                         rec,
                         use_wikilinks=use_wikilinks,
                         image_resolver=image_resolver,
+                        include_transcription_notes=include_transcription_notes,
                     )
                     parts.append(rec_md)
 
@@ -222,6 +344,7 @@ class MarkdownExporter:
                 recipe_list[0],
                 use_wikilinks=use_wikilinks,
                 image_resolver=image_resolver,
+                include_transcription_notes=include_transcription_notes,
             )
 
         docs = [
@@ -229,6 +352,7 @@ class MarkdownExporter:
                 r,
                 use_wikilinks=use_wikilinks,
                 image_resolver=image_resolver,
+                include_transcription_notes=include_transcription_notes,
             )
             for r in recipe_list
         ]
@@ -241,6 +365,7 @@ class MarkdownExporter:
         use_wikilinks: bool = True,
         image_resolver: Optional[Callable[[str], Optional[Union[str, Path, bytes]]]] = None,
         curation: Optional[CuratedCookbook] = None,
+        include_transcription_notes: Optional[bool] = None,
     ) -> Path:
         """Writes Obsidian Markdown to file on disk."""
         path = Path(output_path).resolve()
@@ -250,6 +375,7 @@ class MarkdownExporter:
             use_wikilinks=use_wikilinks,
             image_resolver=image_resolver,
             curation=curation,
+            include_transcription_notes=include_transcription_notes,
         )
         path.write_text(content, encoding=self.encoding)
         count = curation.total_recipe_count if curation else (1 if isinstance(recipes, RecipeSchema) else len(recipes))
@@ -262,6 +388,7 @@ class MarkdownExporter:
         use_wikilinks: bool = True,
         image_resolver: Optional[Callable[[str], Optional[Union[str, Path, bytes]]]] = None,
         curation: Optional[CuratedCookbook] = None,
+        include_transcription_notes: Optional[bool] = None,
     ) -> bytes:
         """Serializes recipes into UTF-8 encoded bytes."""
         return self.export_to_markdown_string(
@@ -269,6 +396,7 @@ class MarkdownExporter:
             use_wikilinks=use_wikilinks,
             image_resolver=image_resolver,
             curation=curation,
+            include_transcription_notes=include_transcription_notes,
         ).encode(self.encoding)
 
 
@@ -277,9 +405,10 @@ def export_recipes_to_markdown(
     use_wikilinks: bool = True,
     image_resolver: Optional[Callable[[str], Optional[Union[str, Path, bytes]]]] = None,
     curation: Optional[CuratedCookbook] = None,
+    include_transcription_notes: bool = False,
 ) -> str:
     """Convenience helper to export recipes as Obsidian Markdown string."""
-    return MarkdownExporter().export_to_markdown_string(
+    return MarkdownExporter(include_transcription_notes=include_transcription_notes).export_to_markdown_string(
         recipes,
         use_wikilinks=use_wikilinks,
         image_resolver=image_resolver,

@@ -26,6 +26,7 @@ from recipeboxer.ingestion.scanner import ScannedCard, scan_card_directory
 from recipeboxer.models.correlation import CorrelationProposal, CorrelationResult
 from recipeboxer.models.domain import CardRole, VisualFingerprint
 from recipeboxer.models.failures import (
+    BudgetExceeded,
     ExtractionUnavailable,
     FailureReason,
     FingerprintUnavailable,
@@ -34,6 +35,7 @@ from recipeboxer.models.failures import (
     StageFailure,
     StageUnavailableError,
 )
+
 from recipeboxer.models.hitl import CardPairApproval, HITLDecision, HitlItem, HitlItemType
 from recipeboxer.models.pipeline import (
     FailedRecipe,
@@ -387,6 +389,27 @@ class RecipeBoxerAgent:
                         progress_callback=_fingerprint_progress,
                         cancellation_token=session.cancellation_token,
                     )
+                except BudgetExceeded as be:
+                    logger.warning(f"[{session.session_id}] Budget exceeded during fingerprinting: {be}")
+                    fail = be.to_failure()
+                    session.add_failure(fail)
+                    budget_item = HitlItem(
+                        item_id=f"hitl_budget_{uuid.uuid4().hex[:8]}",
+                        item_type=HitlItemType.BUDGET,
+                        kind="budget",
+                        stage="FINGERPRINT",
+                        card_ids=[c.card_id for c in new_cards],
+                        failure=fail,
+                        needs_review=True,
+                        message=str(be),
+                    )
+                    session.enqueue_hitl_item(budget_item)
+                    resumed = await session.pause_for_hitl()
+                    if not resumed or session.is_cancelled:
+                        session.state = PipelineState.CANCELLED
+                        session.end_time = time.monotonic()
+                        return
+                    ingestion_result = IngestionResult(fingerprints=[], failures=[fail])
                 except StageUnavailableError as sue:
                     fail = sue.to_failure()
                     session.add_failure(fail)
@@ -418,11 +441,37 @@ class RecipeBoxerAgent:
                     session.end_time = time.monotonic()
                     return
 
-                # Record stage failures from runner
+                # Record stage failures from runner and check for budget exceeded
+                budget_failures = [
+                    f for f in getattr(ingestion_result, "failures", [])
+                    if f.reason == FailureReason.BUDGET_EXCEEDED
+                ]
+                if budget_failures:
+                    b_fail = budget_failures[0]
+                    if b_fail not in session.failures:
+                        session.add_failure(b_fail)
+                    budget_item = HitlItem(
+                        item_id=f"hitl_budget_{uuid.uuid4().hex[:8]}",
+                        item_type=HitlItemType.BUDGET,
+                        kind="budget",
+                        stage="FINGERPRINT",
+                        card_ids=b_fail.card_ids,
+                        failure=b_fail,
+                        needs_review=True,
+                        message=b_fail.message or "Budget exceeded during fingerprinting",
+                    )
+                    session.enqueue_hitl_item(budget_item)
+                    resumed = await session.pause_for_hitl()
+                    if not resumed or session.is_cancelled:
+                        session.state = PipelineState.CANCELLED
+                        session.end_time = time.monotonic()
+                        return
+
                 for failure in getattr(ingestion_result, "failures", []):
                     if failure not in session.failures:
                         session.add_failure(failure)
                         session.enqueue_hitl_failure(failure)
+
 
                 for fp in ingestion_result.fingerprints:
                     session.fingerprints[fp.card_id] = fp
@@ -461,6 +510,30 @@ class RecipeBoxerAgent:
                         correlation_result = await optimizer.optimize(new_fps)
                     else:
                         correlation_result = await self._run_custom_optimizer(optimizer, new_fps)
+                except BudgetExceeded as be:
+                    logger.warning(f"[{session.session_id}] Budget exceeded during correlation: {be}")
+                    fail = be.to_failure()
+                    session.add_failure(fail)
+                    budget_item = HitlItem(
+                        item_id=f"hitl_budget_{uuid.uuid4().hex[:8]}",
+                        item_type=HitlItemType.BUDGET,
+                        kind="budget",
+                        stage="CORRELATION",
+                        card_ids=[fp.card_id for fp in new_fps],
+                        failure=fail,
+                        needs_review=True,
+                        message=str(be),
+                    )
+                    session.enqueue_hitl_item(budget_item)
+                    resumed = await session.pause_for_hitl()
+                    if not resumed or session.is_cancelled:
+                        session.state = PipelineState.CANCELLED
+                        session.end_time = time.monotonic()
+                        return
+                    if isinstance(optimizer, PairingOptimizer):
+                        correlation_result = await optimizer.optimize(new_fps)
+                    else:
+                        correlation_result = await self._run_custom_optimizer(optimizer, new_fps)
                 except StageUnavailableError as sue:
                     fail = sue.to_failure()
                     session.add_failure(fail)
@@ -469,6 +542,7 @@ class RecipeBoxerAgent:
                         proposals=[],
                         unmatched_card_ids=[fp.card_id for fp in new_fps],
                     )
+
                 except Exception as exc:
                     fail = StageFailure(
                         stage=PipelineStage.CORRELATION,
@@ -724,11 +798,48 @@ class RecipeBoxerAgent:
                                 failure=fail,
                             )
                             newly_extracted_recipes.append(failed_recipe)
+                    except BudgetExceeded as be:
+                        logger.warning(
+                            f"[{session.session_id}] Budget exceeded during recipe extraction for {ordered_card_ids}: {be}"
+                        )
+                        fail = be.to_failure(proposal_id=approval.proposal_id)
+                        session.add_failure(fail)
+                        budget_item = HitlItem(
+                            item_id=f"hitl_budget_{uuid.uuid4().hex[:8]}",
+                            item_type=HitlItemType.BUDGET,
+                            kind="budget",
+                            stage="EXTRACTION",
+                            card_ids=ordered_card_ids,
+                            proposal_id=approval.proposal_id,
+                            failure=fail,
+                            needs_review=True,
+                            message=str(be),
+                        )
+                        session.enqueue_hitl_item(budget_item)
+                        resumed = await session.pause_for_hitl()
+                        if not resumed or session.is_cancelled:
+                            session.state = PipelineState.CANCELLED
+                            session.end_time = time.monotonic()
+                            return
+                        # If resumed with raised cap, retry this recipe extraction
+                        try:
+                            recipe = await self._extract_single_recipe(
+                                session,
+                                front_fp=ordered_fps[0] if ordered_fps else None,
+                                back_fp=ordered_fps[1] if len(ordered_fps) > 1 else None,
+                                ordered_fps=ordered_fps,
+                            )
+                            if recipe:
+                                recipe.card_ids = ordered_card_ids if ordered_card_ids else [fp.card_id for fp in ordered_fps]
+                                newly_extracted_recipes.append(recipe)
+                        except Exception as retry_exc:
+                            logger.error(f"Retry extraction failed after budget resume: {retry_exc}")
                     except Exception as exc:
                         logger.error(
                             f"[{session.session_id}] Recipe extraction failed for {ordered_card_ids}: {exc}"
                         )
                         session.errors.append(f"Extraction failed for {ordered_card_ids}: {str(exc)}")
+
 
                         if isinstance(exc, StageUnavailableError):
                             fail = exc.to_failure(proposal_id=approval.proposal_id)

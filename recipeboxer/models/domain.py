@@ -8,6 +8,8 @@ from enum import Enum
 from typing import Any, List, Optional, Union
 from pydantic import BaseModel, Field, field_validator
 
+from recipeboxer.models.features import CaptureMeta, PixelFeatures
+
 
 class CardRole(str, Enum):
     """Functional role or sequence position marker of a scanned recipe card."""
@@ -322,4 +324,65 @@ class VisualFingerprint(BaseModel):
     degraded_reason: Optional[str] = Field(
         default=None,
         description="Reason why visual fingerprint is degraded",
+    )
+    # Wave 4 v2 fingerprint extensions (§1.3)
+    visible_title: Optional[str] = Field(
+        default=None,
+        description="Visible recipe title exactly as printed on the card",
+    )
+    first_lines: List[str] = Field(
+        default_factory=list,
+        description="First 1-2 transcribed lines exactly as printed",
+    )
+    last_lines: List[str] = Field(
+        default_factory=list,
+        description="Last 1-2 transcribed lines exactly as printed",
+    )
+    printed_markers: List[str] = Field(
+        default_factory=list,
+        description="Explicit page/part markers exactly as printed (e.g. '2', 'cont\\'d', 'over')",
+    )
+    text_cut_off_end: Optional[bool] = Field(
+        default=None,
+        description="Whether card text ends abruptly without terminating sentence/step",
+    )
+    text_cut_off_start: Optional[bool] = Field(
+        default=None,
+        description="Whether card text starts abruptly mid-sentence/direction",
+    )
+    sections_detected: List[str] = Field(
+        default_factory=list,
+        description="Recipe sections detected on card face (e.g. 'ingredients', 'directions', 'notes')",
+    )
+    script_descriptor: Optional[str] = Field(
+        default=None,
+        description="Free-text handwriting or typography description",
+    )
+    orientation_deg: Optional[int] = Field(
+        default=None,
+        description="Card orientation angle in degrees (0, 90, 180, 270)",
+    )
+    looks_like_back: Optional[bool] = Field(
+        default=None,
+        description="Whether visual properties suggest the back side of a card",
+    )
+    has_ingredients: Optional[bool] = Field(
+        default=None,
+        description="Whether card contains an ingredient list or ingredient lines",
+    )
+    has_directions: Optional[bool] = Field(
+        default=None,
+        description="Whether card contains preparation steps or directions",
+    )
+    pixel: Optional[PixelFeatures] = Field(
+        default=None,
+        description="Low-level pixel features (WP-G2)",
+    )
+    capture: Optional[CaptureMeta] = Field(
+        default=None,
+        description="Capture metadata (WP-G3)",
+    )
+    embedding_ref: Optional[str] = Field(
+        default=None,
+        description="Reference key to substrate/multimodal embedding (WP-G4)",
     )

@@ -109,3 +109,27 @@ class ModalityUnavailable(StageUnavailableError):
     """Modality classification could not run."""
 
     stage = PipelineStage.MODALITY
+
+
+class BudgetExceeded(StageUnavailableError):
+    """Execution stopped because spending or call budget exceeded the configured cap."""
+
+    stage = PipelineStage.EXTRACTION
+
+    def __init__(
+        self,
+        message: str = "Budget cap exceeded",
+        *,
+        reason: FailureReason = FailureReason.BUDGET_EXCEEDED,
+        card_ids: Optional[List[str]] = None,
+        retryable: bool = False,
+        details: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        super().__init__(
+            message,
+            reason=reason,
+            card_ids=card_ids,
+            retryable=retryable,
+            details=details,
+        )
+

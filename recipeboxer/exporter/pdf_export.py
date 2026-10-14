@@ -202,8 +202,9 @@ def _wrap_text(text: str, max_chars_per_line: int) -> List[str]:
 class PdfExporter:
     """Archival cookbook PDF exporter with elegant typography and embedded card scans."""
 
-    def __init__(self, encoding: str = "utf-8") -> None:
+    def __init__(self, encoding: str = "utf-8", include_transcription_notes: bool = False) -> None:
         self.encoding = encoding
+        self.include_transcription_notes = include_transcription_notes
 
     def _render_recipe_to_pages(
         self,
@@ -211,8 +212,10 @@ class PdfExporter:
         pages: List[_PdfCanvas],
         image_resolver: Optional[Callable[[str], Optional[Union[str, Path, bytes]]]],
         image_data_store: Dict[str, Tuple[int, int, bytes, str]],  # img_name -> (w, h, data, filter)
+        include_transcription_notes: Optional[bool] = None,
     ) -> None:
         """Lays out a single recipe across one or more pages with robust overflow protection."""
+        inc_notes = self.include_transcription_notes if include_transcription_notes is None else include_transcription_notes
         canvas = _PdfCanvas(page_num=len(pages) + 1)
         pages.append(canvas)
 
@@ -277,11 +280,16 @@ class PdfExporter:
         )
 
         col_w = CONTENT_WIDTH / 4.0
+        yield_str = (recipe.yield_value.display_text if getattr(recipe, "yield_value", None) else None) or getattr(recipe, "yield_servings", None) or "—"
+        prep_str = (recipe.prep_time.display_text if getattr(recipe, "prep_time", None) else None) or "—"
+        cook_str = (recipe.cook_time.display_text if getattr(recipe, "cook_time", None) else None) or "—"
+        total_str = (recipe.total_time.display_text if getattr(recipe, "total_time", None) else None) or "—"
+
         meta_items = [
-            ("Yield", recipe.yield_servings or "—"),
-            ("Prep", recipe.prep_time or "—"),
-            ("Cook", recipe.cook_time or "—"),
-            ("Total", recipe.total_time or "—"),
+            ("Yield", yield_str),
+            ("Prep", prep_str),
+            ("Cook", cook_str),
+            ("Total", total_str),
         ]
         for idx, (label, val) in enumerate(meta_items):
             cx = MARGIN_LEFT + (idx * col_w) + 10.0
@@ -291,45 +299,92 @@ class PdfExporter:
         y -= (box_h + 16.0)
 
         # Ingredients Heading & Items
-        if recipe.ingredients:
+        all_ings = recipe.all_ingredients() if hasattr(recipe, "all_ingredients") else getattr(recipe, "ingredients", [])
+        if all_ings:
             ensure_space(36.0, f"{short_title} - INGREDIENTS (CONT.)")
             canvas.draw_text("INGREDIENTS", MARGIN_LEFT, y, "F2", 11.0, 0.18, 0.35, 0.18)
             y -= 6.0
             canvas.draw_line(MARGIN_LEFT, y, MARGIN_LEFT + 120.0, y, 0.18, 0.35, 0.18, 1.0)
             y -= 14.0
 
-            for item in recipe.ingredients:
-                lines = _wrap_text(item, 70)
-                for l_idx, line in enumerate(lines):
-                    ensure_space(15.0, f"{short_title} - INGREDIENTS (CONT.)")
-                    if l_idx == 0:
-                        canvas.draw_text("*", MARGIN_LEFT + 4.0, y, "F2", 9.0, 0.18, 0.35, 0.18)
-                        canvas.draw_text(line, MARGIN_LEFT + 16.0, y, "F1", 9.5, 0.15, 0.15, 0.15)
-                    else:
-                        canvas.draw_text(line, MARGIN_LEFT + 16.0, y, "F1", 9.5, 0.15, 0.15, 0.15)
-                    y -= 13.0
-                y -= 2.0
+            sections = getattr(recipe, "sections", None)
+            if sections:
+                for sec in sections:
+                    if sec.title:
+                        ensure_space(20.0, f"{short_title} - INGREDIENTS (CONT.)")
+                        canvas.draw_text(sec.title.upper(), MARGIN_LEFT, y, "F2", 9.5, 0.25, 0.40, 0.25)
+                        y -= 14.0
+                    for item in sec.ingredients:
+                        text = item.display_text if hasattr(item, "display_text") else str(item)
+                        lines = _wrap_text(text, 70)
+                        for l_idx, line in enumerate(lines):
+                            ensure_space(15.0, f"{short_title} - INGREDIENTS (CONT.)")
+                            if l_idx == 0:
+                                canvas.draw_text("*", MARGIN_LEFT + 4.0, y, "F2", 9.0, 0.18, 0.35, 0.18)
+                                canvas.draw_text(line, MARGIN_LEFT + 16.0, y, "F1", 9.5, 0.15, 0.15, 0.15)
+                            else:
+                                canvas.draw_text(line, MARGIN_LEFT + 16.0, y, "F1", 9.5, 0.15, 0.15, 0.15)
+                            y -= 13.0
+                        y -= 2.0
+            else:
+                for item in all_ings:
+                    text = item.display_text if hasattr(item, "display_text") else str(item)
+                    lines = _wrap_text(text, 70)
+                    for l_idx, line in enumerate(lines):
+                        ensure_space(15.0, f"{short_title} - INGREDIENTS (CONT.)")
+                        if l_idx == 0:
+                            canvas.draw_text("*", MARGIN_LEFT + 4.0, y, "F2", 9.0, 0.18, 0.35, 0.18)
+                            canvas.draw_text(line, MARGIN_LEFT + 16.0, y, "F1", 9.5, 0.15, 0.15, 0.15)
+                        else:
+                            canvas.draw_text(line, MARGIN_LEFT + 16.0, y, "F1", 9.5, 0.15, 0.15, 0.15)
+                        y -= 13.0
+                    y -= 2.0
             y -= 8.0
 
         # Directions Heading & Steps
-        if recipe.directions:
+        all_steps = recipe.all_steps() if hasattr(recipe, "all_steps") else getattr(recipe, "directions", [])
+        if all_steps:
             ensure_space(36.0, f"{short_title} - DIRECTIONS (CONT.)")
             canvas.draw_text("DIRECTIONS", MARGIN_LEFT, y, "F2", 11.0, 0.18, 0.35, 0.18)
             y -= 6.0
             canvas.draw_line(MARGIN_LEFT, y, MARGIN_LEFT + 120.0, y, 0.18, 0.35, 0.18, 1.0)
             y -= 14.0
 
-            for step in recipe.directions:
-                lines = _wrap_text(step, 72)
-                for line in lines:
-                    ensure_space(15.0, f"{short_title} - DIRECTIONS (CONT.)")
-                    canvas.draw_text(line, MARGIN_LEFT + 6.0, y, "F1", 9.5, 0.15, 0.15, 0.15)
-                    y -= 13.0
-                y -= 4.0
+            step_num = 1
+            sections = getattr(recipe, "sections", None)
+            if sections:
+                for sec in sections:
+                    if sec.title and len(sections) > 1:
+                        ensure_space(20.0, f"{short_title} - DIRECTIONS (CONT.)")
+                        canvas.draw_text(sec.title.upper(), MARGIN_LEFT, y, "F2", 9.5, 0.25, 0.40, 0.25)
+                        y -= 14.0
+                    for step in sec.steps:
+                        text = step.display_text if hasattr(step, "display_text") else str(step)
+                        lines = _wrap_text(f"{step_num}. {text}", 72)
+                        step_num += 1
+                        for line in lines:
+                            ensure_space(15.0, f"{short_title} - DIRECTIONS (CONT.)")
+                            canvas.draw_text(line, MARGIN_LEFT + 6.0, y, "F1", 9.5, 0.15, 0.15, 0.15)
+                            y -= 13.0
+                        y -= 4.0
+            else:
+                for step in all_steps:
+                    text = step.display_text if hasattr(step, "display_text") else str(step)
+                    lines = _wrap_text(f"{step_num}. {text}", 72)
+                    step_num += 1
+                    for line in lines:
+                        ensure_space(15.0, f"{short_title} - DIRECTIONS (CONT.)")
+                        canvas.draw_text(line, MARGIN_LEFT + 6.0, y, "F1", 9.5, 0.15, 0.15, 0.15)
+                        y -= 13.0
+                    y -= 4.0
             y -= 8.0
 
-        # Tags and Source
+        # Tags, Notes and Source
         meta_lines = []
+        if recipe.notes:
+            notes_list = recipe.notes if isinstance(recipe.notes, list) else [recipe.notes]
+            for n in notes_list:
+                meta_lines.append(f"Note: {n}")
         if recipe.tags:
             meta_lines.append(f"Tags: {', '.join(recipe.tags)}")
         if recipe.source_notes:
@@ -339,6 +394,39 @@ class PdfExporter:
             ensure_space(13.0)
             canvas.draw_text(note, MARGIN_LEFT, y, "F3", 8.0, 0.45, 0.45, 0.45)
             y -= 11.0
+
+        # Transcription Notes & Warnings
+        if inc_notes:
+            t_notes: List[str] = []
+            if getattr(recipe, "transcription_notes", None):
+                t_notes.extend(recipe.transcription_notes)
+            if getattr(recipe, "warnings", None):
+                for w in recipe.warnings:
+                    msg = w.message if hasattr(w, "message") else str(w)
+                    t_notes.append(f"Warning: {msg}")
+            if hasattr(recipe, "all_ingredients"):
+                for ing in recipe.all_ingredients():
+                    if getattr(ing, "legibility", None) and ing.legibility.value != "clear":
+                        t_notes.append(f"Ingredient legibility [{ing.legibility.value}]: {ing.display_text}")
+            if hasattr(recipe, "all_steps"):
+                for st in recipe.all_steps():
+                    if getattr(st, "legibility", None) and st.legibility.value != "clear":
+                        t_notes.append(f"Step legibility [{st.legibility.value}]: {st.display_text}")
+
+            if t_notes:
+                ensure_space(30.0, f"{short_title} - TRANSCRIPTION NOTES (CONT.)")
+                canvas.draw_text("TRANSCRIPTION NOTES", MARGIN_LEFT, y, "F2", 9.5, 0.35, 0.18, 0.18)
+                y -= 6.0
+                canvas.draw_line(MARGIN_LEFT, y, MARGIN_LEFT + 150.0, y, 0.35, 0.18, 0.18, 0.8)
+                y -= 14.0
+                for tn in t_notes:
+                    lines = _wrap_text(f"- {tn}", 72)
+                    for line in lines:
+                        ensure_space(14.0, f"{short_title} - TRANSCRIPTION NOTES (CONT.)")
+                        canvas.draw_text(line, MARGIN_LEFT + 6.0, y, "F3", 8.0, 0.35, 0.35, 0.35)
+                        y -= 11.0
+                    y -= 2.0
+                y -= 6.0
 
         # Embedded Card Scans
         resolved_cards: List[Tuple[str, bytes]] = []
@@ -531,6 +619,7 @@ class PdfExporter:
         recipes: Union[RecipeSchema, List[RecipeSchema]],
         image_resolver: Optional[Callable[[str], Optional[Union[str, Path, bytes]]]] = None,
         curation: Optional[CuratedCookbook] = None,
+        include_transcription_notes: Optional[bool] = None,
     ) -> bytes:
         """Generates print-ready PDF binary bytes adhering strictly to PDF 1.4 specification."""
         if curation:
@@ -563,6 +652,7 @@ class PdfExporter:
                         pages=body_pages,
                         image_resolver=image_resolver,
                         image_data_store=image_data_store,
+                        include_transcription_notes=include_transcription_notes,
                     )
 
             # Pass 2: Render TOC pages
@@ -588,6 +678,7 @@ class PdfExporter:
                         pages=body_pages,
                         image_resolver=image_resolver,
                         image_data_store=image_data_store,
+                        include_transcription_notes=include_transcription_notes,
                     )
             pages = body_pages
         else:
@@ -598,6 +689,7 @@ class PdfExporter:
                     pages=body_pages,
                     image_resolver=image_resolver,
                     image_data_store=image_data_store,
+                    include_transcription_notes=include_transcription_notes,
                 )
             pages = body_pages
 
@@ -715,11 +807,17 @@ class PdfExporter:
         output_path: Union[str, Path],
         image_resolver: Optional[Callable[[str], Optional[Union[str, Path, bytes]]]] = None,
         curation: Optional[CuratedCookbook] = None,
+        include_transcription_notes: Optional[bool] = None,
     ) -> Path:
         """Writes PDF cookbook to file on disk."""
         path = Path(output_path).resolve()
         path.parent.mkdir(parents=True, exist_ok=True)
-        pdf_bytes = self.export_to_bytes(recipes, image_resolver=image_resolver, curation=curation)
+        pdf_bytes = self.export_to_bytes(
+            recipes,
+            image_resolver=image_resolver,
+            curation=curation,
+            include_transcription_notes=include_transcription_notes,
+        )
         path.write_bytes(pdf_bytes)
         count = curation.total_recipe_count if curation else (1 if isinstance(recipes, RecipeSchema) else len(recipes))
         logger.info(f"Exported {count} recipe(s) to PDF: {path}")
@@ -730,7 +828,13 @@ def export_recipes_to_pdf(
     recipes: Union[RecipeSchema, List[RecipeSchema]],
     image_resolver: Optional[Callable[[str], Optional[Union[str, Path, bytes]]]] = None,
     curation: Optional[CuratedCookbook] = None,
+    include_transcription_notes: bool = False,
 ) -> bytes:
     """Convenience helper to export recipes as .pdf binary bytes."""
-    return PdfExporter().export_to_bytes(recipes, image_resolver=image_resolver, curation=curation)
+    return PdfExporter(include_transcription_notes=include_transcription_notes).export_to_bytes(
+        recipes,
+        image_resolver=image_resolver,
+        curation=curation,
+        include_transcription_notes=include_transcription_notes,
+    )
 

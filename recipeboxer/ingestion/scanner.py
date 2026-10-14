@@ -9,6 +9,9 @@ from pathlib import Path
 from typing import List, Optional, Set, Tuple, Union
 from PIL import Image
 
+from recipeboxer.ingestion.capture import capture_gap_seconds, read_capture_meta
+from recipeboxer.models.features import CaptureMeta
+
 VALID_IMAGE_EXTENSIONS: Set[str] = {
     ".jpg",
     ".jpeg",
@@ -68,10 +71,17 @@ class ScannedCard:
     height: int = 0
     format: str = "JPEG"
     mode: str = "RGB"
+    capture_meta: Optional[CaptureMeta] = None
+    natural_sort_index: int = 0
 
     def __post_init__(self) -> None:
         if not self.filename and self.file_path:
             object.__setattr__(self, "filename", self.file_path.name)
+
+    @property
+    def capture(self) -> Optional[CaptureMeta]:
+        """Convenience property alias for capture_meta."""
+        return self.capture_meta
 
 
 @dataclass
@@ -102,7 +112,11 @@ def compute_file_sha256(file_path: Path, chunk_size: int = 65536) -> str:
     return hasher.hexdigest().lower()
 
 
-def validate_and_load_card(file_path: Path) -> ScannedCard:
+def validate_and_load_card(
+    file_path: Path,
+    natural_sort_index: int = 0,
+    capture_meta: Optional[CaptureMeta] = None,
+) -> ScannedCard:
     """Validate an image file with PIL, extract metadata, and compute SHA-256 hash.
 
     Raises:
@@ -139,6 +153,9 @@ def validate_and_load_card(file_path: Path) -> ScannedCard:
 
     card_id = file_path.name
 
+    if capture_meta is None:
+        capture_meta = read_capture_meta(file_path, natural_sort_index=natural_sort_index)
+
     return ScannedCard(
         card_id=card_id,
         file_path=file_path.resolve(),
@@ -149,6 +166,8 @@ def validate_and_load_card(file_path: Path) -> ScannedCard:
         height=height,
         format=img_format,
         mode=img_mode,
+        capture_meta=capture_meta,
+        natural_sort_index=natural_sort_index,
     )
 
 
@@ -200,11 +219,12 @@ def scan_directory(
     candidate_paths.sort(key=natural_sort_key)
 
     # Validate and build ScannedCard objects
-    for file_path in candidate_paths:
+    for idx, file_path in enumerate(candidate_paths):
         try:
             if validate_images:
-                card = validate_and_load_card(file_path)
+                card = validate_and_load_card(file_path, natural_sort_index=idx)
             else:
+                meta = read_capture_meta(file_path, natural_sort_index=idx)
                 card = ScannedCard(
                     card_id=file_path.name,
                     file_path=file_path.resolve(),
@@ -215,6 +235,8 @@ def scan_directory(
                     height=0,
                     format=file_path.suffix.lstrip(".").upper(),
                     mode="UNKNOWN",
+                    capture_meta=meta,
+                    natural_sort_index=idx,
                 )
             result.cards.append(card)
         except Exception as exc:
@@ -224,6 +246,7 @@ def scan_directory(
 
     result.valid_cards_count = len(result.cards)
     return result
+
 
 
 def scan_card_directory(

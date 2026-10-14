@@ -107,6 +107,18 @@ def create_analyze_parser() -> argparse.ArgumentParser:
         help="Path to JSON file with image sets to skip correlation grouping",
     )
     parser.add_argument(
+        "--budget-usd",
+        type=float,
+        default=None,
+        help="Maximum run spending budget cap in USD (WP-B1, WP-B3)",
+    )
+    parser.add_argument(
+        "--max-calls",
+        type=int,
+        default=None,
+        help="Maximum number of LLM generation calls allowed (WP-B1, WP-B3)",
+    )
+    parser.add_argument(
         "-c",
         "--concurrency",
         type=int,
@@ -121,6 +133,7 @@ def create_analyze_parser() -> argparse.ArgumentParser:
         help="Logging verbosity level",
     )
     return parser
+
 
 
 def main(args: Optional[List[str]] = None) -> int:
@@ -160,8 +173,11 @@ def main(args: Optional[List[str]] = None) -> int:
                     auto_approve=parsed_analyze.auto_approve,
                     profile=parsed_analyze.profile,
                     image_sets=parsed_analyze.image_sets,
+                    budget_usd=parsed_analyze.budget_usd,
+                    max_calls=parsed_analyze.max_calls,
                 )
             )
+
             return 0
         except Exception as exc:
             logging.getLogger("recipeboxer.cli").error(f"Fatal error during analysis: {exc}", exc_info=True)

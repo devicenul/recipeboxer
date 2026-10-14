@@ -493,12 +493,18 @@ def calculate_sequential_header_score(
 ) -> float:
     """Detects sequential header and step progression between two cards (e.g. Part 1 -> Part 2, Card 1 -> Card 2).
 
+    Uses OCR/LLM boundary text and v2 visual fingerprint fields:
+    - printed_markers (e.g. '1' -> '2', 'Card 1' -> 'Card 2')
+    - text_cut_off_end / text_cut_off_start
+    - looks_like_back
+    - has_ingredients / has_directions content progression
+
     Args:
         fp1: Preceding card visual fingerprint.
         fp2: Following card visual fingerprint.
 
     Returns:
-        Header and continuation score in [0.0, 1.0], with 0.50 as neutral.
+        Header and continuation score in [0.0, 1.0], with 0.50 as neutral baseline when absent.
     """
     import re
 
@@ -521,27 +527,40 @@ def calculate_sequential_header_score(
     t1 = f"{t1_first} {t1_last}".strip()
     t2 = f"{t2_first} {t2_last}".strip()
 
-    # Check for printed sequential card/page/part numbers in boundary text
-    # e.g., "Card 1", "Part 2", "Page 2", "pt 1", "p. 2"
-    m1 = re.search(r"(?:part|card|page|pt|p\.)\s*([0-9]+)", t1)
-    m2 = re.search(r"(?:part|card|page|pt|p\.)\s*([0-9]+)", t2)
+    # 1. Check for printed sequential card/page/part numbers in printed_markers or boundary text
+    def _extract_seq_num(markers: Optional[List[str]], text: str) -> Optional[int]:
+        for m in (markers or []):
+            m_str = m.strip().lower()
+            if m_str.isdigit():
+                return int(m_str)
+            match = re.search(r"(?:part|card|page|pt|p\.?|#)\s*([0-9]+)", m_str)
+            if match:
+                try:
+                    return int(match.group(1))
+                except ValueError:
+                    pass
+        match = re.search(r"(?:part|card|page|pt|p\.)\s*([0-9]+)", text)
+        if match:
+            try:
+                return int(match.group(1))
+            except ValueError:
+                pass
+        return None
 
-    if m1 and m2:
-        try:
-            c1 = int(m1.group(1))
-            c2 = int(m2.group(1))
-            if c2 == c1 + 1:
-                return 1.00
-            elif c2 > c1:
-                return 0.75
-            elif c2 < c1:
-                return 0.10
-        except (ValueError, IndexError):
-            pass
+    c1 = _extract_seq_num(fp1.printed_markers, t1)
+    c2 = _extract_seq_num(fp2.printed_markers, t2)
+
+    if c1 is not None and c2 is not None:
+        if c2 == c1 + 1:
+            return 1.00
+        elif c2 > c1:
+            return 0.75
+        elif c2 < c1:
+            return 0.10
 
     score = 0.50
 
-    # Preceding card has continuation cues in boundary text or flags
+    # 2. Preceding card continuation cues in boundary text, printed_markers, or text_cut_off_end
     continuation_cues = (
         "cont",
         "over",
@@ -552,10 +571,13 @@ def calculate_sequential_header_score(
         "pto",
         "->",
     )
-    if has_sym1 or is_cut1 or any(cue in t1 for cue in continuation_cues):
+    fp1_markers_lower = [m.strip().lower() for m in (fp1.printed_markers or [])]
+    has_marker_cue_1 = any(any(cue in m for cue in continuation_cues) for m in fp1_markers_lower)
+    is_cut1_final = is_cut1 or (fp1.text_cut_off_end is True)
+    if has_sym1 or is_cut1_final or has_marker_cue_1 or any(cue in t1 for cue in continuation_cues):
         score += 0.25
 
-    # Following card starts with continuation text markers
+    # 3. Following card continuation start cues in boundary text, printed_markers, or text_cut_off_start
     continuation_start_markers = (
         "cont",
         "direct",
@@ -567,10 +589,36 @@ def calculate_sequential_header_score(
         "page 2",
         "instructions continued",
     )
-    if any(k in t2_first for k in continuation_start_markers):
+    fp2_markers_lower = [m.strip().lower() for m in (fp2.printed_markers or [])]
+    has_marker_cue_2 = any(any(k in m for k in continuation_start_markers) for m in fp2_markers_lower)
+    is_cut2_start = fp2.text_cut_off_start is True
+    if has_marker_cue_2 or is_cut2_start or any(k in t2_first for k in continuation_start_markers):
         score += 0.25
 
+    # 4. Front / Back card face orientation
+    if fp1.looks_like_back is False and fp2.looks_like_back is True:
+        score += 0.15
+    elif fp1.looks_like_back is True and fp2.looks_like_back is False:
+        score -= 0.25
+
+    # 5. Content structure progression: Ingredients (start/front) -> Directions (continuation/back)
+    if (
+        fp1.has_ingredients is True
+        and fp1.has_directions is False
+        and fp2.has_ingredients is False
+        and fp2.has_directions is True
+    ):
+        score += 0.15
+    elif (
+        fp1.has_ingredients is False
+        and fp1.has_directions is True
+        and fp2.has_ingredients is True
+        and fp2.has_directions is False
+    ):
+        score -= 0.25
+
     return round(max(0.0, min(1.0, score)), 4)
+
 
 
 def calculate_heuristic_distance(

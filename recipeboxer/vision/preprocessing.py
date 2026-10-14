@@ -16,8 +16,10 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageOps
+import numpy as np
 
 from recipeboxer.vision.heuristics import hex_to_lab, rgb_to_lab
+
 
 
 def lab_to_rgb(lab_l: float, lab_a: float, lab_b: float) -> Tuple[int, int, int]:
@@ -95,7 +97,7 @@ def detect_skew_angle(
     Args:
         image: PIL Image, path, or bytes.
         max_angle: Maximum search angle range in degrees (default: 45.0).
-        angle_step: Coarse search step in degrees (default: 0.5).
+        angle_step: Coarse search step in degrees (default: 1.0).
         fine_step: Fine refinement search step in degrees (default: 0.1).
 
     Returns:
@@ -106,58 +108,27 @@ def detect_skew_angle(
     max_angle = abs(max_angle)
 
     # Downsample for fast search
-    target_dim = 400.0
+    target_dim = 300.0
     scale = min(1.0, target_dim / max(w, h))
     sw = max(50, int(w * scale))
     sh = max(50, int(h * scale))
     small = im.resize((sw, sh), Image.BILINEAR)
 
-    # Check overall luminance variance: if image is solid or blank, skew is 0.0
-    hist = small.histogram()
-    total_pixels = sw * sh
-    mean_lum = sum(i * cnt for i, cnt in enumerate(hist)) / float(total_pixels)
-    std_lum = math.sqrt(
-        sum(((i - mean_lum) ** 2) * cnt for i, cnt in enumerate(hist)) / float(total_pixels)
-    )
-    if std_lum < 5.0:
+
+    arr = np.array(small, dtype=np.float32)
+    std_lum = float(np.std(arr))
+    if std_lum < 4.0:
         return 0.0
 
-    # Invert and threshold to isolate dark text/ink features
-    running_sum = 0
-    p20_val = 128
-    for val, count in enumerate(hist):
-        running_sum += count
-        if running_sum >= 0.20 * total_pixels:
-            p20_val = val
-            break
+    # Invert so dark ink and ruling strokes are positive foreground
+    med_lum = float(np.median(arr))
+    if med_lum >= 100.0:
+        inv_arr = 255.0 - arr
+    else:
+        inv_arr = arr
 
-    # Contrast stretch and binarize ink
-    thresh = max(40, min(160, p20_val + 20))
-    inv = ImageOps.invert(small)
-    bin_img = inv.point(lambda p: 255 if p > (255 - thresh) else 0, mode="L")
-
-    # If ink binarization is sparse, use edge filtering without canvas border artifacts
-    if sum(bin_img.histogram()[1:]) < 0.005 * total_pixels:
-        edge_img = small.filter(ImageFilter.FIND_EDGES).point(
-            lambda p: 255 if p > 30 else 0, mode="L"
-        )
-        edge_draw = ImageDraw.Draw(edge_img)
-        edge_draw.rectangle([(0, 0), (sw - 1, sh - 1)], outline=0, width=2)
-        bin_img = edge_img
-
-    # If image has virtually no ink or edges, return 0.0
-    if sum(bin_img.histogram()[1:]) < 20:
-        return 0.0
-
-    best_angle = 0.0
-    max_score = 0.0
-
-    # Coarse search from -max_angle to +max_angle
-    num_steps = int(math.ceil(2 * max_angle / angle_step))
-    candidate_angles = [-max_angle + i * angle_step for i in range(num_steps + 1)]
-
-    # Central crop box to avoid boundary rotation clipping artifacts
-    cw, ch = bin_img.size
+    inv_img = Image.fromarray(inv_arr.astype(np.uint8))
+    cw, ch = inv_img.size
     crop_x0 = int(cw * 0.18)
     crop_y0 = int(ch * 0.18)
     crop_x1 = int(cw * 0.82)
@@ -168,16 +139,19 @@ def detect_skew_angle(
     if crop_w <= 10 or crop_h <= 10:
         return 0.0
 
+    best_angle = 0.0
+    max_score = 0.0
+
+    # Coarse search from -max_angle to +max_angle
+    num_steps = int(math.ceil(2 * max_angle / angle_step))
+    candidate_angles = [-max_angle + i * angle_step for i in range(num_steps + 1)]
+
     for a in candidate_angles:
-        r_img = bin_img.rotate(a, resample=Image.NEAREST, expand=False, fillcolor=0)
+        r_img = inv_img.rotate(a, resample=Image.BILINEAR, expand=False, fillcolor=0)
         cropped = r_img.crop((crop_x0, crop_y0, crop_x1, crop_y1))
         rw, rh = cropped.size
-
-        # Horizontal projection profile
         raw = cropped.tobytes()
         row_sums = [sum(raw[y * rw : (y + 1) * rw]) for y in range(rh)]
-
-        # Adjacent row difference squared (projection profile gradient metric)
         score = sum((row_sums[y + 1] - row_sums[y]) ** 2 for y in range(rh - 1))
         if score > max_score:
             max_score = score
@@ -188,12 +162,12 @@ def detect_skew_angle(
 
     # Fine search around best_angle
     fine_best = best_angle
-    fine_range = int(math.ceil(angle_step * 2 / fine_step))
+    fine_range = int(math.ceil(angle_step * 1.5 / fine_step))
     for i in range(-fine_range, fine_range + 1):
         fa = best_angle + i * fine_step
         if abs(fa) > max_angle:
             continue
-        r_img = bin_img.rotate(fa, resample=Image.NEAREST, expand=False, fillcolor=0)
+        r_img = inv_img.rotate(fa, resample=Image.BILINEAR, expand=False, fillcolor=0)
         cropped = r_img.crop((crop_x0, crop_y0, crop_x1, crop_y1))
         rw, rh = cropped.size
         raw = cropped.tobytes()

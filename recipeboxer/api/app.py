@@ -15,8 +15,10 @@ from fastapi.staticfiles import StaticFiles
 
 from recipeboxer.agent.session import SessionManager, get_session_manager
 from recipeboxer.api.routes import router as api_router
+from recipeboxer.api.settings_routes import router as settings_router
 from recipeboxer.config import Settings, get_settings
 from recipeboxer.storage.session_store import SessionStore, get_session_store
+from recipeboxer.storage.settings_store import SettingsStore, get_settings_store
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +52,7 @@ def create_app(
     settings: Optional[Settings] = None,
     session_manager: Optional[SessionManager] = None,
     session_store: Optional[SessionStore] = None,
+    settings_store: Optional[SettingsStore] = None,
 ) -> FastAPI:
     """Creates and configures a FastAPI application instance.
 
@@ -57,6 +60,7 @@ def create_app(
         settings: Optional Settings override (defaults to global settings).
         session_manager: Optional SessionManager override for dependency injection in tests.
         session_store: Optional SessionStore override.
+        settings_store: Optional SettingsStore override.
 
     Returns:
         Configured FastAPI application instance.
@@ -64,6 +68,7 @@ def create_app(
     app_settings = settings or get_settings()
     app_session_manager = session_manager or get_session_manager()
     app_session_store = session_store or get_session_store(app_settings.cache_db_path)
+    app_settings_store = settings_store or get_settings_store()
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
@@ -74,6 +79,7 @@ def create_app(
         app.state.settings = app_settings
         app.state.session_manager = app_session_manager
         app.state.session_store = app_session_store
+        app.state.settings_store = app_settings_store
         logger.info(
             f"RecipeBoxer startup complete. Cache DB: {app_settings.cache_db_path}, "
             f"Export Dir: {app_settings.export_dir}"
@@ -101,6 +107,7 @@ def create_app(
     app.state.settings = app_settings
     app.state.session_manager = app_session_manager
     app.state.session_store = app_session_store
+    app.state.settings_store = app_settings_store
 
     # 1. CORS Middleware
     app.add_middleware(
@@ -142,6 +149,7 @@ def create_app(
 
     # 3. Mount REST API Routes under /api
     app.include_router(api_router, prefix="/api")
+    app.include_router(settings_router, prefix="/api")
 
     # 4. Static Asset Hosting & SPA Catch-All
     static_dir = Path(__file__).parent / "static"

@@ -39,7 +39,18 @@ from recipeboxer.models.pipeline import (
     TokenUsage,
 )
 from recipeboxer.models.recipe import (
+    IllegibleSpan,
+    IngredientLine,
+    Legibility,
+    Provenance,
+    Recipe,
+    RecipeSection,
     RecipeSchema,
+    RecipeWarning,
+    Step,
+    TextSpan,
+    TimeValue,
+    YieldValue,
 )
 from recipeboxer.models.session import (
     IngestionConfig,
@@ -75,7 +86,18 @@ __all__ = [
     "CorrelationCandidate",
     "CandidateListResponse",
     # Recipe
+    "Recipe",
     "RecipeSchema",
+    "IngredientLine",
+    "Step",
+    "RecipeSection",
+    "TextSpan",
+    "IllegibleSpan",
+    "Legibility",
+    "RecipeWarning",
+    "Provenance",
+    "TimeValue",
+    "YieldValue",
     # Pipeline
     "PipelineState",
     "IngestionMode",

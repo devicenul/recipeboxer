@@ -76,6 +76,16 @@ class SessionSummary(BaseModel):
         default=0,
         description="Number of unverified correlation proposals",
     )
+    spend_usd: float = Field(
+        default=0.0,
+        ge=0.0,
+        description="Total Gemini API spend incurred in USD for this session",
+    )
+    estimated_cost_usd: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        description="Pre-run estimated cost in USD",
+    )
 
 
 class SessionDetail(BaseModel):
@@ -188,11 +198,58 @@ class SessionDetail(BaseModel):
         default_factory=list,
         description="List of HITL review queue items including failures",
     )
+    spend_usd: float = Field(
+        default=0.0,
+        ge=0.0,
+        description="Total Gemini API spend incurred in USD for this session",
+    )
+    estimated_cost_usd: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        description="Pre-run estimated cost in USD",
+    )
+    spend_breakdown: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Detailed spend breakdown by pipeline stage and model",
+    )
 
     @property
     def state(self) -> Union[PipelineState, str]:
         """Alias for status to maintain symmetry with PipelineSession.state."""
         return self.status
+
+
+class SessionSpendStatus(BaseModel):
+    """Real-time spend and budget telemetry for a pipeline session."""
+
+    session_id: str = Field(
+        ...,
+        description="Unique identifier for the session",
+    )
+    spend_usd: float = Field(
+        default=0.0,
+        ge=0.0,
+        description="Total Gemini API spend incurred in USD for this session",
+    )
+    estimated_cost_usd: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        description="Pre-run estimated cost in USD",
+    )
+    spend_cap_usd: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        description="Configured per-run spend cap in USD if any",
+    )
+    monthly_cap_usd: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        description="Configured monthly spend cap in USD if any",
+    )
+    spend_breakdown: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Detailed spend breakdown by pipeline stage and model",
+    )
 
 
 class IngestionConfig(BaseModel):
