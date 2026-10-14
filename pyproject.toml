@@ -64,6 +64,10 @@ testpaths = ["tests"]
 # Repo root on sys.path so the flat-layout `cardforge/` project (eval-only
 # synthetic card generator, never imported by recipeboxer) is importable in tests.
 pythonpath = ["."]
+markers = [
+    "live: requires a real Gemini API key (GEMINI_API_KEY); skipped otherwise; may assert accuracy within the eval budget",
+    "score: requires the eval vault age identity (RB_EVAL_AGE_KEY_FILE); orchestrator/CI scorer only",
+]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 filterwarnings = [

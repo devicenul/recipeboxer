@@ -7,3 +7,4 @@
 #
 # Rekey vault archives after adding or removing recipients with:
 #   python -m evals.vault rekey evals/vault
+age1fnxpj4r3admpga68nrs4xnuupf0dwjw8e3hyjxdrnk8tmh0z0gsq3p379s
