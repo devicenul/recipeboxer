@@ -208,7 +208,8 @@ class TestWP3VisualFingerprintRouting:
         )
         res_stain = classifier.classify(fp_stain)
         assert res_stain.modality == CardModality.MIXED_MEDIA
-        assert res_stain.confidence == 0.95
+        assert 0.3 <= res_stain.confidence <= 0.8
+        assert res_stain.features.get("heuristic") is True
         assert "stains" in res_stain.reasoning.lower() or "artifacts" in res_stain.reasoning.lower()
 
         # Real ink: TYPEWRITER_RIBBON -> TYPEWRITTEN
@@ -221,7 +222,8 @@ class TestWP3VisualFingerprintRouting:
         )
         res_type = classifier.classify(fp_type)
         assert res_type.modality == CardModality.TYPEWRITTEN
-        assert res_type.confidence == 0.96
+        assert 0.3 <= res_type.confidence <= 0.8
+        assert res_type.features.get("heuristic") is True
         assert "typewriter" in res_type.reasoning.lower()
 
         # Real ink: PRINTED_TYPESET -> PRINTED_CLIPPING_OR_LABEL
@@ -234,7 +236,8 @@ class TestWP3VisualFingerprintRouting:
         )
         res_print = classifier.classify(fp_print)
         assert res_print.modality == CardModality.PRINTED_CLIPPING_OR_LABEL
-        assert res_print.confidence == 0.96
+        assert 0.3 <= res_print.confidence <= 0.8
+        assert res_print.features.get("heuristic") is True
         assert "printed" in res_print.reasoning.lower()
 
         # Fingerprint without image_path and without identifying attributes -> fallback

@@ -268,31 +268,47 @@ class ModalityClassifier:
                 )
                 for a in card_input.artifacts
             ):
+                matching = [
+                    a for a in card_input.artifacts
+                    if getattr(a, "artifact_type", None) in (
+                        ArtifactType.OIL_STAIN,
+                        ArtifactType.OIL_GREASE_STAIN,
+                        ArtifactType.COFFEE_TEA_RING,
+                        ArtifactType.FOOD_SPLATTER_SAUCE,
+                        ArtifactType.TEAR,
+                        ArtifactType.TEAR_EDGE,
+                    )
+                ]
+                conf = max(0.3, min(0.8, round(0.50 + 0.08 * len(matching), 2)))
                 return ModalityClassificationResult(
                     modality=CardModality.MIXED_MEDIA,
-                    confidence=0.95,
+                    confidence=conf,
                     reasoning="Identified mixed-media substrate with physical stains and artifacts from visual fingerprint.",
-                    features={"artifacts": True},
+                    features={"artifacts": True, "heuristic": True},
                 )
             if (
                 (card_input.ink and getattr(card_input.ink, "ink_type", None) in (InkType.TYPEWRITER_RIBBON,))
                 or str(getattr(card_input, "ink_type", "")).upper() in ("TYPEWRITER_RIBBON", "TYPEWRITTEN")
             ):
+                base_c = float(getattr(card_input.ink, "confidence", 0.70)) if card_input.ink else 0.70
+                conf = max(0.3, min(0.8, round(base_c, 2)))
                 return ModalityClassificationResult(
                     modality=CardModality.TYPEWRITTEN,
-                    confidence=0.96,
+                    confidence=conf,
                     reasoning="Identified monospaced mechanical typewriter text from visual fingerprint.",
-                    features={"typography": "monospaced"},
+                    features={"typography": "monospaced", "heuristic": True},
                 )
             if (
                 (card_input.ink and getattr(card_input.ink, "ink_type", None) in (InkType.PRINTED_TYPE, InkType.PRINTED_TYPESET))
                 or str(getattr(card_input, "ink_type", "")).upper() in ("PRINTED_TYPE", "PRINTED_TYPESET", "PRINT_CLIPPING")
             ):
+                base_c = float(getattr(card_input.ink, "confidence", 0.70)) if card_input.ink else 0.70
+                conf = max(0.3, min(0.8, round(base_c, 2)))
                 return ModalityClassificationResult(
                     modality=CardModality.PRINTED_CLIPPING_OR_LABEL,
-                    confidence=0.96,
+                    confidence=conf,
                     reasoning="Identified printed newsprint or clipping layout from visual fingerprint.",
-                    features={"layout": "printed"},
+                    features={"layout": "printed", "heuristic": True},
                 )
 
         # 3. Deterministic Image CV Feature Analysis
@@ -381,37 +397,51 @@ class ModalityClassifier:
         # Decision rules
         # Newsprint / Magazine Clipping: Tan/gray substrate, multi-column density, dark typography
         if col_valleys > sw * 0.15 and edge_variance > 5000:
+            valleys_margin = (col_valleys - sw * 0.15) / max(sw * 0.15, 1.0)
+            edge_margin = (edge_variance - 5000) / 5000.0
+            conf = max(0.3, min(0.8, round(0.50 + 0.12 * min(valleys_margin, 1.0) + 0.12 * min(edge_margin, 1.0), 2)))
             return ModalityClassificationResult(
                 modality=CardModality.PRINTED_CLIPPING_OR_LABEL,
-                confidence=0.92,
+                confidence=conf,
                 reasoning="Detected multi-column newsprint typography with high edge density.",
-                features={"edge_variance": edge_variance, "col_valleys": col_valleys},
+                features={"edge_variance": edge_variance, "col_valleys": col_valleys, "heuristic": True},
             )
 
         # Typewritten: High regular spacing, monospaced pitch, high horizontal line contrast
         if edge_variance > 4000 and len(peaks) >= 4 and not has_ruling:
+            peaks_margin = (len(peaks) - 4) / 4.0
+            edge_margin = (edge_variance - 4000) / 4000.0
+            conf = max(0.3, min(0.8, round(0.50 + 0.12 * min(peaks_margin, 1.0) + 0.12 * min(edge_margin, 1.0), 2)))
             return ModalityClassificationResult(
                 modality=CardModality.TYPEWRITTEN,
-                confidence=0.91,
+                confidence=conf,
                 reasoning="Detected uniform horizontal baseline spacing and monospaced typewritten stroke distribution.",
-                features={"edge_variance": edge_variance, "peaks_count": len(peaks)},
+                features={"edge_variance": edge_variance, "peaks_count": len(peaks), "heuristic": True},
             )
 
         # Mixed Media: Kraft or stained substrate with irregular physical artifacts
         if lab_b > 22.0 or (lab_l < 85.0 and len(palette.get("ink_centroids", [])) >= 2):
+            margin = 0.0
+            if lab_b > 22.0:
+                margin += min((lab_b - 22.0) / 20.0, 1.0) * 0.12
+            if lab_l < 85.0:
+                margin += min((85.0 - lab_l) / 30.0, 1.0) * 0.12
+            conf = max(0.3, min(0.8, round(0.50 + margin, 2)))
             return ModalityClassificationResult(
                 modality=CardModality.MIXED_MEDIA,
-                confidence=0.90,
+                confidence=conf,
                 reasoning="Detected multiple ink/substrate color centroids and physical degradation.",
-                features={"paper_lab": paper["lab"], "stains_detected": True},
+                features={"paper_lab": paper["lab"], "stains_detected": True, "heuristic": True},
             )
 
         # Handwritten Cursive / Ruled Index Card
+        ruling_margin = 0.15 if has_ruling else 0.0
+        conf = max(0.3, min(0.8, round(0.45 + ruling_margin + min(len(peaks) * 0.02, 0.15), 2)))
         return ModalityClassificationResult(
             modality=CardModality.HANDWRITTEN_CURSIVE,
-            confidence=0.93,
+            confidence=conf,
             reasoning="Detected ruled index card substrate and continuous handwritten cursive strokes.",
-            features={"has_ruling": has_ruling, "paper_tone": paper.get("tone_name")},
+            features={"has_ruling": has_ruling, "paper_tone": paper.get("tone_name"), "heuristic": True},
         )
 
 

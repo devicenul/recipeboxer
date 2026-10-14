@@ -1,8 +1,9 @@
 """Global configuration management for RecipeBoxer."""
 
+import os
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Sequence, Tuple
 from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -301,3 +302,27 @@ class Settings(BaseSettings):
 def get_settings() -> Settings:
     """Returns a cached singleton instance of application Settings."""
     return Settings()
+
+
+def is_usable_gemini_key(key: Optional[Any]) -> bool:
+    """Returns True if the key is non-empty, non-whitespace, and does not start with 'mock' (case-insensitive)."""
+    if key is None:
+        return False
+    k = str(key).strip()
+    return bool(k) and not k.lower().startswith("mock")
+
+
+def has_usable_gemini_key(
+    settings: Optional[Settings] = None,
+    extra_keys: Optional[Sequence[Optional[str]]] = None,
+) -> bool:
+    """Checks whether a valid non-empty, non-mock Gemini API key is present in environment or settings."""
+    eff_settings = settings or get_settings()
+    candidate_keys = [
+        getattr(eff_settings, "gemini_api_key", None),
+        os.environ.get("RECIPEBOXER_GEMINI_API_KEY"),
+        os.environ.get("GEMINI_API_KEY"),
+    ]
+    if extra_keys:
+        candidate_keys.extend(extra_keys)
+    return any(is_usable_gemini_key(k) for k in candidate_keys)

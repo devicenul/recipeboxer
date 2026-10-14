@@ -54,30 +54,25 @@ IMG_1022.JPG
 `transcription.md` contains the typed text of the recipe. You can use markdown headings to structure the recipe:
 
 ```markdown
-# Lemon Bars
+# Starlight Berry Compote
 
-Yield: 16 bars
+Yield: 4 servings
 
 ## Ingredients
-- 2 cups all-purpose flour
-- 1/2 cup powdered sugar
-- 1 cup butter, softened
-- 4 large eggs
-- 2 cups granulated sugar
-- 1/4 cup flour
-- 1/2 cup lemon juice
+- 3 cups mixed wild blackberries and huckleberries
+- 1/3 cup wildflower honey
+- 1 tbsp fresh orange zest
+- 1 pinch ground cardamom
+- 1 tsp arrowroot powder dissolved in 1 tbsp cold water
 
 ## Directions
-1. Preheat oven to 350°F.
-2. In a medium bowl, blend 2 cups flour, powdered sugar, and softened butter.
-3. Press into the bottom of an ungreased 9x13 inch pan.
-4. Bake for 20 minutes until firm and golden.
-5. In another bowl, whisk eggs, granulated sugar, remaining flour, and lemon juice until frothy.
-6. Pour over warm crust and bake another 20 minutes.
-7. Let cool completely before dusting with powdered sugar and cutting into squares.
+1. In a heavy saucepan, combine wild berries, honey, orange zest, and cardamom over medium heat.
+2. Simmer gently for 8 to 10 minutes until berries burst and release rich juices.
+3. Stir in dissolved arrowroot slurry and simmer for 1 additional minute until thickened and glossy.
+4. Remove from heat and cool to lukewarm before serving over warm oat porridge or toast.
 
 ## Notes
-- Grandma always used Meyer lemons from the backyard tree.
+- Hand-harvested alpine berries give the best tartness and aromatic finish.
 ```
 
 *(Tip: If you have a two-sided card and want to record the exact verbatim text per face, you can separate faces with `### Face 1` and `### Face 2` or `---`.)*

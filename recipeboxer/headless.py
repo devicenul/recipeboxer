@@ -35,11 +35,16 @@ from recipeboxer.ai.client import (
     LLMResponse,
     LLMStage,
     TextPart,
+    UsageLedger,
     UsageTokens,
 )
-from recipeboxer.config import Settings, get_settings
+from recipeboxer.config import Settings, get_settings, has_usable_gemini_key, is_usable_gemini_key
+from recipeboxer.correlation.optimizer import PairingOptimizer
+from recipeboxer.correlation.semantic import GeminiSemanticVerifier
+from recipeboxer.extraction.extractor import RecipeExtractor
 from recipeboxer.models.correlation import CorrelationProposal, CorrelationResult
 from recipeboxer.models.domain import VisualFingerprint
+from recipeboxer.vision.fingerprint import GeminiVisualExtractor
 from recipeboxer.models.failures import (
     ExtractionUnavailable,
     FailureReason,
@@ -112,173 +117,65 @@ class OracleGroupingOptimizer:
         )
 
 
+class _LedgerRecordingClient(LLMClient):
+    """Wraps an injected LLMClient to record usage into UsageLedger while delegating generation."""
+
+    def __init__(self, inner: LLMClient, ledger: Any) -> None:
+        self._inner = inner
+        self._ledger = ledger
+
+    @property
+    def requests(self) -> Any:
+        return getattr(self._inner, "requests", [])
+
+    async def generate(self, request: LLMRequest) -> LLMResponse[Any]:
+        resp = await self._inner.generate(request)
+        if self._ledger is not None and hasattr(self._ledger, "record"):
+            self._ledger.record(
+                stage=request.stage,
+                model=resp.model or request.model,
+                usage=resp.usage,
+                latency_ms=resp.latency_ms,
+                attempts=resp.attempts,
+            )
+        return resp
+
+
 class HeadlessClientAdapter:
-    """Adapts an LLMClient (e.g. ScriptedLLMClient) into pipeline component interfaces."""
+    """Compatibility wiring delegating to production extractors with injected LLMClient (FIND-03)."""
 
     def __init__(
         self,
         client: LLMClient,
-        ledger: InMemoryUsageLedger,
+        ledger: UsageLedger,
         model_name: str = "scripted-test-model",
+        settings: Optional[Settings] = None,
     ) -> None:
         self.client = client
         self.ledger = ledger
         self.model_name = model_name
+        self.settings = settings or get_settings()
+        self._recording_client = _LedgerRecordingClient(client, ledger)
+        self.visual_extractor = GeminiVisualExtractor(
+            llm_client=self._recording_client,
+            model_name=self.settings.get_stage_model(LLMStage.FINGERPRINT),
+        )
+        self.recipe_extractor = RecipeExtractor(
+            llm_client=self._recording_client,
+            model_name=self.settings.get_stage_model(LLMStage.STRUCTURE),
+            settings=self.settings,
+        )
 
     async def extract_fingerprint(
-        self, card_input: Any
+        self, card_input: Any, sha_hash: Optional[str] = None
     ) -> VisualFingerprint:
-        """Adapts card input into LLMRequest(stage=FINGERPRINT) and returns VisualFingerprint."""
-        image_bytes = b""
-        card_id = "card"
-        sha_hash = ""
+        return await self.visual_extractor.extract(card_input, sha256_hash=sha_hash)
 
-        if hasattr(card_input, "file_path"):
-            p = Path(card_input.file_path)
-            card_id = getattr(card_input, "card_id", p.name)
-            sha_hash = getattr(card_input, "sha256_hash", "") or ""
-            if p.exists() and p.is_file():
-                image_bytes = p.read_bytes()
-        elif isinstance(card_input, (str, Path)):
-            p = Path(card_input)
-            card_id = p.name
-            if p.exists() and p.is_file():
-                image_bytes = p.read_bytes()
-        elif isinstance(card_input, bytes):
-            image_bytes = card_input
-
-        parts: List[Union[TextPart, ImagePart]] = []
-        if image_bytes:
-            parts.append(ImagePart(data=image_bytes))
-
-        req = LLMRequest(
-            stage=LLMStage.FINGERPRINT,
-            model=self.model_name,
-            parts=parts,
-            response_model=VisualFingerprint,
-        )
-
-        resp = await self.client.generate(req)
-        self.ledger.record(
-            stage=LLMStage.FINGERPRINT,
-            model=resp.model or self.model_name,
-            usage=resp.usage,
-            latency_ms=resp.latency_ms,
-            attempts=resp.attempts,
-        )
-
-        if resp.parsed is not None:
-            if isinstance(resp.parsed, VisualFingerprint):
-                fp = resp.parsed.model_copy()
-            elif isinstance(resp.parsed, dict):
-                fp = VisualFingerprint.model_validate(resp.parsed)
-            elif hasattr(resp.parsed, "model_dump"):
-                fp = VisualFingerprint.model_validate(resp.parsed.model_dump())
-            else:
-                raise FingerprintUnavailable(
-                    "Model returned an unparseable fingerprint payload",
-                    reason=FailureReason.INVALID_RESPONSE,
-                    card_ids=[card_id],
-                )
-            fp.card_id = card_id
-            fp.image_path = str(getattr(card_input, "file_path", card_id))
-            if sha_hash and not fp.sha256_hash:
-                fp.sha256_hash = sha_hash
-            return fp
-
-        if resp.raw_text:
-            try:
-                data = json.loads(resp.raw_text)
-                fp = VisualFingerprint.model_validate(data)
-                fp.card_id = card_id
-                fp.image_path = str(getattr(card_input, "file_path", card_id))
-                return fp
-            except Exception as exc:
-                raise FingerprintUnavailable(
-                    f"Invalid fingerprint response: {type(exc).__name__}",
-                    reason=FailureReason.INVALID_RESPONSE,
-                    card_ids=[card_id],
-                ) from exc
-
-        # INV-AC4: never fabricate a fingerprint when the model returned nothing usable.
-        raise FingerprintUnavailable(
-            "Model returned no fingerprint",
-            reason=FailureReason.INVALID_RESPONSE,
-            card_ids=[card_id],
-        )
-
-    # Aliases expected by various caller patterns
     extract = extract_fingerprint
     fingerprint_card = extract_fingerprint
 
-    async def extract_cards(
-        self, cards: Sequence[Any]
-    ) -> RecipeSchema:
-        """Adapts card sequence into LLMRequest(stage=STRUCTURE) and returns RecipeSchema."""
-        parts: List[Union[TextPart, ImagePart]] = []
-        ordered_ids: List[str] = []
-
-        for c in cards:
-            cid = getattr(c, "card_id", "card")
-            ordered_ids.append(cid)
-            img_bytes = b""
-            img_path = getattr(c, "image_path", None) or getattr(c, "file_path", None)
-            if img_path and Path(img_path).exists():
-                img_bytes = Path(img_path).read_bytes()
-            if img_bytes:
-                parts.append(ImagePart(data=img_bytes))
-
-        req = LLMRequest(
-            stage=LLMStage.STRUCTURE,
-            model=self.model_name,
-            parts=parts,
-            response_model=RecipeSchema,
-        )
-
-        resp = await self.client.generate(req)
-        self.ledger.record(
-            stage=LLMStage.STRUCTURE,
-            model=resp.model or self.model_name,
-            usage=resp.usage,
-            latency_ms=resp.latency_ms,
-            attempts=resp.attempts,
-        )
-
-        if resp.parsed is not None:
-            if isinstance(resp.parsed, RecipeSchema):
-                recipe = resp.parsed.model_copy()
-            elif isinstance(resp.parsed, dict):
-                recipe = RecipeSchema.model_validate(resp.parsed)
-            elif hasattr(resp.parsed, "model_dump"):
-                recipe = RecipeSchema.model_validate(resp.parsed.model_dump())
-            else:
-                raise ExtractionUnavailable(
-                    "Model returned an unparseable recipe payload",
-                    reason=FailureReason.INVALID_RESPONSE,
-                    card_ids=ordered_ids,
-                )
-            recipe.card_ids = ordered_ids
-            return recipe
-
-        if resp.raw_text:
-            try:
-                data = json.loads(resp.raw_text)
-                recipe = RecipeSchema.model_validate(data)
-                recipe.card_ids = ordered_ids
-                return recipe
-            except Exception as exc:
-                raise ExtractionUnavailable(
-                    f"Invalid recipe response: {type(exc).__name__}",
-                    reason=FailureReason.INVALID_RESPONSE,
-                    card_ids=ordered_ids,
-                ) from exc
-
-        # INV-AC4: never fabricate a recipe when the model returned nothing usable.
-        raise ExtractionUnavailable(
-            "Model returned no recipe",
-            reason=FailureReason.INVALID_RESPONSE,
-            card_ids=ordered_ids,
-        )
+    async def extract_cards(self, cards: Sequence[Any]) -> RecipeSchema:
+        return await self.recipe_extractor.extract_cards(list(cards))
 
     extract_recipe = extract_cards
 
@@ -320,17 +217,6 @@ def parse_image_sets_file(
             return combined
 
     raise ValueError(f"Unrecognized image-sets format in {p}")
-
-
-def has_usable_gemini_key(settings: Optional[Settings] = None) -> bool:
-    """Checks whether a valid non-empty Gemini API key is present in environment or config."""
-    eff_settings = settings or get_settings()
-    candidate_keys = [
-        getattr(eff_settings, "gemini_api_key", None),
-        os.environ.get("RECIPEBOXER_GEMINI_API_KEY"),
-        os.environ.get("GEMINI_API_KEY"),
-    ]
-    return any(k and str(k).strip() for k in candidate_keys)
 
 
 async def run_headless_analysis(
@@ -409,15 +295,28 @@ async def run_headless_analysis(
 
     if has_client:
         if isinstance(injected_client, LLMClient):
-            adapter = HeadlessClientAdapter(
-                client=injected_client,
-                ledger=ledger,
+            recording_client = _LedgerRecordingClient(injected_client, ledger)
+            vis_extractor = GeminiVisualExtractor(
+                llm_client=recording_client,
                 model_name=eff_settings.get_stage_model(LLMStage.FINGERPRINT),
             )
-            session.mock_client = adapter
-            session.extractor = adapter
-            agent_kwargs["visual_extractor"] = adapter
-            agent_kwargs["recipe_extractor"] = adapter
+            sem_verifier = GeminiSemanticVerifier(
+                llm_client=recording_client,
+                model_name=eff_settings.get_stage_model(LLMStage.SET_VERIFY),
+            )
+            rec_extractor = RecipeExtractor(
+                llm_client=recording_client,
+                model_name=eff_settings.get_stage_model(LLMStage.STRUCTURE),
+                settings=eff_settings,
+            )
+            pairing_opt = PairingOptimizer(verifier=sem_verifier)
+            session.mock_client = recording_client
+            session.extractor = vis_extractor
+            session.recipe_extractor_fn = rec_extractor.extract
+            agent_kwargs["visual_extractor"] = vis_extractor
+            agent_kwargs["semantic_verifier"] = sem_verifier
+            agent_kwargs["pairing_optimizer"] = pairing_opt
+            agent_kwargs["recipe_extractor"] = rec_extractor
         else:
             session.mock_client = injected_client
             session.extractor = injected_client
@@ -495,12 +394,25 @@ async def run_headless_analysis(
             if "image_urls" in r_dump:
                 r_dump["image_urls"] = [f"/api/cards/{cid}/image" for cid in cids]
 
+        # Real proposal/recipe confidence (INV-AC4, FIND-05)
+        rec_conf = None
+        if hasattr(r, "confidence") and getattr(r, "confidence", None) is not None:
+            rec_conf = float(r.confidence)
+        else:
+            matching_proposals = [
+                p for p in session.proposals
+                if any(cid in cids for cid in getattr(p, "ordered_card_ids", []))
+                and getattr(p, "confidence", None) is not None
+            ]
+            if matching_proposals:
+                rec_conf = min(float(p.confidence) for p in matching_proposals)
+
         pred_id = getattr(r, "recipe_id", None) or f"p{idx}"
         recipes_out.append({
             "pred_id": pred_id,
             "image_ids": cids,
             "recipe": r_dump,
-            "confidence": 1.0,
+            "confidence": rec_conf,
             "flags": [],
         })
 

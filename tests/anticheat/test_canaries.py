@@ -38,6 +38,7 @@ from recipeboxer.ai import (
     UsageTokens,
 )
 from recipeboxer.headless import run_headless_analysis
+from recipeboxer.models.correlation import CorrelationProposal
 from recipeboxer.models.domain import CardRole, VisualFingerprint
 from recipeboxer.models.recipe import RecipeSchema
 
@@ -94,6 +95,15 @@ async def test_canary_rename_invariance(tmp_path: Path) -> None:
                 image_path="/memory/dummy2.jpg",
                 sha256_hash="1" * 64,
                 role=CardRole.SEQUENCE_CONTINUATION,
+            ),
+            # Candidate pair verification
+            CorrelationProposal(
+                proposal_id="p_inv",
+                ordered_card_ids=["dummy1", "dummy2"],
+                confidence=0.88,
+                recommended_action="PAIR",
+                semantic_score=0.9,
+                semantic_verified=True,
             ),
             # Recipe extraction
             RecipeSchema(
@@ -166,6 +176,14 @@ async def test_canary_poisoned_vault(tmp_path: Path) -> None:
         return ScriptedLLMClient([
             VisualFingerprint(card_id="c1", image_path="c1.jpg", sha256_hash="0" * 64, role=CardRole.SEQUENCE_START),
             VisualFingerprint(card_id="c2", image_path="c2.jpg", sha256_hash="1" * 64, role=CardRole.SEQUENCE_CONTINUATION),
+            CorrelationProposal(
+                proposal_id="p_vlt",
+                ordered_card_ids=["c1", "c2"],
+                confidence=0.88,
+                recommended_action="PAIR",
+                semantic_score=0.9,
+                semantic_verified=True,
+            ),
             RecipeSchema(
                 recipe_id="rec_test_vault",
                 title="Fried Chicken",
@@ -301,6 +319,14 @@ async def test_canary_prompt_leak_scan(tmp_path: Path) -> None:
     client = ScriptedLLMClient([
         VisualFingerprint(card_id=c1.name, image_path=str(c1), sha256_hash="0" * 64, role=CardRole.SEQUENCE_START),
         VisualFingerprint(card_id=c2.name, image_path=str(c2), sha256_hash="1" * 64, role=CardRole.SEQUENCE_CONTINUATION),
+        CorrelationProposal(
+            proposal_id="p1",
+            ordered_card_ids=[c1.name, c2.name],
+            confidence=0.88,
+            recommended_action="PAIR",
+            semantic_score=0.9,
+            semantic_verified=True,
+        ),
         RecipeSchema(recipe_id="r1", title="Apple Crisp", ingredients=["Apples"], directions=["Bake"]),
     ])
 
@@ -313,7 +339,7 @@ async def test_canary_prompt_leak_scan(tmp_path: Path) -> None:
         timeout=30.0,
     )
 
-    assert len(client.requests) >= 2
+    assert len(client.requests) == 4
 
     # Forbidden tokens that must NEVER appear in prompt text parts or system instructions
     forbidden_strings = [
@@ -329,9 +355,17 @@ async def test_canary_prompt_leak_scan(tmp_path: Path) -> None:
     ]
 
     for req in client.requests:
-        text_payloads = []
-        if req.system_instruction:
-            text_payloads.append(req.system_instruction)
+        assert req.system_instruction is not None and len(req.system_instruction.strip()) > 0, (
+            f"Production system instruction missing or empty for stage {req.stage}"
+        )
+        assert any(isinstance(p, TextPart) and len(p.text.strip()) > 0 for p in req.parts), (
+            f"Production prompt text parts missing or empty for stage {req.stage}"
+        )
+        assert any(isinstance(p, ImagePart) for p in req.parts), (
+            f"Image payload missing for stage {req.stage}"
+        )
+
+        text_payloads = [req.system_instruction]
         for p in req.parts:
             if isinstance(p, TextPart):
                 text_payloads.append(p.text)
@@ -339,7 +373,7 @@ async def test_canary_prompt_leak_scan(tmp_path: Path) -> None:
         full_prompt_text = " ".join(text_payloads).lower()
         for token in forbidden_strings:
             assert token.lower() not in full_prompt_text, (
-                f"Prompt leak detected! Forbidden token '{token}' found in LLMRequest: {full_prompt_text}"
+                f"Prompt leak detected! Forbidden token '{token}' found in LLMRequest for stage {req.stage}: {full_prompt_text}"
             )
 
 

@@ -19,6 +19,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 from PIL import Image, ImageFilter
 
+from recipeboxer.ai.client import ImagePart, LLMClient, LLMRequest, LLMStage, TextPart
 from recipeboxer.config import get_settings
 from recipeboxer.ingestion.scanner import ScannedCard
 from recipeboxer.models.domain import (
@@ -36,6 +37,7 @@ from recipeboxer.models.domain import (
     PhysicalArtifact,
     VisualFingerprint,
 )
+from recipeboxer.models.failures import FailureReason, FingerprintUnavailable, StageUnavailableError
 from recipeboxer.vision.heuristics import rgb_to_lab
 from recipeboxer.vision.preprocessing import extract_paper_color_palette
 
@@ -67,6 +69,7 @@ class GeminiVisualExtractor:
         api_key: Optional[str] = None,
         model_name: Optional[str] = None,
         client: Optional[Any] = None,
+        llm_client: Optional[LLMClient] = None,
     ) -> None:
         """Initialize GeminiVisualExtractor.
 
@@ -74,11 +77,13 @@ class GeminiVisualExtractor:
             api_key: Optional Gemini API key. Defaults to settings.
             model_name: Optional model override. Defaults to settings.get_fingerprint_model().
             client: Optional mock or custom Gemini client for testing.
+            llm_client: Optional production-hardened LLMClient instance.
         """
         self.settings = get_settings()
         self.api_key = api_key or self.settings.gemini_api_key
         self.model_name = model_name or self.settings.get_fingerprint_model()
         self.client = client
+        self.llm_client = llm_client
 
     async def __call__(self, card_input: Union[ScannedCard, Path, str, bytes, Image.Image]) -> VisualFingerprint:
         """Async callable interface for IngestionRunner compatibility."""
@@ -105,7 +110,13 @@ class GeminiVisualExtractor:
             card_input, sha256_hash, card_id
         )
 
-        # 1. Custom or injected client (e.g. MockGeminiClient in tests)
+        # 1. Real LLMClient if injected (FIND-03)
+        if self.llm_client is not None:
+            return await self._call_llm_client_fingerprint(
+                image_bytes, resolved_id, image_path_str, resolved_hash
+            )
+
+        # 2. Custom or injected client (e.g. MockGeminiClient in tests)
         if self.client is not None:
             res = None
             for method_name in ("extract", "analyze_fingerprint"):
@@ -224,6 +235,75 @@ class GeminiVisualExtractor:
             return (raw_bytes, f"/memory/{c_id}.jpg", c_id, c_hash)
 
         raise TypeError(f"Unsupported card input type: {type(card_input)}")
+
+    async def _call_llm_client_fingerprint(
+        self,
+        image_bytes: bytes,
+        card_id: str,
+        image_path: str,
+        sha256_hash: str,
+    ) -> VisualFingerprint:
+        """Invokes injected LLMClient with production prompt construction."""
+        parts: List[Union[TextPart, ImagePart]] = [
+            TextPart(text="Analyze the provided recipe card image and extract a complete visual fingerprint."),
+        ]
+        if image_bytes:
+            parts.append(ImagePart(data=image_bytes))
+
+        req = LLMRequest(
+            stage=LLMStage.FINGERPRINT,
+            model=self.model_name,
+            system_instruction=FINGERPRINT_SYSTEM_INSTRUCTION,
+            parts=parts,
+            response_model=VisualFingerprint,
+            temperature=0.1,
+        )
+
+        try:
+            resp = await self.llm_client.generate(req)
+        except StageUnavailableError:
+            raise
+        except Exception as exc:
+            raise FingerprintUnavailable(
+                f"Gemini LLMClient fingerprint call failed: {exc}",
+                reason=FailureReason.MODEL_UNAVAILABLE,
+                card_ids=[card_id],
+            ) from exc
+
+        fp: Optional[VisualFingerprint] = None
+        if resp.parsed is not None:
+            if isinstance(resp.parsed, VisualFingerprint):
+                fp = resp.parsed.model_copy()
+            elif isinstance(resp.parsed, dict):
+                fp = VisualFingerprint.model_validate(resp.parsed)
+            elif hasattr(resp.parsed, "model_dump"):
+                fp = VisualFingerprint.model_validate(resp.parsed.model_dump())
+        elif resp.raw_text:
+            try:
+                from recipeboxer.ai.client import _extract_json_text
+                cleaned = _extract_json_text(resp.raw_text)
+                fp = VisualFingerprint.model_validate(json.loads(cleaned))
+            except Exception as exc:
+                raise FingerprintUnavailable(
+                    f"Failed to parse fingerprint JSON from LLMClient: {exc}",
+                    reason=FailureReason.INVALID_RESPONSE,
+                    card_ids=[card_id],
+                ) from exc
+
+        if fp is None:
+            raise FingerprintUnavailable(
+                "Model returned no fingerprint payload",
+                reason=FailureReason.INVALID_RESPONSE,
+                card_ids=[card_id],
+            )
+
+        fp.card_id = card_id
+        fp.image_path = image_path
+        if sha256_hash and not fp.sha256_hash:
+            fp.sha256_hash = sha256_hash
+        fp.degraded = False
+        fp.degraded_reason = None
+        return fp
 
     async def _call_gemini_api(
         self,

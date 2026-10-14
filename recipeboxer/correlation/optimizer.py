@@ -94,11 +94,20 @@ class PairingOptimizer:
                 if not any(cid in assigned_card_ids for cid in prop.ordered_card_ids):
                     for cid in prop.ordered_card_ids:
                         assigned_card_ids.add(cid)
+                    # If semantic_score is None, treat as missing evidence (FIND-04)
+                    if prop.semantic_score is None:
+                        h_score = prop.heuristic_score if prop.heuristic_score is not None else 0.0
+                        prop = prop.model_copy(update={
+                            "confidence": round(h_score, 4),
+                            "recommended_action": "UNCERTAIN",
+                            "semantic_verified": False,
+                            "degraded_reason": "MISSING_SEMANTIC_EVIDENCE",
+                        })
                     final_proposals.append(prop)
 
         # 2. Directed Transition Graph Chaining for pairwise transitions
         # Graph adjacency: next_hop[u] = (v, transition_score, heuristic_score, semantic_score, explanation)
-        next_hop: Dict[str, Tuple[str, float, float, float, str]] = {}
+        next_hop: Dict[str, Tuple[str, float, float, Optional[float], str]] = {}
         prev_hop: Dict[str, str] = {}
 
         def would_create_cycle(start_node: str, end_node: str) -> bool:
@@ -133,8 +142,8 @@ class PairingOptimizer:
                 continue
 
             # Accept directed transition link u -> v
-            h_score = getattr(prop, "heuristic_score", prop.confidence)
-            s_score = getattr(prop, "semantic_score", prop.confidence)
+            h_score = prop.heuristic_score if getattr(prop, "heuristic_score", None) is not None else prop.confidence
+            s_score = getattr(prop, "semantic_score", None)
             expl = getattr(prop, "continuity_explanation", "Sequential continuation")
             next_hop[u] = (v, prop.confidence, h_score, s_score, expl)
             prev_hop[v] = u
@@ -167,7 +176,8 @@ class PairingOptimizer:
                 visited_nodes.add(nxt)
                 t_scores.append(conf)
                 h_scores.append(h_s)
-                s_scores.append(s_s)
+                if s_s is not None:
+                    s_scores.append(s_s)
                 if exp:
                     explanations.append(exp)
                 curr = nxt
@@ -175,9 +185,32 @@ class PairingOptimizer:
             for cid in chain_ids:
                 assigned_card_ids.add(cid)
 
-            avg_conf = sum(t_scores) / len(t_scores) if t_scores else 0.85
-            avg_h = sum(h_scores) / len(h_scores) if h_scores else 0.85
-            avg_s = sum(s_scores) / len(s_scores) if s_scores else 0.85
+            # Derive fallbacks from actual component fingerprints instead of hardcoding 0.85
+            fp_start = fp_by_id.get(start)
+            fallback_conf = (
+                getattr(fp_start, "role_confidence", 0.0)
+                if fp_start and getattr(fp_start, "role_confidence", None) is not None
+                else 0.0
+            )
+
+            avg_conf = sum(t_scores) / len(t_scores) if t_scores else fallback_conf
+            avg_h = sum(h_scores) / len(h_scores) if h_scores else fallback_conf
+
+            # Missing semantic evidence handling (FIND-04)
+            missing_semantic = len(s_scores) < len(h_scores) or not s_scores
+            if missing_semantic:
+                avg_s = sum(s_scores) / len(s_scores) if s_scores else None
+                final_conf = avg_h
+                action = "UNCERTAIN"
+                sem_verified = False
+                deg_reason = "MISSING_SEMANTIC_EVIDENCE"
+            else:
+                avg_s = sum(s_scores) / len(s_scores)
+                final_conf = avg_conf
+                action = "SEQUENCE"
+                sem_verified = True
+                deg_reason = None
+
             full_expl = " | ".join(explanations) if explanations else f"Connected {len(chain_ids)}-card sequence."
 
             seq_proposal = CorrelationProposal(
@@ -186,11 +219,13 @@ class PairingOptimizer:
                 part_count=len(chain_ids),
                 transition_scores=t_scores,
                 heuristic_score=round(avg_h, 4),
-                semantic_score=round(avg_s, 4),
-                confidence=round(avg_conf, 4),
+                semantic_score=round(avg_s, 4) if avg_s is not None else None,
+                confidence=round(final_conf, 4),
                 is_standalone=False,
                 continuity_explanation=full_expl,
-                recommended_action="SEQUENCE",
+                recommended_action=action,
+                semantic_verified=sem_verified,
+                degraded_reason=deg_reason,
             )
             final_proposals.append(seq_proposal)
 

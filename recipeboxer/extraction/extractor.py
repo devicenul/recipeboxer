@@ -21,6 +21,7 @@ import httpx
 from PIL import Image
 import pydantic
 
+from recipeboxer.ai.client import ImagePart, LLMClient, LLMRequest, LLMStage, TextPart
 from recipeboxer.config import Settings, get_settings
 from recipeboxer.ingestion.scanner import ScannedCard
 from recipeboxer.models.domain import CardRole, VisualFingerprint
@@ -133,6 +134,7 @@ class GeminiRecipeExtractor:
         thinking_budget_tokens: Optional[int] = None,
         adaptive_thinking: Optional[bool] = None,
         settings: Optional[Settings] = None,
+        llm_client: Optional[LLMClient] = None,
     ) -> None:
         """Initialize GeminiRecipeExtractor.
 
@@ -144,11 +146,13 @@ class GeminiRecipeExtractor:
             thinking_budget_tokens: Optional cap for thinking tokens.
             adaptive_thinking: Optional override for dynamic thinking budget allocation.
             settings: Optional custom Settings instance.
+            llm_client: Optional production-hardened LLMClient instance.
         """
         self.settings: Settings = settings or get_settings()
         self.api_key = api_key or self.settings.gemini_api_key
         self.model_name = model_name or self.settings.get_extraction_model()
         self.client = client
+        self.llm_client = llm_client
         self.thinking_mode = (
             thinking_mode if thinking_mode is not None else self.settings.thinking_mode
         )
@@ -228,7 +232,14 @@ class GeminiRecipeExtractor:
             resolved_cards[1] if len(resolved_cards) > 1 else (None, None, None)
         )
 
-        # 1. Custom or injected client (e.g. MockGeminiClient in test suite)
+        # 1. Real LLMClient if injected (FIND-03)
+        if self.llm_client is not None:
+            return await self._call_llm_client_extraction(
+                resolved_cards=resolved_cards,
+                ordered_card_ids=ordered_card_ids,
+            )
+
+        # 2. Custom or injected client (e.g. MockGeminiClient in test suite)
         if self.client is not None:
             res = None
             try:
@@ -562,6 +573,141 @@ class GeminiRecipeExtractor:
             return raw_b, f"/memory/card_{h}.jpg", f"card_{h}.jpg"
 
         raise TypeError(f"Unsupported card input type: {type(item)}")
+
+    async def _call_llm_client_extraction(
+        self,
+        resolved_cards: List[Tuple[Optional[bytes], Optional[str], Optional[str]]],
+        ordered_card_ids: List[str],
+    ) -> RecipeSchema:
+        """Executes multimodal JSON extraction call using injected LLMClient."""
+        try:
+            from recipeboxer.ai.gemini import sanitize_prompt_card_id
+        except Exception:
+            def sanitize_prompt_card_id(cid: Optional[str], default_role: str = "card") -> str:
+                if not cid:
+                    return default_role
+                clean = re.sub(r"[^a-zA-Z0-9_-]", "_", cid)
+                if not any(k in clean.lower() for k in ["front", "back", "card", "part", "side", "continuation"]):
+                    return f"{default_role}_{clean}"
+                return clean
+
+        system_instruction = RECIPE_EXTRACTION_SYSTEM_INSTRUCTION
+        effective_thinking = self.thinking_mode
+        effective_budget = self.thinking_budget_tokens
+
+        first_bytes = resolved_cards[0][0] if resolved_cards else None
+        first_path = resolved_cards[0][1] if resolved_cards else None
+        first_id = resolved_cards[0][2] if resolved_cards else None
+
+        if self.adaptive_thinking:
+            try:
+                mod_input: Any = first_bytes or first_path or first_id
+                mod_res = classify_card_modality(mod_input)
+                routed = route_prompt_for_modality(mod_res.modality)
+                system_instruction = routed.system_instruction
+                adaptive_mode, adaptive_budget = compute_adaptive_thinking_budget(mod_res.modality)
+                if self.thinking_budget_tokens is None:
+                    effective_thinking = adaptive_mode
+                    effective_budget = adaptive_budget
+            except Exception:
+                pass
+
+        parts: List[Union[TextPart, ImagePart]] = [
+            TextPart(text="Transcribe and structure the recipe from the provided card images into standard RecipeSchema JSON."),
+        ]
+
+        if len(resolved_cards) > 2:
+            parts.append(
+                TextPart(
+                    text=(
+                        f"You are transcribing a physical multi-card recipe spanning {len(resolved_cards)} card faces "
+                        f"in exact sequential order (Image 1 = Front, Image 2 = Continuation 1, Image 3 = Continuation 2...). "
+                        f"Seamlessly merge all ingredient items and numbered preparation steps in order across all card faces without duplication."
+                    )
+                )
+            )
+
+            for idx, (c_bytes, c_path, c_id) in enumerate(resolved_cards):
+                role_label = "Front (Page 1)" if idx == 0 else f"Continuation {idx} (Page {idx + 1})"
+                if c_bytes:
+                    parts.append(ImagePart(data=c_bytes))
+                sanitized_cid = sanitize_prompt_card_id(c_id, f"card_{idx + 1}")
+                parts.append(TextPart(text=f"Image {idx + 1}: {role_label}: {sanitized_cid}"))
+        elif len(resolved_cards) == 2:
+            # Front card
+            c1_bytes, _, c1_id = resolved_cards[0]
+            if c1_bytes:
+                parts.append(ImagePart(data=c1_bytes))
+            sanitized_c1 = sanitize_prompt_card_id(c1_id, "card_front")
+            parts.append(TextPart(text=f"Image A (Front Card): {sanitized_c1}"))
+
+            # Back card
+            c2_bytes, _, c2_id = resolved_cards[1]
+            if c2_bytes:
+                parts.append(ImagePart(data=c2_bytes))
+            sanitized_c2 = sanitize_prompt_card_id(c2_id, "card_back")
+            parts.append(TextPart(text=f"Image B (Back Card): {sanitized_c2}"))
+        elif len(resolved_cards) == 1:
+            c1_bytes, _, c1_id = resolved_cards[0]
+            if c1_bytes:
+                parts.append(ImagePart(data=c1_bytes))
+            sanitized_c1 = sanitize_prompt_card_id(c1_id, "card_front")
+            parts.append(TextPart(text=f"Image 1 (Front Card): {sanitized_c1}"))
+
+        req = LLMRequest(
+            stage=LLMStage.STRUCTURE,
+            model=self.model_name,
+            system_instruction=system_instruction,
+            parts=parts,
+            response_model=RecipeSchema,
+            temperature=0.1,
+            thinking_budget=effective_budget,
+        )
+
+        try:
+            resp = await self.llm_client.generate(req)
+        except StageUnavailableError:
+            raise
+        except Exception as exc:
+            raise ExtractionUnavailable(
+                f"Gemini LLMClient recipe extraction failed: {exc}",
+                reason=FailureReason.MODEL_UNAVAILABLE,
+                card_ids=ordered_card_ids,
+            ) from exc
+
+        recipe: Optional[RecipeSchema] = None
+        if resp.parsed is not None:
+            if isinstance(resp.parsed, RecipeSchema):
+                recipe = resp.parsed.model_copy()
+            elif isinstance(resp.parsed, dict):
+                recipe = RecipeSchema.model_validate(resp.parsed)
+            elif hasattr(resp.parsed, "model_dump"):
+                recipe = RecipeSchema.model_validate(resp.parsed.model_dump())
+        elif resp.raw_text:
+            try:
+                from recipeboxer.ai.client import _extract_json_text
+                cleaned = _extract_json_text(resp.raw_text)
+                recipe = RecipeSchema.model_validate(json.loads(cleaned))
+            except Exception as exc:
+                raise ExtractionUnavailable(
+                    f"Failed to parse recipe JSON from LLMClient: {exc}",
+                    reason=FailureReason.INVALID_RESPONSE,
+                    card_ids=ordered_card_ids,
+                ) from exc
+
+        if recipe is None:
+            raise ExtractionUnavailable(
+                "Model returned empty recipe response",
+                reason=FailureReason.INVALID_RESPONSE,
+                card_ids=ordered_card_ids,
+            )
+
+        if ordered_card_ids and not recipe.card_ids:
+            recipe.card_ids = ordered_card_ids
+        if recipe.card_ids and not recipe.image_urls:
+            recipe.image_urls = [f"/api/cards/{cid}/image" for cid in recipe.card_ids]
+
+        return recipe
 
     async def _call_gemini_extraction_api(
         self,

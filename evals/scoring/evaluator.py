@@ -67,10 +67,15 @@ def evaluate_deck(
             row["difficulty"] = gold_rec.get("difficulty", {}).get("legibility", "good")
 
         if pred_rec_obj:
-            conf = float(pred_rec_obj.get("confidence", 1.0))
-            confidences.append(conf)
-            is_correct = (iou >= 0.5) and (row.get("ingredient_f1", 0.0) >= 0.7)
-            correct_list.append(is_correct)
+            raw_conf = pred_rec_obj.get("confidence")
+            if raw_conf is not None:
+                try:
+                    conf = float(raw_conf)
+                    confidences.append(conf)
+                    is_correct = (iou >= 0.5) and (row.get("ingredient_f1", 0.0) >= 0.7)
+                    correct_list.append(is_correct)
+                except (ValueError, TypeError):
+                    pass
 
         recipe_rows.append(row)
 
@@ -92,6 +97,8 @@ def evaluate_deck(
         "calibration_ece": calibration_ece,
         "recipe_rows": recipe_rows,
         "matches": matches,
+        "confidences": confidences,
+        "correct_list": correct_list,
     }
 
 
@@ -156,6 +163,8 @@ def score_evaluation(
         deck_results.append(res)
         all_recipe_rows.extend(res.get("recipe_rows", []))
         all_grouping_scores.append(res.get("grouping", {}))
+        all_confidences.extend(res.get("confidences", []))
+        all_correct.extend(res.get("correct_list", []))
 
     # Overall grouping aggregate
     overall_grouping: Dict[str, Any] = {}

@@ -17,9 +17,11 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 from PIL import Image
 
+from recipeboxer.ai.client import ImagePart, LLMClient, LLMRequest, LLMStage, TextPart
 from recipeboxer.config import get_settings
 from recipeboxer.models.correlation import CorrelationProposal
 from recipeboxer.models.domain import CardRole, VisualFingerprint
+from recipeboxer.models.failures import FailureReason, SemanticVerificationUnavailable, StageUnavailableError
 from recipeboxer.vision.heuristics import _get_enum_str, calculate_heuristic_distance
 
 logger = logging.getLogger(__name__)
@@ -53,6 +55,7 @@ class GeminiSemanticVerifier:
         client: Optional[Any] = None,
         heuristic_weight: Optional[float] = None,
         semantic_weight: Optional[float] = None,
+        llm_client: Optional[LLMClient] = None,
     ) -> None:
         """Initialize GeminiSemanticVerifier.
 
@@ -62,11 +65,13 @@ class GeminiSemanticVerifier:
             client: Optional mock Gemini client for testing.
             heuristic_weight: Weight of heuristic score in composite confidence (default 0.30).
             semantic_weight: Weight of semantic score in composite confidence (default 0.70).
+            llm_client: Optional production-hardened LLMClient instance.
         """
         self.settings = get_settings()
         self.api_key = api_key or self.settings.gemini_api_key
         self.model_name = model_name or self.settings.get_correlation_model()
         self.client = client
+        self.llm_client = llm_client
         self.heuristic_weight = (
             heuristic_weight if heuristic_weight is not None else self.settings.heuristic_weight
         )
@@ -93,7 +98,11 @@ class GeminiSemanticVerifier:
         if heuristic_score is None:
             heuristic_score = calculate_heuristic_distance(front_fp, back_fp)
 
-        # 1. Custom or injected client (e.g. MockGeminiClient in tests)
+        # 1. Real LLMClient if injected (FIND-03)
+        if self.llm_client is not None:
+            return await self._call_llm_client_semantic(front_fp, back_fp, heuristic_score)
+
+        # 2. Custom or injected client (e.g. MockGeminiClient in tests)
         if self.client is not None:
             res = None
             for method_name in ("verify_pair", "verify_correlation"):
@@ -171,6 +180,99 @@ class GeminiSemanticVerifier:
             proposal = await self.verify_pair(front_fp, back_fp, heuristic_score=h_score)
             proposals.append(proposal)
         return proposals
+
+    async def _call_llm_client_semantic(
+        self,
+        front_fp: VisualFingerprint,
+        back_fp: VisualFingerprint,
+        heuristic_score: float,
+    ) -> CorrelationProposal:
+        """Invokes injected LLMClient with production semantic continuity prompt construction."""
+        prompt_text = "Evaluate semantic continuity between candidate front and back card sides.\n\nFront Card: Card A\nBack Card: Card B"
+        parts: List[Union[TextPart, ImagePart]] = [
+            TextPart(text=prompt_text),
+        ]
+
+        p1 = Path(front_fp.image_path)
+        if p1.exists() and p1.is_file():
+            parts.append(ImagePart(data=p1.read_bytes()))
+
+        p2 = Path(back_fp.image_path)
+        if p2.exists() and p2.is_file():
+            parts.append(ImagePart(data=p2.read_bytes()))
+
+        req = LLMRequest(
+            stage=LLMStage.SET_VERIFY,
+            model=self.model_name,
+            system_instruction=SEMANTIC_VERIFICATION_PROMPT,
+            parts=parts,
+            response_model=CorrelationProposal,
+            temperature=0.1,
+        )
+
+        try:
+            resp = await self.llm_client.generate(req)
+        except StageUnavailableError:
+            raise
+        except Exception as exc:
+            raise SemanticVerificationUnavailable(
+                f"Gemini LLMClient semantic verification failed: {exc}",
+                reason=FailureReason.MODEL_UNAVAILABLE,
+                card_ids=[front_fp.card_id, back_fp.card_id],
+            ) from exc
+
+        if resp.parsed is not None:
+            if isinstance(resp.parsed, CorrelationProposal):
+                prop = resp.parsed.model_copy()
+                prop.ordered_card_ids = [front_fp.card_id, back_fp.card_id]
+                return prop
+            if hasattr(resp.parsed, "model_dump"):
+                data = resp.parsed.model_dump()
+            elif isinstance(resp.parsed, dict):
+                data = resp.parsed
+            else:
+                data = {}
+            s_score = float(data.get("semantic_score", 0.0))
+            expl = str(data.get("explanation", ""))
+            action = str(data.get("recommended_action", "PAIR"))
+        elif resp.raw_text:
+            try:
+                from recipeboxer.ai.client import _extract_json_text
+                cleaned = _extract_json_text(resp.raw_text)
+                data = json.loads(cleaned)
+                s_score = float(data.get("semantic_score", 0.0))
+                expl = str(data.get("explanation", ""))
+                action = str(data.get("recommended_action", "PAIR"))
+            except Exception as exc:
+                raise SemanticVerificationUnavailable(
+                    f"Failed to parse semantic response from LLMClient: {exc}",
+                    reason=FailureReason.INVALID_RESPONSE,
+                    card_ids=[front_fp.card_id, back_fp.card_id],
+                ) from exc
+        else:
+            raise SemanticVerificationUnavailable(
+                "Model returned empty semantic response",
+                reason=FailureReason.INVALID_RESPONSE,
+                card_ids=[front_fp.card_id, back_fp.card_id],
+            )
+
+        composite = self.heuristic_weight * heuristic_score + self.semantic_weight * s_score
+        composite = round(max(0.0, min(1.0, composite)), 4)
+
+        return CorrelationProposal(
+            proposal_id=f"prop_{uuid.uuid4().hex[:8]}",
+            ordered_card_ids=[front_fp.card_id, back_fp.card_id],
+            part_count=2,
+            transition_scores=[composite],
+            heuristic_score=heuristic_score,
+            semantic_score=s_score,
+            confidence=composite,
+            is_standalone=False,
+            continuity_explanation=expl,
+            recommended_action=action,
+            semantic_verified=True,
+            degraded_reason=None,
+        )
 
     async def _call_gemini_semantic_api(
         self,

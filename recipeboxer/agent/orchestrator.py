@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Union
 
 from recipeboxer.agent.session import PipelineSession
-from recipeboxer.config import Settings, get_settings
+from recipeboxer.config import Settings, get_settings, has_usable_gemini_key, is_usable_gemini_key
 from recipeboxer.correlation.optimizer import PairingOptimizer
 from recipeboxer.correlation.semantic import GeminiSemanticVerifier
 from recipeboxer.exporter.plan_to_eat import PlanToEatExporter
@@ -102,20 +102,22 @@ class RecipeBoxerAgent:
             return True
         if hasattr(session, "config") and session.config:
             if isinstance(session.config, dict):
-                if session.config.get("mock_client") or session.config.get("gemini_api_key"):
+                if session.config.get("mock_client"):
                     return True
-            elif getattr(session.config, "gemini_api_key", None):
+                if is_usable_gemini_key(session.config.get("gemini_api_key")):
+                    return True
+            elif is_usable_gemini_key(getattr(session.config, "gemini_api_key", None)):
                 return True
         if hasattr(session, "settings") and session.settings is not None and not isinstance(session.settings, Settings):
             return True
 
-        # Injected clients on agent components
-        if getattr(self.visual_extractor, "client", None) is not None:
-            return True
-        if getattr(self.semantic_verifier, "client", None) is not None:
-            return True
-        if getattr(self.recipe_extractor, "client", None) is not None:
-            return True
+        # Injected clients on agent components (LLMClient or mock client)
+        for comp in (self.visual_extractor, self.semantic_verifier, self.recipe_extractor):
+            if comp is not None:
+                if getattr(comp, "llm_client", None) is not None:
+                    return True
+                if getattr(comp, "client", None) is not None:
+                    return True
 
         # Custom / mock component instances passed to agent
         if self.visual_extractor is not None and not isinstance(self.visual_extractor, GeminiVisualExtractor):
@@ -124,19 +126,12 @@ class RecipeBoxerAgent:
             return True
 
         # Usable Gemini API key
-        candidate_keys = [
+        extra_keys = [
             getattr(session.settings, "gemini_api_key", None),
-            getattr(self.settings, "gemini_api_key", None),
             getattr(self.visual_extractor, "api_key", None),
             getattr(self.recipe_extractor, "api_key", None),
-            os.environ.get("RECIPEBOXER_GEMINI_API_KEY"),
-            os.environ.get("GEMINI_API_KEY"),
         ]
-        for k in candidate_keys:
-            if k and str(k).strip():
-                return True
-
-        return False
+        return has_usable_gemini_key(self.settings, extra_keys=extra_keys)
 
     def _load_baseline(
         self, session: PipelineSession
