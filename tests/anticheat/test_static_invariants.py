@@ -58,9 +58,6 @@ PACKAGE_ROOT = REPO_ROOT / "recipeboxer"
 # Production scope excludes static assets, and temporarily excludes card_generator and
 # evals which move to separate top-level packages in Phase 1 / Phase 2.
 TEMPORARY_EXCLUSIONS = {
-    # TODO(WP-V2): card_generator and tools move to top-level cardforge/ project
-    "recipeboxer/tools/card_generator.py",
-    "recipeboxer/tools/__init__.py",
     # TODO(WP-E3): evals package moves out of recipeboxer to top-level evals/
     "recipeboxer/evals",
     # Static frontend web assets
@@ -208,10 +205,6 @@ def _extract_varnames_from_node(node: ast.AST) -> Set[str]:
     return names
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Cheat present; removed in Phase 2 WP-C1..C6 - flip to hard pass then",
-)
 def test_no_answer_key_paths() -> None:
     """Enforces INV-AC1: No answer key paths or manifest lookups in production code.
 
@@ -289,10 +282,6 @@ def test_no_answer_key_paths() -> None:
     assert not violations, f"Anti-cheat violation inventory for INV-AC1 ({len(violations)} hits):\n" + "\n".join(lines)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Cheat present; removed in Phase 2 WP-C1..C6 - flip to hard pass then",
-)
 def test_no_filename_semantics() -> None:
     """Enforces INV-AC2: No filename semantics or category code inference in pipeline.
 
@@ -381,10 +370,6 @@ def test_no_filename_semantics() -> None:
     assert not violations, f"Anti-cheat violation inventory for INV-AC2 ({len(violations)} hits):\n" + "\n".join(lines)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Cheat present; removed in Phase 2 WP-C1..C6 - flip to hard pass then",
-)
 def test_no_fixture_content() -> None:
     """Enforces INV-AC3: No fixture recipe content, titles, or hashes in production code.
 

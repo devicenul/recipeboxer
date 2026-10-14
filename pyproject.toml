@@ -28,7 +28,7 @@ dependencies = [
     "pydantic>=2.10.0",
     "pydantic-settings>=2.8.0",
     "google-antigravity>=0.1.14",
-    "google-genai>=2.19.0",
+    "google-genai>=2.30,<3",
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.30.0",
     "pillow>=11.0.0",
@@ -61,6 +61,9 @@ recipeboxer = ["py.typed", "**/*.json", "**/*.yaml", "**/*.txt", "**/*.csv"]
 [tool.pytest.ini_options]
 minversion = "8.0"
 testpaths = ["tests"]
+# Repo root on sys.path so the flat-layout `cardforge/` project (eval-only
+# synthetic card generator, never imported by recipeboxer) is importable in tests.
+pythonpath = ["."]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 filterwarnings = [

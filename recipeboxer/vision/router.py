@@ -12,11 +12,8 @@ Dynamically routes each card to the optimal prompt branch, domain skill, and thi
 
 from __future__ import annotations
 
-import hashlib
 import io
-import json
-import math
-import re
+import logging
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
@@ -29,34 +26,7 @@ from recipeboxer.models.domain import ArtifactType, InkType, VisualFingerprint
 from recipeboxer.vision.heuristics import rgb_to_lab
 from recipeboxer.vision.preprocessing import extract_paper_color_palette
 
-_MANIFEST_MODALITY_CACHE: Optional[Dict[str, CardModality]] = None
-
-
-def _get_manifest_modality_lookup() -> Dict[str, CardModality]:
-    """Indexes ground-truth modalities by SHA-256 image byte hash."""
-    global _MANIFEST_MODALITY_CACHE
-    if _MANIFEST_MODALITY_CACHE is not None:
-        return _MANIFEST_MODALITY_CACHE
-    lookup: Dict[str, CardModality] = {}
-    candidate_paths = [
-        Path(__file__).resolve().parent.parent.parent / "tests" / "fixtures" / "sample_cards" / "manifest.json",
-        Path("tests/fixtures/sample_cards/manifest.json").resolve(),
-    ]
-    for p in candidate_paths:
-        if p.exists() and p.is_file():
-            try:
-                data = json.loads(p.read_text(encoding="utf-8"))
-                for card in data.get("cards", []):
-                    sha = card.get("sha256_hash")
-                    mod = card.get("modality")
-                    if sha and mod:
-                        lookup[sha.lower().strip()] = CardModality.normalize(mod)
-                break
-            except Exception:
-                pass
-    _MANIFEST_MODALITY_CACHE = lookup
-    return _MANIFEST_MODALITY_CACHE
-
+logger = logging.getLogger(__name__)
 
 
 class CardModality(str, Enum):
@@ -73,36 +43,31 @@ class CardModality(str, Enum):
         """Normalizes string or enum value to canonical CardModality."""
         if isinstance(val, CardModality):
             return val
-        s = str(getattr(val, "value", val)).strip().upper()
+        raw_text = str(getattr(val, "value", val)).strip().upper()
         if (
-            "CLP" in s
-            or "CLIPPING" in s
-            or "CUTOUT" in s
-            or "NEWSPRINT" in s
-            or "LABEL" in s
-            or "NEWSLETTER" in s
-            or "MAGAZINE" in s
+            "CLIPPING" in raw_text
+            or "CUTOUT" in raw_text
+            or "NEWSPRINT" in raw_text
+            or "LABEL" in raw_text
+            or "NEWSLETTER" in raw_text
+            or "MAGAZINE" in raw_text
         ):
             return CardModality.PRINTED_CLIPPING_OR_LABEL
-        if "PRINT" in s and ("HAND" in s or "MANUSCRIPT" in s or "LETTER" in s):
+        if "PRINT" in raw_text and ("HAND" in raw_text or "MANUSCRIPT" in raw_text or "LETTER" in raw_text):
             return CardModality.HANDWRITTEN_PRINT
-        if "MIXED" in s or "DMG" in s or "STAIN" in s or "DAMAGED" in s or "DEGRADED" in s:
+        if "MIXED" in raw_text or "STAIN" in raw_text or "DAMAGED" in raw_text or "DEGRADED" in raw_text:
             return CardModality.MIXED_MEDIA
-        if "TYPE" in s or "TYP" in s or "MONOSPACE" in s:
+        if "TYPE" in raw_text or "MONOSPACE" in raw_text:
             return CardModality.TYPEWRITTEN
         if (
-            "CURSIVE" in s
-            or "HANDWRITTEN" in s
-            or "HANDWRITING" in s
-            or s in ("VHC", "MCS", "STA")
-            or "_vhc_" in s.lower()
-            or "_mcs_" in s.lower()
-            or "_sta_" in s.lower()
-            or "SCRIPT" in s
+            "CURSIVE" in raw_text
+            or "HANDWRITTEN" in raw_text
+            or "HANDWRITING" in raw_text
+            or "SCRIPT" in raw_text
         ):
             return CardModality.HANDWRITTEN_CURSIVE
         try:
-            return CardModality(s)
+            return CardModality(raw_text)
         except ValueError:
             return CardModality.HANDWRITTEN_CURSIVE
 
@@ -272,19 +237,14 @@ class ModalityClassifier:
     ) -> ModalityClassificationResult:
         """Classifies document modality from image data or card representation."""
         card_id = ""
-        image_path = ""
 
-        # Extract identifiers and metadata if available
+        # Extract identifiers for logging if available
         if isinstance(card_input, VisualFingerprint):
             card_id = card_input.card_id
-            image_path = card_input.image_path
         elif isinstance(card_input, ScannedCard) or hasattr(card_input, "file_path"):
             card_id = getattr(card_input, "card_id", Path(card_input.file_path).name)
-            image_path = str(card_input.file_path)
         elif isinstance(card_input, (Path, str)):
-            p = Path(card_input)
-            card_id = p.name
-            image_path = str(p)
+            card_id = Path(card_input).name
 
         # 1. Custom client override if injected (for testing or multimodal LLM classification)
         if self.client is not None and hasattr(self.client, "classify_modality"):
@@ -334,123 +294,52 @@ class ModalityClassifier:
                     reasoning="Identified printed newsprint or clipping layout from visual fingerprint.",
                     features={"layout": "printed"},
                 )
-            if card_input.sha256_hash:
-                sha_lookup = _get_manifest_modality_lookup()
-                clean_sha = card_input.sha256_hash.lower().strip()
-                if clean_sha in sha_lookup:
-                    mod = sha_lookup[clean_sha]
-                    return ModalityClassificationResult(
-                        modality=mod,
-                        confidence=0.98,
-                        reasoning=f"Identified {mod.value} from registered scan fingerprint.",
-                        features={"sha256_match": True},
-                    )
 
-            if card_input.image_path:
-                try:
-                    p = Path(card_input.image_path)
-                    if p.exists() and p.is_file():
-                        calc_sha = hashlib.sha256(p.read_bytes()).hexdigest().lower()
-                        sha_lookup = _get_manifest_modality_lookup()
-                        if calc_sha in sha_lookup:
-                            mod = sha_lookup[calc_sha]
-                            return ModalityClassificationResult(
-                                modality=mod,
-                                confidence=0.98,
-                                reasoning=f"Identified {mod.value} from registered scan file digest.",
-                                features={"sha256_match": True},
-                            )
-                except Exception:
-                    pass
-
-        # 3. Check SHA-256 byte digest for registered corpus images
-        try:
-            raw_bytes: Optional[bytes] = None
-            if isinstance(card_input, bytes):
-                raw_bytes = card_input
-            elif isinstance(card_input, (str, Path)):
-                p = Path(card_input)
-                if p.exists() and p.is_file():
-                    raw_bytes = p.read_bytes()
-            elif isinstance(card_input, ScannedCard) or hasattr(card_input, "file_path"):
-                p = Path(card_input.file_path)
-                if p.exists() and p.is_file():
-                    raw_bytes = p.read_bytes()
-
-            if raw_bytes:
-                calc_sha = hashlib.sha256(raw_bytes).hexdigest().lower()
-                sha_lookup = _get_manifest_modality_lookup()
-                if calc_sha in sha_lookup:
-                    mod = sha_lookup[calc_sha]
-                    return ModalityClassificationResult(
-                        modality=mod,
-                        confidence=0.98,
-                        reasoning=f"Identified {mod.value} from registered scan image digest.",
-                        features={"sha256_match": True},
-                    )
-        except Exception:
-            pass
-
-        # 4. Deterministic Image CV Feature Analysis
+        # 3. Deterministic Image CV Feature Analysis
         try:
             im = self._resolve_image(card_input)
-            return self._classify_from_image_features(im, card_id)
-        except Exception:
-            # Fallback for non-existent mock string paths in unit tests
-            c_str = str(card_id).lower()
-            if "clipping" in c_str or "newspaper" in c_str or "newsprint" in c_str:
-                return ModalityClassificationResult(
-                    modality=CardModality.PRINTED_CLIPPING_OR_LABEL,
-                    confidence=0.85,
-                    reasoning="Inferred printed clipping from mock description.",
-                    features={"fallback": True},
-                )
-            if "typewriter" in c_str or "typewritten" in c_str or "typed" in c_str:
-                return ModalityClassificationResult(
-                    modality=CardModality.TYPEWRITTEN,
-                    confidence=0.85,
-                    reasoning="Inferred typewritten from mock description.",
-                    features={"fallback": True},
-                )
-            if "mixed" in c_str or "stained" in c_str or "damaged" in c_str:
-                return ModalityClassificationResult(
-                    modality=CardModality.MIXED_MEDIA,
-                    confidence=0.85,
-                    reasoning="Inferred mixed-media from mock description.",
-                    features={"fallback": True},
-                )
+            return self._classify_from_image_features(im, card_id=card_id)
+        except Exception as exc:
+            reason = str(exc) if str(exc) else type(exc).__name__
             return ModalityClassificationResult(
                 modality=CardModality.HANDWRITTEN_CURSIVE,
-                confidence=0.85,
-                reasoning="Defaulted to vintage handwritten cursive.",
+                confidence=0.0,
+                reasoning=f"Modality unavailable: {reason}",
                 features={"fallback": True},
             )
-
 
     def _resolve_image(self, card_input: Any) -> Image.Image:
         """Loads PIL Image from diverse inputs."""
         if isinstance(card_input, Image.Image):
             return card_input.copy()
         if isinstance(card_input, VisualFingerprint):
-            p = Path(card_input.image_path)
-            if p.exists():
-                return Image.open(p)
+            if card_input.image_path:
+                p = Path(card_input.image_path)
+                if p.exists() and p.is_file():
+                    return Image.open(p)
+                raise FileNotFoundError(f"Fingerprint image_path does not exist: {card_input.image_path}")
+            raise ValueError("VisualFingerprint has no image_path to load pixels from")
         if isinstance(card_input, ScannedCard) or hasattr(card_input, "file_path"):
             p = Path(card_input.file_path)
-            if p.exists():
+            if p.exists() and p.is_file():
                 return Image.open(p)
+            raise FileNotFoundError(f"ScannedCard file_path does not exist: {card_input.file_path}")
         if isinstance(card_input, (Path, str)):
             p = Path(card_input)
-            if p.exists():
+            if p.exists() and p.is_file():
                 return Image.open(p)
+            raise FileNotFoundError(f"Image path does not exist: {p}")
         if isinstance(card_input, bytes):
             return Image.open(io.BytesIO(card_input))
         raise ValueError(f"Cannot resolve image from {type(card_input)}")
 
     def _classify_from_image_features(
-        self, im: Image.Image, card_id: str
+        self, im: Image.Image, card_id: str = ""
     ) -> ModalityClassificationResult:
         """Extracts substrate colorimetry, ruling, edge density, and typography pitch."""
+        if card_id:
+            logger.debug("Classifying image features for card_id=%s", card_id)
+
         rgb = im.convert("RGB")
         w, h = rgb.size
         gray = rgb.convert("L")
@@ -478,7 +367,6 @@ class ModalityClassifier:
         col_mid = col_edge_sums[int(sw * 0.25) : int(sw * 0.75)]
         max_col_mid = max(col_mid) if col_mid else 1.0
         col_valleys = sum(1 for v in col_mid if v < 0.25 * max_col_mid) if max_col_mid > 0 else 0
-
 
         # Check for regular ruling line peaks
         peaks = [

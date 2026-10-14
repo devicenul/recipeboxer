@@ -42,35 +42,6 @@ Respond with strict JSON with these fields:
 - "recommended_action": string ("PAIR", "UNCERTAIN", or "REJECT")
 """
 
-_MANIFEST_RECIPE_CLUSTER_CACHE: Optional[Dict[str, str]] = None
-
-
-def _get_manifest_recipe_cluster_lookup() -> Dict[str, str]:
-    """Indexes recipe cluster IDs by card SHA-256 byte hashes for deterministic offline semantic evaluation."""
-    global _MANIFEST_RECIPE_CLUSTER_CACHE
-    if _MANIFEST_RECIPE_CLUSTER_CACHE is not None:
-        return _MANIFEST_RECIPE_CLUSTER_CACHE
-    lookup: Dict[str, str] = {}
-    candidate_paths = [
-        Path(__file__).resolve().parent.parent.parent / "tests" / "fixtures" / "sample_cards" / "manifest.json",
-        Path("tests/fixtures/sample_cards/manifest.json").resolve(),
-    ]
-    for p in candidate_paths:
-        if p.exists() and p.is_file():
-            try:
-                data = json.loads(p.read_text(encoding="utf-8"))
-                for card in data.get("cards", []):
-                    sha = card.get("sha256_hash")
-                    rid = card.get("recipe_cluster", {}).get("recipe_id")
-                    if sha and rid:
-                        lookup[sha.lower().strip()] = rid
-                break
-            except Exception:
-                pass
-    _MANIFEST_RECIPE_CLUSTER_CACHE = lookup
-    return _MANIFEST_RECIPE_CLUSTER_CACHE
-
-
 class GeminiSemanticVerifier:
     """Stage 2 semantic continuity verifier using Gemini Multimodal models."""
 
@@ -164,10 +135,24 @@ class GeminiSemanticVerifier:
             try:
                 return await self._call_gemini_semantic_api(front_fp, back_fp, heuristic_score)
             except Exception as exc:
-                logger.warning(f"Gemini API semantic verification failed: {exc}. Falling back to text analysis.")
+                logger.warning(
+                    "Gemini API semantic verification failed: %s. Returning degraded proposal.",
+                    exc,
+                )
+                return self._evaluate_offline_continuity(
+                    front_fp,
+                    back_fp,
+                    heuristic_score,
+                    degraded_reason=f"API_ERROR: {type(exc).__name__}",
+                )
 
-        # 3. Offline semantic continuity evaluation
-        return self._evaluate_offline_continuity(front_fp, back_fp, heuristic_score)
+        # 3. Offline semantic continuity evaluation (no model available)
+        return self._evaluate_offline_continuity(
+            front_fp,
+            back_fp,
+            heuristic_score,
+            degraded_reason="NO_MODEL",
+        )
 
     async def verify_candidate_proposals(
         self,
@@ -196,12 +181,10 @@ class GeminiSemanticVerifier:
         """Invokes Gemini Multimodal API with dual image attachments."""
         import httpx
 
-        # Read images if available on filesystem
-        sanitized_front = front_fp.card_id if (front_fp.card_id and "card_" in front_fp.card_id.lower()) else "Card A"
-        sanitized_back = back_fp.card_id if (back_fp.card_id and "card_" in back_fp.card_id.lower()) else "Card B"
+        # Read images if available on filesystem - strictly opaque labels enforce INV-AC2
         parts: List[Dict[str, Any]] = [
             {
-                "text": f"{SEMANTIC_VERIFICATION_PROMPT}\n\nFront Card: {sanitized_front}\nBack Card: {sanitized_back}"
+                "text": f"{SEMANTIC_VERIFICATION_PROMPT}\n\nFront Card: Card A\nBack Card: Card B"
             }
         ]
 
@@ -249,83 +232,76 @@ class GeminiSemanticVerifier:
                 is_standalone=False,
                 continuity_explanation=explanation,
                 recommended_action=action,
+                semantic_verified=True,
+                degraded_reason=None,
             )
 
     def _evaluate_offline_continuity(
-
         self,
         front_fp: VisualFingerprint,
         back_fp: VisualFingerprint,
         heuristic_score: float,
+        degraded_reason: str = "NO_MODEL",
     ) -> CorrelationProposal:
-        """Evaluates semantic continuity offline using boundary text cues, image digests, and physical heuristics."""
-        f_sha = (front_fp.sha256_hash or "").lower().strip()
-        b_sha = (back_fp.sha256_hash or "").lower().strip()
+        """Evaluates semantic continuity offline using honest boundary text cues and heuristics."""
+        f_last = (
+            front_fp.boundary_text.last_line.lower()
+            if front_fp.boundary_text and front_fp.boundary_text.last_line
+            else ""
+        )
+        b_first = (
+            back_fp.boundary_text.first_line.lower()
+            if back_fp.boundary_text and back_fp.boundary_text.first_line
+            else ""
+        )
 
-        cluster_lookup = _get_manifest_recipe_cluster_lookup()
-        if f_sha and b_sha and f_sha in cluster_lookup and b_sha in cluster_lookup:
-            if cluster_lookup[f_sha] == cluster_lookup[b_sha]:
-                semantic_score = 0.95
-                explanation = (
-                    "Strong semantic continuity detected: front card ends with continuation cue/ingredients, "
-                    "back card continues with numbered baking/preparation steps."
-                )
-                action = "SEQUENCE"
-            else:
-                semantic_score = 0.05
-                explanation = "No narrative, boundary cue, or semantic continuity detected between cards from different recipes."
-                action = "REJECT"
-        else:
-            f_last = front_fp.boundary_text.last_line.lower() if front_fp.boundary_text else ""
-            b_first = back_fp.boundary_text.first_line.lower() if back_fp.boundary_text else ""
+        has_cue = bool(
+            front_fp.boundary_text and front_fp.boundary_text.has_continuation_symbol
+        )
+        is_cutoff = bool(
+            front_fp.boundary_text and front_fp.boundary_text.is_cut_off_mid_sentence
+        )
+        has_cont_header = any(
+            kw in b_first for kw in ("cont", "direct", "step", "bake")
+        )
+        has_explicit_cont_in_header = "continued" in b_first or "cont." in b_first or "cont)" in b_first
+        has_cont_symbol_in_text = any(
+            sym in f_last for sym in ("(over", "->", "turn over", "pt.", "part")
+        )
 
-            # Check semantic continuity cues from boundary OCR
-            has_cue = (
-                front_fp.boundary_text.has_continuation_symbol
-                if front_fp.boundary_text
-                else False
+        front_has_continuation = has_cue or has_cont_symbol_in_text
+        back_has_continuation = has_explicit_cont_in_header or (is_cutoff and has_cont_header)
+
+        # Check real evidence in boundary text
+        if front_has_continuation and (is_cutoff or back_has_continuation):
+            # Strong boundary text evidence (front cue + back continuation)
+            semantic_score = 0.85
+            raw_comp = self.heuristic_weight * heuristic_score + self.semantic_weight * semantic_score
+            composite = round(min(0.80, max(0.0, raw_comp)), 4)
+            action = "PAIR" if composite >= 0.75 else "UNCERTAIN"
+            explanation = (
+                f"Strong boundary text continuity detected ({degraded_reason}): front card ends with continuation cue/cutoff, "
+                "back card begins with continuation header."
             )
-            is_cutoff = (
-                front_fp.boundary_text.is_cut_off_mid_sentence
-                if front_fp.boundary_text
-                else False
-            )
-            has_cont_header = (
-                "cont" in b_first or "direct" in b_first or "step" in b_first or "bake" in b_first
-            )
-
-            # Check narrative & boundary continuity without checking filename tokens
-            if has_cue or (is_cutoff and has_cont_header):
-                semantic_score = 0.95
-                explanation = (
-                    "Strong semantic continuity detected: front card ends with continuation cue/ingredients, "
-                    "back card continues with numbered baking/preparation steps."
-                )
-                action = "SEQUENCE"
-            elif ("continued" in b_first or "cont." in b_first) and is_cutoff:
-                semantic_score = 0.90
-                explanation = "Moderate-to-strong semantic continuity detected from narrative boundary text cues."
-                action = "SEQUENCE"
-            elif heuristic_score >= 0.60:
-                semantic_score = 0.65
-                explanation = "Moderate visual and structural continuity. Recommended for review."
-                action = "UNCERTAIN"
-            else:
-                semantic_score = 0.10
-                explanation = "No narrative, boundary cue, or semantic continuity detected between cards."
-                action = "REJECT"
-
-
-
-        composite = self.heuristic_weight * heuristic_score + self.semantic_weight * semantic_score
-        composite = round(max(0.0, min(1.0, composite)), 4)
-
-        if composite >= 0.80:
-            action = "PAIR"
-        elif composite >= 0.50:
+        elif front_has_continuation or back_has_continuation:
+            # Moderate / partial boundary text cues
+            semantic_score = 0.70
+            raw_comp = self.heuristic_weight * heuristic_score + self.semantic_weight * semantic_score
+            composite = round(min(0.65, max(0.0, raw_comp)), 4)
             action = "UNCERTAIN"
+            explanation = (
+                f"Moderate boundary text cues detected ({degraded_reason}): continuation cues present in boundary OCR text. "
+                "Recommended for human review."
+            )
         else:
-            action = "REJECT"
+            # No real boundary evidence: neutral score, confidence = heuristic score only
+            semantic_score = 0.5
+            composite = round(max(0.0, min(1.0, heuristic_score)), 4)
+            action = "UNCERTAIN"
+            explanation = (
+                f"Unverified correlation ({degraded_reason}): no multimodal LLM available; "
+                "confidence reflects Stage 1 heuristic score only."
+            )
 
         return CorrelationProposal(
             proposal_id=f"prop_{uuid.uuid4().hex[:8]}",
@@ -338,4 +314,6 @@ class GeminiSemanticVerifier:
             is_standalone=False,
             continuity_explanation=explanation,
             recommended_action=action,
+            semantic_verified=False,
+            degraded_reason=degraded_reason,
         )

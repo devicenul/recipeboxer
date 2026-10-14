@@ -1,4 +1,4 @@
-"""Unit and integration tests for the procedural synthetic card generator tool (recipeboxer/tools/card_generator.py).
+"""Unit and integration tests for the procedural synthetic card generator tool (cardforge).
 
 Validates:
 1. Deterministic generation reproducibility: identical seeds produce byte-identical images and metadata.
@@ -29,14 +29,15 @@ from typing import Any, Dict, List
 import pytest
 from PIL import Image
 
-from recipeboxer.models.domain import CardRole
-from recipeboxer.models.recipe import RecipeSchema
-from recipeboxer.tools.card_generator import (
+import tempfile
+from cardforge import (
     CardModality,
+    CardRole,
     DegradationConfig,
     DegradationLevel,
     GeneratedCard,
     PaperSubstrate,
+    RecipeSchema,
     SyntheticCardGenerator,
     apply_coffee_ring,
     apply_date_stamp,
@@ -456,7 +457,7 @@ def test_card_generator_cli_help(capsys):
 def test_fallback_font_when_truetype_unavailable(sample_test_recipe: RecipeSchema):
     """Verify generator degrades gracefully to Pillow default bitmap font when TrueType fails."""
     from unittest.mock import patch
-    import recipeboxer.tools.card_generator as cg
+    import cardforge as cg
 
     # Clear cache and simulate missing truetype support
     cg._FONT_CACHE.clear()
@@ -554,9 +555,9 @@ def test_generate_multi_card_set_with_degradation(sample_test_recipe: RecipeSche
     assert len(c3_artifacts) > 0
 
 
-def test_tools_package_lazy_exports():
+def test_cardforge_package_exports():
     """Verify recipeboxer.tools exports all required models and helper functions."""
-    import recipeboxer.tools as tools
+    import cardforge as tools
     
     expected_exports = [
         "CardModality",
@@ -578,7 +579,7 @@ def test_tools_package_lazy_exports():
         "get_font",
     ]
     for export_name in expected_exports:
-        assert hasattr(tools, export_name), f"Missing export '{export_name}' in recipeboxer.tools"
+        assert hasattr(tools, export_name), f"Missing export '{export_name}' in cardforge"
         attr = getattr(tools, export_name)
         assert attr is not None
 
@@ -677,4 +678,30 @@ def test_generate_standalone_card_with_tape_and_stamps(sample_test_recipe: Recip
     assert "TAPE_RESIDUE_YELLOWED" in art_types
     assert "OIL_GREASE_STAIN" in art_types
 
+
+
+
+def test_generator_deterministic_reproducibility():
+    """Verify that cardforge generator with seed=42 reproduces identical images and manifest structure."""
+    with tempfile.TemporaryDirectory() as tmpdir1, tempfile.TemporaryDirectory() as tmpdir2:
+        tmp_path1 = Path(tmpdir1)
+        tmp_path2 = Path(tmpdir2)
+        cards1 = generate_synthetic_corpus(output_dir=tmp_path1, seed=42)
+        cards2 = generate_synthetic_corpus(output_dir=tmp_path2, seed=42)
+        assert len(cards1) == 48
+        assert len(cards2) == 48
+
+        for c1, c2 in zip(cards1, cards2):
+            f1 = tmp_path1 / c1.filename
+            f2 = tmp_path2 / c2.filename
+            assert hashlib.sha256(f1.read_bytes()).hexdigest() == hashlib.sha256(f2.read_bytes()).hexdigest()
+
+        orig_dir = Path("tests/fixtures/sample_cards")
+        if orig_dir.exists() and (orig_dir / "manifest.json").exists():
+            with open(orig_dir / "manifest.json", "r", encoding="utf-8") as f:
+                orig_manifest = json.load(f)
+            assert len(cards1) == orig_manifest["total_cards"]
+            for card_entry in orig_manifest["cards"]:
+                fn = card_entry["filename"]
+                assert (tmp_path1 / fn).exists()
 

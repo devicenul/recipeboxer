@@ -11,6 +11,12 @@ from pydantic import BaseModel, Field
 
 from recipeboxer.ingestion.scanner import ScannedCard
 from recipeboxer.models.domain import VisualFingerprint
+from recipeboxer.models.failures import (
+    FailureReason,
+    PipelineStage,
+    StageFailure,
+    StageUnavailableError,
+)
 from recipeboxer.storage.cache import FingerprintCache
 
 logger = logging.getLogger(__name__)
@@ -50,6 +56,7 @@ class CardTaskResult(BaseModel):
     success: bool
     fingerprint: Optional[VisualFingerprint] = None
     error: Optional[str] = None
+    failure: Optional[StageFailure] = None
     is_cache_hit: bool = False
 
 
@@ -72,6 +79,10 @@ class IngestionResult(BaseModel):
     failed_cards: List[Tuple[str, str]] = Field(
         default_factory=list,
         description="List of (card_id, error_reason) tuples for failed cards",
+    )
+    failures: List[StageFailure] = Field(
+        default_factory=list,
+        description="List of StageFailure records for failed cards",
     )
     total_cards: int = 0
     cache_hits: int = 0
@@ -224,11 +235,18 @@ class IngestionRunner:
                 # 2. Cache miss: invoke extractor function
                 if self.extractor_fn is None:
                     err = "No extractor_fn provided for cache miss"
+                    sf = StageFailure(
+                        stage=PipelineStage.FINGERPRINT,
+                        reason=FailureReason.MODEL_UNAVAILABLE,
+                        message=err,
+                        card_ids=[card.card_id],
+                        retryable=False,
+                    )
                     async with self._lock:
                         progress.processed_cards += 1
                         progress.failed_cards += 1
                     await update_progress(card.card_id)
-                    return CardTaskResult(card=card, success=False, error=err)
+                    return CardTaskResult(card=card, success=False, error=err, failure=sf)
 
                 try:
                     fp = await self.extractor_fn(card)
@@ -254,11 +272,24 @@ class IngestionRunner:
                     )
                 except Exception as exc:
                     logger.error(f"Extraction failed for {card.card_id}: {exc}")
+                    if isinstance(exc, StageUnavailableError):
+                        sf = exc.to_failure()
+                        if not sf.card_ids:
+                            sf.card_ids = [card.card_id]
+                    else:
+                        sf = StageFailure(
+                            stage=PipelineStage.FINGERPRINT,
+                            reason=FailureReason.UNKNOWN,
+                            message=str(exc),
+                            card_ids=[card.card_id],
+                            retryable=False,
+                            details={"error_type": type(exc).__name__},
+                        )
                     async with self._lock:
                         progress.processed_cards += 1
                         progress.failed_cards += 1
                     await update_progress(card.card_id)
-                    return CardTaskResult(card=card, success=False, error=str(exc))
+                    return CardTaskResult(card=card, success=False, error=str(exc), failure=sf)
 
         results: List[CardTaskResult] = []
 
@@ -302,6 +333,7 @@ class IngestionRunner:
         # Compile final results
         successful_fps = [r.fingerprint for r in results if r.success and r.fingerprint is not None]
         failed_cards = [(r.card.card_id, r.error or "Unknown error") for r in results if not r.success]
+        failures = [r.failure for r in results if r.failure is not None]
 
         status = (
             IngestionStatus.CANCELLED
@@ -316,6 +348,7 @@ class IngestionRunner:
         return IngestionResult(
             fingerprints=successful_fps,
             failed_cards=failed_cards,
+            failures=failures,
             total_cards=total_cards,
             cache_hits=sum(1 for r in results if r.is_cache_hit),
             newly_extracted=sum(1 for r in results if r.success and not r.is_cache_hit),

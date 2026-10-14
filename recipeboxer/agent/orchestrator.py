@@ -25,8 +25,18 @@ from recipeboxer.ingestion.runner import (
 from recipeboxer.ingestion.scanner import ScannedCard, scan_card_directory
 from recipeboxer.models.correlation import CorrelationProposal, CorrelationResult
 from recipeboxer.models.domain import CardRole, VisualFingerprint
-from recipeboxer.models.hitl import CardPairApproval, HITLDecision
+from recipeboxer.models.failures import (
+    ExtractionUnavailable,
+    FailureReason,
+    FingerprintUnavailable,
+    PipelineStage,
+    SemanticVerificationUnavailable,
+    StageFailure,
+    StageUnavailableError,
+)
+from recipeboxer.models.hitl import CardPairApproval, HITLDecision, HitlItem, HitlItemType
 from recipeboxer.models.pipeline import (
+    FailedRecipe,
     PipelineStartRequest,
     PipelineState,
     ProgressMetrics,
@@ -76,6 +86,57 @@ class RecipeBoxerAgent:
     def start_pipeline(self, session: PipelineSession) -> asyncio.Task:
         """Alias for run_in_background."""
         return self.run_in_background(session)
+
+    def _has_usable_model_or_client(self, session: PipelineSession) -> bool:
+        """Determines if a model client or usable API key is present for analysis (INV-AC6, D5)."""
+        # Injected client or mock directly on session
+        if session.mock_client is not None:
+            return True
+        if session.extractor is not None:
+            return True
+        if session.verifier is not None:
+            return True
+        if session.optimizer is not None:
+            return True
+        if session.recipe_extractor_fn is not None:
+            return True
+        if hasattr(session, "config") and session.config:
+            if isinstance(session.config, dict):
+                if session.config.get("mock_client") or session.config.get("gemini_api_key"):
+                    return True
+            elif getattr(session.config, "gemini_api_key", None):
+                return True
+        if hasattr(session, "settings") and session.settings is not None and not isinstance(session.settings, Settings):
+            return True
+
+        # Injected clients on agent components
+        if getattr(self.visual_extractor, "client", None) is not None:
+            return True
+        if getattr(self.semantic_verifier, "client", None) is not None:
+            return True
+        if getattr(self.recipe_extractor, "client", None) is not None:
+            return True
+
+        # Custom / mock component instances passed to agent
+        if self.visual_extractor is not None and not isinstance(self.visual_extractor, GeminiVisualExtractor):
+            return True
+        if self.recipe_extractor is not None and not isinstance(self.recipe_extractor, RecipeExtractor):
+            return True
+
+        # Usable Gemini API key
+        candidate_keys = [
+            getattr(session.settings, "gemini_api_key", None),
+            getattr(self.settings, "gemini_api_key", None),
+            getattr(self.visual_extractor, "api_key", None),
+            getattr(self.recipe_extractor, "api_key", None),
+            os.environ.get("RECIPEBOXER_GEMINI_API_KEY"),
+            os.environ.get("GEMINI_API_KEY"),
+        ]
+        for k in candidate_keys:
+            if k and str(k).strip():
+                return True
+
+        return False
 
     def _load_baseline(
         self, session: PipelineSession
@@ -288,6 +349,27 @@ class RecipeBoxerAgent:
                 return
 
             # -------------------------------------------------------------
+            # INV-AC6, D5: Fail Fast if No Usable Key and No Injected Client
+            # -------------------------------------------------------------
+            if not self._has_usable_model_or_client(session):
+                no_key_failure = StageFailure(
+                    stage=PipelineStage.FINGERPRINT,
+                    reason=FailureReason.NO_API_KEY,
+                    message="No Gemini API key or injected LLM client available. Analysis is blocked. Please configure an API key to proceed.",
+                    card_ids=[c.card_id for c in session.cards],
+                    retryable=False,
+                    details={"blocked_by": "INV-AC6"},
+                )
+                session.add_failure(no_key_failure)
+                session.enqueue_hitl_failure(no_key_failure)
+                session.state = PipelineState.FAILED
+                session.error_message = no_key_failure.message
+                session.errors.append(no_key_failure.message)
+                session.end_time = time.monotonic()
+                logger.warning(f"[{session.session_id}] Analysis blocked: {no_key_failure.message}")
+                return
+
+            # -------------------------------------------------------------
             # Stage 2: Visual Fingerprinting (Processed ONLY for new cards)
             # -------------------------------------------------------------
             if new_cards:
@@ -304,22 +386,62 @@ class RecipeBoxerAgent:
                     extractor_fn=extractor_fn,
                 )
 
-                ingestion_result = await runner.run(
-                    cards=new_cards,
-                    progress_callback=_fingerprint_progress,
-                    cancellation_token=session.cancellation_token,
-                )
+                try:
+                    ingestion_result = await runner.run(
+                        cards=new_cards,
+                        progress_callback=_fingerprint_progress,
+                        cancellation_token=session.cancellation_token,
+                    )
+                except StageUnavailableError as sue:
+                    fail = sue.to_failure()
+                    session.add_failure(fail)
+                    session.enqueue_hitl_failure(fail)
+                    ingestion_result = IngestionResult(
+                        fingerprints=[],
+                        failed_cards=[(c.card_id, str(sue)) for c in new_cards],
+                        failures=[fail],
+                    )
+                except Exception as exc:
+                    fail = StageFailure(
+                        stage=PipelineStage.FINGERPRINT,
+                        reason=FailureReason.UNKNOWN,
+                        message=f"Fingerprinting failed: {exc}",
+                        card_ids=[c.card_id for c in new_cards],
+                        retryable=False,
+                        details={"error_type": type(exc).__name__},
+                    )
+                    session.add_failure(fail)
+                    session.enqueue_hitl_failure(fail)
+                    ingestion_result = IngestionResult(
+                        fingerprints=[],
+                        failed_cards=[(c.card_id, str(exc)) for c in new_cards],
+                        failures=[fail],
+                    )
 
                 if session.is_cancelled:
                     session.state = PipelineState.CANCELLED
                     session.end_time = time.monotonic()
                     return
 
+                # Record stage failures from runner
+                for failure in getattr(ingestion_result, "failures", []):
+                    if failure not in session.failures:
+                        session.add_failure(failure)
+                        session.enqueue_hitl_failure(failure)
+
                 for fp in ingestion_result.fingerprints:
                     session.fingerprints[fp.card_id] = fp
                 session.progress_metrics.fingerprinted = len(session.fingerprints)
 
-                if not session.fingerprints:
+                # Count degraded fingerprints (degraded=True)
+                degraded_count = sum(
+                    1 for fp in session.fingerprints.values()
+                    if getattr(fp, "degraded", False) is True or (isinstance(fp, dict) and fp.get("degraded") is True)
+                )
+                session.degraded_fingerprints_count = degraded_count
+                session.progress_metrics.degraded_fingerprints = degraded_count
+
+                if not session.fingerprints and not session.failures:
                     raise RuntimeError("Visual fingerprinting yielded 0 valid fingerprints.")
             else:
                 logger.info(
@@ -339,10 +461,34 @@ class RecipeBoxerAgent:
                 elif session.mock_client is not None and hasattr(session.mock_client, "verify_correlation"):
                     optimizer = self._build_mock_optimizer(session, new_fps)
 
-                if isinstance(optimizer, PairingOptimizer):
-                    correlation_result = await optimizer.optimize(new_fps)
-                else:
-                    correlation_result = await self._run_custom_optimizer(optimizer, new_fps)
+                try:
+                    if isinstance(optimizer, PairingOptimizer):
+                        correlation_result = await optimizer.optimize(new_fps)
+                    else:
+                        correlation_result = await self._run_custom_optimizer(optimizer, new_fps)
+                except StageUnavailableError as sue:
+                    fail = sue.to_failure()
+                    session.add_failure(fail)
+                    session.enqueue_hitl_failure(fail)
+                    correlation_result = CorrelationResult(
+                        proposals=[],
+                        unmatched_card_ids=[fp.card_id for fp in new_fps],
+                    )
+                except Exception as exc:
+                    fail = StageFailure(
+                        stage=PipelineStage.CORRELATION,
+                        reason=FailureReason.UNKNOWN,
+                        message=f"Correlation optimization failed: {exc}",
+                        card_ids=[fp.card_id for fp in new_fps],
+                        retryable=False,
+                        details={"error_type": type(exc).__name__},
+                    )
+                    session.add_failure(fail)
+                    session.enqueue_hitl_failure(fail)
+                    correlation_result = CorrelationResult(
+                        proposals=[],
+                        unmatched_card_ids=[fp.card_id for fp in new_fps],
+                    )
 
                 if session.is_cancelled:
                     session.state = PipelineState.CANCELLED
@@ -376,7 +522,68 @@ class RecipeBoxerAgent:
                     for cid in correlation_result.unmatched_card_ids
                     if cid in session.fingerprints
                 ]
+
+                # Surface degraded fingerprints and unverified proposals (INV-AC4)
+                unverified_count = 0
+                for p in session.proposals:
+                    is_unverified = getattr(p, "semantic_verified", None) is False or (
+                        isinstance(p, dict) and p.get("semantic_verified") is False
+                    )
+                    has_degraded_card = any(
+                        getattr(session.fingerprints.get(cid), "degraded", False) is True or (
+                            isinstance(session.fingerprints.get(cid), dict) and session.fingerprints[cid].get("degraded") is True
+                        )
+                        for cid in p.ordered_card_ids
+                    )
+                    if is_unverified:
+                        unverified_count += 1
+
+                    if is_unverified or has_degraded_card:
+                        try:
+                            object.__setattr__(p, "needs_review", True)
+                        except Exception:
+                            pass
+                        if p.recommended_action != "REJECT":
+                            p.recommended_action = "NEEDS_REVIEW"
+                        flag_reasons = []
+                        if is_unverified:
+                            flag_reasons.append("unverified semantic continuity")
+                        if has_degraded_card:
+                            flag_reasons.append("degraded card fingerprint")
+                        flag_str = f" [NEEDS REVIEW: {', '.join(flag_reasons)}]"
+                        if flag_str not in p.continuity_explanation:
+                            p.continuity_explanation = (p.continuity_explanation + flag_str).strip()
+                    else:
+                        try:
+                            object.__setattr__(p, "needs_review", False)
+                        except Exception:
+                            pass
+
+                session.unverified_proposals_count = unverified_count
+                session.progress_metrics.unverified_proposals = unverified_count
                 session.progress_metrics.proposals = len(session.proposals)
+
+                # Populate HITL queue items for proposals
+                for p in session.proposals:
+                    reasons = []
+                    if getattr(p, "semantic_verified", None) is False:
+                        reasons.append("UNVERIFIED_SEMANTIC")
+                    if any(getattr(session.fingerprints.get(cid), "degraded", False) is True for cid in p.ordered_card_ids):
+                        reasons.append("DEGRADED_FINGERPRINT")
+
+                    item = HitlItem(
+                        item_id=p.proposal_id,
+                        item_type=HitlItemType.PROPOSAL,
+                        kind="PROPOSAL",
+                        stage="CORRELATION",
+                        card_ids=p.ordered_card_ids,
+                        proposal_id=p.proposal_id,
+                        proposal=p,
+                        needs_review=getattr(p, "needs_review", False),
+                        review_reasons=reasons,
+                        message=p.continuity_explanation or "Correlation proposal awaiting review",
+                    )
+                    session.enqueue_hitl_item(item)
             else:
                 session.proposals = []
                 session.unmatched_card_ids = []
@@ -389,12 +596,33 @@ class RecipeBoxerAgent:
             # -------------------------------------------------------------
             # Stage 4: Human-in-the-Loop (HITL) Pause Boundary
             # -------------------------------------------------------------
+            if session.state == PipelineState.FAILED or session.is_cancelled:
+                return
+
+            auto_approve = False
+            if hasattr(session.config, "auto_approve"):
+                auto_approve = bool(session.config.auto_approve)
+            elif isinstance(session.config, dict):
+                auto_approve = bool(session.config.get("auto_approve", False))
+
             if session.proposals:
-                resumed = await session.pause_for_hitl()
-                if not resumed or session.is_cancelled:
-                    session.state = PipelineState.CANCELLED
-                    session.end_time = time.monotonic()
-                    return
+                if auto_approve:
+                    session.approvals = [
+                        CardPairApproval(
+                            proposal_id=p.proposal_id,
+                            card_ids=p.ordered_card_ids,
+                            decision=HITLDecision.APPROVE,
+                        )
+                        for p in session.proposals
+                    ]
+                    session.progress_metrics.approved = len(session.approvals)
+                    session.state = PipelineState.EXTRACTING
+                else:
+                    resumed = await session.pause_for_hitl()
+                    if not resumed or session.is_cancelled:
+                        session.state = PipelineState.CANCELLED
+                        session.end_time = time.monotonic()
+                        return
             else:
                 logger.info(
                     f"[{session.session_id}] Stage 4 HITL bypassed: No new proposals requiring human review."
@@ -469,15 +697,82 @@ class RecipeBoxerAgent:
                                 recipe.tags = RecipeSchema.clean_and_deduplicate_tags(combined_tags)
 
                             newly_extracted_recipes.append(recipe)
-                            session.progress_metrics.extracted = len(newly_extracted_recipes)
+                        else:
+                            # Recipe extraction returned None -> StageFailure
+                            fail = StageFailure(
+                                stage=PipelineStage.EXTRACTION,
+                                reason=FailureReason.INVALID_RESPONSE,
+                                message=f"Recipe extraction returned empty for {ordered_card_ids}",
+                                card_ids=ordered_card_ids,
+                                proposal_id=approval.proposal_id,
+                                retryable=True,
+                                details={"card_ids": ordered_card_ids, "proposal_id": approval.proposal_id},
+                            )
+                            session.add_failure(fail)
+                            session.enqueue_hitl_failure(
+                                stage=PipelineStage.EXTRACTION,
+                                card_ids=ordered_card_ids,
+                                proposal_id=approval.proposal_id,
+                                failure=fail,
+                                message=f"Recipe extraction returned empty for {ordered_card_ids}",
+                            )
+                            failed_recipe = FailedRecipe(
+                                recipe_id=f"rec_failed_{uuid.uuid4().hex[:8]}",
+                                title=f"Extraction Failed ({', '.join(ordered_card_ids)})",
+                                description=f"Recipe extraction returned empty for cards: {ordered_card_ids}",
+                                card_ids=ordered_card_ids,
+                                image_urls=[
+                                    f"/api/cards/{cid}/image?session_id={session.session_id}"
+                                    for cid in ordered_card_ids
+                                ],
+                                status="FAILED",
+                                failure=fail,
+                            )
+                            newly_extracted_recipes.append(failed_recipe)
                     except Exception as exc:
                         logger.error(
                             f"[{session.session_id}] Recipe extraction failed for {ordered_card_ids}: {exc}"
                         )
                         session.errors.append(f"Extraction failed for {ordered_card_ids}: {str(exc)}")
 
-                if not newly_extracted_recipes and session.progress_metrics.approved > 0:
-                    raise RuntimeError("Recipe extraction failed for all approved cards.")
+                        if isinstance(exc, StageUnavailableError):
+                            fail = exc.to_failure(proposal_id=approval.proposal_id)
+                        else:
+                            fail = StageFailure(
+                                stage=PipelineStage.EXTRACTION,
+                                reason=FailureReason.TIMEOUT if "timeout" in str(exc).lower() else FailureReason.UNKNOWN,
+                                message=str(exc),
+                                card_ids=ordered_card_ids,
+                                proposal_id=approval.proposal_id,
+                                retryable=True,
+                                details={"card_ids": ordered_card_ids, "proposal_id": approval.proposal_id},
+                            )
+                        session.add_failure(fail)
+                        session.enqueue_hitl_failure(
+                            stage=PipelineStage.EXTRACTION,
+                            card_ids=ordered_card_ids,
+                            proposal_id=approval.proposal_id,
+                            failure=fail,
+                            message=f"Recipe extraction failed for {ordered_card_ids}: {str(exc)}",
+                        )
+                        failed_recipe = FailedRecipe(
+                            recipe_id=f"rec_failed_{uuid.uuid4().hex[:8]}",
+                            title=f"Extraction Failed ({', '.join(ordered_card_ids)})",
+                            description=f"Recipe extraction failed: {str(exc)}",
+                            card_ids=ordered_card_ids,
+                            image_urls=[
+                                f"/api/cards/{cid}/image?session_id={session.session_id}"
+                                for cid in ordered_card_ids
+                            ],
+                            status="FAILED",
+                            failure=fail,
+                        )
+                        newly_extracted_recipes.append(failed_recipe)
+
+                session.progress_metrics.extracted = len(newly_extracted_recipes)
+                session.progress_metrics.failed_extractions = sum(
+                    1 for r in newly_extracted_recipes if getattr(r, "status", None) == "FAILED"
+                )
 
             # Stage 5 Unification: Baseline Recipes + Newly Extracted Recipes
             merged_recipes: List[RecipeSchema] = []
@@ -646,13 +941,24 @@ class RecipeBoxerAgent:
 
             return _mock_extractor
 
-        if callable(ext):
-            return ext
+        target = ext or self.visual_extractor
+        if hasattr(target, "extract_fingerprint"):
+            return target.extract_fingerprint
+        if hasattr(target, "fingerprint_card"):
+            return target.fingerprint_card
+        if hasattr(target, "extract"):
+            return target.extract
+        if callable(target):
+            return target
 
-        if hasattr(ext, "extract_fingerprint"):
-            return ext.extract_fingerprint
+        if hasattr(self.visual_extractor, "extract_fingerprint"):
+            return self.visual_extractor.extract_fingerprint
+        if hasattr(self.visual_extractor, "extract"):
+            return self.visual_extractor.extract
+        if callable(self.visual_extractor):
+            return self.visual_extractor
 
-        return self.visual_extractor.extract_fingerprint
+        raise AttributeError(f"Visual extractor '{target}' has no fingerprint extraction method.")
 
     def _build_mock_optimizer(
         self, session: PipelineSession, fingerprints: List[VisualFingerprint]
@@ -729,25 +1035,23 @@ class RecipeBoxerAgent:
             except Exception:
                 res = session.recipe_extractor_fn(ordered_fps)
             recipe = await res if asyncio.iscoroutine(res) else res
-        elif session.mock_client and hasattr(session.mock_client, "extract_cards"):
-            recipe = await session.mock_client.extract_cards(ordered_fps)
-        elif session.mock_client and hasattr(session.mock_client, "extract_recipe"):
-            try:
-                recipe = await session.mock_client.extract_recipe(primary_front, primary_back)
-            except Exception:
-                recipe = await session.mock_client.extract_recipe(ordered_fps)
-        elif hasattr(self.recipe_extractor, "extract_cards"):
-            recipe = await self.recipe_extractor.extract_cards(ordered_fps)
-        elif hasattr(self.recipe_extractor, "extract"):
-            recipe = await self.recipe_extractor.extract(ordered_fps)
-        elif hasattr(self.recipe_extractor, "extract_recipe"):
-            recipe = await self.recipe_extractor.extract_recipe(primary_front, primary_back)
-        elif callable(self.recipe_extractor):
-            try:
-                res = self.recipe_extractor(ordered_fps)
-            except TypeError:
-                res = self.recipe_extractor(primary_front, primary_back)
-            recipe = await res if asyncio.iscoroutine(res) else res
+        else:
+            ext = getattr(session, "extractor", None) or session.mock_client or self.recipe_extractor
+            if ext and hasattr(ext, "extract_cards"):
+                recipe = await ext.extract_cards(ordered_fps)
+            elif ext and hasattr(ext, "extract"):
+                recipe = await ext.extract(ordered_fps)
+            elif ext and hasattr(ext, "extract_recipe"):
+                try:
+                    recipe = await ext.extract_recipe(primary_front, primary_back)
+                except Exception:
+                    recipe = await ext.extract_recipe(ordered_fps)
+            elif callable(ext):
+                try:
+                    res = ext(ordered_fps)
+                except TypeError:
+                    res = ext(primary_front, primary_back)
+                recipe = await res if asyncio.iscoroutine(res) else res
 
         if recipe is not None and not isinstance(recipe, RecipeSchema) and hasattr(recipe, "model_dump"):
             return RecipeSchema.model_validate(recipe.model_dump())

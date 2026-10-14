@@ -28,7 +28,7 @@ from PIL import Image
 
 from recipeboxer.models.domain import CardRole
 from recipeboxer.models.recipe import RecipeSchema
-from recipeboxer.tools.card_generator import CardModality
+from cardforge import CardModality
 from tests.fixtures.loader import (
     CardEntry,
     SampleCardCorpus,

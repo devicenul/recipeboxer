@@ -4,7 +4,18 @@ from __future__ import annotations
 
 from enum import Enum
 from typing import Any, Dict, List, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
+
+from recipeboxer.models.failures import StageFailure
+from recipeboxer.models.recipe import RecipeSchema
+
+
+class FailedRecipe(RecipeSchema):
+    """Visible recipe entry for a card sequence whose extraction failed (INV-AC4)."""
+    model_config = ConfigDict(extra="allow")
+    title: str = "Extraction Failed"
+    status: str = "FAILED"
+    failure: Optional[StageFailure] = None
 
 
 class PipelineState(str, Enum):
@@ -40,6 +51,10 @@ class ProgressMetrics(BaseModel):
     baseline_recipes_count: int = Field(default=0, ge=0, description="Inherited baseline recipes count")
     current_stage: Optional[str] = Field(default=None, description="Active stage label")
     percent_complete: float = Field(default=0.0, ge=0.0, le=100.0)
+    degraded_fingerprints: int = Field(default=0, ge=0, description="Cards with degraded fingerprints")
+    unverified_proposals: int = Field(default=0, ge=0, description="Proposals without semantic verification")
+    failed_extractions: int = Field(default=0, ge=0, description="Recipes that failed extraction")
+    failures_count: int = Field(default=0, ge=0, description="Total count of stage failures")
 
 
 class TokenUsage(BaseModel):
@@ -60,6 +75,11 @@ class PipelineStatus(BaseModel):
     elapsed_seconds: float = Field(default=0.0, ge=0.0)
     csv_output_path: Optional[str] = Field(default=None, description="Path to generated CSV file when COMPLETED")
     error: Optional[str] = Field(default=None, description="Error message if state is FAILED")
+    failures: List[StageFailure] = Field(default_factory=list, description="Stage failures encountered during pipeline execution")
+    failures_count: int = Field(default=0, ge=0, description="Number of stage failures encountered")
+    degraded_fingerprints_count: int = Field(default=0, ge=0, description="Number of cards with degraded fingerprints")
+    unverified_proposals_count: int = Field(default=0, ge=0, description="Number of proposals not semantically verified")
+    failed_extractions_count: int = Field(default=0, ge=0, description="Number of recipe extractions that failed")
 
 
 class PipelineStartRequest(BaseModel):

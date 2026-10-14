@@ -23,7 +23,7 @@ from PIL import Image, ImageStat
 
 from recipeboxer.models.domain import ArtifactType, CardRole
 from recipeboxer.models.recipe import RecipeSchema
-from recipeboxer.tools.card_generator import CardModality, generate_synthetic_corpus
+from cardforge import CardModality
 from tests.fixtures.loader import SampleCardCorpus, load_sample_corpus
 
 
@@ -247,35 +247,6 @@ def test_4card_traditional_panettone_sequence_chain(sample_corpus: SampleCardCor
     assert c4.recipe_cluster["continuation_cue"] is None
 
 
-# ============================================================================
-# 5. DETERMINISTIC SYNTHETIC CORPUS GENERATOR REPRODUCIBILITY
-# ============================================================================
-
-def test_generator_deterministic_reproducibility():
-    """Verify that card_generator.py with seed=42 reproduces all 48 images with exact SHA256 hashes."""
-    orig_dir = Path("tests/fixtures/sample_cards")
-    orig_manifest_path = orig_dir / "manifest.json"
-    with open(orig_manifest_path, "r", encoding="utf-8") as f:
-        orig_manifest = json.load(f)
-
-    with tempfile.TemporaryDirectory() as tmpdir:
-        tmp_path = Path(tmpdir)
-        generated_cards = generate_synthetic_corpus(output_dir=tmp_path, seed=42)
-        assert len(generated_cards) == 48
-
-        mismatches = []
-        for card_entry in orig_manifest["cards"]:
-            fn = card_entry["filename"]
-            orig_file = orig_dir / fn
-            gen_file = tmp_path / fn
-            assert gen_file.exists(), f"Generated card {fn} missing from output"
-
-            orig_sha = hashlib.sha256(orig_file.read_bytes()).hexdigest()
-            gen_sha = hashlib.sha256(gen_file.read_bytes()).hexdigest()
-            if orig_sha != gen_sha:
-                mismatches.append((fn, orig_sha, gen_sha))
-
-        assert len(mismatches) == 0, f"Deterministic generation mismatches with seed 42: {mismatches}"
 
 
 # ============================================================================

@@ -95,7 +95,7 @@ hidden_imports = [
 ]
 
 # Dynamically collect submodules for key packages
-for package_name in ["recipeboxer", "uvicorn", "starlette", "fastapi"]:
+for package_name in ["recipeboxer", "uvicorn", "starlette", "fastapi", "google.genai", "google.auth"]:
     try:
         collected = collect_submodules(package_name)
         hidden_imports.extend(collected)

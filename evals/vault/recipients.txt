@@ -1,0 +1,9 @@
+# RecipeBoxer Vault Recipients
+# Public age keys of authorized evaluators, maintainers, and CI.
+# Format: age1... (one key per line)
+#
+# Add a new recipient with:
+#   python -m evals.vault add-recipient <pubkey>
+#
+# Rekey vault archives after adding or removing recipients with:
+#   python -m evals.vault rekey evals/vault

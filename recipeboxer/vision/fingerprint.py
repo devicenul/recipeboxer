@@ -17,7 +17,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
-from PIL import Image
+from PIL import Image, ImageFilter
 
 from recipeboxer.config import get_settings
 from recipeboxer.ingestion.scanner import ScannedCard
@@ -37,6 +37,7 @@ from recipeboxer.models.domain import (
     VisualFingerprint,
 )
 from recipeboxer.vision.heuristics import rgb_to_lab
+from recipeboxer.vision.preprocessing import extract_paper_color_palette
 
 logger = logging.getLogger(__name__)
 
@@ -150,9 +151,24 @@ class GeminiVisualExtractor:
                 return await self._call_gemini_api(image_bytes, resolved_id, image_path_str, resolved_hash)
             except Exception as exc:
                 logger.warning(f"Gemini API fingerprint call failed: {exc}. Falling back to visual analysis.")
+                return self._extract_offline_fingerprint(
+                    image_bytes,
+                    resolved_id,
+                    image_path_str,
+                    resolved_hash,
+                    degraded=True,
+                    degraded_reason=f"Gemini API fingerprint call failed: {exc}",
+                )
 
         # 3. Deterministic offline visual analysis fallback
-        return self._extract_offline_fingerprint(image_bytes, resolved_id, image_path_str, resolved_hash)
+        return self._extract_offline_fingerprint(
+            image_bytes,
+            resolved_id,
+            image_path_str,
+            resolved_hash,
+            degraded=True,
+            degraded_reason="Offline pixel-only analysis (no API key configured)",
+        )
 
     def extract_sync(
         self,
@@ -164,7 +180,14 @@ class GeminiVisualExtractor:
         image_bytes, image_path_str, resolved_id, resolved_hash = self._resolve_card_input(
             card_input, sha256_hash, card_id
         )
-        return self._extract_offline_fingerprint(image_bytes, resolved_id, image_path_str, resolved_hash)
+        return self._extract_offline_fingerprint(
+            image_bytes,
+            resolved_id,
+            image_path_str,
+            resolved_hash,
+            degraded=True,
+            degraded_reason="Synchronous offline pixel-only extraction",
+        )
 
     def _resolve_card_input(
         self,
@@ -247,6 +270,8 @@ class GeminiVisualExtractor:
             parsed_json["image_path"] = image_path
             parsed_json["sha256_hash"] = sha256_hash
             parsed_json.setdefault("extracted_at", datetime.now(timezone.utc).isoformat())
+            parsed_json.setdefault("degraded", False)
+            parsed_json.setdefault("degraded_reason", None)
 
             return VisualFingerprint.model_validate(parsed_json)
 
@@ -256,155 +281,146 @@ class GeminiVisualExtractor:
         card_id: str,
         image_path: str,
         sha256_hash: str,
+        degraded: bool = True,
+        degraded_reason: Optional[str] = "Offline pixel-only analysis",
     ) -> VisualFingerprint:
-        """Extracts visual properties offline by sampling pixels and inspecting metadata."""
-        fname = card_id.lower()
-
+        """Extracts visual properties offline purely from pixel analysis with no filename heuristics."""
         # Check for corrupt bytes
         if len(image_bytes) == 0 or b"CORRUPT" in image_bytes:
             raise ValueError(f"Corrupted or empty image data for {card_id}")
 
-        # Open image with Pillow to analyze substrate
-        avg_r, avg_g, avg_b = 246, 236, 205
-        has_ruling = True
+        # Decode image with Pillow
         try:
             with Image.open(io.BytesIO(image_bytes)) as img:
                 img_rgb = img.convert("RGB")
-                w, h = img_rgb.size
-                # Sample border margin pixels for paper color
-                samples = [
-                    img_rgb.getpixel((x, y))
-                    for x in [w // 10, w // 2, 9 * w // 10]
-                    for y in [h // 10, 9 * h // 10]
-                ]
-                if samples:
-                    avg_r = sum(s[0] for s in samples) // len(samples)
-                    avg_g = sum(s[1] for s in samples) // len(samples)
-                    avg_b = sum(s[2] for s in samples) // len(samples)
-        except Exception:
-            pass
+        except Exception as exc:
+            raise ValueError(f"Cannot decode image data for {card_id}: {exc}")
 
-        hex_color = f"#{avg_r:02X}{avg_g:02X}{avg_b:02X}"
-        lab_l, lab_a, lab_b = rgb_to_lab(avg_r, avg_g, avg_b)
+        # 1. Paper substrate color palette via CIELAB clustering
+        palette = extract_paper_color_palette(img_rgb)
+        paper_centroid = palette.get("paper_centroid") or {}
+        hex_color = paper_centroid.get("hex", "#FFFFFF")
+        lab = paper_centroid.get("lab", (100.0, 0.0, 0.0))
+        lab_l, lab_a, lab_b = lab
+        tone_name = paper_centroid.get("tone_name", "White")
 
-        # Tone categorization
-        if lab_l > 95.0 and abs(lab_a) < 5 and abs(lab_b) < 10:
-            tone = PaperColorTone.WHITE
+        # Standardize tone enum
+        tone_enum: PaperColorTone
+        if tone_name == "White" or (lab_l > 95.0 and abs(lab_a) < 5 and abs(lab_b) < 10):
+            tone_enum = PaperColorTone.WHITE
             tone_name = "White"
-        elif lab_b > 25.0 or (avg_r > 200 and avg_g < 190 and avg_b < 150):
-            tone = PaperColorTone.KRAFT_BROWN
+        elif tone_name == "Kraft Brown" or lab_b > 25.0:
+            tone_enum = PaperColorTone.KRAFT_BROWN
             tone_name = "Kraft Brown"
-        elif lab_b > 12.0:
-            tone = PaperColorTone.OFF_WHITE_CREAM
+        elif tone_name == "Aged Cream" or lab_b > 12.0:
+            tone_enum = PaperColorTone.OFF_WHITE_CREAM
             tone_name = "Aged Cream"
+        elif tone_name == "Yellowed Aged":
+            tone_enum = PaperColorTone.YELLOWED_AGED
+            tone_name = "Yellowed Aged"
         else:
-            tone = PaperColorTone.OFF_WHITE_CREAM
-            tone_name = "Cream"
+            tone_enum = PaperColorTone.OFF_WHITE_CREAM
+            tone_name = tone_name or "Cream"
 
-        # Determine role from filename or layout
-        if any(k in fname for k in ("noise", "divider", "blank", "tab")):
-            role = CardRole.UNKNOWN
-            role_conf = 0.50
-            first_line = "Category Tab / Noise Card"
-            last_line = "End of section."
-            has_cue = False
-            is_cutoff = False
-        elif any(k in fname for k in ("standalone", "single")):
-            role = CardRole.STANDALONE
-            role_conf = 0.95
-            first_line = "Standalone Recipe Title"
-            last_line = "Bake until set. Yield: 12 servings."
-            has_cue = False
-            is_cutoff = False
-        elif (
-            "back" in fname
-            or "rear" in fname
-            or "verso" in fname
-            or any(f"card{i}" in fname for i in range(2, 10))
-            or any(f"part{i}" in fname for i in range(2, 10))
-            or any(f"pt{i}" in fname for i in range(2, 10))
-            or any(f"0{i}_" in fname for i in range(2, 10))
-        ):
-            role = CardRole.SEQUENCE_CONTINUATION
-            role_conf = 0.95
-            first_line = "(Directions continued)"
-            last_line = "Bake and serve completely."
-            has_cue = False
-            is_cutoff = False
-        elif (
-            "front" in fname
-            or "part1" in fname
-            or "card1" in fname
-            or "pt1" in fname
-            or "01_" in fname
-        ):
-            role = CardRole.SEQUENCE_START
-            role_conf = 0.95
-            first_line = "Recipe Title & Ingredients"
-            last_line = "Continue on back (over ->)"
-            has_cue = True
-            is_cutoff = True
+        paper_color_info = PaperColorInfo(
+            tone_name=tone_name,
+            hex_approx=hex_color,
+            lab_l=round(lab_l, 4),
+            lab_a=round(lab_a, 4),
+            lab_b=round(lab_b, 4),
+            tone_enum=tone_enum,
+        )
+
+        # 2. Ruling detection via horizontal projection profile of edge map
+        w, h = img_rgb.size
+        gray = img_rgb.convert("L")
+        scale = min(1.0, 400.0 / max(w, h))
+        sw = max(50, int(w * scale))
+        sh = max(50, int(h * scale))
+        small_gray = gray.resize((sw, sh), Image.BILINEAR)
+
+        edges = small_gray.filter(ImageFilter.FIND_EDGES)
+        raw_edges = edges.tobytes()
+        row_edge_sums = [sum(raw_edges[y * sw : (y + 1) * sw]) for y in range(sh)]
+        mean_edge = sum(row_edge_sums) / float(sh) if sh else 1.0
+
+        peaks = [
+            i
+            for i in range(1, sh - 1)
+            if row_edge_sums[i] > 1.4 * mean_edge
+            and row_edge_sums[i] > row_edge_sums[i - 1]
+            and row_edge_sums[i] > row_edge_sums[i + 1]
+        ]
+
+        has_ruling = False
+        ruling_type = PaperRulingType.UNRULED_BLANK
+        line_spacing_px: Optional[float] = None
+        if len(peaks) >= 5:
+            spacings = [peaks[i + 1] - peaks[i] for i in range(len(peaks) - 1)]
+            valid_spacings = [s for s in spacings if 4 <= s <= 60]
+            if len(valid_spacings) >= 3:
+                median_sp = sorted(valid_spacings)[len(valid_spacings) // 2]
+                regular = sum(1 for s in valid_spacings if abs(s - median_sp) <= max(2, median_sp * 0.25))
+                if regular >= 3:
+                    has_ruling = True
+                    ruling_type = PaperRulingType.STANDARD_RULED_BLUE
+                    line_spacing_px = round(median_sp / scale, 1)
+
+        ruling_info = PaperRulingInfo(
+            has_ruling=has_ruling,
+            ruling_type=ruling_type,
+            line_spacing_px=line_spacing_px,
+        )
+
+        # 3. Ink color from pixel clustering centroids if available
+        ink_centroids = palette.get("ink_centroids", [])
+        if ink_centroids:
+            ink_c = ink_centroids[0]
+            ink_r, ink_g, ink_b = ink_c.get("rgb", (0, 0, 0))
+            i_lab_l, i_lab_a, i_lab_b = ink_c.get("lab", (0.0, 0.0, 0.0))
+            if i_lab_b < -10.0 or (ink_b > ink_r + 15 and ink_b > ink_g + 15):
+                ink_color = InkColor.BLUE
+                ink_type = InkType.BLUE_BALLPOINT
+            elif i_lab_a > 15.0 and ink_r > ink_g + 20 and ink_r > ink_b + 20:
+                ink_color = InkColor.RED
+                ink_type = InkType.BALLPOINT_PEN
+            elif i_lab_a < -15.0 and ink_g > ink_r + 20 and ink_g > ink_b + 20:
+                ink_color = InkColor.GREEN
+                ink_type = InkType.BALLPOINT_PEN
+            elif i_lab_l < 45.0 and abs(i_lab_a) < 15.0 and abs(i_lab_b) < 15.0:
+                ink_color = InkColor.BLACK
+                ink_type = InkType.BLACK_BALLPOINT
+            else:
+                ink_color = InkColor.UNKNOWN
+                ink_type = InkType.UNKNOWN
         else:
-            role = CardRole.STANDALONE
-            role_conf = 0.80
-            first_line = "Recipe Card"
-            last_line = "Enjoy your recipe."
-            has_cue = False
-            is_cutoff = False
+            ink_color = InkColor.UNKNOWN
+            ink_type = InkType.UNKNOWN
 
-        # Ruling & Ink
-        if "unruled" in fname or "white" in fname or "lemon" in fname:
-            has_ruling = False
-            ruling_type = PaperRulingType.UNRULED_BLANK
-        else:
-            has_ruling = True
-            ruling_type = PaperRulingType.STANDARD_RULED_BLUE
+        ink_info = InkInfo(
+            ink_color=ink_color,
+            ink_type=ink_type,
+        )
 
-        ink_color = InkColor.BLUE if ("cinnamon" in fname or "blue" in fname) else InkColor.BLACK
-        ink_type = InkType.BLUE_BALLPOINT if ink_color == InkColor.BLUE else InkType.FELT_TIP_MARKER
-
-        # Artifacts
-        artifacts: List[PhysicalArtifact] = []
-        if "stain" in fname or "cinnamon" in fname:
-            quad = CardQuadrant.TOP_LEFT if "back" in fname else CardQuadrant.TOP_RIGHT
-            artifacts.append(
-                PhysicalArtifact(
-                    artifact_type=ArtifactType.OIL_GREASE_STAIN,
-                    quadrant=quad,
-                    severity="MODERATE",
-                    description=f"Grease stain in {quad.value}",
-                )
-            )
-
+        # 4. Role, boundary text, and artifacts
+        # In offline pixel-only mode: role=UNKNOWN, boundary_text empty, artifacts empty
         return VisualFingerprint(
             card_id=card_id,
             image_path=image_path,
             sha256_hash=sha256_hash,
-            role=role,
-            role_confidence=role_conf,
-            paper_color=PaperColorInfo(
-                tone_name=tone_name,
-                hex_approx=hex_color,
-                lab_l=lab_l,
-                lab_a=lab_a,
-                lab_b=lab_b,
-                tone_enum=tone,
-            ),
-            ruling=PaperRulingInfo(
-                has_ruling=has_ruling,
-                ruling_type=ruling_type,
-                line_spacing_px=24.0 if has_ruling else None,
-            ),
-            ink=InkInfo(
-                ink_color=ink_color,
-                ink_type=ink_type,
-            ),
-            artifacts=artifacts,
+            role=CardRole.UNKNOWN,
+            role_confidence=0.0,
+            paper_color=paper_color_info,
+            ruling=ruling_info,
+            ink=ink_info,
+            artifacts=[],
             boundary_text=BoundaryText(
-                first_line=first_line,
-                last_line=last_line,
-                has_continuation_symbol=has_cue,
-                is_cut_off_mid_sentence=is_cutoff,
+                first_line="",
+                last_line="",
+                has_continuation_symbol=False,
+                is_cut_off_mid_sentence=False,
             ),
             extracted_at=datetime.now(timezone.utc),
+            degraded=degraded,
+            degraded_reason=degraded_reason,
         )

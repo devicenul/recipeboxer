@@ -32,7 +32,7 @@ class CorrelationProposal(BaseModel):
         le=1.0,
         description="Stage 1 heuristic visual feature similarity score (0.0 to 1.0)",
     )
-    semantic_score: float = Field(
+    semantic_score: Optional[float] = Field(
         default=0.0,
         ge=0.0,
         le=1.0,
@@ -55,6 +55,14 @@ class CorrelationProposal(BaseModel):
     recommended_action: str = Field(
         default="SEQUENCE",
         description="Recommended action: SEQUENCE, PAIR, STANDALONE, UNCERTAIN, or REJECT",
+    )
+    semantic_verified: bool = Field(
+        default=True,
+        description="True if verified by multimodal LLM, False if offline or degraded",
+    )
+    degraded_reason: Optional[str] = Field(
+        default=None,
+        description="Reason for degraded or unverified correlation (e.g. 'NO_MODEL', 'API_ERROR: ...')",
     )
 
     @property

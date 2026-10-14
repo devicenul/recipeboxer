@@ -97,6 +97,8 @@ class JudgeEvaluationResult(BaseModel):
         description="Token consumption metrics for the LLM evaluation call",
     )
     latency_ms: float = Field(default=0.0, ge=0.0, description="Evaluation execution duration in milliseconds")
+    is_mock: bool = Field(default=False, description="Whether this result was produced by deterministic mock")
+    mock_label: Optional[str] = Field(default=None, description="Label indicating mock evaluation if applicable")
 
     @model_validator(mode="after")
     def _validate_and_sync_scores(self) -> "JudgeEvaluationResult":
@@ -308,9 +310,11 @@ def _evaluate_deterministic_mock(
         threshold=threshold,
         dimension_scores=dim_scores,
         itemized_reasoning=reasoning,
-        overall_feedback=f"Deterministic evaluation score: {aggregate:.2f}/5.0. Status: {'PASS' if passed else 'FAIL'}.",
+        overall_feedback=f"mock (not a quality score): Deterministic evaluation score: {aggregate:.2f}/5.0. Status: {'PASS' if passed else 'FAIL'}.",
         token_usage={"prompt_tokens": 120, "completion_tokens": 65, "total_tokens": 185},
         latency_ms=round(elapsed_ms, 2),
+        is_mock=True,
+        mock_label="mock (not a quality score)",
     )
 
 
@@ -346,7 +350,7 @@ class RecipeJudge:
         self.api_key = api_key or self.settings.gemini_api_key
         self.model_name = model_name or self.settings.default_model
         self.threshold = threshold
-        self.mock = mock or (not self.api_key or self.api_key.startswith("mock"))
+        self.mock = bool(mock)
         self.max_retries = max_retries
         self.retry_delay = retry_delay_seconds
 

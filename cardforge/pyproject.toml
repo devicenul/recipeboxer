@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel>=0.40.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cardforge"
+version = "0.1.0"
+description = "Synthetic recipe card generator used by RecipeBoxer evals; intended to become its own repository; must never be imported by the recipeboxer app"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "pillow>=11.0.0",
+    "pydantic>=2.0.0",
+]
+
+[project.scripts]
+cardforge = "cardforge.__main__:main"
+
+[tool.setuptools]
+packages = ["cardforge"]
+
+[tool.setuptools.package-dir]
+cardforge = "."

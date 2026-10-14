@@ -2,9 +2,60 @@
 
 from functools import lru_cache
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Quality profiles mapping table (Section 7.1).
+# NOTE: model IDs are provisional. They must be validated against the live
+# models list (GenAIClient.list_available_models) during WP-B0/WP-B2 before
+# being relied on; "balanced" must match the project's default model.
+_DEFAULT_FLASH = "gemini-3.7-flash"
+_DEFAULT_PRO = "gemini-3.7-pro"
+
+QUALITY_PROFILES: Dict[str, Dict[str, str]] = {
+    "economy": {
+        "FINGERPRINT": _DEFAULT_FLASH,
+        "SET_VERIFY": _DEFAULT_FLASH,
+        "TRANSCRIBE": _DEFAULT_FLASH,
+        "STRUCTURE": _DEFAULT_FLASH,
+        "GROUNDING": _DEFAULT_FLASH,
+        "REPAIR": _DEFAULT_FLASH,
+        "JUDGE": _DEFAULT_FLASH,
+        "MODALITY": _DEFAULT_FLASH,
+    },
+    "balanced": {
+        "FINGERPRINT": _DEFAULT_FLASH,
+        "SET_VERIFY": _DEFAULT_FLASH,
+        "TRANSCRIBE": _DEFAULT_FLASH,
+        "STRUCTURE": _DEFAULT_FLASH,
+        "GROUNDING": _DEFAULT_FLASH,
+        "REPAIR": _DEFAULT_FLASH,
+        "JUDGE": _DEFAULT_PRO,
+        "MODALITY": _DEFAULT_FLASH,
+    },
+    "best": {
+        "FINGERPRINT": _DEFAULT_FLASH,
+        "SET_VERIFY": _DEFAULT_PRO,
+        "TRANSCRIBE": _DEFAULT_PRO,
+        "STRUCTURE": _DEFAULT_PRO,
+        "GROUNDING": _DEFAULT_PRO,
+        "REPAIR": _DEFAULT_PRO,
+        "JUDGE": _DEFAULT_PRO,
+        "MODALITY": _DEFAULT_FLASH,
+    },
+}
+
+DEFAULT_STAGE_TIMEOUTS: Dict[str, float] = {
+    "FINGERPRINT": 30.0,
+    "SET_VERIFY": 45.0,
+    "TRANSCRIBE": 60.0,
+    "STRUCTURE": 45.0,
+    "GROUNDING": 30.0,
+    "REPAIR": 30.0,
+    "JUDGE": 30.0,
+    "MODALITY": 20.0,
+}
 
 
 class Settings(BaseSettings):
@@ -27,6 +78,22 @@ class Settings(BaseSettings):
         default=None,
         description="Per-stage model override for structured recipe extraction",
     )
+    set_verify_model: Optional[str] = Field(
+        default=None,
+        description="Per-stage model override for set-level verification",
+    )
+    transcribe_model: Optional[str] = Field(
+        default=None,
+        description="Per-stage model override for verbatim card transcription",
+    )
+    structure_model: Optional[str] = Field(
+        default=None,
+        description="Per-stage model override for recipe structuring",
+    )
+    judge_model: Optional[str] = Field(
+        default=None,
+        description="Per-stage model override for LLM evaluation judge",
+    )
     thinking_mode: bool = Field(
         default=False,
         description="Whether to enable Gemini extended reasoning / thinking mode",
@@ -39,6 +106,38 @@ class Settings(BaseSettings):
     adaptive_thinking: bool = Field(
         default=False,
         description="Whether to dynamically allocate thinking budget tokens based on card modality",
+    )
+
+    # --- Unified LLM Client Settings (WP-X1) ---
+    llm_max_retries: int = Field(
+        default=4,
+        ge=0,
+        le=10,
+        description="Maximum retry attempts on transient LLM failures (429/5xx/timeouts)",
+    )
+    llm_timeout_s: float = Field(
+        default=60.0,
+        ge=1.0,
+        description="Default timeout in seconds for LLM operations",
+    )
+    stage_timeouts: dict[str, float] = Field(
+        default_factory=lambda: dict(DEFAULT_STAGE_TIMEOUTS),
+        description="Per-stage timeout limits in seconds",
+    )
+    llm_max_concurrency: int = Field(
+        default=5,
+        ge=1,
+        le=50,
+        description="Maximum concurrent LLM generation calls",
+    )
+    llm_rpm_limit: int = Field(
+        default=60,
+        ge=1,
+        description="Maximum LLM requests per minute (token bucket limiter)",
+    )
+    quality_profile: str = Field(
+        default="balanced",
+        description="Active quality profile ('economy', 'balanced', 'best')",
     )
 
     # --- Ingestion & Throttling Settings ---
@@ -134,17 +233,58 @@ class Settings(BaseSettings):
     )
 
     # --- Model Resolution Helpers ---
+    def get_stage_model(self, stage: Any) -> str:
+        """Returns the effective model identifier for a given pipeline/LLM stage."""
+        stage_str = stage.value if hasattr(stage, "value") else str(stage)
+        stage_upper = stage_str.upper()
+
+        # Check explicit per-stage override fields
+        if stage_upper == "FINGERPRINT" and self.fingerprint_model:
+            return self.fingerprint_model
+        if stage_upper in ("SET_VERIFY", "CORRELATION"):
+            if self.set_verify_model:
+                return self.set_verify_model
+            if self.correlation_model:
+                return self.correlation_model
+        if stage_upper in ("TRANSCRIBE",):
+            if self.transcribe_model:
+                return self.transcribe_model
+            if self.extraction_model:
+                return self.extraction_model
+        if stage_upper in ("STRUCTURE", "EXTRACTION"):
+            if self.structure_model:
+                return self.structure_model
+            if self.extraction_model:
+                return self.extraction_model
+        if stage_upper == "JUDGE" and self.judge_model:
+            return self.judge_model
+
+        # Fall back to quality profile table
+        profile_map = QUALITY_PROFILES.get(self.quality_profile.lower(), QUALITY_PROFILES["balanced"])
+        if stage_upper in profile_map:
+            return profile_map[stage_upper]
+
+        return self.default_model
+
+    def get_stage_timeout(self, stage: Any) -> float:
+        """Returns the effective timeout in seconds for a given pipeline/LLM stage."""
+        stage_str = stage.value if hasattr(stage, "value") else str(stage)
+        stage_upper = stage_str.upper()
+        if self.stage_timeouts and stage_upper in self.stage_timeouts:
+            return float(self.stage_timeouts[stage_upper])
+        return float(self.llm_timeout_s)
+
     def get_fingerprint_model(self) -> str:
         """Returns effective model identifier for visual fingerprinting."""
-        return self.fingerprint_model or self.default_model
+        return self.fingerprint_model or self.get_stage_model("FINGERPRINT")
 
     def get_correlation_model(self) -> str:
         """Returns effective model identifier for semantic correlation."""
-        return self.correlation_model or self.default_model
+        return self.correlation_model or self.set_verify_model or self.get_stage_model("SET_VERIFY")
 
     def get_extraction_model(self) -> str:
         """Returns effective model identifier for structured recipe extraction."""
-        return self.extraction_model or self.default_model
+        return self.extraction_model or self.structure_model or self.get_stage_model("STRUCTURE")
 
     @property
     def cache_db_path(self) -> Path:

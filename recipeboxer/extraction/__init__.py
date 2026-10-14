@@ -1,7 +1,6 @@
 """Recipe extraction package for RecipeBoxer.
 
-Provides multimodal Gemini recipe transcription and deterministic offline
-fallback extractors for transcribing scanned recipe cards into RecipeSchema models.
+Provides multimodal Gemini recipe transcription for transcribing scanned recipe cards into RecipeSchema models.
 """
 
 from recipeboxer.extraction.extractor import (

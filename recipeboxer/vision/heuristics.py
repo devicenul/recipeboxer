@@ -498,81 +498,79 @@ def calculate_sequential_header_score(
         fp2: Following card visual fingerprint.
 
     Returns:
-        Header and continuation score in [0.0, 1.0].
+        Header and continuation score in [0.0, 1.0], with 0.50 as neutral.
     """
     import re
 
-    t1 = ""
-    t2 = ""
+    t1_first = ""
+    t1_last = ""
+    has_sym1 = False
+    is_cut1 = False
     if fp1.boundary_text:
-        t1 = f"{fp1.boundary_text.first_line} {fp1.boundary_text.last_line}".lower()
+        t1_first = (fp1.boundary_text.first_line or "").strip().lower()
+        t1_last = (fp1.boundary_text.last_line or "").strip().lower()
+        has_sym1 = bool(fp1.boundary_text.has_continuation_symbol)
+        is_cut1 = bool(fp1.boundary_text.is_cut_off_mid_sentence)
+
+    t2_first = ""
+    t2_last = ""
     if fp2.boundary_text:
-        t2 = f"{fp2.boundary_text.first_line} {fp2.boundary_text.last_line}".lower()
+        t2_first = (fp2.boundary_text.first_line or "").strip().lower()
+        t2_last = (fp2.boundary_text.last_line or "").strip().lower()
 
-    fn1 = fp1.card_id.lower()
-    fn2 = fp2.card_id.lower()
+    t1 = f"{t1_first} {t1_last}".strip()
+    t2 = f"{t2_first} {t2_last}".strip()
 
-    # Pattern match (card_num, side) or part_num across filename or boundary text
-    m1 = (
-        re.search(r"card\s*([0-9]+)[_\s]*(front|back)?", fn1)
-        or re.search(r"part\s*([0-9]+)[_\s]*(front|back)?", fn1)
-        or re.search(r"pt\s*([0-9]+)[_\s]*(front|back)?", fn1)
-        or re.search(r"(?:part|card|page|pt|p\.)\s*([0-9]+)", t1)
-    )
-    m2 = (
-        re.search(r"card\s*([0-9]+)[_\s]*(front|back)?", fn2)
-        or re.search(r"part\s*([0-9]+)[_\s]*(front|back)?", fn2)
-        or re.search(r"pt\s*([0-9]+)[_\s]*(front|back)?", fn2)
-        or re.search(r"(?:part|card|page|pt|p\.)\s*([0-9]+)", t2)
-    )
+    # Check for printed sequential card/page/part numbers in boundary text
+    # e.g., "Card 1", "Part 2", "Page 2", "pt 1", "p. 2"
+    m1 = re.search(r"(?:part|card|page|pt|p\.)\s*([0-9]+)", t1)
+    m2 = re.search(r"(?:part|card|page|pt|p\.)\s*([0-9]+)", t2)
 
     if m1 and m2:
         try:
             c1 = int(m1.group(1))
             c2 = int(m2.group(1))
-            s1 = m1.group(2) if (len(m1.groups()) > 1 and m1.group(2)) else ("back" if "back" in fn1 else "front")
-            s2 = m2.group(2) if (len(m2.groups()) > 1 and m2.group(2)) else ("back" if "back" in fn2 else "front")
-
-            # 1. Front -> Back of the same physical card (e.g. Card 1 Front -> Card 1 Back)
-            if c1 == c2 and s1 == "front" and s2 == "back":
+            if c2 == c1 + 1:
                 return 1.00
-
-            # 2. Back of Card N -> Front of Card N+1 (e.g. Card 1 Back -> Card 2 Front)
-            if c2 == c1 + 1 and s1 == "back" and s2 == "front":
-                return 1.00
-
-            # 3. Single-sided parts advance without front/back (e.g. Part 1 -> Part 2, Page 1 -> Page 2)
-            if c2 == c1 + 1 and s1 == "front" and s2 == "front" and "front" not in fn1 and "front" not in fn2 and "back" not in fn1 and "back" not in fn2:
-                return 1.00
-
-            # 4. Front-to-front skip across cards (e.g. Card 1 Front -> Card 2 Front)
-            if c2 == c1 + 1 and s1 == "front" and s2 == "front":
-                return 0.50
-
-            # 5. Same card part continuation with side progression
-            if c2 == c1 + 1 and s1 == "back" and s2 == "back":
-                return 0.50
-
-            # 6. Non-contiguous forward progression (e.g. Card 1 Front -> Card 2 Back)
-            if c2 > c1:
-                return 0.50
-
-            # Reverse sequence / back-to-front reversal or same card back-to-front
-            return 0.10
+            elif c2 > c1:
+                return 0.75
+            elif c2 < c1:
+                return 0.10
         except (ValueError, IndexError):
             pass
 
-    # Simple front -> back transition (e.g. apple_crisp_front.jpg -> apple_crisp_back.jpg)
-    if "front" in fn1 and "back" in fn2 and "back" not in fn1:
-        return 1.00
-
     score = 0.50
-    if fp1.boundary_text and (fp1.boundary_text.has_continuation_symbol or fp1.boundary_text.is_cut_off_mid_sentence):
-        score += 0.25
-    if fp2.boundary_text and any(k in fp2.boundary_text.first_line.lower() for k in ("cont", "direct", "step", "bake", "over", "part 2", "card 2")):
+
+    # Preceding card has continuation cues in boundary text or flags
+    continuation_cues = (
+        "cont",
+        "over",
+        "continued",
+        "turn over",
+        "see back",
+        "p.t.o",
+        "pto",
+        "->",
+    )
+    if has_sym1 or is_cut1 or any(cue in t1 for cue in continuation_cues):
         score += 0.25
 
-    return round(min(1.0, score), 4)
+    # Following card starts with continuation text markers
+    continuation_start_markers = (
+        "cont",
+        "direct",
+        "step",
+        "bake",
+        "over",
+        "part 2",
+        "card 2",
+        "page 2",
+        "instructions continued",
+    )
+    if any(k in t2_first for k in continuation_start_markers):
+        score += 0.25
+
+    return round(max(0.0, min(1.0, score)), 4)
 
 
 def calculate_heuristic_distance(

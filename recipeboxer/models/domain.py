@@ -315,3 +315,11 @@ class VisualFingerprint(BaseModel):
         default_factory=lambda: datetime.now(timezone.utc),
         description="UTC timestamp when visual fingerprint was generated",
     )
+    degraded: bool = Field(
+        default=False,
+        description="Whether visual fingerprint was generated via degraded offline pixel analysis or fallback",
+    )
+    degraded_reason: Optional[str] = Field(
+        default=None,
+        description="Reason why visual fingerprint is degraded",
+    )

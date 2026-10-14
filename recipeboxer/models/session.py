@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional, Union
 from pydantic import BaseModel, Field
 
+from recipeboxer.models.failures import StageFailure
 from recipeboxer.models.pipeline import PipelineState, ProgressMetrics, TokenUsage
 from recipeboxer.models.recipe import RecipeSchema
 
@@ -58,6 +59,22 @@ class SessionSummary(BaseModel):
     error: Optional[str] = Field(
         default=None,
         description="Last error message if session failed",
+    )
+    failures_count: int = Field(
+        default=0,
+        description="Total number of stage failures in this session",
+    )
+    failures: List[StageFailure] = Field(
+        default_factory=list,
+        description="List of stage failures",
+    )
+    degraded_fingerprints_count: int = Field(
+        default=0,
+        description="Number of cards with degraded fingerprints",
+    )
+    unverified_proposals_count: int = Field(
+        default=0,
+        description="Number of unverified correlation proposals",
     )
 
 
@@ -146,6 +163,30 @@ class SessionDetail(BaseModel):
     error: Optional[str] = Field(
         default=None,
         description="Error message if session failed",
+    )
+    failures: List[StageFailure] = Field(
+        default_factory=list,
+        description="List of stage failures in this session",
+    )
+    failures_count: int = Field(
+        default=0,
+        description="Total number of stage failures in this session",
+    )
+    degraded_fingerprints_count: int = Field(
+        default=0,
+        description="Number of cards with degraded fingerprints",
+    )
+    unverified_proposals_count: int = Field(
+        default=0,
+        description="Number of correlation proposals lacking semantic verification",
+    )
+    failed_extractions_count: int = Field(
+        default=0,
+        description="Number of recipes whose extraction failed",
+    )
+    hitl_queue: List[Dict[str, Any]] = Field(
+        default_factory=list,
+        description="List of HITL review queue items including failures",
     )
 
     @property

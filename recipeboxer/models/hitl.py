@@ -2,9 +2,76 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field, model_validator
+
+from recipeboxer.models.correlation import CorrelationProposal
+from recipeboxer.models.failures import StageFailure
+
+
+class HitlItemType(str, Enum):
+    """Types of items that can appear in the HITL review queue."""
+    PROPOSAL = "PROPOSAL"
+    STAGE_FAILURE = "STAGE_FAILURE"
+    UNASSIGNED_CARD = "UNASSIGNED_CARD"
+    MANUAL_REVIEW = "MANUAL_REVIEW"
+
+
+class HitlItem(BaseModel):
+    """Unified item in the HITL review queue for proposals, failures, and unassigned cards."""
+    item_id: str = Field(
+        ...,
+        description="Unique identifier for the review queue item",
+    )
+    item_type: HitlItemType = Field(
+        default=HitlItemType.PROPOSAL,
+        description="Type of HITL item (PROPOSAL, STAGE_FAILURE, etc.)",
+    )
+    kind: str = Field(
+        default="PROPOSAL",
+        description="String alias for item_type for compatibility",
+    )
+    stage: Optional[str] = Field(
+        default=None,
+        description="Pipeline stage where item originated (e.g. FINGERPRINT, CORRELATION, EXTRACTION)",
+    )
+    card_ids: List[str] = Field(
+        default_factory=list,
+        description="Card IDs associated with this review item",
+    )
+    proposal_id: Optional[str] = Field(
+        default=None,
+        description="Associated proposal ID if applicable",
+    )
+    proposal: Optional[CorrelationProposal] = Field(
+        default=None,
+        description="Embedded correlation proposal if item_type is PROPOSAL",
+    )
+    failure: Optional[StageFailure] = Field(
+        default=None,
+        description="Embedded stage failure record if item_type is STAGE_FAILURE",
+    )
+    needs_review: bool = Field(
+        default=False,
+        description="Flag indicating proposal or card requires human attention",
+    )
+    review_reasons: List[str] = Field(
+        default_factory=list,
+        description="Reasons why review is required (e.g. DEGRADED_FINGERPRINT, UNVERIFIED_SEMANTIC)",
+    )
+    message: str = Field(
+        default="",
+        description="Human-readable summary message for the reviewer",
+    )
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+    )
+
+
+# Clean alias
+HitlQueueItem = HitlItem
 
 
 class HITLDecision(str, Enum):

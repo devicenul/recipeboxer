@@ -15,6 +15,7 @@ import io
 import json
 import logging
 import os
+import secrets
 import shutil
 import tempfile
 import uuid
@@ -28,7 +29,7 @@ from PIL import Image
 from recipeboxer.models.correlation import CorrelationProposal, CorrelationResult
 from recipeboxer.models.domain import CardRole
 from recipeboxer.models.recipe import RecipeSchema
-from recipeboxer.tools.card_generator import CardModality
+from recipeboxer.vision.router import CardModality
 
 try:
     from tests.fixtures.loader import CardEntry, SampleCardCorpus, get_manifest_path, get_sample_card_dir
@@ -45,6 +46,7 @@ logger = logging.getLogger(__name__)
 
 class ObfuscationStrategy(str, Enum):
     """Naming strategies for generating opaque card identifiers."""
+    RANDOM = "RANDOM"
     DETERMINISTIC_SHA256 = "DETERMINISTIC_SHA256"
     UUID4 = "UUID4"
     SEQUENTIAL = "SEQUENTIAL"
@@ -99,30 +101,6 @@ def sanitize_image_exif(source_path: Union[str, Path], destination_path: Union[s
         clean_im.save(dst, format=im_format, **save_kwargs)
 
 
-_ACTIVE_OBFUSCATION_REGISTRY: Dict[str, str] = {}
-
-
-def resolve_active_obfuscation_id(identifier: Union[str, Path]) -> str:
-    """Resolves an obfuscated identifier or path to original ground-truth card_id if active.
-
-    Args:
-        identifier: Obfuscated ID or file path (e.g. 'card_a7b8c9d0.jpg' or Path).
-
-    Returns:
-        Original ground-truth card_id if registered in active corpus, or filename as fallback.
-    """
-    if not identifier:
-        return ""
-    clean = Path(str(identifier).strip()).name
-    full_str = str(identifier).strip()
-    return (
-        _ACTIVE_OBFUSCATION_REGISTRY.get(full_str)
-        or _ACTIVE_OBFUSCATION_REGISTRY.get(clean)
-        or _ACTIVE_OBFUSCATION_REGISTRY.get(Path(clean).stem)
-        or clean
-    )
-
-
 # ============================================================================
 # 2. OBFUSCATED CARD CORPUS & CONTEXT MANAGER
 # ============================================================================
@@ -139,7 +117,7 @@ class ObfuscatedCardCorpus:
         self,
         cards_or_dir: Union[str, Path, List[Any], SampleCardCorpus],
         target_dir: Optional[Union[str, Path]] = None,
-        strategy: ObfuscationStrategy = ObfuscationStrategy.DETERMINISTIC_SHA256,
+        strategy: ObfuscationStrategy = ObfuscationStrategy.RANDOM,
         prefix: str = "card_",
     ) -> None:
         """Initializes ObfuscatedCardCorpus.
@@ -268,7 +246,7 @@ class ObfuscatedCardCorpus:
                 obfuscated_id=obf_id,
                 file_path=target_image_path,
                 original_file_path=orig_path,
-                sha256_hash=orig_sha or actual_sha,
+                sha256_hash=actual_sha,
                 modality=mod,
                 role=role,
                 recipe_cluster=cluster,
@@ -324,19 +302,13 @@ class ObfuscatedCardCorpus:
         ext: str,
     ) -> str:
         """Generates an opaque identifier that contains zero lexical hints."""
-        if self.strategy == ObfuscationStrategy.DETERMINISTIC_SHA256:
-            # Hash original identifier and path to produce deterministic opaque ID
-            seed = f"{orig_id}_{orig_path.name if orig_path else ''}_{orig_sha or ''}"
-            digest = hashlib.sha256(seed.encode("utf-8")).hexdigest()[:8]
-            return f"{self.prefix}{digest}{ext}"
-        elif self.strategy == ObfuscationStrategy.UUID4:
-            u = uuid.uuid4().hex[:8]
-            return f"{self.prefix}{u}{ext}"
-        elif self.strategy == ObfuscationStrategy.SEQUENTIAL:
+        if self.strategy == ObfuscationStrategy.SEQUENTIAL:
             return f"{self.prefix}{idx + 1:04d}{ext}"
-        else:
-            digest = hashlib.sha256(orig_id.encode("utf-8")).hexdigest()[:8]
-            return f"{self.prefix}{digest}{ext}"
+        while True:
+            token = secrets.token_hex(4)
+            candidate = f"{self.prefix}{token}{ext}"
+            if candidate not in self._obfuscated_to_id:
+                return candidate
 
     # ------------------------------------------------------------------------
     # Public Resolution & Mapping APIs
@@ -362,9 +334,9 @@ class ObfuscatedCardCorpus:
         stem = Path(clean).stem
         if stem in self._id_to_obfuscated:
             return self._id_to_obfuscated[stem]
-        # Return fallback deterministic opaque ID if not registered
-        h = hashlib.sha256(clean.encode("utf-8")).hexdigest()[:8]
-        return f"{self.prefix}{h}.jpg"
+        # Return fallback random opaque ID if not registered
+        token = secrets.token_hex(4)
+        return f"{self.prefix}{token}.jpg"
 
     def resolve_id(self, obfuscated_id: str) -> str:
         """Translates an opaque obfuscated card ID back to its original ground-truth card ID.
@@ -465,14 +437,7 @@ class ObfuscatedCardCorpus:
     # Context Manager Protocol
     # ------------------------------------------------------------------------
 
-
     def __enter__(self) -> ObfuscatedCardCorpus:
-        for obf_id, orig_id in self._obfuscated_to_id.items():
-            _ACTIVE_OBFUSCATION_REGISTRY[obf_id] = orig_id
-        for orig_id, obf_path in self._original_to_path.items():
-            _ACTIVE_OBFUSCATION_REGISTRY[str(obf_path)] = orig_id
-            _ACTIVE_OBFUSCATION_REGISTRY[obf_path.name] = orig_id
-            _ACTIVE_OBFUSCATION_REGISTRY[obf_path.stem] = orig_id
         return self
 
     def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
@@ -480,13 +445,6 @@ class ObfuscatedCardCorpus:
 
     def cleanup(self) -> None:
         """Cleans up temporary sanitized files and directories."""
-        for obf_id in list(self._obfuscated_to_id.keys()):
-            _ACTIVE_OBFUSCATION_REGISTRY.pop(obf_id, None)
-        for obf_path in list(self._obfuscated_to_path.values()):
-            _ACTIVE_OBFUSCATION_REGISTRY.pop(str(obf_path), None)
-            _ACTIVE_OBFUSCATION_REGISTRY.pop(obf_path.name, None)
-            _ACTIVE_OBFUSCATION_REGISTRY.pop(obf_path.stem, None)
-
         if self._temp_dir is not None:
             try:
                 self._temp_dir.cleanup()
@@ -503,7 +461,6 @@ __all__ = [
     "ObfuscatedCard",
     "ObfuscatedCardCorpus",
     "EvaluationObfuscator",
-    "resolve_active_obfuscation_id",
     "sanitize_image_exif",
 ]
 

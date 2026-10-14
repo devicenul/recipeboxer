@@ -15,7 +15,8 @@ from recipeboxer.ingestion.runner import IngestionCancellationToken
 from recipeboxer.ingestion.scanner import ScannedCard
 from recipeboxer.models.correlation import CorrelationProposal, CorrelationResult
 from recipeboxer.models.domain import VisualFingerprint
-from recipeboxer.models.hitl import CardPairApproval, HITLDecision
+from recipeboxer.models.failures import StageFailure
+from recipeboxer.models.hitl import CardPairApproval, HITLDecision, HitlItem, HitlItemType
 from recipeboxer.models.pipeline import (
     IngestionMode,
     PipelineStartRequest,
@@ -59,7 +60,12 @@ class PipelineSession:
             mock_client: Optional mock client for testing.
         """
         self.session_id: str = session_id or f"sess_{uuid.uuid4().hex[:8]}"
-        self.settings: Settings = settings or get_settings()
+        if not isinstance(settings, Settings):
+            if settings is not None and mock_client is None:
+                mock_client = settings
+            self.settings: Settings = get_settings()
+        else:
+            self.settings: Settings = settings or get_settings()
 
         if config is None:
             self.config: Union[PipelineStartRequest, Dict[str, Any]] = {}
@@ -130,6 +136,12 @@ class PipelineSession:
         self.csv_content: Optional[str] = None
         self.csv_output_path: Optional[str] = None
 
+        # Failures and HITL queue tracking (INV-AC4)
+        self.failures: List[StageFailure] = []
+        self.hitl_queue: List[HitlItem] = []
+        self.degraded_fingerprints_count: int = 0
+        self.unverified_proposals_count: int = 0
+
         # Telemetry & diagnostics
         self.progress_metrics: ProgressMetrics = ProgressMetrics()
         self.token_usage: TokenUsage = TokenUsage()
@@ -144,6 +156,57 @@ class PipelineSession:
         self.cancellation_token: IngestionCancellationToken = IngestionCancellationToken()
         self.pipeline_task: Optional[asyncio.Task] = None
         self._lock: asyncio.Lock = asyncio.Lock()
+
+    def add_failure(self, failure: StageFailure) -> None:
+        """Appends a StageFailure to the session telemetry and metrics."""
+        self.failures.append(failure)
+        self.progress_metrics.failures_count = len(self.failures)
+
+    def enqueue_hitl_item(self, item: HitlItem) -> None:
+        """Enqueues a review item into the HITL queue."""
+        self.hitl_queue.append(item)
+
+    def enqueue_hitl_failure(
+        self,
+        failure: Optional[StageFailure] = None,
+        card_ids: Optional[List[str]] = None,
+        proposal_id: Optional[str] = None,
+        stage: Optional[Any] = None,
+        message: Optional[str] = None,
+        **kwargs: Any,
+    ) -> HitlItem:
+        """Creates and enqueues a STAGE_FAILURE HITL item."""
+        if failure is None and kwargs.get("fail"):
+            failure = kwargs["fail"]
+        if failure is None:
+            failure = StageFailure(
+                stage=stage or PipelineStage.FINGERPRINT,
+                reason=FailureReason.INTERNAL_ERROR,
+                message=message or "Stage failure",
+                card_ids=card_ids or [],
+                proposal_id=proposal_id,
+            )
+        cids = list(card_ids or failure.card_ids)
+        prop_id = proposal_id or failure.proposal_id
+        stg = stage or failure.stage
+        item = HitlItem(
+            item_id=f"hitl_fail_{uuid.uuid4().hex[:8]}",
+            item_type=HitlItemType.STAGE_FAILURE,
+            kind="STAGE_FAILURE",
+            stage=stg.value if hasattr(stg, "value") else str(stg),
+            card_ids=cids,
+            proposal_id=prop_id,
+            failure=failure,
+            needs_review=True,
+            review_reasons=[failure.reason.value if hasattr(failure.reason, "value") else str(failure.reason)],
+            message=message or failure.message or f"Stage failure in {stg}: {failure.reason}",
+        )
+        self.enqueue_hitl_item(item)
+        return item
+
+    @property
+    def hitl_items(self) -> List[HitlItem]:
+        return self.hitl_queue
 
     # --- Property Aliases for Compatibility ---
 
@@ -408,6 +471,27 @@ class PipelineSession:
             except ValueError:
                 mode = IngestionMode.PARALLEL
 
+        fp_degraded = sum(
+            1 for fp in self.fingerprints.values()
+            if getattr(fp, "degraded", False) is True or (isinstance(fp, dict) and fp.get("degraded") is True)
+        )
+        prop_unverified = sum(
+            1 for p in self.proposals
+            if getattr(p, "semantic_verified", None) is False or (isinstance(p, dict) and p.get("semantic_verified") is False)
+        )
+        degraded_count = max(getattr(self, "degraded_fingerprints_count", 0), fp_degraded)
+        unverified_count = max(getattr(self, "unverified_proposals_count", 0), prop_unverified)
+        failed_count = sum(
+            1 for r in self.recipes
+            if getattr(r, "status", None) in ("FAILED", "NEEDS_ATTENTION") or (isinstance(r, dict) and r.get("status") in ("FAILED", "NEEDS_ATTENTION"))
+        )
+        self.degraded_fingerprints_count = degraded_count
+        self.unverified_proposals_count = unverified_count
+        self.progress_metrics.degraded_fingerprints = degraded_count
+        self.progress_metrics.unverified_proposals = unverified_count
+        self.progress_metrics.failed_extractions = failed_count
+        self.progress_metrics.failures_count = len(self.failures)
+
         return PipelineStatus(
             session_id=self.session_id,
             status=self.state,
@@ -417,6 +501,11 @@ class PipelineSession:
             elapsed_seconds=elapsed,
             csv_output_path=self.csv_output_path,
             error=self.error_message,
+            failures=list(self.failures),
+            failures_count=len(self.failures),
+            degraded_fingerprints_count=degraded_count,
+            unverified_proposals_count=unverified_count,
+            failed_extractions_count=failed_count,
         )
 
     def get_status_model(self) -> PipelineStatus:

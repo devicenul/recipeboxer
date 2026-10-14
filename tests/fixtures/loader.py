@@ -13,7 +13,7 @@ from PIL import Image
 
 from recipeboxer.models.domain import CardRole
 from recipeboxer.models.recipe import RecipeSchema
-from recipeboxer.tools.card_generator import CardModality
+from recipeboxer.vision.router import CardModality
 
 
 # Default path locations
@@ -148,21 +148,6 @@ class SampleCardCorpus:
             if entry.sha256_hash:
                 clean_sha = entry.sha256_hash.lower().strip()
                 self._cards_by_id[clean_sha] = entry
-                self._cards_by_id[f"card_{clean_sha[:8]}"] = entry
-                self._cards_by_id[f"card_{clean_sha[:8]}.jpg"] = entry
-                self._cards_by_id[f"card_{clean_sha[:8]}.png"] = entry
-                self._cards_by_id[f"card_{clean_sha[:8]}.jpeg"] = entry
-
-            # Deterministic SHA256 of filename/card_id (as used by ObfuscatedCardCorpus)
-            for raw_n in (fname, cid, Path(fname).name, Path(cid).name):
-                h = hashlib.sha256(raw_n.encode("utf-8")).hexdigest()[:8].lower()
-                self._cards_by_id[f"card_{h}"] = entry
-                self._cards_by_id[f"card_{h}.jpg"] = entry
-                self._cards_by_id[f"card_{h}.png"] = entry
-                self._cards_by_id[f"card_{h}.jpeg"] = entry
-
-
-
 
             rec_id = entry.recipe_cluster.get("recipe_id", "")
             if rec_id:
@@ -192,10 +177,6 @@ class SampleCardCorpus:
         """Retrieves card entry by unique card_id, filename, SHA-256, or stem (case and delimiter-insensitive)."""
         if not card_id:
             return None
-        from recipeboxer.evals.obfuscation import resolve_active_obfuscation_id
-        resolved_orig = resolve_active_obfuscation_id(card_id)
-        if resolved_orig and resolved_orig != str(card_id).strip() and resolved_orig in self._cards_by_id:
-            return self._cards_by_id[resolved_orig]
 
         card_str = str(card_id).strip()
         stem = Path(card_str).stem

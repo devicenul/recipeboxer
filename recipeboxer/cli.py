@@ -72,6 +72,15 @@ def main(args: Optional[List[str]] = None) -> int:
     # Essential for PyInstaller on Windows/macOS to prevent infinite subprocess loops
     multiprocessing.freeze_support()
 
+    # Intercept and redirect legacy/card-generator subcommands
+    cli_args = args if args is not None else sys.argv[1:]
+    if cli_args and cli_args[0] in ("generate", "card-generator", "generate-cards", "cardforge"):
+        print(
+            "Synthetic card generation has moved to the standalone 'cardforge' package.\n"
+            "Please run: python -m cardforge [options]"
+        )
+        return 0
+
     parser = create_parser()
     parsed_args = parser.parse_args(args=args)
 

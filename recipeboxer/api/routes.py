@@ -58,6 +58,7 @@ from recipeboxer.exporter.pdf_export import PdfExporter, export_recipes_to_pdf
 from recipeboxer.exporter.plan_to_eat import PlanToEatExporter, export_recipes_to_plan_to_eat_csv
 from recipeboxer.ingestion.scanner import VALID_IMAGE_EXTENSIONS, ScannedCard, get_image_mime_type, validate_and_load_card
 from recipeboxer.models.domain import VisualFingerprint
+from recipeboxer.models.failures import StageFailure
 from recipeboxer.models.hitl import (
     ApprovalPayload,
     CandidateListResponse,
@@ -65,6 +66,9 @@ from recipeboxer.models.hitl import (
     CardPairApproval,
     CorrelationCandidate,
     HITLDecision,
+    HitlItem,
+    HitlItemType,
+    HitlQueueItem,
 )
 from recipeboxer.models.pipeline import (
     IngestionMode,
@@ -647,6 +651,11 @@ async def get_pipeline_status(
                 elapsed_seconds=detail.elapsed_seconds,
                 csv_output_path=detail.csv_output_path,
                 error=detail.error,
+                failures=detail.failures,
+                failures_count=detail.failures_count,
+                degraded_fingerprints_count=detail.degraded_fingerprints_count,
+                unverified_proposals_count=detail.unverified_proposals_count,
+                failed_extractions_count=detail.failed_extractions_count,
             )
 
     return PipelineStatus(
@@ -975,7 +984,7 @@ async def get_session_detail(
 ) -> SessionDetail:
     """Retrieves comprehensive session state, metrics, cards, and recipes."""
     sess = manager.get_session(session_id)
-    if sess and (sess.cards or sess.recipes or sess.state != PipelineState.IDLE):
+    if sess is not None:
         store.save_pipeline_session(sess)
 
     detail = store.get_session_detail(session_id)
@@ -983,6 +992,18 @@ async def get_session_detail(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Session '{session_id}' not found",
+        )
+    if sess is not None:
+        detail.failures = list(sess.failures)
+        detail.failures_count = len(sess.failures)
+        detail.hitl_queue = [
+            item.model_dump() if hasattr(item, "model_dump") else dict(item)
+            for item in getattr(sess, "hitl_queue", [])
+        ]
+        detail.degraded_fingerprints_count = getattr(sess, "degraded_fingerprints_count", 0)
+        detail.unverified_proposals_count = getattr(sess, "unverified_proposals_count", 0)
+        detail.failed_extractions_count = sum(
+            1 for r in sess.recipes if getattr(r, "status", None) in ("FAILED", "NEEDS_ATTENTION")
         )
     return detail
 
@@ -1082,22 +1103,104 @@ async def get_hitl_pending(
             unassigned_dump.append({"card_id": str(u)})
 
     proposed_pairs_list = []
+    proposals_dump = []
     for p in session.proposals:
         p_dump = p.model_dump()
         if "front_card_id" not in p_dump and p.ordered_card_ids:
             p_dump["front_card_id"] = p.ordered_card_ids[0]
             p_dump["back_card_id"] = p.ordered_card_ids[1] if len(p.ordered_card_ids) > 1 else None
+        if hasattr(p, "needs_review"):
+            p_dump["needs_review"] = p.needs_review
         proposed_pairs_list.append(p_dump)
+
+        pd = p.model_dump()
+        if hasattr(p, "needs_review"):
+            pd["needs_review"] = p.needs_review
+        proposals_dump.append(pd)
+
+    failures_dump = [
+        f.model_dump() if hasattr(f, "model_dump") else dict(f)
+        for f in getattr(session, "failures", [])
+    ]
+    queue_dump = [
+        item.model_dump() if hasattr(item, "model_dump") else dict(item)
+        for item in getattr(session, "hitl_queue", [])
+    ]
+    failure_items_dump = [
+        it for it in queue_dump
+        if it.get("item_type") == HitlItemType.STAGE_FAILURE
+        or it.get("kind") == "STAGE_FAILURE"
+        or it.get("failure") is not None
+    ]
 
     return {
         "session_id": session.session_id,
         "status": session.state.value,
-        "proposals": [p.model_dump() for p in session.proposals],
+        "proposals": proposals_dump,
         "proposed_pairs": proposed_pairs_list,
         "unassigned_cards": unassigned_dump,
         "total_proposals": len(session.proposals),
         "total_unassigned": len(session.unassigned_cards),
+        "failures": failures_dump,
+        "failure_items": failure_items_dump,
+        "hitl_queue": queue_dump,
+        "total_failures": len(failures_dump),
     }
+
+
+@router.get(
+    "/hitl/queue",
+    status_code=status.HTTP_200_OK,
+    summary="Retrieve HITL Queue Items Including Failures and Proposals",
+)
+async def get_hitl_queue(
+    session_id: Optional[str] = Query(None, description="Optional target session ID"),
+    manager: SessionManager = Depends(get_manager),
+) -> Dict[str, Any]:
+    """Retrieves HITL review queue items including stage failures, degraded cards, and proposals."""
+    session = manager.get_session(session_id)
+    if session is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Session not found",
+        )
+
+    queue_items = [
+        item.model_dump() if hasattr(item, "model_dump") else dict(item)
+        for item in getattr(session, "hitl_queue", [])
+    ]
+    failures = [
+        f.model_dump() if hasattr(f, "model_dump") else dict(f)
+        for f in getattr(session, "failures", [])
+    ]
+    return {
+        "session_id": session.session_id,
+        "status": session.state.value if hasattr(session.state, "value") else str(session.state),
+        "items": queue_items,
+        "hitl_queue": queue_items,
+        "failures": failures,
+        "failure_items": [
+            it for it in queue_items
+            if it.get("item_type") == HitlItemType.STAGE_FAILURE
+            or it.get("kind") == "STAGE_FAILURE"
+            or it.get("failure") is not None
+        ],
+        "total_items": len(queue_items),
+        "total_failures": len(failures),
+    }
+
+
+@router.get(
+    "/sessions/{session_id}/hitl/queue",
+    status_code=status.HTTP_200_OK,
+    summary="Retrieve HITL Queue Items for Session",
+)
+async def get_session_hitl_queue(
+    session_id: str,
+    manager: SessionManager = Depends(get_manager),
+) -> Dict[str, Any]:
+    """Retrieves HITL review queue items for a given session path."""
+    return await get_hitl_queue(session_id=session_id, manager=manager)
 
 
 @router.get(

@@ -1,12 +1,18 @@
 # RecipeBoxer Sample Recipe Card Corpus & Provenance Guide
 
+> [!IMPORTANT]
+> **Dataset Provenance & Tier T0 Specification Notice**
+> All 48 images in this directory are **synthetic Pillow renders** produced by the card generator (`recipeboxer/tools/card_generator.py` / `cardforge`) from recipe text and procedural substrate/ink/wear models.
+> The historical archive and source references documented below describe the **recipe text inspiration and historical context**, not physical camera scans.
+> This dataset is designated as **Tier T0 (training/visible)**: it is intended solely for unit testing, feature fitting, confidence calibration, and development debugging. It is **never used for official quality or benchmark evaluation claims**.
+
 This directory contains the curated benchmark sample recipe card fixture dataset for **RecipeBoxer**, an intelligent recipe card digitization, physical substrate analysis, and HITL (Human-in-the-Loop) correlation engine.
 
 ---
 
 ## 1. Corpus Overview & Architecture
 
-The corpus contains **48 high-resolution digitized recipe card scans** representing **24 diverse culinary recipes** across **6 historical modalities** and structural configurations. Every scan is paired with ground-truth metadata in `manifest.json` adhering to the authoritative RecipeBoxer domain contracts (`RecipeSchema`, `VisualFingerprint`, `CardRole`, and `PhysicalArtifact`).
+The corpus contains **48 high-resolution synthetic recipe card image renders** representing **24 diverse culinary recipes** across **6 historical modalities** and structural configurations. Every synthetic render is paired with ground-truth metadata in `manifest.json` adhering to the authoritative RecipeBoxer domain contracts (`RecipeSchema`, `VisualFingerprint`, `CardRole`, and `PhysicalArtifact`).
 
 ### Historical & Archival Modalities Covered (6 Dimensions, 24 Recipes, 48 Cards)
 
@@ -74,16 +80,16 @@ The corpus contains representative, authentic specimens across all three canonic
 
 ## 3. Dataset Provenance & Archive Sources
 
-All cards in this fixture library are curated from historical public domain recipe manuscripts, open archival collections, or deterministically synthesized using RecipeBoxer's procedural generation engine (`recipeboxer/tools/card_generator.py`):
+The recipe texts in this fixture library are inspired by historical public domain recipe manuscripts and open archival collections, while all 48 card images are deterministically synthesized using RecipeBoxer's procedural generation engine (`recipeboxer/tools/card_generator.py` / `cardforge`):
 
 1. **Library of Congress American Memory Collection**:
    - *Culinary History, Home Economics, and Community Cookery Series (1880–1970)*
-   - Open access historical documentation of American community recipe boxes, church auxiliary index card collections, and vintage culinary pamphlets.
+   - Open access historical documentation of American community recipe boxes, church auxiliary index card collections, and vintage culinary pamphlets whose recipe texts served as inspiration.
 2. **Michigan State University Libraries – Feeding America Archival Collection**:
    - Historic American Cookbook Project and community manuscript recipe archives.
    - Public domain historical recipe texts published prior to 1978 without copyright renewal notice.
 3. **Internet Archive & Open Ephemera Repositories**:
-   - Vintage magazine advertisement scans, packaging archives, and community-donated heirloom family recipe card scans dedicated to the public domain under CC0 1.0 Universal terms.
+   - Vintage magazine advertisements, packaging archives, and community culinary ephemera whose published recipe texts inspired the synthesized cards.
 4. **RecipeBoxer Procedural Cleanroom Engine**:
    - Algorithmic cleanroom synthesis of paper substrates, text typesetting, ink dynamics, and physical wear simulations designed specifically for OCR/VLM machine learning benchmarking.
 
@@ -93,7 +99,7 @@ All cards in this fixture library are curated from historical public domain reci
 
 All images, metadata manifests, and recipe schema transcriptions in `tests/fixtures/sample_cards/` are provided under open, permissive terms:
 
-- **Image Scans & Renderings**: Dedicated to the **Public Domain** under [Creative Commons CC0 1.0 Universal (CC0 1.0) Public Domain Dedication](https://creativecommons.org/publicdomain/zero/1.0/). You are free to copy, modify, distribute, and perform the work, even for commercial purposes, all without asking permission.
+- **Image Renderings**: Dedicated to the **Public Domain** under [Creative Commons CC0 1.0 Universal (CC0 1.0) Public Domain Dedication](https://creativecommons.org/publicdomain/zero/1.0/). You are free to copy, modify, distribute, and perform the work, even for commercial purposes, all without asking permission.
 - **Recipe Transcriptions & Metadata**: Released under the **MIT License** / CC0, free of copyright encumbrance.
 - **Generator Source Code**: Governed by the repository's root open-source license (`GPL-3.0` / MIT component license).
 
@@ -101,7 +107,7 @@ All images, metadata manifests, and recipe schema transcriptions in `tests/fixtu
 
 ## 5. Manifest Schema Specification (`manifest.json`)
 
-The machine-readable manifest `manifest.json` maps every card scan in this directory to its ground-truth metadata:
+The machine-readable manifest `manifest.json` maps every synthetic card rendering in this directory to its ground-truth metadata:
 
 ```json
 {
