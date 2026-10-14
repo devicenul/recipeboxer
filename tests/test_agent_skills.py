@@ -248,14 +248,27 @@ class TestAntigravityToolWrappers:
         assert "stain_similarity_score" in res
         assert 0.0 <= res["stain_similarity_score"] <= 1.0
 
-    def test_classify_modality_tool(self):
+    def test_classify_modality_tool(self, monkeypatch):
         sample_path = SAMPLE_CARDS_DIR / "rec_typ_beef_stroganoff_1956_front.jpg"
         if not sample_path.exists():
             pytest.skip("Sample card not found.")
 
+        from recipeboxer.vision.router import CardModality, ModalityClassificationResult
+
+        monkeypatch.setattr(
+            "recipeboxer.vision.router.classify_card_modality",
+            lambda p, **kw: ModalityClassificationResult(
+                modality=CardModality.TYPEWRITTEN,
+                confidence=0.96,
+                reasoning="Mocked mechanical typewriter classification",
+                features={"typography": "monospaced"},
+            ),
+        )
+
         res = classify_card_modality_tool(str(sample_path))
         assert res["success"] is True
         assert res["modality"] == "TYPEWRITTEN"
+        assert res["confidence"] == 0.96
 
     def test_tool_output_path_creates_nested_directories(self, tmp_path):
         sample_path = SAMPLE_CARDS_DIR / "rec_typ_beef_stroganoff_1956_front.jpg"

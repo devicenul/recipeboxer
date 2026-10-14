@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
 import pytest
 from PIL import Image
 
@@ -28,6 +29,7 @@ from recipeboxer.models.domain import (
     PaperRulingInfo,
     VisualFingerprint,
 )
+from recipeboxer.models.failures import ExtractionUnavailable, FailureReason
 from recipeboxer.models.recipe import RecipeSchema
 
 
@@ -57,26 +59,44 @@ async def test_extractor_custom_model_and_budget_overrides():
 
 
 @pytest.mark.asyncio
-async def test_extractor_injected_mock_client(mock_gemini_client, synthetic_card_deck):
-    """Injects MockGeminiClient and extracts single and pair recipes."""
-    extractor = GeminiRecipeExtractor(client=mock_gemini_client)
+async def test_extractor_injected_mock_client(tmp_path):
+    """Injects explicit mock client and extracts single and pair recipes."""
+    mock_recipe = RecipeSchema(
+        title="Grandma's Cinnamon Rolls",
+        ingredients=["2 cups flour", "1 tsp cinnamon"],
+        directions=["1. Roll dough.", "2. Bake at 375F."],
+    )
+    mock_client = AsyncMock()
+    mock_client.extract_recipe = AsyncMock(return_value=mock_recipe)
+    extractor = GeminiRecipeExtractor(client=mock_client)
 
-    p1_front = synthetic_card_deck.directory / "01_cinnamon_rolls_front.jpg"
-    p1_back = synthetic_card_deck.directory / "02_cinnamon_rolls_back.jpg"
+    p1_front = tmp_path / "card_01a.jpg"
+    p1_back = tmp_path / "card_01b.jpg"
+    p1_front.write_bytes(b"dummy_front_bytes")
+    p1_back.write_bytes(b"dummy_back_bytes")
 
     recipe = await extractor.extract(p1_front, p1_back)
     assert isinstance(recipe, RecipeSchema)
     assert "Cinnamon Rolls" in recipe.title
-    assert len(recipe.ingredients) > 0
-    assert len(recipe.directions) > 0
+    assert len(recipe.ingredients) == 2
+    assert len(recipe.directions) == 2
     assert recipe.directions[0].startswith("1. ")
 
 
 @pytest.mark.asyncio
-async def test_extractor_offline_standalone_fudge(synthetic_card_deck):
-    """Tests offline extraction on 05_chocolate_fudge_standalone.jpg."""
-    extractor = GeminiRecipeExtractor(api_key=None)
-    fudge_path = synthetic_card_deck.directory / "05_chocolate_fudge_standalone.jpg"
+async def test_extractor_offline_standalone_fudge(tmp_path):
+    """Tests extraction with injected client for standalone card."""
+    fudge_recipe = RecipeSchema(
+        title="10-Minute Quick Chocolate Fudge",
+        ingredients=["3 cups chocolate chips", "1 can sweetened condensed milk", "1 tsp vanilla", "pinch salt"],
+        directions=["1. Melt chips with milk.", "2. Stir in vanilla.", "3. Chill until firm."],
+        tags=["Candy"],
+    )
+    client = AsyncMock()
+    client.extract_recipe = AsyncMock(return_value=fudge_recipe)
+    extractor = GeminiRecipeExtractor(client=client)
+    fudge_path = tmp_path / "card_fudge_standalone.jpg"
+    fudge_path.write_bytes(b"fake_fudge_image")
 
     recipe = await extractor.extract(fudge_path)
     assert isinstance(recipe, RecipeSchema)
@@ -90,26 +110,50 @@ async def test_extractor_offline_standalone_fudge(synthetic_card_deck):
 
 
 @pytest.mark.asyncio
-async def test_extractor_offline_standalone_pecan_pie(synthetic_card_deck):
-    """Tests offline extraction on 06_pecan_pie_standalone.jpg."""
-    extractor = GeminiRecipeExtractor(api_key=None)
-    pie_path = synthetic_card_deck.directory / "06_pecan_pie_standalone.jpg"
+async def test_extractor_offline_standalone_pecan_pie(tmp_path):
+    """Tests extraction with injected client for pecan pie standalone card."""
+    pecan_recipe = RecipeSchema(
+        title="Southern Pecan Pie",
+        yield_servings="8 servings",
+        ingredients=["1 cup pecans", "1 cup corn syrup", "3 eggs", "1/2 cup sugar"],
+        directions=["1. Mix filling.", "2. Pour into crust.", "3. Arrange pecans.", "4. Bake 50 mins."],
+        tags=["Pie"],
+    )
+    client = AsyncMock()
+    client.extract_recipe = AsyncMock(return_value=pecan_recipe)
+    extractor = GeminiRecipeExtractor(client=client)
+    pie_path = tmp_path / "card_pecan_standalone.jpg"
+    pie_path.write_bytes(b"fake_pecan_image")
 
     recipe = await extractor.extract(pie_path)
     assert isinstance(recipe, RecipeSchema)
     assert recipe.title == "Southern Pecan Pie"
     assert recipe.yield_servings == "8 servings"
-    assert len(recipe.ingredients) == 7
+    assert len(recipe.ingredients) == 4
     assert len(recipe.directions) == 4
     assert "Pie" in recipe.tags
 
 
 @pytest.mark.asyncio
-async def test_extractor_offline_two_sided_cinnamon_rolls(synthetic_card_deck):
-    """Tests front + back pair 01_cinnamon_rolls_front.jpg + 02_cinnamon_rolls_back.jpg."""
-    extractor = GeminiRecipeExtractor(api_key=None)
-    p1_front = synthetic_card_deck.directory / "01_cinnamon_rolls_front.jpg"
-    p1_back = synthetic_card_deck.directory / "02_cinnamon_rolls_back.jpg"
+async def test_extractor_offline_two_sided_cinnamon_rolls(tmp_path):
+    """Tests front + back pair with injected mock client."""
+    crolls_recipe = RecipeSchema(
+        title="Grandma's Cinnamon Rolls",
+        yield_servings="12 rolls",
+        prep_time="30 mins",
+        cook_time="25 mins",
+        total_time="2 hrs 15 mins",
+        ingredients=["2 cups flour", "1 cup milk", "1 tbsp yeast", "cinnamon", "sugar"],
+        directions=[f"{idx}. Step {idx} details" for idx in range(1, 11)],
+        tags=["Dessert"],
+    )
+    client = AsyncMock()
+    client.extract_recipe = AsyncMock(return_value=crolls_recipe)
+    extractor = GeminiRecipeExtractor(client=client)
+    p1_front = tmp_path / "card_cr_front.jpg"
+    p1_back = tmp_path / "card_cr_back.jpg"
+    p1_front.write_bytes(b"fake_front")
+    p1_back.write_bytes(b"fake_back")
 
     recipe = await extractor.extract(p1_front, p1_back)
     assert isinstance(recipe, RecipeSchema)
@@ -118,7 +162,7 @@ async def test_extractor_offline_two_sided_cinnamon_rolls(synthetic_card_deck):
     assert recipe.prep_time == "30 mins"
     assert recipe.cook_time == "25 mins"
     assert recipe.total_time == "2 hrs 15 mins"
-    assert len(recipe.ingredients) == 13
+    assert len(recipe.ingredients) == 5
     assert len(recipe.directions) == 10
     for idx, d in enumerate(recipe.directions, start=1):
         assert d.startswith(f"{idx}. ")
@@ -126,29 +170,38 @@ async def test_extractor_offline_two_sided_cinnamon_rolls(synthetic_card_deck):
 
 
 @pytest.mark.asyncio
-async def test_extractor_offline_two_sided_lemon_bars(synthetic_card_deck):
-    """Tests front + back pair 03_lemon_bars_front.jpg + 04_lemon_bars_back.jpg."""
-    extractor = GeminiRecipeExtractor(api_key=None)
-    p2_front = synthetic_card_deck.directory / "03_lemon_bars_front.jpg"
-    p2_back = synthetic_card_deck.directory / "04_lemon_bars_back.jpg"
+async def test_extractor_offline_two_sided_lemon_bars(tmp_path):
+    """Tests front + back pair with injected mock client for lemon bars."""
+    lemon_recipe = RecipeSchema(
+        title="Luscious Lemon Glaze Bars",
+        yield_servings="24 bars",
+        ingredients=["2 cups flour", "1/2 cup butter", "4 eggs", "1 1/2 cups sugar", "lemon juice"],
+        directions=[f"{idx}. Step {idx} directions" for idx in range(1, 7)],
+        tags=["Lemon"],
+    )
+    client = AsyncMock()
+    client.extract_recipe = AsyncMock(return_value=lemon_recipe)
+    extractor = GeminiRecipeExtractor(client=client)
+    p2_front = tmp_path / "card_lemon_f.jpg"
+    p2_back = tmp_path / "card_lemon_b.jpg"
+    p2_front.write_bytes(b"lemon_f")
+    p2_back.write_bytes(b"lemon_b")
 
     recipe = await extractor.extract(p2_front, p2_back)
     assert isinstance(recipe, RecipeSchema)
     assert recipe.title == "Luscious Lemon Glaze Bars"
     assert recipe.yield_servings == "24 bars"
-    assert len(recipe.ingredients) == 7
+    assert len(recipe.ingredients) == 5
     assert len(recipe.directions) == 6
     assert "Lemon" in recipe.tags
 
 
 @pytest.mark.asyncio
 async def test_extractor_offline_generic_unseen_card(tmp_path):
-    """Tests fallback extraction on unseen/arbitrary card name & boundary text."""
-    extractor = GeminiRecipeExtractor(api_key=None)
-
+    """Tests fallback extraction on unseen card: no-key raises ExtractionUnavailable, injected client succeeds."""
     fp = VisualFingerprint(
-        card_id="99_apple_crisp_card.jpg",
-        image_path=str(tmp_path / "99_apple_crisp_card.jpg"),
+        card_id="card_unseen_01.jpg",
+        image_path=str(tmp_path / "card_unseen_01.jpg"),
         sha256_hash="deadbeef12345678",
         role=CardRole.STANDALONE,
         boundary_text=BoundaryText(
@@ -157,6 +210,20 @@ async def test_extractor_offline_generic_unseen_card(tmp_path):
         ),
     )
 
+    # Without client/key raises ExtractionUnavailable
+    extractor_no_key = GeminiRecipeExtractor(api_key=None)
+    with pytest.raises(ExtractionUnavailable) as exc_info:
+        await extractor_no_key.extract(fp)
+    assert exc_info.value.reason == FailureReason.NO_API_KEY
+
+    # With injected client passes through
+    mock_client = AsyncMock()
+    mock_client.extract_recipe = AsyncMock(return_value=RecipeSchema(
+        title="Warm Autumn Apple Crisp",
+        ingredients=["4 cups apples", "1 cup oats"],
+        directions=["1. Bake at 350F."],
+    ))
+    extractor = GeminiRecipeExtractor(client=mock_client)
     recipe = await extractor.extract(fp)
     assert isinstance(recipe, RecipeSchema)
     assert "Apple Crisp" in recipe.title
@@ -166,10 +233,19 @@ async def test_extractor_offline_generic_unseen_card(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_extractor_scanned_card_and_path_inputs(synthetic_card_deck, tmp_path):
-    """Passes ScannedCard, Path, str, bytes, and PIL Image inputs to extractor."""
-    extractor = GeminiRecipeExtractor(api_key=None)
-    p1 = synthetic_card_deck.directory / "05_chocolate_fudge_standalone.jpg"
+async def test_extractor_scanned_card_and_path_inputs(tmp_path):
+    """Passes ScannedCard, Path, str, bytes, and PIL Image inputs to extractor with injected client."""
+    mock_recipe = RecipeSchema(
+        title="10-Minute Quick Chocolate Fudge",
+        ingredients=["3 cups chocolate chips", "1 can condensed milk"],
+        directions=["1. Melt and chill."],
+    )
+    client = AsyncMock()
+    client.extract_recipe = AsyncMock(return_value=mock_recipe)
+    extractor = GeminiRecipeExtractor(client=client)
+
+    p1 = tmp_path / "card_input_test.jpg"
+    p1.write_bytes(b"dummy_jpeg_bytes")
 
     # 1. Path object
     r1 = await extractor.extract(p1)
@@ -203,6 +279,7 @@ async def test_extractor_scanned_card_and_path_inputs(synthetic_card_deck, tmp_p
     pil_img = Image.new("RGB", (100, 100), color=(255, 255, 255))
     r5 = await extractor.extract(pil_img)
     assert isinstance(r5, RecipeSchema)
+
 
 
 @pytest.mark.asyncio
@@ -292,15 +369,16 @@ async def test_extractor_api_markdown_codeblock_stripping():
 
 
 @pytest.mark.asyncio
-async def test_extractor_api_failure_fallback(synthetic_card_deck):
-    """Mocks HTTP 500 error from Gemini API and verifies graceful fallback."""
+async def test_extractor_api_failure_fallback(tmp_path):
+    """Mocks HTTP connection error from Gemini API and verifies typed ExtractionUnavailable is raised."""
     extractor = GeminiRecipeExtractor(api_key="real-gemini-api-key-test")
-    p1 = synthetic_card_deck.directory / "05_chocolate_fudge_standalone.jpg"
+    p1 = tmp_path / "card_timeout_test.jpg"
+    p1.write_bytes(b"dummy_bytes")
 
-    with patch("httpx.AsyncClient.post", side_effect=Exception("API Connection Timeout")):
-        recipe = await extractor.extract(p1)
-        assert isinstance(recipe, RecipeSchema)
-        assert recipe.title == "10-Minute Quick Chocolate Fudge"
+    with patch("httpx.AsyncClient.post", side_effect=httpx.ConnectTimeout("API Connection Timeout")):
+        with pytest.raises(ExtractionUnavailable) as exc_info:
+            await extractor.extract(p1)
+        assert exc_info.value.reason == FailureReason.TIMEOUT
 
 
 @pytest.mark.asyncio
@@ -346,41 +424,64 @@ async def test_extractor_thinking_mode_payload():
 
 
 @pytest.mark.asyncio
-async def test_extractor_batch_concurrency(synthetic_card_deck):
-    """Runs extract_batch on 4 pairs with concurrency=2."""
-    extractor = GeminiRecipeExtractor(api_key=None)
+async def test_extractor_batch_concurrency():
+    """Runs extract_batch on 4 pairs with concurrency=2 using injected client."""
+    def make_recipe(title):
+        return RecipeSchema(
+            title=title,
+            ingredients=["1 cup item"],
+            directions=["1. Do step."],
+        )
 
-    p1_front = synthetic_card_deck.directory / "01_cinnamon_rolls_front.jpg"
-    p1_back = synthetic_card_deck.directory / "02_cinnamon_rolls_back.jpg"
-    p2_front = synthetic_card_deck.directory / "03_lemon_bars_front.jpg"
-    p2_back = synthetic_card_deck.directory / "04_lemon_bars_back.jpg"
-    s1 = synthetic_card_deck.directory / "05_chocolate_fudge_standalone.jpg"
-    s2 = synthetic_card_deck.directory / "06_pecan_pie_standalone.jpg"
+    titles = [
+        "Grandma's Cinnamon Rolls",
+        "Luscious Lemon Glaze Bars",
+        "10-Minute Quick Chocolate Fudge",
+        "Southern Pecan Pie",
+    ]
+    responses = [make_recipe(t) for t in titles]
+    call_idx = 0
+
+    class OrderedClient:
+        async def extract_recipe(self, front, back=None):
+            nonlocal call_idx
+            res = responses[call_idx % len(responses)]
+            call_idx += 1
+            return res
+
+    extractor = GeminiRecipeExtractor(client=OrderedClient())
 
     pairs = [
-        (p1_front, p1_back),
-        (p2_front, p2_back),
-        (s1, None),
-        (s2, None),
+        (b"card_1", b"card_2"),
+        (b"card_3", b"card_4"),
+        (b"card_5", None),
+        (b"card_6", None),
     ]
 
     recipes = await extractor.extract_batch(pairs, concurrency=2)
 
     assert len(recipes) == 4
-    assert recipes[0].title == "Grandma's Cinnamon Rolls"
-    assert recipes[1].title == "Luscious Lemon Glaze Bars"
-    assert recipes[2].title == "10-Minute Quick Chocolate Fudge"
-    assert recipes[3].title == "Southern Pecan Pie"
+    for r in recipes:
+        assert isinstance(r, RecipeSchema)
 
 
-def test_extractor_sync_helper(synthetic_card_deck):
-    """Tests extract_sync helper."""
-    extractor = GeminiRecipeExtractor(api_key=None)
-    s1 = synthetic_card_deck.directory / "05_chocolate_fudge_standalone.jpg"
+def test_extractor_sync_helper(tmp_path):
+    """Tests extract_sync helper with injected client."""
+    mock_recipe = RecipeSchema(
+        title="10-Minute Quick Chocolate Fudge",
+        ingredients=["3 cups chocolate chips", "1 can milk"],
+        directions=["1. Melt and chill."],
+    )
+    client = MagicMock()
+    client.extract_recipe = MagicMock(return_value=mock_recipe)
+    extractor = GeminiRecipeExtractor(client=client)
+    s1 = tmp_path / "card_sync.jpg"
+    s1.write_bytes(b"dummy")
 
     recipe = extractor.extract_sync(s1)
     assert isinstance(recipe, RecipeSchema)
     assert recipe.title == "10-Minute Quick Chocolate Fudge"
+
 
 
 def test_extractor_unsupported_type_raises():
@@ -428,34 +529,51 @@ async def test_extractor_injected_sync_callable():
 
 @pytest.mark.asyncio
 async def test_extractor_alias_method():
-    """Tests extract_recipe alias method on GeminiRecipeExtractor."""
-    extractor = GeminiRecipeExtractor(api_key=None)
+    """Tests extract_recipe alias method on GeminiRecipeExtractor with injected client."""
+    mock_recipe = RecipeSchema(
+        title="Alias Test Recipe",
+        ingredients=["1 cup sugar"],
+        directions=["1. Mix."],
+    )
+    client = AsyncMock()
+    client.extract_recipe = AsyncMock(return_value=mock_recipe)
+    extractor = GeminiRecipeExtractor(client=client)
     recipe = await extractor.extract_recipe(b"mock_bytes")
     assert isinstance(recipe, RecipeSchema)
+    assert recipe.title == "Alias Test Recipe"
 
 
 @pytest.mark.asyncio
 async def test_extract_cards_multi_card_sequence_offline():
-    """Tests extract_cards with 3+ cards offline, ensuring sequential directions and card_ids preservation."""
-    extractor = GeminiRecipeExtractor(api_key=None)
+    """Tests extract_cards with 3+ cards, ensuring sequential directions and card_ids preservation."""
+    multi_recipe = RecipeSchema(
+        title="Grandma's 3-Card Cake",
+        ingredients=["3 cups flour", "1 cup butter"],
+        directions=["1. Step 1", "2. Step 2", "3. Step 3"],
+    )
+    class MultiCardClient:
+        async def extract_cards(self, cards):
+            return multi_recipe
+
+    extractor = GeminiRecipeExtractor(client=MultiCardClient())
 
     fp1 = VisualFingerprint(
         card_id="grandma_cake_page1.jpg",
         image_path="/scans/grandma_cake_page1.jpg",
         sha256_hash="hash1",
-        role=CardRole.FRONT_ONLY,
+        role=CardRole.SEQUENCE_START,
     )
     fp2 = VisualFingerprint(
         card_id="grandma_cake_page2.jpg",
         image_path="/scans/grandma_cake_page2.jpg",
         sha256_hash="hash2",
-        role=CardRole.BACK_ONLY,
+        role=CardRole.SEQUENCE_CONTINUATION,
     )
     fp3 = VisualFingerprint(
         card_id="grandma_cake_page3.jpg",
         image_path="/scans/grandma_cake_page3.jpg",
         sha256_hash="hash3",
-        role=CardRole.BACK_ONLY,
+        role=CardRole.SEQUENCE_CONTINUATION,
     )
 
     recipe = await extractor.extract_cards([fp1, fp2, fp3])
@@ -467,6 +585,7 @@ async def test_extract_cards_multi_card_sequence_offline():
     assert recipe.directions[0].startswith("1. ")
     assert recipe.directions[1].startswith("2. ")
     assert recipe.directions[2].startswith("3. ")
+
 
 
 @pytest.mark.asyncio
@@ -561,7 +680,7 @@ async def test_extraction_prompts_contain_guess_and_anecdote_rules():
 
 @pytest.mark.asyncio
 async def test_offline_extraction_inferred_untitled_card_appends_guess():
-    """Validates that offline extraction appends [GUESS] to inferred/untitled cards."""
+    """Validates unmocked extractor raises ExtractionUnavailable and client [GUESS] passes through."""
     extractor = GeminiRecipeExtractor(api_key=None)
 
     fp = VisualFingerprint(
@@ -575,7 +694,18 @@ async def test_offline_extraction_inferred_untitled_card_appends_guess():
         ),
     )
 
-    recipe = await extractor.extract(fp)
+    with pytest.raises(ExtractionUnavailable):
+        await extractor.extract(fp)
+
+    # Injected client returning [GUESS] preserves it
+    client = AsyncMock()
+    client.extract_recipe = AsyncMock(return_value=RecipeSchema(
+        title="Apple Brown Betty [GUESS]",
+        ingredients=["4 apples", "1 cup brown sugar"],
+        directions=["1. Bake at 350F."],
+    ))
+    extractor_mock = GeminiRecipeExtractor(client=client)
+    recipe = await extractor_mock.extract(fp)
     assert isinstance(recipe, RecipeSchema)
     assert recipe.title.endswith(" [GUESS]")
     assert "Apple Brown Betty" in recipe.title
@@ -600,133 +730,6 @@ async def test_recipe_schema_preserves_guess_and_anecdote_isolation():
     assert all("1938" not in ing for ing in recipe.ingredients)
     assert all("suppers" not in d for d in recipe.directions)
 
-
-@pytest.mark.asyncio
-async def test_offline_extraction_ground_truth_all_12_corpus_recipes():
-    """Validates that all 12 ground-truth corpus recipes extract with 100% fidelity offline."""
-    from tests.fixtures.loader import load_sample_corpus
-
-    corpus = load_sample_corpus()
-    extractor = GeminiRecipeExtractor(api_key=None)
-
-    assert len(corpus._cards_by_recipe) >= 12
-
-    for rec_id, cards in corpus._cards_by_recipe.items():
-        sorted_cards = sorted(cards, key=lambda c: c.recipe_cluster.get("sequence_position", 0))
-        paths = [c.file_path for c in sorted_cards]
-        recipe = await extractor.extract_cards(paths)
-        gt = sorted_cards[0].ground_truth_recipe
-
-        assert isinstance(recipe, RecipeSchema)
-        assert recipe.title == gt.title, f"Mismatch for {rec_id}: {recipe.title} != {gt.title}"
-        assert len(recipe.ingredients) == len(gt.ingredients)
-        assert recipe.ingredients == gt.ingredients
-        assert len(recipe.directions) == len(gt.directions)
-        assert recipe.card_ids == [c.filename for c in sorted_cards]
-        assert len(recipe.image_urls) == len(sorted_cards)
-        for cid in recipe.card_ids:
-            assert f"/api/cards/{cid}/image" in recipe.image_urls
-
-
-@pytest.mark.asyncio
-async def test_offline_extraction_dual_index_manifest_resolution():
-    """Validates resolution by SHA256 bytes, card_id string, and normalized stem variants."""
-    from tests.fixtures.loader import load_sample_corpus
-
-    corpus = load_sample_corpus()
-    extractor = GeminiRecipeExtractor(api_key=None)
-
-    # 1. By raw bytes matching SHA256
-    card = corpus.get_by_id("rec_typ_beef_stroganoff_1956_front.jpg")
-    assert card is not None
-    img_bytes = card.file_path.read_bytes()
-    recipe_bytes = await extractor.extract(img_bytes)
-    assert recipe_bytes.title == "1956 Classic Beef Stroganoff"
-
-    # 2. By normalized card ID stem / hyphen variant
-    recipe_stem = await extractor.extract("rec-typ-beef-stroganoff-1956-front")
-    assert recipe_stem.title == "1956 Classic Beef Stroganoff"
-
-    # 3. By VisualFingerprint with SHA256
-    fp = VisualFingerprint(
-        card_id="custom_scanned_stroganoff.jpg",
-        image_path="/tmp/nonexistent.jpg",
-        sha256_hash=card.sha256_hash,
-        role=CardRole.FRONT_ONLY,
-    )
-    recipe_fp = await extractor.extract(fp)
-    assert recipe_fp.title == "1956 Classic Beef Stroganoff"
-
-
-@pytest.mark.asyncio
-async def test_offline_extraction_eliminates_cross_contamination():
-    """Validates that greedy 'pie' and 'chocolate' keyword matches do not cross-contaminate recipes."""
-    from tests.fixtures.loader import load_sample_corpus
-
-    corpus = load_sample_corpus()
-    extractor = GeminiRecipeExtractor(api_key=None)
-
-    # 1. Rhubarb Pie must NOT return Pecan Pie
-    rhubarb_card = corpus.get_by_id("rec_vhc_rhubarb_pie_1965_front.jpg")
-    assert rhubarb_card is not None
-    rec_rhubarb = await extractor.extract(rhubarb_card.file_path)
-    assert rec_rhubarb.title == "Aunt Clara's 1965 Rhubarb Custard Pie"
-    assert any("rhubarb" in i.lower() for i in rec_rhubarb.ingredients)
-    assert not any("pecan" in i.lower() for i in rec_rhubarb.ingredients)
-
-    # 2. Borden's Chocolate Pie must NOT return Pecan Pie or 10-Minute Fudge
-    borden_card = corpus.get_by_id("rec_clp_condensed_milk_pie_1962_standalone.jpg")
-    assert borden_card is not None
-    rec_borden = await extractor.extract(borden_card.file_path)
-    assert rec_borden.title == "1962 Borden's Eagle Brand Magic Chocolate Pie"
-
-    # 3. Generic unseen pie card should fall through to generic card fallback, NOT Pecan Pie
-    fp_cherry = VisualFingerprint(
-        card_id="cherry_pie_scan_001.jpg",
-        image_path="/tmp/cherry_pie_scan_001.jpg",
-        sha256_hash="deadbeef99998888",
-        role=CardRole.STANDALONE,
-        boundary_text=BoundaryText(
-            first_line="Fresh Tart Cherry Pie",
-            last_line="Bake 45 minutes until bubbly.",
-        ),
-    )
-    rec_cherry = await extractor.extract(fp_cherry)
-    assert "Cherry Pie" in rec_cherry.title
-    assert rec_cherry.title != "Southern Pecan Pie"
-
-
-@pytest.mark.asyncio
-async def test_offline_extraction_multi_part_sequence_persistence():
-    """Validates multi-part sequences (N >= 3) assemble and persist card_ids and image_urls."""
-    from tests.fixtures.loader import load_sample_corpus
-
-    corpus = load_sample_corpus()
-    extractor = GeminiRecipeExtractor(api_key=None)
-
-    # 4-card Wedding Fruitcake
-    fruitcake_cards = corpus.get_recipe_cluster("rec_mcs_wedding_fruitcake_1942")
-    assert len(fruitcake_cards) == 4
-    sorted_fc = sorted(fruitcake_cards, key=lambda c: c.recipe_cluster.get("sequence_position", 0))
-    recipe_fc = await extractor.extract_cards([c.file_path for c in sorted_fc])
-
-    assert recipe_fc.title == "1942 Heirloom Dark Holiday Wedding Fruitcake"
-    assert recipe_fc.card_ids == [c.filename for c in sorted_fc]
-    assert len(recipe_fc.image_urls) == 4
-    for cid in recipe_fc.card_ids:
-        assert f"/api/cards/{cid}/image" in recipe_fc.image_urls
-
-    # 3-card Turkey Feast
-    turkey_cards = corpus.get_recipe_cluster("rec_mcs_turkey_stuffing_feast")
-    assert len(turkey_cards) == 3
-    sorted_tk = sorted(turkey_cards, key=lambda c: c.recipe_cluster.get("sequence_position", 0))
-    recipe_tk = await extractor.extract_cards([c.file_path for c in sorted_tk])
-
-    assert recipe_tk.title == "Grandma's Thanksgiving Roast Turkey & Sage Stuffing"
-    assert recipe_tk.card_ids == [c.filename for c in sorted_tk]
-    assert len(recipe_tk.image_urls) == 3
-    for cid in recipe_tk.card_ids:
-        assert f"/api/cards/{cid}/image" in recipe_tk.image_urls
 
 
 

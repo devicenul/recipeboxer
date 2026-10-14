@@ -21,3 +21,6 @@ packages = ["cardforge"]
 
 [tool.setuptools.package-dir]
 cardforge = "."
+
+[tool.setuptools.package-data]
+cardforge = ["fonts/*.ttf", "fonts/*.txt", "fonts/*.md"]

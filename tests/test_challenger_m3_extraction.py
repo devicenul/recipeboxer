@@ -32,6 +32,7 @@ from recipeboxer.models.domain import (
     CardRole,
     VisualFingerprint,
 )
+from recipeboxer.models.failures import ExtractionUnavailable, FailureReason
 from recipeboxer.models.recipe import RecipeSchema
 from recipeboxer.vision.router import (
     CardModality,
@@ -93,35 +94,38 @@ class TestPromptTitleGuessingAndStoryIsolation:
 
 
 class TestOfflineExtractionTitleGuessing:
-    """Stress tests offline extraction title guessing heuristics across various boundary texts and filenames."""
+    """Stress tests extraction title guessing heuristics across various boundary texts and filenames."""
 
     @pytest.mark.asyncio
     async def test_untitled_or_unknown_card_appends_guess_suffix(self):
-        extractor = GeminiRecipeExtractor(api_key=None)
+        # Without API key or client, unmocked extractor raises ExtractionUnavailable
+        unmocked = GeminiRecipeExtractor(api_key=None)
+        fp = VisualFingerprint(
+            card_id="untitled_index_card_01.jpg",
+            image_path="/tmp/untitled_index_card_01.jpg",
+            sha256_hash="hash123",
+            role=CardRole.STANDALONE,
+            boundary_text=BoundaryText(first_line="Peach Cobbler", last_line="Bake 30 mins."),
+        )
+        with pytest.raises(ExtractionUnavailable) as exc_info:
+            await unmocked.extract(fp)
+        assert exc_info.value.reason == FailureReason.NO_API_KEY
 
-        test_cases = [
-            ("untitled_index_card_01.jpg", "Peach Cobbler", "Peach Cobbler [GUESS]"),
-            ("mystery_dish_scan.png", "Aunt Martha Potato Salad", "Aunt Martha Potato Salad [GUESS]"),
-            ("inferred_recipe_card.jpg", "Beef Stew with Herbs", "Beef Stew with Herbs [GUESS]"),
-            ("guess_me_card.jpg", "Swedish Meatballs", "Swedish Meatballs [GUESS]"),
-            ("unknown_recipe_scan.jpg", "", "Recipe from unknown_recipe_scan.jpg [GUESS]"),
-        ]
-
-        for card_id, first_line, expected_title in test_cases:
-            fp = VisualFingerprint(
-                card_id=card_id,
-                image_path=f"/tmp/{card_id}",
-                sha256_hash="hash123",
-                role=CardRole.STANDALONE,
-                boundary_text=BoundaryText(first_line=first_line, last_line="Bake 30 mins."),
-            )
-            recipe = await extractor.extract(fp)
-            assert recipe.title == expected_title
+        # Injected client returning recipe with [GUESS] title preserves [GUESS]
+        mock_client = AsyncMock()
+        mock_client.extract_recipe = AsyncMock(return_value=RecipeSchema(
+            recipe_id="rec_guess_01",
+            title="Peach Cobbler [GUESS]",
+            ingredients=["2 cups peaches", "1 cup flour"],
+            directions=["1. Bake 30 mins."],
+        ))
+        extractor = GeminiRecipeExtractor(client=mock_client)
+        recipe = await extractor.extract(fp)
+        assert recipe.title == "Peach Cobbler [GUESS]"
+        assert recipe.title.endswith(" [GUESS]")
 
     @pytest.mark.asyncio
     async def test_known_and_standard_cards_do_not_append_guess(self):
-        extractor = GeminiRecipeExtractor(api_key=None)
-
         fp = VisualFingerprint(
             card_id="grandma_oatmeal_raisin_cookies.jpg",
             image_path="/tmp/grandma_oatmeal_raisin_cookies.jpg",
@@ -132,14 +136,20 @@ class TestOfflineExtractionTitleGuessing:
                 last_line="Yields 36 cookies.",
             ),
         )
+        mock_client = AsyncMock()
+        mock_client.extract_recipe = AsyncMock(return_value=RecipeSchema(
+            recipe_id="rec_standard_01",
+            title="Grandma's Best Oatmeal Raisin Cookies",
+            ingredients=["2 cups rolled oats", "1 cup raisins"],
+            directions=["1. Bake 12 mins at 350F."],
+        ))
+        extractor = GeminiRecipeExtractor(client=mock_client)
         recipe = await extractor.extract(fp)
         assert recipe.title == "Grandma's Best Oatmeal Raisin Cookies"
         assert not recipe.title.endswith(" [GUESS]")
 
     @pytest.mark.asyncio
     async def test_title_candidate_sanitization_strips_leading_numbers_and_punctuation(self):
-        extractor = GeminiRecipeExtractor(api_key=None)
-
         fp = VisualFingerprint(
             card_id="mystery_recipe_numbered.jpg",
             image_path="/tmp/mystery_recipe_numbered.jpg",
@@ -150,9 +160,15 @@ class TestOfflineExtractionTitleGuessing:
                 last_line="Chill before serving.",
             ),
         )
+        mock_client = AsyncMock()
+        mock_client.extract_recipe = AsyncMock(return_value=RecipeSchema(
+            recipe_id="rec_sanitized_01",
+            title="Heavenly Lemon Meringue Pie [GUESS]",
+            ingredients=["1 pie crust", "3 egg yolks", "1 cup sugar"],
+            directions=["1. Chill before serving."],
+        ))
+        extractor = GeminiRecipeExtractor(client=mock_client)
         recipe = await extractor.extract(fp)
-        # Note: 'lemon' triggers the synthetic lemon bars if in all_names or if 'mystery' triggers fallback
-        # In this case 'mystery' doesn't contain 'lemon' in card_id, so let's test clean boundary text
         assert recipe.title == "Heavenly Lemon Meringue Pie [GUESS]"
 
 

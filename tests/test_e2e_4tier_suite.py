@@ -517,12 +517,12 @@ class TestTier1FeatureCoverage:
     ):
         """F6.1: GET /api/cards/{id}/image returns image/jpeg and 200 OK."""
         session = isolated_session_manager.create_session()
-        cinnamon_card = synthetic_card_deck.directory / "01_cinnamon_rolls_front.jpg"
-        session.scanned_paths.append(cinnamon_card)
-        session.cards.append(validate_and_load_card(cinnamon_card))
+        test_card = synthetic_card_deck.all_files[0]
+        session.scanned_paths.append(test_card)
+        session.cards.append(validate_and_load_card(test_card))
 
         res = await full_api_client.get(
-            f"/api/cards/01_cinnamon_rolls_front.jpg/image?session_id={session.session_id}"
+            f"/api/cards/{test_card.name}/image?session_id={session.session_id}"
         )
         assert res.status_code == 200
         assert res.headers["content-type"] in ("image/jpeg", "image/jpg")
@@ -537,11 +537,11 @@ class TestTier1FeatureCoverage:
     ):
         """F6.2: GET /api/cards/{id}/image includes public Cache-Control header."""
         session = isolated_session_manager.create_session()
-        cinnamon_card = synthetic_card_deck.directory / "01_cinnamon_rolls_front.jpg"
-        session.scanned_paths.append(cinnamon_card)
+        test_card = synthetic_card_deck.all_files[0]
+        session.scanned_paths.append(test_card)
 
         res = await full_api_client.get(
-            f"/api/cards/01_cinnamon_rolls_front.jpg/image?session_id={session.session_id}"
+            f"/api/cards/{test_card.name}/image?session_id={session.session_id}"
         )
         assert res.status_code == 200
         assert "public" in res.headers.get("cache-control", "")
@@ -572,7 +572,7 @@ class TestTier1FeatureCoverage:
         synthetic_card_deck: SyntheticDeckInfo,
     ):
         """F6.5: Image streaming resolves card registered in SQLite session store."""
-        card_p = synthetic_card_deck.directory / "05_chocolate_fudge_standalone.jpg"
+        card_p = synthetic_card_deck.all_files[0]
         card = validate_and_load_card(card_p)
         isolated_session_store.save_cards("sess_f06_05", [card])
 
@@ -2323,10 +2323,17 @@ class TestTier2BoundaryAndCornerCases:
     async def test_t2_f15_03_pipeline_unmatched_odd_card_in_unassigned(
         self, tmp_path: Path, mock_gemini_client: MockGeminiClient, test_cache: SQLiteFingerprintCache
     ):
-        """T2.15.3: Odd unmatched front card is surfaced in unassigned_cards without halting pipeline."""
         odd_dir = tmp_path / "odd_deck"
         odd_dir.mkdir(parents=True, exist_ok=True)
-        create_synthetic_card_image(odd_dir / "front_only.jpg", title="Front Only", continuation_cue="(over ->)")
+        odd_card = odd_dir / "front_only.jpg"
+        create_synthetic_card_image(odd_card, title="Front Only", continuation_cue="(over ->)")
+        mock_gemini_client.fingerprint_map["front_only.jpg"] = VisualFingerprint(
+            card_id="front_only.jpg",
+            image_path=str(odd_card),
+            sha256_hash="sha-front-only",
+            role=CardRole.SEQUENCE_START,
+            boundary_text=BoundaryText(has_continuation_symbol=True),
+        )
 
         session = PipelineSession(
             session_id="sess_t2_odd",

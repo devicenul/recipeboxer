@@ -110,6 +110,23 @@ class InkType(str, Enum):
         return str(self.value)
 
 
+class RulingStyle(str, Enum):
+    """Ruling line patterns and grids."""
+    STANDARD_RULED = "STANDARD_RULED"
+    WIDE_RULED = "WIDE_RULED"
+    NARROW_RULED = "NARROW_RULED"
+    BLUE_NO_HEADER = "BLUE_NO_HEADER"
+    GRID_GRAPH = "GRID_GRAPH"
+    DOT_GRID = "DOT_GRID"
+    DOUBLE_HEADER = "DOUBLE_HEADER"
+    FAINT_RULED = "FAINT_RULED"
+    GREEN_LEDGER = "GREEN_LEDGER"
+    UNRULED = "UNRULED"
+
+    def __str__(self) -> str:
+        return str(self.value)
+
+
 class DegradationLevel(str, Enum):
     """Physical damage and age degradation intensity."""
     NONE = "NONE"
@@ -119,6 +136,42 @@ class DegradationLevel(str, Enum):
 
     def __str__(self) -> str:
         return str(self.value)
+
+
+@dataclass
+class CardStock:
+    """Defines a physical card stationery stock.
+
+    A stock encompasses paper color tone, ruling variant, card dimensions,
+    and base paper aging profile. In a homogeneous collection, the majority
+    of cards share the same stock_id.
+    """
+    stock_id: str = "stock_default"
+    name: str = "Standard Ruled Index Card"
+    substrate: PaperSubstrate = PaperSubstrate.RULED_INDEX
+    ruling: Union[RulingStyle, str] = RulingStyle.STANDARD_RULED
+    base_color: Optional[Tuple[int, int, int]] = None
+    width: int = 680
+    height: int = 440
+    aging_level: DegradationLevel = DegradationLevel.MILD
+
+
+@dataclass
+class CardWriter:
+    """Defines an author, hand, or typewriter.
+
+    Encapsulates font / handwriting style, ink type and color,
+    stroke characteristics, and continuation cue habits.
+    """
+    writer_id: str = "writer_default"
+    name: str = "Primary Cook"
+    modality: CardModality = CardModality.HANDWRITTEN_CURSIVE
+    font_style: str = "cursive"
+    ink_color: Tuple[int, int, int] = (25, 35, 110)
+    ink_type: InkType = InkType.FOUNTAIN_PEN
+    continuation_cue_style: Optional[str] = "over"  # "over", "pto", "card_num", "none"
+    line_wobble: int = 1
+    font_size_scale: float = 1.0
 
 
 @dataclass
@@ -134,19 +187,24 @@ class DegradationConfig:
     stamps: bool = False
     tape_residue: bool = False
     bleed_through: bool = False
+    creases: int = 0
+    perspective_warp: float = 0.0
+    glare: bool = False
+    jpeg_noise: float = 0.0
 
     @classmethod
     def from_level(
         cls,
         level: DegradationLevel,
         rng: Optional[random.Random] = None,
+        include_advanced: bool = False,
     ) -> DegradationConfig:
         """Constructs a realistic DegradationConfig corresponding to an intensity level."""
         r = rng or random.Random()
         if level == DegradationLevel.NONE:
             return cls(level=DegradationLevel.NONE)
         elif level == DegradationLevel.MILD:
-            return cls(
+            cfg = cls(
                 level=DegradationLevel.MILD,
                 oil_smudges=1 if r.random() < 0.5 else 0,
                 coffee_rings=1 if r.random() < 0.3 else 0,
@@ -159,7 +217,7 @@ class DegradationConfig:
                 bleed_through=r.random() < 0.4,
             )
         elif level == DegradationLevel.MODERATE:
-            return cls(
+            cfg = cls(
                 level=DegradationLevel.MODERATE,
                 oil_smudges=r.randint(1, 2),
                 coffee_rings=1 if r.random() < 0.6 else 0,
@@ -172,7 +230,7 @@ class DegradationConfig:
                 bleed_through=True,
             )
         else:  # SEVERE
-            return cls(
+            cfg = cls(
                 level=DegradationLevel.SEVERE,
                 oil_smudges=r.randint(2, 3),
                 coffee_rings=r.randint(1, 2),
@@ -184,6 +242,25 @@ class DegradationConfig:
                 tape_residue=True,
                 bleed_through=True,
             )
+
+        if include_advanced:
+            if level == DegradationLevel.MILD:
+                cfg.creases = 1 if r.random() < 0.25 else 0
+                cfg.perspective_warp = round(r.uniform(0.01, 0.02), 3) if r.random() < 0.25 else 0.0
+                cfg.glare = r.random() < 0.15
+                cfg.jpeg_noise = round(r.uniform(0.05, 0.12), 2) if r.random() < 0.2 else 0.0
+            elif level == DegradationLevel.MODERATE:
+                cfg.creases = r.randint(1, 2) if r.random() < 0.5 else 0
+                cfg.perspective_warp = round(r.uniform(0.02, 0.04), 3) if r.random() < 0.4 else 0.0
+                cfg.glare = r.random() < 0.3
+                cfg.jpeg_noise = round(r.uniform(0.10, 0.25), 2) if r.random() < 0.4 else 0.0
+            else:
+                cfg.creases = r.randint(1, 3)
+                cfg.perspective_warp = round(r.uniform(0.03, 0.06), 3) if r.random() < 0.6 else 0.0
+                cfg.glare = r.random() < 0.4
+                cfg.jpeg_noise = round(r.uniform(0.20, 0.45), 2)
+
+        return cfg
 
     for_level = from_level
 
@@ -221,3 +298,8 @@ class GeneratedCard:
     recipe_cluster: Dict[str, Any]
     physical_characteristics: Dict[str, Any]
     recipe: RecipeSchema
+    stock_id: Optional[str] = None
+    writer_id: Optional[str] = None
+    verbatim_text: Optional[str] = None
+    face_index: int = 0
+    total_faces: int = 1

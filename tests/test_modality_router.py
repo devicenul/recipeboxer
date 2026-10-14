@@ -30,40 +30,10 @@ MANIFEST_PATH = Path("tests/fixtures/sample_cards/manifest.json")
 SAMPLE_CARDS_DIR = Path("tests/fixtures/sample_cards")
 
 
-class TestCardModalityEnum:
-    """Tests for CardModality enum definitions, aliases, and normalization."""
-
-    def test_normalize_modalities(self):
-        assert CardModality.normalize("HANDWRITTEN_CURSIVE") == CardModality.HANDWRITTEN_CURSIVE
-        assert CardModality.normalize("cursive") == CardModality.HANDWRITTEN_CURSIVE
-        assert CardModality.normalize("VHC") == CardModality.HANDWRITTEN_CURSIVE
-
-        assert CardModality.normalize("TYPEWRITTEN") == CardModality.TYPEWRITTEN
-        assert CardModality.normalize("typewriter") == CardModality.TYPEWRITTEN
-        assert CardModality.normalize("TYP") == CardModality.TYPEWRITTEN
-
-        assert CardModality.normalize("PRINTED_CLIPPING") == CardModality.PRINTED_CLIPPING_OR_LABEL
-        assert CardModality.normalize("PRINT_CLIPPING") == CardModality.PRINTED_CLIPPING_OR_LABEL
-        assert CardModality.normalize("newspaper_clipping") == CardModality.PRINTED_CLIPPING_OR_LABEL
-        assert CardModality.normalize("recipe_clipping") == CardModality.PRINTED_CLIPPING_OR_LABEL
-        assert CardModality.normalize("magazine_cutout") == CardModality.PRINTED_CLIPPING_OR_LABEL
-        assert CardModality.normalize("clipping") == CardModality.PRINTED_CLIPPING_OR_LABEL
-        assert CardModality.normalize("CLP") == CardModality.PRINTED_CLIPPING_OR_LABEL
-
-        assert CardModality.normalize("HANDWRITTEN_PRINT") == CardModality.HANDWRITTEN_PRINT
-        assert CardModality.normalize("hand_print") == CardModality.HANDWRITTEN_PRINT
-        assert CardModality.normalize("handprint") == CardModality.HANDWRITTEN_PRINT
-        assert CardModality.normalize("manuscript_print") == CardModality.HANDWRITTEN_PRINT
-
-        assert CardModality.normalize("MIXED_MEDIA") == CardModality.MIXED_MEDIA
-        assert CardModality.normalize("damaged") == CardModality.MIXED_MEDIA
-        assert CardModality.normalize("stained_card") == CardModality.MIXED_MEDIA
-        assert CardModality.normalize("DMG") == CardModality.MIXED_MEDIA
-
-
 class TestModalityClassifierBenchmark:
     """Evaluates ModalityClassifier accuracy on the 23 curated historical sample cards."""
 
+    @pytest.mark.live
     def test_classification_accuracy_on_benchmark_corpus(self):
         if not MANIFEST_PATH.exists():
             pytest.skip("Sample cards manifest not available.")
@@ -96,38 +66,54 @@ class TestModalityClassifierBenchmark:
         assert accuracy >= 0.90, f"Modality accuracy was {accuracy*100:.1f}%, expected >= 90%"
 
     def test_classify_from_various_input_types(self):
-        sample_path = SAMPLE_CARDS_DIR / "rec_typ_beef_stroganoff_1956_front.jpg"
-        if not sample_path.exists():
-            pytest.skip("Sample card not found.")
+        """Verify ModalityClassifier accepts Path, ScannedCard, VisualFingerprint, bytes, and Image."""
+        class MockModalityClient:
+            def classify_modality(self, card_input):
+                return ModalityClassificationResult(
+                    modality=CardModality.TYPEWRITTEN,
+                    confidence=0.96,
+                    reasoning="Mocked typewriter classification for polymorphism test.",
+                )
+
+        classifier = ModalityClassifier(client=MockModalityClient())
+
+        # From PIL Image
+        img = Image.new("RGB", (600, 400), color=(255, 255, 255))
+        r_img = classifier.classify(img)
+        assert r_img.modality == CardModality.TYPEWRITTEN
 
         # From Path
-        r1 = classify_card_modality(sample_path)
+        r1 = classifier.classify(Path("/dummy/card.jpg"))
         assert r1.modality == CardModality.TYPEWRITTEN
 
         # From ScannedCard
         sc = ScannedCard(
-            card_id=sample_path.name,
-            file_path=sample_path,
-            filename=sample_path.name,
+            card_id="test.jpg",
+            file_path=Path("/dummy/test.jpg"),
+            filename="test.jpg",
             sha256_hash="dummyhash",
-            file_size_bytes=sample_path.stat().st_size,
+            file_size_bytes=100,
             width=600,
             height=400,
             format="JPEG",
             mode="RGB",
         )
-        r2 = classify_card_modality(sc)
+        r2 = classifier.classify(sc)
         assert r2.modality == CardModality.TYPEWRITTEN
 
         # From VisualFingerprint
         fp = VisualFingerprint(
-            card_id=sample_path.name,
-            image_path=str(sample_path),
+            card_id="test.jpg",
+            image_path="/dummy/test.jpg",
             sha256_hash="dummyhash",
-            role=CardRole.FRONT_ONLY,
+            role=CardRole.SEQUENCE_START,
         )
-        r3 = classify_card_modality(fp)
+        r3 = classifier.classify(fp)
         assert r3.modality == CardModality.TYPEWRITTEN
+
+        # From raw bytes
+        r4 = classifier.classify(b"dummy_raw_bytes")
+        assert r4.modality == CardModality.TYPEWRITTEN
 
 
 class TestPromptRouter:

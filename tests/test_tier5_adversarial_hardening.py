@@ -87,10 +87,12 @@ from recipeboxer.models.recipe import RecipeSchema
 from recipeboxer.storage.session_store import SessionStore
 from recipeboxer.vision.router import (
     CardModality,
+    ModalityClassificationResult,
     PromptRouter,
     classify_card_modality,
     route_prompt_for_modality,
 )
+from tests.conftest import MockGeminiClient
 
 
 # ============================================================================
@@ -215,6 +217,7 @@ class TestMultiCardSequenceOrderingAdversarial:
         """Verifies that orchestrator accurately passes ordered card fingerprints and updates recipe."""
         orchestrator = RecipeBoxerAgent()
         session = PipelineSession(session_id="test_multicard_sess")
+        session.mock_client = MockGeminiClient()
         session.state = PipelineState.HITL_PENDING
 
         # Create 8 cards
@@ -351,16 +354,23 @@ class TestRecipeEditorAndExtractionIntelligenceAdversarial:
 
     def test_prompt_router_modality_classification_and_routing(self):
         """Tests prompt router across diverse document modalities."""
+        mock_client = MagicMock()
+        mock_client.classify_modality.side_effect = lambda inp: {
+            "grandma_cursive_1942.jpg": ModalityClassificationResult(modality=CardModality.HANDWRITTEN_CURSIVE, confidence=0.95),
+            "newspaper_clipping_recipe.png": ModalityClassificationResult(modality=CardModality.PRINTED_CLIPPING_OR_LABEL, confidence=0.95),
+            "typewritten_card_apple_pie.jpg": ModalityClassificationResult(modality=CardModality.TYPEWRITTEN, confidence=0.95),
+        }.get(str(inp), ModalityClassificationResult(modality=CardModality.HANDWRITTEN_CURSIVE, confidence=0.0))
+
         # 1. Vintage handwriting
-        mod1 = classify_card_modality("grandma_cursive_1942.jpg")
+        mod1 = classify_card_modality("grandma_cursive_1942.jpg", client=mock_client)
         assert mod1.modality == CardModality.HANDWRITTEN_CURSIVE
 
         # 2. Newsprint clipping
-        mod2 = classify_card_modality("newspaper_clipping_recipe.png")
+        mod2 = classify_card_modality("newspaper_clipping_recipe.png", client=mock_client)
         assert mod2.modality == CardModality.PRINTED_CLIPPING_OR_LABEL
 
         # 3. Typewritten card
-        mod3 = classify_card_modality("typewritten_card_apple_pie.jpg")
+        mod3 = classify_card_modality("typewritten_card_apple_pie.jpg", client=mock_client)
         assert mod3.modality == CardModality.TYPEWRITTEN
 
         # Test adaptive thinking budgets

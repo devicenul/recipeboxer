@@ -246,6 +246,17 @@ class TestTier1FeatureCoverage:
             stain_quadrant=CardQuadrant.TOP_RIGHT,
             stain_type=ArtifactType.OIL_GREASE_STAIN,
         )
+        mock_gemini_client.fingerprint_map[card_path.name] = VisualFingerprint(
+            card_id=card_path.name,
+            image_path=str(card_path),
+            sha256_hash="sha-cinnamon-front",
+            role=CardRole.FRONT_ONLY,
+            paper_color=PaperColorInfo(tone_enum=PaperColorTone.OFF_WHITE_CREAM),
+            ruling=PaperRulingInfo(has_ruling=True),
+            ink=InkInfo(ink_color=InkColor.BLUE),
+            artifacts=[PhysicalArtifact(artifact_type=ArtifactType.OIL_GREASE_STAIN, quadrant=CardQuadrant.TOP_RIGHT)],
+            boundary_text=BoundaryText(has_continuation_symbol=True),
+        )
         fp = await mock_gemini_client.analyze_fingerprint(card_path, "sha-cinnamon-front")
 
         assert fp.role == CardRole.FRONT_ONLY
@@ -311,6 +322,18 @@ class TestTier1FeatureCoverage:
             role=CardRole.BACK_ONLY,
         )
 
+        mock_gemini_client.correlation_map[(front_fp.card_id, back_fp.card_id)] = CorrelationProposal(
+            proposal_id="prop_cin_pair",
+            front_card_id=front_fp.card_id,
+            back_card_id=back_fp.card_id,
+            ordered_card_ids=[front_fp.card_id, back_fp.card_id],
+            heuristic_score=0.92,
+            semantic_score=0.95,
+            confidence=0.93,
+            is_standalone=False,
+            continuity_explanation="Syntactic continuity confirmed between front ingredients and back instructions.",
+            recommended_action="PAIR",
+        )
         proposal = await mock_gemini_client.verify_correlation(front_fp, back_fp, heuristic_score=0.92)
         assert proposal.semantic_score >= 0.90
         assert proposal.confidence >= 0.85
@@ -483,6 +506,13 @@ class TestTier1FeatureCoverage:
             role=CardRole.BACK_ONLY,
         )
 
+        mock_gemini_client.recipe_map[front_fp.card_id] = RecipeSchema(
+            recipe_id="rec_cin_rolls",
+            title="Grandma's Cinnamon Rolls",
+            ingredients=["2 cups flour", "1 cup sugar", "2 tsp cinnamon", "1 cup milk", "1/2 cup butter"],
+            directions=["1. Mix dry ingredients.", "2. Add wet ingredients.", "3. Bake at 350F for 25 minutes."],
+            tags=["Baking", "Breakfast"],
+        )
         recipe = await mock_gemini_client.extract_recipe(front_fp, back_fp)
         assert isinstance(recipe, RecipeSchema)
         assert recipe.title == "Grandma's Cinnamon Rolls"
@@ -616,13 +646,18 @@ class TestTier2BoundaryAndCornerCases:
 
     @pytest.mark.asyncio
     async def test_t2_single_card_standalone_batch(
-        self, async_client: httpx.AsyncClient, tmp_path: Path
+        self, async_client: httpx.AsyncClient, tmp_path: Path, mock_gemini_client: MockGeminiClient
     ):
         """T2.3: Single-card batch with 1 standalone recipe runs cleanly without pair requirements."""
         single_dir = tmp_path / "single_scan"
         single_dir.mkdir()
         card_p = single_dir / "quick_fudge_standalone.jpg"
         create_synthetic_card_image(card_p, title="Quick Fudge", continuation_cue=None)
+        mock_gemini_client.recipe_map["quick_fudge_standalone.jpg"] = RecipeSchema(
+            title="Quick Chocolate Fudge",
+            ingredients=["3 cups chocolate chips", "1 can condensed milk"],
+            directions=["1. Melt chips.", "2. Chill until set."],
+        )
 
         start_res = await async_client.post("/api/pipeline/start", json={
             "scans_dir": str(single_dir),
@@ -714,6 +749,13 @@ class TestTier2BoundaryAndCornerCases:
         orphan_dir.mkdir()
         orphan_front = orphan_dir / "cinnamon_front.jpg"
         create_synthetic_card_image(orphan_front, title="Cinnamon Front", continuation_cue="(over)")
+        mock_gemini_client.fingerprint_map["cinnamon_front.jpg"] = VisualFingerprint(
+            card_id="cinnamon_front.jpg",
+            image_path=str(orphan_front),
+            sha256_hash="sha-orphan",
+            role=CardRole.SEQUENCE_START,
+            boundary_text=BoundaryText(has_continuation_symbol=True),
+        )
 
         session = PipelineSession(
             session_id="sess_orphan",
@@ -828,20 +870,27 @@ class TestTier3CrossFeatureInteractions:
         Pre-caches cards, runs slow-batch with instant cache lookup, and rejects unwanted cards in HITL.
         """
         # Pre-populate cache for all valid synthetic cards
+        pair_fronts = {p[0] for p in synthetic_card_deck.pairs}
+        pair_backs = {p[1] for p in synthetic_card_deck.pairs}
+        standalones = set(synthetic_card_deck.standalones)
         for f in synthetic_card_deck.all_files:
-            if "corrupt" in f.name:
+            if f.name in synthetic_card_deck.corrupted:
                 continue
             card_bytes = f.read_bytes()
             sha = hashlib.sha256(card_bytes).hexdigest()
+            role = (
+                CardRole.STANDALONE if f.name in standalones else (
+                    CardRole.FRONT_ONLY if f.name in pair_fronts else (
+                        CardRole.BACK_ONLY if f.name in pair_backs else CardRole.UNKNOWN
+                    )
+                )
+            )
             test_cache.put(VisualFingerprint(
                 card_id=f.name,
                 image_path=str(f),
                 sha256_hash=sha,
-                role=CardRole.STANDALONE if "standalone" in f.name else (
-                    CardRole.FRONT_ONLY if "front" in f.name else (
-                        CardRole.BACK_ONLY if "back" in f.name else CardRole.UNKNOWN
-                    )
-                ),
+                role=role,
+                boundary_text=BoundaryText(has_continuation_symbol=f.name in pair_fronts),
             ))
 
         assert test_cache.count() >= 6
@@ -905,7 +954,7 @@ class TestTier4RealWorldScenarios:
     # ------------------------------------------------------------------------
     @pytest.mark.asyncio
     async def test_t4_scenario1_vintage_handwritten_cards(
-        self, async_client: httpx.AsyncClient, tmp_path: Path
+        self, async_client: httpx.AsyncClient, tmp_path: Path, mock_gemini_client: MockGeminiClient
     ):
         """
         Scenario 1: Vintage Handwritten Index Cards.
@@ -936,6 +985,37 @@ class TestTier4RealWorldScenarios:
             bg_color=(244, 230, 195),
             stain_quadrant=CardQuadrant.TOP_LEFT,
             stain_type=ArtifactType.OIL_GREASE_STAIN,
+        )
+
+        mock_gemini_client.fingerprint_map["vintage_rolls_front.jpg"] = VisualFingerprint(
+            card_id="vintage_rolls_front.jpg",
+            image_path=str(f_path),
+            sha256_hash="sha-vf",
+            role=CardRole.SEQUENCE_START,
+            boundary_text=BoundaryText(has_continuation_symbol=True),
+        )
+        mock_gemini_client.fingerprint_map["vintage_rolls_back.jpg"] = VisualFingerprint(
+            card_id="vintage_rolls_back.jpg",
+            image_path=str(b_path),
+            sha256_hash="sha-vb",
+            role=CardRole.SEQUENCE_CONTINUATION,
+            boundary_text=BoundaryText(has_recipe_continuation=True),
+        )
+        mock_gemini_client.correlation_map[("vintage_rolls_front.jpg", "vintage_rolls_back.jpg")] = CorrelationProposal(
+            proposal_id="prop_v1",
+            front_card_id="vintage_rolls_front.jpg",
+            back_card_id="vintage_rolls_back.jpg",
+            ordered_card_ids=["vintage_rolls_front.jpg", "vintage_rolls_back.jpg"],
+            heuristic_score=0.92,
+            semantic_score=0.95,
+            confidence=0.93,
+            recommended_action="PAIR",
+            continuity_explanation="Syntactic continuity confirmed between front ingredients and back instructions.",
+        )
+        mock_gemini_client.recipe_map["vintage_rolls_front.jpg"] = RecipeSchema(
+            title="Grandma's Cinnamon Rolls",
+            ingredients=["1 pkg active dry yeast", "1/2 cup warm water", "3 cups flour"],
+            directions=["1. Dissolve yeast.", "2. Knead 5 mins.", "3. Bake at 375F."],
         )
 
         start_res = await async_client.post("/api/pipeline/start", json={
@@ -1100,7 +1180,7 @@ class TestTier4RealWorldScenarios:
     # ------------------------------------------------------------------------
     @pytest.mark.asyncio
     async def test_t4_scenario4_hitl_override_and_pairing_correction(
-        self, async_client: httpx.AsyncClient, tmp_path: Path
+        self, async_client: httpx.AsyncClient, tmp_path: Path, mock_gemini_client: MockGeminiClient
     ):
         """
         Scenario 4: HITL Override & Pairing Correction.
@@ -1115,6 +1195,33 @@ class TestTier4RealWorldScenarios:
         create_synthetic_card_image(b1, title=None, body_lines=["1. Bake lemon crust 20 mins."])
         b2 = scans_dir / "cinnamon_back.jpg"  # Actual matching back
         create_synthetic_card_image(b2, title=None, body_lines=["1. Knead dough, bake rolls."])
+
+        mock_gemini_client.fingerprint_map["cinnamon_front.jpg"] = VisualFingerprint(
+            card_id="cinnamon_front.jpg",
+            image_path=str(f1),
+            sha256_hash="sha-cf4",
+            role=CardRole.SEQUENCE_START,
+            boundary_text=BoundaryText(has_continuation_symbol=True),
+        )
+        mock_gemini_client.fingerprint_map["lemon_back.jpg"] = VisualFingerprint(
+            card_id="lemon_back.jpg",
+            image_path=str(b1),
+            sha256_hash="sha-lb4",
+            role=CardRole.SEQUENCE_CONTINUATION,
+            boundary_text=BoundaryText(has_recipe_continuation=True),
+        )
+        mock_gemini_client.fingerprint_map["cinnamon_back.jpg"] = VisualFingerprint(
+            card_id="cinnamon_back.jpg",
+            image_path=str(b2),
+            sha256_hash="sha-cb4",
+            role=CardRole.SEQUENCE_CONTINUATION,
+            boundary_text=BoundaryText(has_recipe_continuation=True),
+        )
+        mock_gemini_client.recipe_map["cinnamon_front.jpg"] = RecipeSchema(
+            title="Grandma's Cinnamon Rolls",
+            ingredients=["1 pkg yeast", "3 cups flour"],
+            directions=["1. Knead dough, bake rolls."],
+        )
 
         start_res = await async_client.post("/api/pipeline/start", json={
             "scans_dir": str(scans_dir),
@@ -1461,6 +1568,18 @@ class TestTier1And2DeepVerification:
             role=CardRole.BACK_ONLY,
         )
 
+        mock_gemini_client.correlation_map[(front_fp.card_id, back_fp.card_id)] = CorrelationProposal(
+            proposal_id="prop_unrelated",
+            front_card_id=front_fp.card_id,
+            back_card_id=back_fp.card_id,
+            ordered_card_ids=[front_fp.card_id, back_fp.card_id],
+            heuristic_score=0.50,
+            semantic_score=0.05,
+            confidence=0.10,
+            is_standalone=False,
+            continuity_explanation="No semantic continuity between dessert and meat dishes.",
+            recommended_action="REJECT",
+        )
         proposal = await mock_gemini_client.verify_correlation(front_fp, back_fp, heuristic_score=0.50)
         assert proposal.semantic_score <= 0.10
         assert proposal.confidence < 0.50

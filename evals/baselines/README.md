@@ -9,7 +9,7 @@ This directory stores historical and milestone benchmark baselines recorded acro
 | Baseline File | Date | Git Commit | Status / Integrity | Description |
 |:---|:---:|:---:|:---:|:---|
 | [`pre_remediation.json`](file:///storage/emulated/10/AntiGravity/Workspaces/recipeboxer/evals/baselines/pre_remediation.json) | 2026-10-14 | `1272a55f0be19a82c509ccfbbec9811fdd072f85` | **CONTAMINATED** | Pre-remediation baseline recorded under Phase 0 (WP-00b). Contains eval cheats and answer-key lookups. |
-| `honest_v0.json` *(upcoming)* | TBD | Gate A | **HONEST** | First certified honest baseline across T1 (dev-eval), T2 (held-out), and T3 (real-web) corpora without cheats. |
+| `honest_v0.json` *(upcoming)* | Gate A | Certified | **HONEST** | First certified honest baseline across T1 (dev-eval), T2 (held-out), and T3 (real-web) corpora without cheats. |
 
 ---
 
@@ -34,10 +34,48 @@ This directory stores historical and milestone benchmark baselines recorded acro
 
 ---
 
-## Upcoming Milestone: Gate A (`honest_v0.json`)
+## Certified Honest Baseline (`honest_v0.json`)
 
-At **Gate A** (following completion of Phase 1 and Phase 2):
-1. All answer-key lookups, filename heuristics, and canned recipe fallbacks in `recipeboxer/` will be eliminated.
-2. The black-box test harness (`evals/score.py` + vault tooling) will evaluate pixels strictly through live model APIs (`google-genai`).
-3. Ground-truth data will be stored in an encrypted vault accessible only to the scoring harness.
-4. The first certified honest baseline (`honest_v0.json`) will be recorded against T1 (dev-eval), T2 (held-out), and T3 (real-web) corpora.
+At **Gate A** (following completion of Phase 1 and Phase 2), the first certified honest baseline (`honest_v0.json`) is recorded:
+1. **Zero Cheats**: All answer-key lookups, filename heuristics, and canned recipe fallbacks in `recipeboxer/` are completely removed (verified by AST anti-cheat canaries in `tests/anticheat/`).
+2. **Black-Box Runner**: Images are copied into a temporary directory with randomized filenames and order. Execution runs in a scrubbed subprocess with a `sys.addaudithook` preventing access to ground-truth vaults, answer keys, or fixtures.
+3. **Encrypted Vault Ground Truth**: Ground-truth data is encrypted with `age` and decrypted strictly in memory by the trusted scorer (`evals/score.py`) after the SUT completes.
+4. **Live Independent LLM Judge**: Qualitative rubric scoring uses `LiveJudge` on an independent model tier from the extractor (e.g. Pro judge if extractor is Flash), blinded to system and model names. Judge scores are reported and never gate.
+5. **Multi-Corpus Scope**: Evaluated across T1 (dev-eval synthetic), T2 (held-out synthetic), and T3 (public-domain real-web archives with human transcriptions).
+
+---
+
+## Baseline Comparison & Regression Testing (`evals.report compare`)
+
+Evaluation reports are compared against stored baselines to detect performance and accuracy regressions during development and CI.
+
+### CLI Usage
+
+```bash
+# Compare a new evaluation report against the honest baseline
+python -m evals.report compare path/to/report.json evals/baselines/honest_v0.json
+
+# Compare with custom tolerances
+python -m evals.report compare report.json baseline.json --tolerances '{"bcubed_f1": 0.02, "title_cer": 0.03}'
+```
+
+### Exit Codes
+- `0`: All metrics are within allowable tolerances. Comparison **PASSED**.
+- `1`: One or more metrics regressed beyond the specified tolerance, or cheat detected / status regression.
+- `2`: File not found or argument error.
+
+### Directionality and Tolerances
+
+| Metric Category | Metrics | Direction | Default Tolerance |
+|:---|:---|:---:|:---:|
+| **Grouping** | `bcubed_f1`, `bcubed_p`, `bcubed_r`, `ari`, `exact_cluster_acc` | Higher is better | `0.01` |
+| **Grouping (Errors)** | `false_merge_rate`, `false_split_rate` | Lower is better | `0.01` |
+| **Extraction (Quality)** | `ingredient_f1`, `direction_f1`, `qty_unit_exact` | Higher is better | `0.01` |
+| **Extraction (Errors)** | `title_cer`, `overall_cer`, `hallucination_rate`, `omission_rate` | Lower is better | `0.02` |
+| **Calibration** | `ece` | Lower is better | `0.01` |
+| **LLM Judge** | `judge_score`, `aggregate_score` (informational) | Higher is better | `0.20` |
+
+### Feedback Policy Enforcement
+When rendering reports (`python -m evals.report render ...`):
+- **T0 (Train Tier)**: Allows both aggregate metrics and `--feedback per_item` for granular debugging and prompt development.
+- **T1–T4 (Eval & Test Tiers)**: **Aggregate only**. Any request for `--feedback per_item` raises `ValueError`, and all per-item / per-image fields are automatically stripped to safeguard benchmark integrity and prevent test-set memorization.

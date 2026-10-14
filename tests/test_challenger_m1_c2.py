@@ -736,29 +736,40 @@ class TestStaticAssetFallbackRouting:
         self, session_mgr: SessionManager, session_db: SessionStore, tmp_path: Path, monkeypatch
     ):
         """Verifies that when index.html exists in static dir, it is served instead of placeholder."""
-        static_dir = Path(__file__).parent.parent / "recipeboxer" / "api" / "static"
-        index_file = static_dir / "index.html"
+        fake_static = tmp_path / "static"
+        fake_static.mkdir(parents=True, exist_ok=True)
+        fake_assets = fake_static / "assets"
+        fake_assets.mkdir(parents=True, exist_ok=True)
+        index_file = fake_static / "index.html"
 
-        # Create temporary custom index.html
         custom_html = "<!DOCTYPE html><html><head><title>RecipeBoxer Production SPA</title></head><body><div id='root'>SPA Loaded</div></body></html>"
-        existed_before = index_file.exists()
-        original_content = index_file.read_text(encoding="utf-8") if existed_before else None
+        index_file.write_text(custom_html, encoding="utf-8")
 
-        try:
-            index_file.write_text(custom_html, encoding="utf-8")
+        import recipeboxer.api.app as app_mod
+        orig_path = app_mod.Path
 
-            app = create_app(session_manager=session_mgr, session_store=session_db)
-            transport = ASGITransport(app=app)
-            async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
-                res_root = await client.get("/")
-                assert res_root.status_code == 200
-                assert "RecipeBoxer Production SPA" in res_root.text
+        def fake_path(*args, **kwargs):
+            p = orig_path(*args, **kwargs)
+            if len(args) == 1 and str(args[0]) == str(app_mod.__file__):
+                class _FakeDir:
+                    def __truediv__(self, other):
+                        if other == "static":
+                            return fake_static
+                        return p.parent / other
+                class _FakeFile:
+                    parent = _FakeDir()
+                return _FakeFile()
+            return p
 
-                res_subroute = await client.get("/correlate/session_99")
-                assert res_subroute.status_code == 200
-                assert "RecipeBoxer Production SPA" in res_subroute.text
-        finally:
-            if existed_before and original_content is not None:
-                index_file.write_text(original_content, encoding="utf-8")
-            elif index_file.exists():
-                index_file.unlink()
+        monkeypatch.setattr(app_mod, "Path", fake_path)
+
+        app = create_app(session_manager=session_mgr, session_store=session_db)
+        transport = ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+            res_root = await client.get("/")
+            assert res_root.status_code == 200
+            assert "RecipeBoxer Production SPA" in res_root.text
+
+            res_subroute = await client.get("/correlate/session_99")
+            assert res_subroute.status_code == 200
+            assert "RecipeBoxer Production SPA" in res_subroute.text

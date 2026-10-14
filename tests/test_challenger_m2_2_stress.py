@@ -79,7 +79,25 @@ def stress_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     db_path.parent.mkdir(parents=True, exist_ok=True)
     store = SessionStore(db_path=str(db_path))
     cache = FingerprintCache(db_path=str(db_path))
-    manager = SessionManager()
+
+    from tests.conftest import MockGeminiClient
+
+    class MockSessionManager(SessionManager):
+        def __init__(self, mock_client=None, test_cache=None):
+            super().__init__()
+            self._mock_client = mock_client
+            self._test_cache = test_cache
+
+        def create_session(self, *args, **kwargs):
+            session = super().create_session(*args, **kwargs)
+            if self._mock_client is not None:
+                session.mock_client = self._mock_client
+            if self._test_cache is not None:
+                session.fingerprint_cache = self._test_cache
+                session.cache = self._test_cache
+            return session
+
+    manager = MockSessionManager(mock_client=MockGeminiClient(), test_cache=cache)
 
     settings = Settings(
         cache_db_path=str(db_path),

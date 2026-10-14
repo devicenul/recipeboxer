@@ -72,10 +72,36 @@ def image_resolver(dummy_card_images):
     return _resolve
 
 
+class CallOrderMockClient:
+    """Mock client keyed strictly by call order."""
+
+    def __init__(self, responses):
+        self._responses = list(responses)
+        self._index = 0
+
+    def __call__(self, *args, **kwargs):
+        resp = self._responses[self._index]
+        self._index += 1
+        return resp
+
+
 @pytest.mark.asyncio
 async def test_multicard_transcription_sequence_preservation():
     """Verifies that GeminiRecipeExtractor transcribes ordered multi-card sequences in exact positional order."""
-    extractor = GeminiRecipeExtractor()
+    recipe_4_mock = RecipeSchema(
+        title="Dark Wedding Fruitcake",
+        ingredients=["1 cup candied cherries", "2 cups walnuts"],
+        directions=["Step 1", "Step 2", "Step 3", "Step 4"],
+        card_ids=["fruitcake_p1", "fruitcake_p2", "fruitcake_p3", "fruitcake_p4"],
+    )
+    recipe_8_mock = RecipeSchema(
+        title="Heirloom Sourdough Bread",
+        ingredients=["flour", "water", "starter"],
+        directions=[f"Step {i}" for i in range(1, 9)],
+        card_ids=[f"booklet_page_{i:02d}" for i in range(1, 9)],
+    )
+    client = CallOrderMockClient([recipe_4_mock, recipe_8_mock])
+    extractor = GeminiRecipeExtractor(client=client)
 
     # Test 4-card sequence (Dark Wedding Fruitcake)
     fps_4 = [
@@ -145,7 +171,14 @@ async def test_hitl_reordered_sequence_flow_in_orchestrator(tmp_path):
     )
     session.approvals = [approval]
 
-    agent = RecipeBoxerAgent(settings=settings)
+    mock_recipe = RecipeSchema(
+        title="Dark Wedding Fruitcake",
+        ingredients=["1 cup candied cherries", "2 cups walnuts"],
+        directions=["Mix ingredients.", "Bake at 300F."],
+        card_ids=reordered_card_ids,
+    )
+    mock_extractor = GeminiRecipeExtractor(client=lambda *args, **kwargs: mock_recipe)
+    agent = RecipeBoxerAgent(settings=settings, recipe_extractor=mock_extractor)
 
     # Trigger extraction stage manually via orchestrator logic
     session.state = PipelineState.EXTRACTING

@@ -13,9 +13,19 @@ CardForge is a procedural generation engine for creating realistic synthetic his
   - `TYPEWRITTEN`: Manual typewriter strike marks, character bounce, and ribbon wear.
   - `PRINTED_CLIPPING`: Glued newsprint and magazine clippings with multi-column layouts.
   - `MIXED_MEDIA`: Composite cards featuring handwritten corrections or stains.
-- **Substrates**: Aged yellow, white linen, ruled index, grid graph, kraft brown, and blank.
-- **Physical Artifacts**: Coffee/tea rings, oil smudges, edge tears, corner dog-ears, date stamps, and cellophane tape residue.
-- **Narrative Continuity**: Supports front/back card pairs and multi-card sets (3–4 cards) with narrative continuation cues.
+- **Substrates & Ruling Variants**:
+  - Paper tones: Aged yellow, white linen, ruled index, grid graph, kraft brown, blank, cream, canary.
+  - Rulings: `STANDARD_RULED`, `WIDE_RULED`, `NARROW_RULED`, `BLUE_NO_HEADER`, `DOUBLE_HEADER`, `FAINT_RULED`, `GREEN_LEDGER`, `GRID_GRAPH`, `DOT_GRID`, `UNRULED`.
+- **Stationery & Author Concepts**:
+  - `CardStock`: Physical substrate, dimensions, ruling line variant, paper tone, base aging profile.
+  - `CardWriter`: Writer personality, font style (Caveat, Special Elite, Marck Script, DejaVu), ink color and type, continuation cue habits.
+- **Physical Artifacts & Degradations**:
+  - Coffee/tea rings, oil smudges, edge tears, corner dog-ears, date stamps, cellophane tape residue.
+  - Creases (fold lines), perspective warp (off-axis camera framing), specular glare, JPEG compression noise, and mirrored show-through / ghost bleed-through.
+- **Narrative Continuity & Multi-Face Sets**:
+  - Supports 1 to 5 faces (standalones, front/back pairs, and 3–5 face sequences).
+  - Configurable continuation cues (present or absent).
+  - Exact verbatim tracking per face.
 - **T0 Archival Templates**: 24 historical recipe templates spanning 6 categories.
 - **Deterministic**: Fully deterministic given a random seed.
 

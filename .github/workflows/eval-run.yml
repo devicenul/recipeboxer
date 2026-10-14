@@ -1,0 +1,170 @@
+name: eval-run
+
+'on':
+  pull_request:
+    types: [labeled, opened, synchronize, reopened]
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      tier:
+        description: "Evaluation corpus tier (default: T1)"
+        required: false
+        default: "T1"
+        type: string
+      oracle_plan:
+        description: "Path to maintainer-provided oracle plan JSON (optional, activates oracle grouping track)"
+        required: false
+        default: ""
+        type: string
+      decks:
+        description: "Comma-separated deck IDs (optional, e.g. d01,d02)"
+        required: false
+        default: ""
+        type: string
+      variant:
+        description: "Naming variant: opaque, misleading, shuffle, reencode"
+        required: false
+        default: "opaque"
+        type: choice
+        options:
+          - opaque
+          - misleading
+          - shuffle
+          - reencode
+      budget_usd:
+        description: "Per-run evaluation budget ceiling in USD (enforced by RB_EVAL_MAX_USD)"
+        required: false
+        default: "2.00"
+        type: string
+
+concurrency:
+  group: eval-run-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  run-sut:
+    name: Execute Untrusted SUT Evaluation
+    # Only execute for workflow_dispatch, push to main, or PRs with 'run-eval' label
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'run-eval'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    # Environment eval-live gates access to CI_GEMINI_API_KEY with required maintainer reviewers
+    environment: eval-live
+
+    env:
+      # Dedicated low-quota CI key with provider-side spend limits.
+      # NO vault identity or age secrets are ever provided to this untrusted run.
+      GEMINI_API_KEY: ${{ secrets.CI_GEMINI_API_KEY }}
+      RECIPEBOXER_GEMINI_API_KEY: ${{ secrets.CI_GEMINI_API_KEY }}
+      RB_EVAL_MAX_USD: ${{ inputs.budget_usd || '2.00' }}
+
+    steps:
+      - name: Checkout pull request or target ref
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.4.0
+        with:
+          python-version: "3.13"
+          cache: "pip"
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+            pyproject.toml
+            cardforge/pyproject.toml
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip wheel setuptools
+          python -m pip install -r requirements.txt -r requirements-dev.txt
+          python -m pip install -e .
+          python -m pip install -e ./cardforge
+
+      - name: Verify environment hygiene (no vault key material)
+        run: |
+          python -c "
+          import os, sys
+          forbidden_keys = [k for k in os.environ if any(w in k.upper() for w in ('AGE', 'VAULT', 'SECRET_KEY', 'IDENTITY'))]
+          if forbidden_keys:
+              print(f'SECURITY VIOLATION: Forbidden vault key material detected in untrusted runner environment: {forbidden_keys}', file=sys.stderr)
+              sys.exit(1)
+          print('Environment hygiene verified: no vault identity or age key variables present.')
+          "
+
+      - name: Prepare output directory and metadata
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          BASE_REF: ${{ github.base_ref || github.ref_name }}
+          TIER: ${{ inputs.tier || 'T1' }}
+        run: |
+          mkdir -p out
+          python -c "
+          import json, os, time
+
+          pr_num_raw = os.environ.get('PR_NUMBER')
+          pr_number = int(pr_num_raw) if pr_num_raw and pr_num_raw.strip() else None
+
+          metadata = {
+              'schema': 'rb-meta/1',
+              'event_name': os.environ.get('GITHUB_EVENT_NAME', ''),
+              'pr_number': pr_number,
+              'head_sha': os.environ.get('HEAD_SHA', ''),
+              'base_ref': os.environ.get('BASE_REF', ''),
+              'tier': os.environ.get('TIER', 'T1'),
+              'run_id': os.environ.get('GITHUB_RUN_ID', ''),
+              'run_attempt': int(os.environ.get('GITHUB_RUN_ATTEMPT', '1')),
+              'actor': os.environ.get('GITHUB_ACTOR', ''),
+              'repository': os.environ.get('GITHUB_REPOSITORY', ''),
+              'workflow': os.environ.get('GITHUB_WORKFLOW', ''),
+              'created_at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
+          }
+          with open('out/run-metadata.json', 'w', encoding='utf-8') as f:
+              json.dump(metadata, f, indent=2)
+          print('Wrote out/run-metadata.json:')
+          print(json.dumps(metadata, indent=2))
+          "
+
+      - name: Run SUT evaluation harness
+        env:
+          INPUT_TIER: ${{ inputs.tier || 'T1' }}
+          INPUT_ORACLE_PLAN: ${{ inputs.oracle_plan }}
+          INPUT_DECKS: ${{ inputs.decks }}
+          INPUT_VARIANT: ${{ inputs.variant || 'opaque' }}
+        run: |
+          CMD=(python -m evals.harness.run --tier "${INPUT_TIER}" --out out/)
+          if [ -n "${INPUT_DECKS}" ]; then
+            CMD+=(--decks "${INPUT_DECKS}")
+          fi
+          if [ -n "${INPUT_VARIANT}" ]; then
+            CMD+=(--variant "${INPUT_VARIANT}")
+          fi
+          if [ -n "${INPUT_ORACLE_PLAN}" ]; then
+            if [ -f "${INPUT_ORACLE_PLAN}" ]; then
+              CMD+=(--oracle-plan "${INPUT_ORACLE_PLAN}")
+            else
+              echo "Warning: Oracle plan '${INPUT_ORACLE_PLAN}' not found; proceeding with end-to-end track."
+            fi
+          fi
+          echo "Running evaluation harness: ${CMD[*]}"
+          "${CMD[@]}"
+
+      - name: Upload SUT outputs artifact
+        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4.6.1
+        if: always()
+        with:
+          name: sut-outputs
+          path: out/
+          if-no-files-found: error
+          retention-days: 7

@@ -58,8 +58,6 @@ PACKAGE_ROOT = REPO_ROOT / "recipeboxer"
 # Production scope excludes static assets, and temporarily excludes card_generator and
 # evals which move to separate top-level packages in Phase 1 / Phase 2.
 TEMPORARY_EXCLUSIONS = {
-    # TODO(WP-E3): evals package moves out of recipeboxer to top-level evals/
-    "recipeboxer/evals",
     # Static frontend web assets
     "recipeboxer/api/static",
 }
@@ -448,7 +446,6 @@ def test_no_cardforge_or_evals_import() -> None:
     - recipeboxer.evals (internal evals package being moved out, except allowed in cli.py)
     """
     forbidden_roots = {"cardforge", "evals", "tests"}
-    allowed_recipeboxer_evals_importers = {"recipeboxer/cli.py"}
     violations: List[Tuple[str, int, str]] = []
 
     for file_path in get_scoped_python_files():
@@ -477,10 +474,9 @@ def test_no_cardforge_or_evals_import() -> None:
                 if root_pkg in forbidden_roots:
                     violations.append((rel_str, lineno, f"Forbidden import of package {name!r}"))
                 elif name == "recipeboxer.evals" or name.startswith("recipeboxer.evals."):
-                    if rel_str not in allowed_recipeboxer_evals_importers:
-                        violations.append(
-                            (rel_str, lineno, f"Forbidden import of 'recipeboxer.evals' in production module {rel_str}")
-                        )
+                    violations.append(
+                        (rel_str, lineno, f"Forbidden import of removed 'recipeboxer.evals' in production module {rel_str}")
+                    )
 
     lines = [f"{rel}:{lno}: {reason}" for rel, lno, reason in sorted(set(violations))]
     assert not violations, f"Forbidden imports detected ({len(violations)} hits):\n" + "\n".join(lines)

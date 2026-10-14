@@ -2,6 +2,7 @@
 
 import asyncio
 from pathlib import Path
+import os
 import pytest
 
 from recipeboxer.agent.orchestrator import RecipeBoxerAgent
@@ -10,6 +11,11 @@ from recipeboxer.ingestion.scanner import scan_card_directory
 from recipeboxer.models.pipeline import PipelineState
 
 
+@pytest.mark.live
+@pytest.mark.skipif(
+    not os.getenv("GEMINI_API_KEY"),
+    reason="Requires live GEMINI_API_KEY",
+)
 @pytest.mark.asyncio
 async def test_sample_card_corpus_e2e_correlation_and_retention():
     """Verify all 48 cards in sample_cards are correlated into 24 proposals with 0 dropped cards."""

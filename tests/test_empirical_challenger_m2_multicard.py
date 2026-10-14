@@ -26,11 +26,12 @@ from recipeboxer.agent.orchestrator import AgentOrchestrator, PipelineSession
 from recipeboxer.correlation.optimizer import PairingOptimizer
 from recipeboxer.extraction.extractor import GeminiRecipeExtractor
 from recipeboxer.ingestion.scanner import ScannedCard
+from recipeboxer.models.correlation import CorrelationProposal
 from recipeboxer.models.domain import CardRole, VisualFingerprint
 from recipeboxer.models.hitl import CardPairApproval, HITLDecision
 from recipeboxer.models.pipeline import IngestionMode, PipelineStartRequest, PipelineState
 from recipeboxer.models.recipe import RecipeSchema
-from tests.conftest import MockGeminiClient, SQLiteFingerprintCache, SyntheticDeckInfo
+from recipeboxer.storage.cache import FingerprintCache
 
 
 def _make_dummy_fingerprint(card_id: str, role: CardRole = CardRole.STANDALONE) -> VisualFingerprint:
@@ -42,12 +43,60 @@ def _make_dummy_fingerprint(card_id: str, role: CardRole = CardRole.STANDALONE) 
     )
 
 
+class MultiCardExtractorClient:
+    """Mock client returning deterministic recipes matching explicit card ordering."""
+
+    async def extract_cards(self, cards: List[Any]) -> RecipeSchema:
+        cids = []
+        for c in cards:
+            if isinstance(c, VisualFingerprint):
+                cids.append(c.card_id)
+            elif isinstance(c, ScannedCard) or hasattr(c, "card_id"):
+                cids.append(getattr(c, "card_id", "card"))
+            elif isinstance(c, (Path, str)):
+                cids.append(Path(c).name)
+            elif isinstance(c, bytes):
+                h = hashlib.sha256(c).hexdigest()[:8]
+                cids.append(f"card_{h}.jpg")
+            elif isinstance(c, Image.Image):
+                buf = io.BytesIO()
+                c.save(buf, format="JPEG")
+                h = hashlib.sha256(buf.getvalue()).hexdigest()[:8]
+                cids.append(f"card_{h}.jpg")
+            else:
+                cids.append(f"card_{len(cids)+1}")
+
+        directions = [
+            f"1. Front preparation and mixing ({cids[0]})",
+            *(f"{i+2}. Subsequent directions for card {cid}" for i, cid in enumerate(cids[1:]))
+        ]
+        return RecipeSchema(
+            recipe_id="rec_multicard",
+            title="Multi-Card Recipe",
+            ingredients=["ingredient 1", "ingredient 2"],
+            directions=directions,
+            card_ids=cids,
+            image_urls=[f"/api/cards/{cid}/image" for cid in cids],
+        )
+
+    async def extract_recipe(self, front: Any, back: Optional[Any] = None) -> RecipeSchema:
+        cards = [front]
+        if back is not None:
+            cards.append(back)
+        return await self.extract_cards(cards)
+
+    async def extract(self, cards: Any) -> RecipeSchema:
+        if isinstance(cards, list):
+            return await self.extract_cards(cards)
+        return await self.extract_cards([cards])
+
+
 class TestMultiCardExtractionOrdering:
     """Stress tests for GeminiRecipeExtractor with 3, 4, 5, 6, 8 card sequences."""
 
     @pytest.fixture
     def extractor(self):
-        return GeminiRecipeExtractor(api_key="mock_key", model_name="gemini-3.7-flash")
+        return GeminiRecipeExtractor(client=MultiCardExtractorClient())
 
     @pytest.mark.asyncio
     async def test_extract_empty_list_raises_value_error(self, extractor):
@@ -177,28 +226,115 @@ class TestMultiCardExtractionOrdering:
             assert len(recipe.image_urls) == 6
 
 
+class LocalPipelineMockClient:
+    """Explicit injected mock client for PipelineSession multi-card orchestration."""
+
+    async def analyze_fingerprint(self, image_path: Path, sha256_hash: str) -> VisualFingerprint:
+        cid = image_path.name
+        return VisualFingerprint(
+            card_id=cid,
+            image_path=str(image_path),
+            sha256_hash=sha256_hash,
+            role=CardRole.STANDALONE,
+            paper_tone="aged_cream",
+            dominant_colors=["#FFF8DC"],
+            card_width_px=800,
+            card_height_px=500,
+            aspect_ratio=1.6,
+            confidence=0.9,
+        )
+
+    async def verify_correlation(
+        self, front_fp: VisualFingerprint, back_fp: VisualFingerprint, heuristic_score: float
+    ) -> CorrelationProposal:
+        return CorrelationProposal(
+            proposal_id=f"prop_{front_fp.card_id}_{back_fp.card_id}",
+            front_card_id=front_fp.card_id,
+            back_card_id=back_fp.card_id,
+            ordered_card_ids=[front_fp.card_id, back_fp.card_id],
+            part_count=2,
+            transition_scores=[0.8],
+            heuristic_score=0.8,
+            semantic_score=0.8,
+            confidence=0.8,
+            is_standalone=False,
+            continuity_explanation="Matches well",
+            recommended_action="PAIR",
+            semantic_verified=True,
+        )
+
+    async def extract_cards(self, cards: List[Any]) -> RecipeSchema:
+        cids = []
+        for c in cards:
+            if isinstance(c, VisualFingerprint):
+                cids.append(c.card_id)
+            elif isinstance(c, ScannedCard) or hasattr(c, "card_id"):
+                cids.append(getattr(c, "card_id", "card"))
+            elif isinstance(c, (Path, str)):
+                cids.append(Path(c).name)
+            else:
+                cids.append(f"card_{len(cids)+1}")
+        return RecipeSchema(
+            recipe_id=f"rec_{hashlib.sha256('_'.join(cids).encode()).hexdigest()[:8]}",
+            title="Extracted Multi-Card Recipe",
+            ingredients=["1 cup sugar", "2 cups flour"],
+            directions=[f"Step {i+1} for {cid}" for i, cid in enumerate(cids)],
+            card_ids=cids,
+            image_urls=[f"/api/cards/{cid}/image" for cid in cids],
+            tags=["Dessert"],
+        )
+
+    async def extract_recipe(self, front: Any, back: Optional[Any] = None) -> RecipeSchema:
+        cards = [front]
+        if back is not None:
+            cards.append(back)
+        return await self.extract_cards(cards)
+
+    async def extract(self, cards: Any) -> RecipeSchema:
+        if isinstance(cards, list):
+            return await self.extract_cards(cards)
+        return await self.extract_cards([cards])
+
+
 class TestPipelineSessionMultiCardOrchestration:
     """End-to-end PipelineSession integration tests with multi-card sequences."""
+
+    @pytest.fixture
+    def local_scans_dir(self, tmp_path: Path) -> Path:
+        scans = tmp_path / "scans"
+        scans.mkdir(parents=True, exist_ok=True)
+        for i in range(1, 7):
+            img = Image.new("RGB", (200, 150), color=(i * 35, (7 - i) * 35, i * 40))
+            img.save(scans / f"card_{i:02d}.jpg", format="JPEG")
+        return scans
+
+    @pytest.fixture
+    def local_cache(self, tmp_path: Path) -> FingerprintCache:
+        return FingerprintCache(tmp_path / "cache" / "fingerprints_test.db")
+
+    @pytest.fixture
+    def local_mock_client(self) -> LocalPipelineMockClient:
+        return LocalPipelineMockClient()
 
     @pytest.mark.asyncio
     async def test_session_multi_card_4_cards_approval_with_batch_tags(
         self,
-        synthetic_card_deck: SyntheticDeckInfo,
-        mock_gemini_client: MockGeminiClient,
-        test_cache: SQLiteFingerprintCache,
+        local_scans_dir: Path,
+        local_mock_client: LocalPipelineMockClient,
+        local_cache: FingerprintCache,
     ):
         """PipelineSession executes 4-card sequence approval, preserving order and propagating default batch tags."""
         session = PipelineSession(
             session_id="sess_multi_4card_tags",
             config=PipelineStartRequest(
-                scans_dir=str(synthetic_card_deck.directory),
+                scans_dir=str(local_scans_dir),
                 mode=IngestionMode.PARALLEL,
                 default_tags=["Vintage Holiday", "Heirloom"],
                 max_concurrency=4,
             ),
-            cache=test_cache,
-            extractor=mock_gemini_client,
-            mock_client=mock_gemini_client,
+            cache=local_cache,
+            extractor=local_mock_client,
+            mock_client=local_mock_client,
         )
 
         task = asyncio.create_task(session.run())
@@ -241,20 +377,20 @@ class TestPipelineSessionMultiCardOrchestration:
     @pytest.mark.asyncio
     async def test_session_multi_card_reversal_fallback_when_card_ids_empty(
         self,
-        synthetic_card_deck: SyntheticDeckInfo,
-        mock_gemini_client: MockGeminiClient,
-        test_cache: SQLiteFingerprintCache,
+        local_scans_dir: Path,
+        local_mock_client: LocalPipelineMockClient,
+        local_cache: FingerprintCache,
     ):
         """PipelineSession handles reverse_roles=True when card_ids is empty, reversing front and back."""
         session = PipelineSession(
             session_id="sess_multi_rev_fallback",
             config=PipelineStartRequest(
-                scans_dir=str(synthetic_card_deck.directory),
+                scans_dir=str(local_scans_dir),
                 mode=IngestionMode.PARALLEL,
             ),
-            cache=test_cache,
-            extractor=mock_gemini_client,
-            mock_client=mock_gemini_client,
+            cache=local_cache,
+            extractor=local_mock_client,
+            mock_client=local_mock_client,
         )
 
         task = asyncio.create_task(session.run())
@@ -290,20 +426,20 @@ class TestPipelineSessionMultiCardOrchestration:
     @pytest.mark.asyncio
     async def test_session_mixed_multi_card_standalone_and_rejection_batch(
         self,
-        synthetic_card_deck: SyntheticDeckInfo,
-        mock_gemini_client: MockGeminiClient,
-        test_cache: SQLiteFingerprintCache,
+        local_scans_dir: Path,
+        local_mock_client: LocalPipelineMockClient,
+        local_cache: FingerprintCache,
     ):
         """PipelineSession processes a batch containing 3-card group, standalone card, and rejected card."""
         session = PipelineSession(
             session_id="sess_mixed_batch",
             config=PipelineStartRequest(
-                scans_dir=str(synthetic_card_deck.directory),
+                scans_dir=str(local_scans_dir),
                 mode=IngestionMode.PARALLEL,
             ),
-            cache=test_cache,
-            extractor=mock_gemini_client,
-            mock_client=mock_gemini_client,
+            cache=local_cache,
+            extractor=local_mock_client,
+            mock_client=local_mock_client,
         )
 
         task = asyncio.create_task(session.run())

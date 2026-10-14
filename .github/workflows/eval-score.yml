@@ -1,0 +1,295 @@
+name: eval-score
+
+'on':
+  workflow_run:
+    workflows: ["eval-run"]
+    types: [completed]
+
+permissions:
+  contents: read
+  actions: read
+  pull-requests: write
+
+jobs:
+  score:
+    name: Trusted Ground-Truth Evaluation Scoring
+    # Only execute if the upstream untrusted eval-run completed successfully
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      MAX_SCORED_RUNS_PER_24H: "10"
+
+    steps:
+      - name: Checkout trusted default branch (never PR head)
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.4.0
+        with:
+          python-version: "3.13"
+          cache: "pip"
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+            pyproject.toml
+            cardforge/pyproject.toml
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip wheel setuptools
+          python -m pip install -r requirements.txt -r requirements-dev.txt
+          python -m pip install -e .
+          python -m pip install -e ./cardforge
+
+      - name: Configure CI age identity key outside workspace
+        env:
+          CI_AGE_IDENTITY_RAW: ${{ secrets.CI_AGE_IDENTITY }}
+        run: |
+          if [ -z "${CI_AGE_IDENTITY_RAW}" ]; then
+            echo "::error::CI_AGE_IDENTITY secret is empty or missing. Vault cannot be decrypted."
+            exit 1
+          fi
+          KEY_DIR="${RUNNER_TEMP}/eval_keys"
+          mkdir -p -m 700 "${KEY_DIR}"
+          KEY_FILE="${KEY_DIR}/ci_age.key"
+          (umask 077 && printf "%s\n" "${CI_AGE_IDENTITY_RAW}" > "${KEY_FILE}")
+          chmod 600 "${KEY_FILE}"
+          echo "RB_EVAL_AGE_KEY_FILE=${KEY_FILE}" >> "$GITHUB_ENV"
+          echo "Securely wrote CI age identity outside workspace to: ${KEY_FILE}"
+
+      - name: Download SUT outputs artifact
+        uses: actions/download-artifact@cc203385981b70ca67e1cc392babf9cc229d5806 # v4.1.9
+        with:
+          name: sut-outputs
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: sut_artifact
+
+      - name: Validate untrusted artifact schema and size
+        env:
+          EXPECTED_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          python -c "
+          import json, os, re, sys
+          from pathlib import Path
+
+          artifact_dir = Path('sut_artifact')
+          if not artifact_dir.is_dir():
+              print('ERROR: sut_artifact directory not found.', file=sys.stderr)
+              sys.exit(1)
+
+          # 1. Validate file existence and file size limits (guard against zip/JSON bombs)
+          MAX_FILE_SIZES = {
+              'run-metadata.json': 512 * 1024,        # 512 KB
+              'outputs.json': 25 * 1024 * 1024,       # 25 MB
+              'ledger.json': 10 * 1024 * 1024,        # 10 MB
+              'run.log': 10 * 1024 * 1024,            # 10 MB
+          }
+
+          for fname, max_size in MAX_FILE_SIZES.items():
+              target = artifact_dir / fname
+              if not target.is_file():
+                  print(f'ERROR: Required artifact file missing: {fname}', file=sys.stderr)
+                  sys.exit(1)
+              fsize = target.stat().st_size
+              if fsize > max_size:
+                  print(f'ERROR: File {fname} exceeds max allowed size ({fsize} > {max_size})', file=sys.stderr)
+                  sys.exit(1)
+
+          # 2. Strict parse: load metadata JSON without eval or shell interpolation
+          meta_path = artifact_dir / 'run-metadata.json'
+          with open(meta_path, 'r', encoding='utf-8') as f:
+              try:
+                  metadata = json.load(f)
+              except Exception as e:
+                  print(f'ERROR: Corrupt run-metadata.json: {e}', file=sys.stderr)
+                  sys.exit(1)
+
+          if not isinstance(metadata, dict):
+              print('ERROR: run-metadata.json root is not an object', file=sys.stderr)
+              sys.exit(1)
+
+          if metadata.get('schema') != 'rb-meta/1':
+              print(f'ERROR: Invalid metadata schema: {metadata.get(\"schema\")}', file=sys.stderr)
+              sys.exit(1)
+
+          expected_head = os.environ.get('EXPECTED_HEAD_SHA', '').strip()
+          meta_head = str(metadata.get('head_sha', '')).strip()
+          if expected_head and meta_head != expected_head:
+              print(f'SECURITY ERROR: Metadata head_sha ({meta_head}) does not match workflow_run head_sha ({expected_head})', file=sys.stderr)
+              sys.exit(1)
+
+          # 3. Strict parse: outputs.json
+          outputs_path = artifact_dir / 'outputs.json'
+          with open(outputs_path, 'r', encoding='utf-8') as f:
+              try:
+                  outputs = json.load(f)
+              except Exception as e:
+                  print(f'ERROR: Corrupt outputs.json: {e}', file=sys.stderr)
+                  sys.exit(1)
+
+          if not isinstance(outputs, dict):
+              print('ERROR: outputs.json root is not an object', file=sys.stderr)
+              sys.exit(1)
+
+          if outputs.get('schema') != 'rb-out/1':
+              print(f'ERROR: Unsupported outputs schema: {outputs.get(\"schema\")}', file=sys.stderr)
+              sys.exit(1)
+
+          tier = outputs.get('tier')
+          if tier not in ('T1', 'T2', 'T3', 'T4'):
+              print(f'ERROR: Invalid tier in outputs: {tier}', file=sys.stderr)
+              sys.exit(1)
+
+          # Check deck and image id characters to prevent path traversal or format attacks
+          SAFE_ID_RE = re.compile(r'^[a-zA-Z0-9_.-]{1,128}$')
+          decks = outputs.get('decks', [])
+          if not isinstance(decks, list):
+              print('ERROR: outputs.decks is not a list', file=sys.stderr)
+              sys.exit(1)
+
+          for deck in decks:
+              deck_id = deck.get('deck_id', '')
+              if not SAFE_ID_RE.match(str(deck_id)):
+                  print(f'SECURITY ERROR: Suspicious deck_id in outputs: {deck_id}', file=sys.stderr)
+                  sys.exit(1)
+              for recipe in deck.get('recipes', []):
+                  for img_id in recipe.get('image_ids', []):
+                      if not SAFE_ID_RE.match(str(img_id)):
+                          print(f'SECURITY ERROR: Suspicious image_id in outputs: {img_id}', file=sys.stderr)
+                          sys.exit(1)
+
+          # 4. Strict parse: ledger.json
+          ledger_path = artifact_dir / 'ledger.json'
+          with open(ledger_path, 'r', encoding='utf-8') as f:
+              try:
+                  ledger = json.load(f)
+              except Exception as e:
+                  print(f'ERROR: Corrupt ledger.json: {e}', file=sys.stderr)
+                  sys.exit(1)
+
+          if not isinstance(ledger, dict) or 'calls' not in ledger:
+              print('ERROR: ledger.json missing calls structure', file=sys.stderr)
+              sys.exit(1)
+
+          print('Untrusted artifact validation PASSED: sizes, schemas, and identifiers conform to contracts.')
+          "
+
+      - name: Run evaluation scorer (trusted code against decrypted vault)
+        run: |
+          mkdir -p report
+          python -m evals.score --tier T1 --outputs sut_artifact --report report/ --feedback aggregate
+
+      - name: Archive evaluation report artifact
+        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4.6.1
+        if: always()
+        with:
+          name: eval-report
+          path: report/
+          retention-days: 14
+
+      - name: Post aggregate PR comment and enforce rate limit
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        env:
+          MAX_SCORED_RUNS_PER_24H: ${{ env.MAX_SCORED_RUNS_PER_24H }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+
+            // 1. Read validated metadata
+            const metaPath = path.join('sut_artifact', 'run-metadata.json');
+            if (!fs.existsSync(metaPath)) {
+              core.info('No run-metadata.json found. Skipping PR comment.');
+              return;
+            }
+            const metadata = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
+            const prNumber = metadata.pr_number;
+
+            if (!prNumber) {
+              core.info('Run was not triggered from a PR (e.g. push to main or manual dispatch). Skipping PR comment.');
+              return;
+            }
+
+            // 2. Verify PR matches workflow_run payload to ensure provenance
+            const workflowRun = context.payload.workflow_run;
+            const matchingPr = (workflowRun.pull_requests || []).find(pr => pr.number === prNumber);
+            if (!matchingPr) {
+              core.setFailed(`Security Error: Metadata PR #${prNumber} does not match pull_requests in workflow_run payload.`);
+              return;
+            }
+            if (metadata.head_sha !== workflowRun.head_sha) {
+              core.setFailed(`Security Error: Metadata head_sha (${metadata.head_sha}) does not match workflow_run head_sha (${workflowRun.head_sha}).`);
+              return;
+            }
+
+            // 3. Enforce rate limit (max N scored runs per PR per 24 hours)
+            const maxRuns = parseInt(process.env.MAX_SCORED_RUNS_PER_24H || '10', 10);
+            const marker = '<!-- recipeboxer-eval-score -->';
+            const now = Date.now();
+            const oneDayAgo = now - (24 * 60 * 60 * 1000);
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+              per_page: 100,
+            });
+
+            const recentScoredComments = comments.filter(c => {
+              const isBot = c.user && (c.user.login === 'github-actions[bot]' || c.user.type === 'Bot');
+              const hasMarker = c.body && c.body.includes(marker);
+              const createdAt = new Date(c.created_at).getTime();
+              return isBot && hasMarker && createdAt >= oneDayAgo;
+            });
+
+            core.info(`Found ${recentScoredComments.length} scored comments on PR #${prNumber} in last 24h (cap: ${maxRuns}).`);
+
+            if (recentScoredComments.length >= maxRuns) {
+              const limitMsg = `${marker}\n> [!WARNING]\n> **Daily Evaluation Rate Limit Reached**\n>\n> This pull request has reached the daily limit of ${maxRuns} scored evaluation runs in a 24-hour window. Additional runs will be scored again after 24 hours. Upstream Run ID: [${process.env.RUN_ID}](${context.payload.repository.html_url}/actions/runs/${process.env.RUN_ID})`;
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber,
+                body: limitMsg,
+              });
+              core.warning(`Evaluation rate limit exceeded for PR #${prNumber} (${recentScoredComments.length}/${maxRuns} in 24h).`);
+              return;
+            }
+
+            // 4. Read generated report markdown
+            const reportPath = path.join('report', 'report.md');
+            if (!fs.existsSync(reportPath)) {
+              core.setFailed(`Report markdown file not found at ${reportPath}`);
+              return;
+            }
+            const reportContent = fs.readFileSync(reportPath, 'utf8');
+
+            // 5. Construct and post comment
+            const commentBody = `${marker}\n## 📊 RecipeBoxer Evaluation Score (${metadata.tier})\n\n` +
+              `**Commit:** \`${metadata.head_sha.substring(0, 8)}\` | **Workflow Run:** [#${process.env.RUN_ID}](${context.payload.repository.html_url}/actions/runs/${process.env.RUN_ID})\n\n` +
+              reportContent + '\n\n' +
+              `---\n*Evaluation scoring executed from trusted \`${context.payload.repository.default_branch}\` branch. Ground truth remains encrypted in the vault.*`;
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+              body: commentBody,
+            });
+            core.info(`Posted evaluation score comment to PR #${prNumber}.`);
+
+      - name: Secure cleanup of CI age identity
+        if: always()
+        run: |
+          if [ -n "${RB_EVAL_AGE_KEY_FILE:-}" ] && [ -f "${RB_EVAL_AGE_KEY_FILE}" ]; then
+            shred -u "${RB_EVAL_AGE_KEY_FILE}" 2>/dev/null || rm -f "${RB_EVAL_AGE_KEY_FILE}"
+            echo "CI age identity key file securely deleted."
+          fi

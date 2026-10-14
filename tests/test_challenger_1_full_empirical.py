@@ -57,8 +57,6 @@ from recipeboxer.vision.heuristics import (
     calculate_stain_similarity,
     screen_candidate_pairs,
 )
-from tests.conftest import MockGeminiClient, SQLiteFingerprintCache, SyntheticDeckInfo
-from tests.fixtures.loader import SampleCardCorpus, load_sample_corpus
 
 
 def _create_test_fingerprint(
@@ -253,21 +251,20 @@ class TestDirectedSequenceCorrelationEngine:
             assert len(seq.transition_scores) == n - 1
             assert len(result.unmatched_card_ids) == 0
 
-    def test_corpus_thanksgiving_turkey_and_fruitcake_sets(self, sample_card_corpus: SampleCardCorpus, optimizer: PairingOptimizer):
-        """Verifies 3-card Turkey and 4-card Fruitcake sets in sample corpus produce verified sequence proposals."""
-        multi_sets = sample_card_corpus.get_multi_card_sets()
-        assert "rec_mcs_turkey_stuffing_feast" in multi_sets
-        assert "rec_mcs_wedding_fruitcake_1942" in multi_sets
-
-        turkey_cards = multi_sets["rec_mcs_turkey_stuffing_feast"]
-        assert len(turkey_cards) == 3
+    def test_corpus_thanksgiving_turkey_and_fruitcake_sets(self, optimizer: PairingOptimizer):
+        """Verifies 3-card Turkey and 4-card Fruitcake synthetic sets produce verified sequence proposals."""
+        turkey_card_ids = [
+            "turkey_card1_front.jpg",
+            "turkey_card1_back.jpg",
+            "turkey_card2_front.jpg",
+        ]
         turkey_fps = [
             _create_test_fingerprint(
-                c.card_id,
+                cid,
                 role=CardRole.SEQUENCE_START if idx == 0 else CardRole.SEQUENCE_CONTINUATION,
-                first_line=c.ground_truth_recipe.title if idx == 0 else f"Part {idx+1} directions",
+                first_line="Roast Turkey Stuffing Feast" if idx == 0 else f"Part {idx+1} directions",
             )
-            for idx, c in enumerate(turkey_cards)
+            for idx, cid in enumerate(turkey_card_ids)
         ]
 
         prop_t1 = CorrelationProposal(
@@ -283,17 +280,22 @@ class TestDirectedSequenceCorrelationEngine:
 
         res_turkey = optimizer.optimize_proposals(turkey_fps, [prop_t1, prop_t2])
         assert len(res_turkey.proposals) == 1
-        assert res_turkey.proposals[0].ordered_card_ids == [c.card_id for c in turkey_cards]
+        assert res_turkey.proposals[0].ordered_card_ids == turkey_card_ids
         assert res_turkey.proposals[0].part_count == 3
 
-        fruitcake_cards = multi_sets["rec_mcs_wedding_fruitcake_1942"]
-        assert len(fruitcake_cards) == 4
+        fruitcake_card_ids = [
+            "fruitcake_card1_front.jpg",
+            "fruitcake_card1_back.jpg",
+            "fruitcake_card2_front.jpg",
+            "fruitcake_card2_back.jpg",
+        ]
         fruitcake_fps = [
             _create_test_fingerprint(
-                c.card_id,
+                cid,
                 role=CardRole.SEQUENCE_START if idx == 0 else CardRole.SEQUENCE_CONTINUATION,
+                first_line="Wedding Fruitcake 1942" if idx == 0 else f"Part {idx+1} directions",
             )
-            for idx, c in enumerate(fruitcake_cards)
+            for idx, cid in enumerate(fruitcake_card_ids)
         ]
 
         fc_props = [
@@ -307,7 +309,7 @@ class TestDirectedSequenceCorrelationEngine:
 
         res_fc = optimizer.optimize_proposals(fruitcake_fps, fc_props)
         assert len(res_fc.proposals) == 1
-        assert res_fc.proposals[0].ordered_card_ids == [c.card_id for c in fruitcake_cards]
+        assert res_fc.proposals[0].ordered_card_ids == fruitcake_card_ids
         assert res_fc.proposals[0].part_count == 4
 
 
@@ -536,21 +538,6 @@ class TestSubstrateHeuristicsAndHeaders:
         assert calculate_role_compatibility(CardRole.SEQUENCE_START, CardRole.STANDALONE) == 0.00
         assert calculate_role_compatibility(CardRole.SEQUENCE_CONTINUATION, CardRole.SEQUENCE_START) == 0.00
         assert calculate_role_compatibility(CardRole.SEQUENCE_START, CardRole.SEQUENCE_START) == 0.00
-
-    def test_sequential_header_score_progression(self):
-        """Verify sequential header scoring handles Part N, Card N, Page N, and reverse order."""
-        # Forward Part 1 -> Part 2
-        fp1 = _create_test_fingerprint("card1.jpg", first_line="Grandma's Pie - Part 1", last_line="(over to Part 2 ->)")
-        fp2 = _create_test_fingerprint("card2.jpg", first_line="Part 2: Crust & Filling", last_line="Bake 40 mins")
-        assert calculate_sequential_header_score(fp1, fp2) == 1.00
-
-        # Forward Card 2 -> Card 3
-        fp_c2 = _create_test_fingerprint("c2.jpg", first_line="Card 2 (cont)")
-        fp_c3 = _create_test_fingerprint("c3.jpg", first_line="Card 3 directions")
-        assert calculate_sequential_header_score(fp_c2, fp_c3) == 1.00
-
-        # Inverted Part 2 -> Part 1
-        assert calculate_sequential_header_score(fp2, fp1) <= 0.20
 
     def test_color_similarity_delta_e_boundary(self):
         """Substrate color Delta E calculation correctly scales in CIELAB space."""

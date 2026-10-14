@@ -47,12 +47,29 @@ def create_test_image(dest_path: Path, width: int = 100, height: int = 80) -> Pa
     return dest_path
 
 
+from recipeboxer.storage.cache import FingerprintCache
+from tests.conftest import MockGeminiClient
+
+
+class MockSessionManager(SessionManager):
+    def __init__(self, cache_db: Path | None = None):
+        super().__init__()
+        self.cache_db = cache_db
+
+    def create_session(self, *args, **kwargs):
+        session = super().create_session(*args, **kwargs)
+        session.mock_client = MockGeminiClient()
+        if self.cache_db:
+            session.fingerprint_cache = FingerprintCache(db_path=self.cache_db)
+        return session
+
+
 @pytest_asyncio.fixture
 async def async_client(tmp_path: Path) -> AsyncGenerator[AsyncClient, None]:
     """Test async HTTP client fixture with fresh SessionManager and SessionStore."""
     db_path = tmp_path / "m1_stress_test.db"
     store = SessionStore(db_path=db_path)
-    manager = SessionManager()
+    manager = MockSessionManager(cache_db=tmp_path / "cache.db")
     app = create_app(session_manager=manager, session_store=store)
 
     transport = ASGITransport(app=app)

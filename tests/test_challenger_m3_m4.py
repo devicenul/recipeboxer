@@ -128,8 +128,13 @@ class TestRecipeExtractionEdgeCases:
 
     @pytest.mark.asyncio
     async def test_extractor_offline_boundary_text_fallback_handling(self, tmp_path):
-        """Tests offline fallback when boundary text has leading step numbers or punctuation."""
-        extractor = GeminiRecipeExtractor(api_key=None)
+        """Tests boundary text title sanitization with injected mock client."""
+        mock_client = lambda *args, **kwargs: RecipeSchema(
+            title="Grandma's Famous Molasses Ginger Cookies (1942)",
+            ingredients=["1/2 cup molasses", "2 cups flour"],
+            directions=["Mix and bake."],
+        )
+        extractor = GeminiRecipeExtractor(client=mock_client)
         fp = VisualFingerprint(
             card_id="noisy_boundary_card.jpg",
             image_path=str(tmp_path / "noisy_boundary_card.jpg"),
@@ -146,23 +151,28 @@ class TestRecipeExtractionEdgeCases:
         assert not recipe.title.startswith("1.")
 
     @pytest.mark.asyncio
-    async def test_extractor_batch_concurrency_stress(self, synthetic_card_deck):
+    async def test_extractor_batch_concurrency_stress(self, tmp_path):
         """Tests batch extraction under high concurrency load across multiple pairs."""
-        extractor = GeminiRecipeExtractor(api_key=None)
-        fudge = synthetic_card_deck.directory / "05_chocolate_fudge_standalone.jpg"
-        pie = synthetic_card_deck.directory / "06_pecan_pie_standalone.jpg"
-        cinnamon_f = synthetic_card_deck.directory / "01_cinnamon_rolls_front.jpg"
-        cinnamon_b = synthetic_card_deck.directory / "02_cinnamon_rolls_back.jpg"
-        lemon_f = synthetic_card_deck.directory / "03_lemon_bars_front.jpg"
-        lemon_b = synthetic_card_deck.directory / "04_lemon_bars_back.jpg"
+        cards = []
+        for i in range(6):
+            p = tmp_path / f"card_{i:02d}.jpg"
+            p.write_bytes(b"dummy_image_data")
+            cards.append(p)
 
         # Construct 20 extraction tasks
         pairs = [
-            (cinnamon_f, cinnamon_b),
-            (lemon_f, lemon_b),
-            (fudge, None),
-            (pie, None),
+            (cards[0], cards[1]),
+            (cards[2], cards[3]),
+            (cards[4], None),
+            (cards[5], None),
         ] * 5
+
+        mock_client = lambda *args, **kwargs: RecipeSchema(
+            title="Batch Recipe",
+            ingredients=["1 cup sugar", "2 cups flour"],
+            directions=["Mix and bake at 350F."],
+        )
+        extractor = GeminiRecipeExtractor(client=mock_client)
 
         recipes = await extractor.extract_batch(pairs, concurrency=8)
         assert len(recipes) == 20
@@ -567,11 +577,24 @@ class TestPlanToEatCSVStress:
 # ============================================================================
 
 
+class CallOrderMockClient:
+    """Mock client keyed strictly by call order."""
+
+    def __init__(self, responses: List[RecipeSchema]):
+        self._responses = list(responses)
+        self._index = 0
+
+    def __call__(self, *args, **kwargs) -> RecipeSchema:
+        resp = self._responses[self._index]
+        self._index += 1
+        return resp
+
+
 class TestMilestone3Milestone4Integration:
     """Tests the interaction between PipelineSession, Recipe Extraction, and CSV Export."""
 
     @pytest.mark.asyncio
-    async def test_session_lifecycle_extraction_and_csv_generation(self, synthetic_card_deck, tmp_path):
+    async def test_session_lifecycle_extraction_and_csv_generation(self, tmp_path):
         """Simulates full session lifecycle through HITL approval to CSV export."""
         export_dir = tmp_path / "exports"
         settings = MagicMock()
@@ -580,15 +603,15 @@ class TestMilestone3Milestone4Integration:
 
         session = PipelineSession(session_id="sess_test_m3_m4")
         session.fingerprints = {
-            "05_chocolate_fudge_standalone.jpg": VisualFingerprint(
-                card_id="05_chocolate_fudge_standalone.jpg",
-                image_path=str(synthetic_card_deck.directory / "05_chocolate_fudge_standalone.jpg"),
+            "card_fudge.jpg": VisualFingerprint(
+                card_id="card_fudge.jpg",
+                image_path=str(tmp_path / "card_fudge.jpg"),
                 sha256_hash="hash1",
                 role=CardRole.STANDALONE,
             ),
-            "06_pecan_pie_standalone.jpg": VisualFingerprint(
-                card_id="06_pecan_pie_standalone.jpg",
-                image_path=str(synthetic_card_deck.directory / "06_pecan_pie_standalone.jpg"),
+            "card_pecan.jpg": VisualFingerprint(
+                card_id="card_pecan.jpg",
+                image_path=str(tmp_path / "card_pecan.jpg"),
                 sha256_hash="hash2",
                 role=CardRole.STANDALONE,
             ),
@@ -598,19 +621,30 @@ class TestMilestone3Milestone4Integration:
         session.approvals = [
             CardPairApproval(
                 proposal_id="prop_1",
-                front_card_id="05_chocolate_fudge_standalone.jpg",
+                front_card_id="card_fudge.jpg",
                 back_card_id=None,
                 decision=HITLDecision.APPROVE,
             ),
             CardPairApproval(
                 proposal_id="prop_2",
-                front_card_id="06_pecan_pie_standalone.jpg",
+                front_card_id="card_pecan.jpg",
                 back_card_id=None,
                 decision=HITLDecision.APPROVE,
             ),
         ]
 
-        extractor = GeminiRecipeExtractor(api_key=None)
+        recipe_fudge = RecipeSchema(
+            title="10-Minute Quick Chocolate Fudge",
+            ingredients=["2 cups sugar", "1/2 cup cocoa"],
+            directions=["Cook and cool."],
+        )
+        recipe_pecan = RecipeSchema(
+            title="Southern Pecan Pie",
+            ingredients=["1 cup pecans", "1 cup corn syrup"],
+            directions=["Bake in pie shell."],
+        )
+        mock_client = CallOrderMockClient([recipe_fudge, recipe_pecan])
+        extractor = GeminiRecipeExtractor(client=mock_client)
         exporter = PlanToEatExporter()
 
         # Extract recipes
@@ -637,7 +671,7 @@ class TestMilestone3Milestone4Integration:
         assert rows[0]["Title"] == "10-Minute Quick Chocolate Fudge"
         assert rows[1]["Title"] == "Southern Pecan Pie"
 
-    def test_fastapi_export_csv_endpoint(self, synthetic_card_deck):
+    def test_fastapi_export_csv_endpoint(self):
         """Tests FastAPI GET /api/export/csv endpoint on completed session with complex recipes."""
         app = create_app()
         manager = SessionManager()

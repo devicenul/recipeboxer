@@ -103,10 +103,27 @@ from tests.conftest import (
 # TEST FIXTURES
 # ============================================================================
 
+class MockSessionManager(SessionManager):
+    def __init__(self, cache_dir: Path | None = None):
+        super().__init__()
+        self.cache_dir = cache_dir
+
+    def create_session(self, *args, **kwargs):
+        session = super().create_session(*args, **kwargs)
+        session.mock_client = MockGeminiClient()
+        if self.cache_dir:
+            self.cache_dir.mkdir(parents=True, exist_ok=True)
+            db_path = self.cache_dir / f"cache_{session.session_id}.db"
+            cache = FingerprintCache(db_path=db_path)
+            session.fingerprint_cache = cache
+            session.cache = cache
+        return session
+
+
 @pytest.fixture
-def adversarial_session_manager() -> SessionManager:
+def adversarial_session_manager(tmp_path: Path) -> SessionManager:
     """Isolated SessionManager instance for adversarial tests."""
-    return SessionManager()
+    return MockSessionManager(cache_dir=tmp_path / "cache")
 
 
 @pytest.fixture

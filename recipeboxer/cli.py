@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
 import logging
 import multiprocessing
 import os
@@ -17,7 +18,7 @@ from recipeboxer.config import get_settings
 
 
 def create_parser() -> argparse.ArgumentParser:
-    """Builds the argument parser for RecipeBoxer CLI."""
+    """Builds the argument parser for RecipeBoxer server CLI."""
     settings = get_settings()
     parser = argparse.ArgumentParser(
         prog="recipeboxer",
@@ -67,6 +68,61 @@ def create_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def create_analyze_parser() -> argparse.ArgumentParser:
+    """Builds argument parser for the 'analyze' headless subcommand (WP-E3, contracts §7)."""
+    parser = argparse.ArgumentParser(
+        prog="recipeboxer analyze",
+        description="Run production headless digitization pipeline with auto-approve.",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+    parser.add_argument(
+        "--input",
+        type=str,
+        required=True,
+        help="Input directory containing recipe card images",
+    )
+    parser.add_argument(
+        "--out",
+        type=str,
+        required=True,
+        help="Output JSON file destination",
+    )
+    parser.add_argument(
+        "--auto-approve",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Auto-approve HITL proposals",
+    )
+    parser.add_argument(
+        "--profile",
+        type=str,
+        choices=["economy", "balanced", "best"],
+        default="balanced",
+        help="Model quality and cost profile",
+    )
+    parser.add_argument(
+        "--image-sets",
+        type=str,
+        default=None,
+        help="Path to JSON file with image sets to skip correlation grouping",
+    )
+    parser.add_argument(
+        "-c",
+        "--concurrency",
+        type=int,
+        default=None,
+        help="Maximum concurrent ingestion tasks",
+    )
+    parser.add_argument(
+        "--log-level",
+        type=str,
+        choices=["critical", "error", "warning", "info", "debug", "trace"],
+        default="info",
+        help="Logging verbosity level",
+    )
+    return parser
+
+
 def main(args: Optional[List[str]] = None) -> int:
     """Main execution entry point for RecipeBoxer."""
     # Essential for PyInstaller on Windows/macOS to prevent infinite subprocess loops
@@ -80,6 +136,36 @@ def main(args: Optional[List[str]] = None) -> int:
             "Please run: python -m cardforge [options]"
         )
         return 0
+
+    if cli_args and cli_args[0] == "analyze":
+        analyze_parser = create_analyze_parser()
+        parsed_analyze = analyze_parser.parse_args(args=cli_args[1:])
+
+        if parsed_analyze.concurrency is not None:
+            os.environ["RECIPEBOXER_MAX_CONCURRENCY"] = str(parsed_analyze.concurrency)
+
+        log_level = getattr(logging, parsed_analyze.log_level.upper(), logging.INFO)
+        logging.basicConfig(
+            level=log_level,
+            format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        )
+
+        from recipeboxer.headless import run_headless_analysis
+
+        try:
+            asyncio.run(
+                run_headless_analysis(
+                    input_dir=parsed_analyze.input,
+                    out_file=parsed_analyze.out,
+                    auto_approve=parsed_analyze.auto_approve,
+                    profile=parsed_analyze.profile,
+                    image_sets=parsed_analyze.image_sets,
+                )
+            )
+            return 0
+        except Exception as exc:
+            logging.getLogger("recipeboxer.cli").error(f"Fatal error during analysis: {exc}", exc_info=True)
+            return 1
 
     parser = create_parser()
     parsed_args = parser.parse_args(args=args)

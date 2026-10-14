@@ -1,12 +1,15 @@
-"""Comprehensive unit tests for RecipeBoxer quantitative evaluation metrics.
+"""Comprehensive unit tests for evals.metrics.
 
-Tests:
-1. Levenshtein distance dynamic programming (strings, word sequences, edge cases).
-2. Text normalization and unicode vulgar fraction standardization.
-3. Character Error Rate (CER) and Word Error Rate (WER) mathematical accuracy.
-4. Recipe-level transcription error rates across ingredients, directions, fractions, and metadata.
-5. Pairing metrics (Precision, Recall, F1, multi-card groupings, standalone cards).
-6. Schema conformity validator (Plan To Eat 9-column, Schema.org JSON-LD, ISO 8601 durations).
+Rewritten for WP-E5 to test the new pure-function evals.metrics suite:
+- Text normalization, unicode NFKC, fractions, and edit distance.
+- CER, WER, and case-handling.
+- Grouping: B-cubed, ARI, exact-cluster accuracy, order Kendall tau, standalone accuracy,
+  false-merge/split rates, Hungarian recipe matching.
+- Extraction: title CER, ingredient Hungarian (CER <= 0.1), quantity/unit exact match with synonyms,
+  direction F1 + tau, per-field CER, hallucination/omission rates, [illegible] precision.
+- Calibration: Expected Calibration Error (ECE).
+- Ops: ledger summary with token counts, latency, retries, and USD pricing.
+- Aggregation: overall means and per-group breakdowns with explicit n.
 """
 
 from __future__ import annotations
@@ -14,23 +17,21 @@ from __future__ import annotations
 import math
 import pytest
 
-from recipeboxer.evals.metrics import (
-    PairingMetricResult,
-    SchemaConformityResult,
-    TranscriptionMetricResult,
-    calculate_direction_sequence_score,
-    calculate_fraction_accuracy,
-    calculate_pairing_metrics,
-    calculate_transcription_metrics,
-    character_error_rate,
+from evals.metrics import (
+    aggregate,
+    cer,
+    ece,
     extract_fractions,
     levenshtein_distance,
+    match_recipes,
     normalize_text,
-    validate_schema_conformity,
-    word_error_rate,
+    normalize_unit,
+    quantities_match,
+    score_grouping,
+    score_recipe,
+    summarize_ledger,
+    wer,
 )
-from recipeboxer.models.correlation import CorrelationProposal, CorrelationResult
-from recipeboxer.models.recipe import RecipeSchema
 
 
 # ============================================================================
@@ -65,7 +66,6 @@ class TestLevenshteinDistance:
         assert levenshtein_distance("chocolate", "caramel") == 7
 
     def test_asymmetric_sequence_lengths(self):
-        # Test that O(min(N, M)) swapping works identically in both orderings
         assert levenshtein_distance("a", "abcdefghij") == 9
         assert levenshtein_distance("abcdefghij", "a") == 9
 
@@ -89,14 +89,17 @@ class TestTextNormalization:
     def test_all_standard_vulgar_fractions(self):
         fractions_str = "½ ⅓ ⅔ ¼ ¾ ⅕ ⅖ ⅗ ⅘ ⅙ ⅚ ⅛ ⅜ ⅝ ⅞"
         norm = normalize_text(fractions_str)
-        expected = ["1/2", "1/3", "2/3", "1/4", "3/4", "1/5", "2/5", "3/5", "4/5", "1/6", "5/6", "1/8", "3/8", "5/8", "7/8"]
+        expected = [
+            "1/2", "1/3", "2/3", "1/4", "3/4", "1/5", "2/5", "3/5", "4/5",
+            "1/6", "5/6", "1/8", "3/8", "5/8", "7/8",
+        ]
         for exp in expected:
             assert exp in norm
 
     def test_smart_quotes_dashes_degrees(self):
         raw = '“Grandma’s Special”—Bake at 375°F for 45 mins.'
         norm = normalize_text(raw)
-        assert "375 f" in norm or "375" in norm
+        assert "375 f" in norm
         assert "grandma" in norm
         assert "“" not in norm
         assert "”" not in norm
@@ -111,34 +114,30 @@ class TestTextNormalization:
         norm_default = normalize_text(raw)
         assert norm_default == "bake at 350 f"
 
-        norm_preserve = normalize_text(raw, preserve_case=True, preserve_punctuation=True)
+        norm_preserve = normalize_text(raw, case_sensitive=True, preserve_punctuation=True)
         assert "Bake" in norm_preserve
         assert "!" in norm_preserve
+
+    def test_unicode_nfkc_normalization(self):
+        # Ligature 'ﬁ' (U+FB01) should normalize to 'fi' under NFKC
+        raw = "ﬁne flour"
+        norm = normalize_text(raw)
+        assert "fine flour" == norm
 
     def test_extract_fractions(self):
         text = "Use 1 1/2 cups flour, ½ cup sugar, 3/4 tsp cinnamon, and ⅛ tsp allspice."
         fracs = extract_fractions(text)
-        assert "1 1/2" in fracs or "1/2" in fracs
+        assert "1 1/2" in fracs
+        assert "1/2" in fracs
         assert "3/4" in fracs
         assert "1/8" in fracs
 
-    def test_extract_fractions_unicode_slashes_and_whitespace(self):
-        # Test fraction slash U+2044 and division slash U+2215 and spaces around slashes
-        text = "Add 1⁄2 cup milk, 3∕4 tsp baking powder, and 1 / 4 cup butter."
+    def test_extract_fractions_hyphenated_and_slashes(self):
+        text = "1-1/2 cups flour, 1⁄2 cup milk, 3∕4 tsp salt"
         fracs = extract_fractions(text)
+        assert "1 1/2" in fracs
         assert "1/2" in fracs
         assert "3/4" in fracs
-        assert "1/4" in fracs
-
-    def test_extract_fractions_hyphenated_mixed_numbers(self):
-        text = "1-1/2 cups flour, 2-1/4 tsp sugar, and 3 - 3/4 cups water."
-        fracs = extract_fractions(text)
-        assert fracs == ["1 1/2", "2 1/4", "3 3/4"]
-
-    def test_extract_fractions_empty_or_none(self):
-        assert extract_fractions("") == []
-        assert extract_fractions(None) == []
-        assert extract_fractions("No numbers here") == []
 
 
 # ============================================================================
@@ -149,336 +148,363 @@ class TestErrorRates:
     """Tests for CER and WER metric accuracy and boundary conditions."""
 
     def test_cer_exact_match(self):
-        assert character_error_rate("Preheat oven to 375°F", "Preheat oven to 375°F") == 0.0
-        assert character_error_rate("1/2 cup butter", "½ cup butter") == 0.0
+        assert cer("Preheat oven to 375°F", "Preheat oven to 375°F") == 0.0
+        # Unicode fraction equivalence: ½ == 1/2
+        assert cer("1/2 cup butter", "½ cup butter") == 0.0
 
     def test_cer_empty_strings(self):
-        assert character_error_rate("", "") == 0.0
-        assert character_error_rate(None, None) == 0.0
-        assert character_error_rate("sugar", "") == 1.0
-        assert character_error_rate("", "sugar") == 1.0
+        assert cer("", "") == 0.0
+        assert cer(None, None) == 0.0
+        assert cer("sugar", "") == 1.0
+        assert cer("", "sugar") == 1.0
 
     def test_cer_single_character_corruption(self):
         # 1 edit over 4 normalized chars = 0.25
-        cer = character_error_rate("salt", "silt", normalize=False)
-        assert pytest.approx(cer, 0.001) == 0.25
+        c = cer("salt", "silt", normalize=False)
+        assert pytest.approx(c, 0.001) == 0.25
 
-    def test_cer_complete_divergence(self):
-        cer = character_error_rate("aaaa", "bbbb", normalize=False)
-        assert pytest.approx(cer, 0.001) == 1.0
+    def test_cer_case_sensitivity_option(self):
+        c_insensitive = cer("Flour", "flour", case_sensitive=False)
+        assert c_insensitive == 0.0
+        c_sensitive = cer("Flour", "flour", case_sensitive=True)
+        assert c_sensitive > 0.0
 
     def test_wer_exact_match(self):
-        assert word_error_rate("Combine flour sugar salt", "Combine flour sugar salt") == 0.0
-        assert word_error_rate("Add 1/2 cup milk", "Add ½ cup milk") == 0.0
+        assert wer("Combine flour sugar salt", "Combine flour sugar salt") == 0.0
+        assert wer("Add 1/2 cup milk", "Add ½ cup milk") == 0.0
 
     def test_wer_empty_strings(self):
-        assert word_error_rate("", "") == 0.0
-        assert word_error_rate(None, None) == 0.0
-        assert word_error_rate("one two", "") == 1.0
-        assert word_error_rate("", "one two") == 1.0
-
-    def test_wer_single_word_substitution(self):
-        # 1 word edit over 4 words = 0.25
-        wer = word_error_rate("mix flour and sugar", "mix flour and butter")
-        assert pytest.approx(wer, 0.001) == 0.25
-
-    def test_wer_word_deletion_and_insertion(self):
-        # Deletion: 1 deletion over 4 words = 0.25
-        wer_del = word_error_rate("bake in hot oven", "bake in oven")
-        assert pytest.approx(wer_del, 0.001) == 0.25
-
-        # Insertion: 1 insertion over 3 words = 0.3333
-        wer_ins = word_error_rate("bake in oven", "bake in hot oven")
-        assert pytest.approx(wer_ins, 0.001) == 1.0 / 3.0
+        assert wer("", "") == 0.0
+        assert wer(None, None) == 0.0
+        assert wer("one two", "") == 1.0
+        assert wer("", "one two") == 1.0
 
 
 # ============================================================================
-# 4. RECIPE TRANSCRIPTION METRIC SUITE TESTS
+# 4. UNIT & QUANTITY NORMALIZATION TESTS
 # ============================================================================
 
-class TestRecipeTranscriptionMetrics:
-    """Tests for recipe-level metric calculations."""
+class TestUnitAndQuantityNormalization:
+    """Tests for ingredient unit synonyms and quantity equivalence."""
+
+    def test_unit_synonyms(self):
+        assert normalize_unit("c") == "cup"
+        assert normalize_unit("c.") == "cup"
+        assert normalize_unit("cup") == "cup"
+        assert normalize_unit("cups") == "cup"
+
+        assert normalize_unit("tsp") == "tsp"
+        assert normalize_unit("t") == "tsp"
+        assert normalize_unit("teaspoon") == "tsp"
+
+        assert normalize_unit("tbsp") == "tbsp"
+        assert normalize_unit("T") == "tbsp"
+        assert normalize_unit("tablespoon") == "tbsp"
+
+        assert normalize_unit("lb") == "lb"
+        assert normalize_unit("pound") == "lb"
+        assert normalize_unit("lbs") == "lb"
+
+        assert normalize_unit("oz") == "oz"
+        assert normalize_unit("ounce") == "oz"
+
+    def test_quantities_match(self):
+        assert quantities_match("1 1/2", "1-1/2") is True
+        assert quantities_match("1 1/2", "1.5") is True
+        assert quantities_match("1/2", "0.5") is True
+        assert quantities_match("½", "1/2") is True
+        assert quantities_match("3/4", "0.75") is True
+        assert quantities_match("2", "2.0") is True
+        assert quantities_match("1/2", "3/4") is False
+
+
+# ============================================================================
+# 5. GROUPING METRICS TESTS
+# ============================================================================
+
+class TestGroupingMetrics:
+    """Tests for B-cubed, ARI, exact-cluster, order Kendall tau, and Hungarian matching."""
+
+    def test_match_recipes_perfect_overlap(self):
+        pred = [["c1", "c2"], ["c3"]]
+        gold = [["c1", "c2"], ["c3"]]
+        matches = match_recipes(pred, gold)
+        assert len(matches) == 2
+        # (0, 0, 1.0) and (1, 1, 1.0)
+        for p, g, iou in matches:
+            assert p is not None and g is not None
+            assert iou == 1.0
+
+    def test_match_recipes_unmatched_pred_and_gold(self):
+        pred = [["c1"], ["c2"]]
+        gold = [["c1"], ["c3"]]
+        matches = match_recipes(pred, gold)
+        # Matches: c1 matched (0, 0, 1.0), c2 unmatched (1, None, 0.0), c3 unmatched (None, 1, 0.0)
+        assert (0, 0, 1.0) in matches
+        assert (1, None, 0.0) in matches
+        assert (None, 1, 0.0) in matches
+
+    def test_score_grouping_identical(self):
+        pred = [["c1", "c2"], ["c3"]]
+        gold = [["c1", "c2"], ["c3"]]
+        res = score_grouping(pred, gold)
+        assert res["bcubed_p"] == 1.0
+        assert res["bcubed_r"] == 1.0
+        assert res["bcubed_f1"] == 1.0
+        assert res["ari"] == 1.0
+        assert res["exact_cluster_acc"] == 1.0
+        assert res["order_kendall_tau"] == 1.0
+        assert res["standalone_acc"] == 1.0
+        assert res["false_merge_rate"] == 0.0
+        assert res["false_split_rate"] == 0.0
+        assert res["n_pred"] == 2
+        assert res["n_gold"] == 2
+
+    def test_score_grouping_face_order_kendall_tau(self):
+        # Card order reversed in multi-card recipe
+        pred = [["c2", "c1"]]
+        gold = [["c1", "c2"]]
+        res = score_grouping(pred, gold)
+        # 1 discordant pair, 0 concordant -> tau = -1.0
+        assert res["order_kendall_tau"] == -1.0
+        # Cluster sets are identical: exact_cluster_acc is 1.0 (set based)
+        assert res["exact_cluster_acc"] == 1.0
+
+    def test_score_grouping_false_merge_and_split(self):
+        # Over-clustering: merged two gold recipes
+        pred = [["c1", "c2", "c3"]]
+        gold = [["c1", "c2"], ["c3"]]
+        res = score_grouping(pred, gold)
+        assert res["false_merge_rate"] > 0.0
+        assert res["false_split_rate"] == 0.0
+
+        # Under-clustering: split one recipe into two singletons
+        pred_split = [["c1"], ["c2"], ["c3"]]
+        res_split = score_grouping(pred_split, gold)
+        assert res_split["false_split_rate"] > 0.0
+        assert res_split["false_merge_rate"] == 0.0
+
+
+# ============================================================================
+# 6. RECIPE EXTRACTION METRICS TESTS
+# ============================================================================
+
+class TestExtractionMetrics:
+    """Tests for score_recipe and aggregate functions."""
 
     @pytest.fixture
-    def sample_recipe(self) -> RecipeSchema:
-        return RecipeSchema(
-            recipe_id="rec_apple_crisp",
-            title="Grandma's Apple Crisp",
-            description="Traditional 1948 family dessert recipe.",
-            prep_time="20 mins",
-            cook_time="35 mins",
-            total_time="55 mins",
-            yield_servings="6 servings",
-            ingredients=[
-                "5 medium apples, sliced",
-                "1/2 cup granulated sugar",
-                "3/4 cup flour",
-                "1/3 cup butter, cold",
-                "1/4 tsp salt",
+    def sample_gold(self) -> dict:
+        return {
+            "title": "Grandma's Apple Crisp",
+            "yield": "6 servings",
+            "source_note": "1948 Handwritten Card",
+            "ingredients": [
+                {"raw": "5 medium apples, sliced", "quantity": "5", "unit": None, "item": "apples"},
+                {"raw": "1/2 cup granulated sugar", "quantity": "1/2", "unit": "cup", "item": "sugar"},
+                {"raw": "3/4 cup flour", "quantity": "3/4", "unit": "cup", "item": "flour"},
+                {"raw": "1/3 cup butter", "quantity": "1/3", "unit": "cup", "item": "butter"},
+                {"raw": "1/4 tsp salt", "quantity": "1/4", "unit": "tsp", "item": "salt"},
             ],
-            directions=[
+            "directions": [
                 "1. Preheat oven to 375°F and grease dish.",
                 "2. Toss apples with sugar.",
                 "3. Combine flour, butter, and salt until crumbly.",
                 "4. Spread topping over apples and bake 35 mins.",
             ],
-            tags=["Dessert", "Baking"],
-            source_notes="1948 Handwritten Card",
-        )
+            "notes": ["Serve warm with vanilla ice cream."],
+        }
 
-    def test_identical_recipe_metrics(self, sample_recipe: RecipeSchema):
-        res = calculate_transcription_metrics(sample_recipe, sample_recipe)
-        assert res.overall_cer == 0.0
-        assert res.overall_wer == 0.0
-        assert res.ingredient_cer == 0.0
-        assert res.direction_cer == 0.0
-        assert res.fraction_accuracy == 1.0
-        assert res.direction_sequence_score == 1.0
+    def test_identical_recipe_scores(self, sample_gold: dict):
+        res = score_recipe(sample_gold, sample_gold)
+        assert res["title_cer"] == 0.0
+        assert res["ingredient_p"] == 1.0
+        assert res["ingredient_r"] == 1.0
+        assert res["ingredient_f1"] == 1.0
+        assert res["qty_unit_exact"] == 1.0
+        assert res["direction_f1"] == 1.0
+        assert res["direction_tau"] == 1.0
+        assert res["hallucination_rate"] == 0.0
+        assert res["omission_rate"] == 0.0
+        assert res["illegible_precision"] is None
 
-    def test_partially_mutated_recipe_metrics(self, sample_recipe: RecipeSchema):
-        mutated = sample_recipe.model_copy(deep=True)
-        # Mutate one ingredient
-        mutated.ingredients = [
-            "5 medium apples, sliced",
-            "1/2 cup brown sugar",  # was granulated sugar
-            "3/4 cup flour",
-            "1/3 cup butter, cold",
-            "1/4 tsp salt",
-        ]
-        res = calculate_transcription_metrics(sample_recipe, mutated)
-        assert res.overall_cer > 0.0
-        assert res.ingredient_cer > 0.0
-        assert res.direction_cer == 0.0  # directions unchanged
-        assert res.fraction_accuracy == 1.0  # fractions unchanged
-
-    def test_fraction_accuracy_calculation(self):
-        ref_fracs = ["1/2", "3/4", "1/8"]
-        hyp_fracs = ["1/2", "3/4", "1/4"]  # 1 mismatch
-
-        acc = calculate_fraction_accuracy(ref_fracs, hyp_fracs)
-        # TP = 2 ("1/2", "3/4"), FP = 1 ("1/4"), FN = 1 ("1/8")
-        # P = 2/3, R = 2/3, F1 = 2/3
-        assert pytest.approx(acc, 0.001) == 2.0 / 3.0
-
-        # Empty cases
-        assert calculate_fraction_accuracy([], []) == 1.0
-        assert calculate_fraction_accuracy(["1/2"], []) == 0.0
-        assert calculate_fraction_accuracy([], ["1/2"]) == 0.0
-
-    def test_fraction_accuracy_hyphenated_mixed_number_matching(self):
-        ref_fracs = extract_fractions("1 1/2 cups flour and 3/4 tsp salt")
-        hyp_fracs = extract_fractions("1-1/2 cups flour and 3/4 tsp salt")
-        assert calculate_fraction_accuracy(ref_fracs, hyp_fracs) == 1.0
-
-    def test_direction_sequence_score_monotonicity(self):
-        ref_dirs = ["1. Step one", "2. Step two", "3. Step three"]
-        hyp_dirs = ["1. Step one", "2. Step two", "3. Step three"]
-        assert calculate_direction_sequence_score(ref_dirs, hyp_dirs) == 1.0
-
-        # Non-sequential numbers
-        broken_dirs = ["1. Step one", "4. Step two", "5. Step three"]
-        score_broken = calculate_direction_sequence_score(ref_dirs, broken_dirs)
-        assert score_broken < 1.0
-
-    def test_direction_sequence_score_various_numbering_prefixes(self):
-        ref_dirs = ["1. Step one", "2. Step two", "3. Step three"]
-        hyp_paren = ["(1) Step one", "(2) Step two", "(3) Step three"]
-        hyp_step_dash = ["Step 1 - Step one", "Step 2 - Step two", "Step 3 - Step three"]
-        hyp_colon = ["1: Step one", "2: Step two", "3: Step three"]
-        assert calculate_direction_sequence_score(ref_dirs, hyp_paren) == 1.0
-        assert calculate_direction_sequence_score(ref_dirs, hyp_step_dash) == 1.0
-        assert calculate_direction_sequence_score(ref_dirs, hyp_colon) == 1.0
-
-    def test_direction_sequence_score_unnumbered_steps(self):
-        ref_dirs = ["Mix flour and sugar.", "Pour into greased baking pan.", "Bake 20 mins."]
-        hyp_dirs = ["Mix flour and sugar.", "Pour into greased baking pan.", "Bake 20 mins."]
-        assert calculate_direction_sequence_score(ref_dirs, hyp_dirs) == 1.0
-
-    def test_recipe_metrics_null_and_empty_elements_tolerance(self, sample_recipe: RecipeSchema):
-        # Mutate to include empty or whitespace strings
-        mutated = sample_recipe.model_copy(deep=True)
-        mutated.ingredients = ["1 cup flour", "", "2 tbsp sugar"]
-        mutated.directions = ["1. First step", "2. Second step"]
-        res = calculate_transcription_metrics(sample_recipe, mutated)
-        assert isinstance(res, TranscriptionMetricResult)
-        assert res.overall_cer >= 0.0
-
-
-# ============================================================================
-# 5. PAIRING METRICS TESTS
-# ============================================================================
-
-class TestPairingMetrics:
-    """Tests for correlation proposal Precision, Recall, and F1 calculations."""
-
-    def test_perfect_pairs_and_standalones(self):
-        gt = [("card1_front.jpg", "card1_back.jpg"), ("card2_front.jpg", "card2_back.jpg"), ("card3_single.jpg", None)]
-        pred = [("card1_front.jpg", "card1_back.jpg"), ("card2_front.jpg", "card2_back.jpg"), ("card3_single.jpg", None)]
-
-        res = calculate_pairing_metrics(pred, gt)
-        assert res.precision == 1.0
-        assert res.recall == 1.0
-        assert res.f1_score == 1.0
-        assert res.true_positives == 3
-        assert res.false_positives == 0
-        assert res.false_negatives == 0
-
-    def test_empty_predictions_and_ground_truth(self):
-        res = calculate_pairing_metrics([], [])
-        assert res.precision == 1.0
-        assert res.recall == 1.0
-        assert res.f1_score == 1.0
-
-    def test_partial_match_with_fp_and_fn(self):
-        gt = [
-            ("c1_f.jpg", "c1_b.jpg"),
-            ("c2_f.jpg", "c2_b.jpg"),
-            ("c3_f.jpg", "c3_b.jpg"),
-        ]
-        # Predicted: c1 matched correctly, c2 matched with c3 (FP), c3 missed (FN)
-        pred = [
-            ("c1_f.jpg", "c1_b.jpg"),  # TP
-            ("c2_f.jpg", "c3_b.jpg"),  # FP
-        ]
-        res = calculate_pairing_metrics(pred, gt)
-        assert res.true_positives == 1
-        assert res.false_positives == 1
-        assert res.false_negatives == 2
-        # P = 1 / 2 = 0.5, R = 1 / 3 = 0.3333, F1 = 2 * 0.5 * (1/3) / (0.5 + 1/3) = 0.4
-        assert pytest.approx(res.precision, 0.001) == 0.5
-        assert pytest.approx(res.recall, 0.001) == 1.0 / 3.0
-        assert pytest.approx(res.f1_score, 0.001) == 0.4
-
-    def test_correlation_proposal_objects_input(self):
-        gt = [("c1_front", "c1_back"), ("c2_solo", None)]
-        pred = [
-            CorrelationProposal(
-                proposal_id="p1",
-                front_card_id="c1_front",
-                back_card_id="c1_back",
-                confidence=0.95,
-                recommended_action="PAIR",
-            ),
-            CorrelationProposal(
-                proposal_id="p2",
-                front_card_id="c2_solo",
-                back_card_id=None,
-                is_standalone=True,
-                confidence=0.90,
-                recommended_action="STANDALONE",
-            ),
-        ]
-        res = calculate_pairing_metrics(pred, gt)
-        assert res.f1_score == 1.0
-        assert res.true_positives == 2
-
-    def test_multi_card_clusters(self):
-        # 3-card recipe grouping cluster
-        gt = [{"c1", "c2", "c3"}]
-        pred = [{"c1", "c2", "c3"}]
-        res = calculate_pairing_metrics(pred, gt)
-        assert res.true_positives >= 1
-        assert res.f1_score == 1.0
-        assert res.multi_card_accuracy == 1.0
-
-
-# ============================================================================
-# 6. SCHEMA CONFORMITY VALIDATOR TESTS
-# ============================================================================
-
-class TestSchemaConformityValidator:
-    """Tests for Plan To Eat and Schema.org RFC conformity checks."""
-
-    def test_valid_recipe_passes_all_checks(self):
-        recipe = RecipeSchema(
-            recipe_id="rec_valid_001",
-            title="Old Fashioned Sugar Cookies",
-            description="Crispy vintage rolled sugar cookies.",
-            prep_time="20 mins",
-            cook_time="10 mins",
-            total_time="30 mins",
-            yield_servings="24 cookies",
-            ingredients=["2 cups flour", "1 cup sugar", "1/2 cup butter", "1 tsp baking powder"],
-            directions=[
-                "1. Preheat oven to 375°F.",
-                "2. Cream butter and sugar.",
-                "3. Roll dough and cut shapes.",
-                "4. Bake 10 mins until lightly golden.",
+    def test_unit_synonym_matching_in_extraction(self, sample_gold: dict):
+        pred = {
+            "title": "Grandma's Apple Crisp",
+            "ingredients": [
+                {"raw": "5 medium apples, sliced", "quantity": "5", "unit": None, "item": "apples"},
+                # "1/2 cup granulated sugar" with '½' and 'c.' synonym
+                {"raw": "1/2 cup granulated sugar", "quantity": "½", "unit": "c.", "item": "sugar"},
+                # "3/4 cup flour" with '0.75' and 'cups' synonym
+                {"raw": "3/4 cup flour", "quantity": "0.75", "unit": "cups", "item": "flour"},
+                # "1/3 cup butter"
+                {"raw": "1/3 cup butter", "quantity": "1/3", "unit": "cup", "item": "butter"},
+                # "1/4 tsp salt" with 't.' synonym for tsp
+                {"raw": "1/4 tsp salt", "quantity": "1/4", "unit": "t.", "item": "salt"},
             ],
-            tags=["Cookies", "Vintage"],
-            source_notes="Grandma's Box 1952",
-        )
-        res = validate_schema_conformity(recipe)
-        assert res.is_valid is True
-        assert res.conformity_score == 1.0
-        assert res.plan_to_eat_compliant is True
-        assert res.schema_org_compliant is True
-        assert res.non_empty_title is True
-        assert res.non_empty_ingredients is True
-        assert res.non_empty_directions is True
-        assert res.sequential_directions is True
-        assert res.iso8601_duration_valid is True
-        assert res.fractions_clean is True
-        assert len(res.failed_checks) == 0
+            "directions": sample_gold["directions"],
+        }
+        res = score_recipe(pred, sample_gold)
+        # All 5 ingredients matched (CER <= 0.1) and all units matched via synonyms
+        assert res["ingredient_f1"] == 1.0
+        assert res["qty_unit_exact"] == 1.0
 
-    def test_empty_ingredients_fails(self):
-        recipe = RecipeSchema(
-            recipe_id="rec_bad_001",
-            title="Empty Recipe",
-            ingredients=[],
-            directions=["1. Do something."],
-        )
-        res = validate_schema_conformity(recipe)
-        assert res.is_valid is False
-        assert "non_empty_ingredients" in res.failed_checks
-        assert res.non_empty_ingredients is False
+    def test_omitted_recipe_scores(self, sample_gold: dict):
+        res = score_recipe(None, sample_gold)
+        assert res["title_cer"] == 1.0
+        assert res["ingredient_f1"] == 0.0
+        assert res["direction_f1"] == 0.0
+        assert res["omission_rate"] == 1.0
+        assert res["hallucination_rate"] == 0.0
 
-    def test_non_sequential_directions_fails(self):
-        # We bypass pydantic validator to test raw schema conformity detection
-        recipe = RecipeSchema.model_construct(
-            recipe_id="rec_bad_seq",
-            title="Out of order steps",
-            ingredients=["1 cup flour"],
-            directions=["1. First step", "3. Third step (skipped 2)"],
-        )
-        res = validate_schema_conformity(recipe)
-        assert "sequential_directions" in res.failed_checks
-        assert res.sequential_directions is False
+    def test_hallucination_rate(self, sample_gold: dict):
+        pred = {
+            "title": sample_gold["title"],
+            "ingredients": sample_gold["ingredients"] + [
+                {"raw": "1 cup chocolate chips (extra)", "quantity": "1", "unit": "cup", "item": "chocolate"}
+            ],
+            "directions": sample_gold["directions"],
+        }
+        res = score_recipe(pred, sample_gold)
+        # 1 extra predicted line out of 10 total predicted lines = 0.1
+        assert res["hallucination_rate"] == 0.1
 
-    def test_invalid_duration_fails(self):
-        recipe = RecipeSchema(
-            recipe_id="rec_bad_time",
-            title="Invalid Time Recipe",
-            prep_time="unparseable gibberish time string XYZ",
-            ingredients=["1 cup milk"],
-            directions=["1. Drink milk."],
-        )
-        res = validate_schema_conformity(recipe)
-        assert "iso8601_duration_valid" in res.failed_checks
-        assert res.iso8601_duration_valid is False
+    def test_illegible_marker_precision(self, sample_gold: dict):
+        gold = dict(sample_gold)
+        gold["ingredients"] = [
+            {"raw": "1 [illegible] sugar", "quantity": "1", "unit": "[illegible]", "item": "sugar"}
+        ]
+        pred = {
+            "title": sample_gold["title"],
+            "ingredients": [
+                {"raw": "1 [illegible: stain] sugar", "quantity": "1", "unit": None, "item": "sugar"}
+            ],
+            "directions": [],
+        }
+        res = score_recipe(pred, gold, gold_verbatim=["1 [illegible] sugar"])
+        assert res["illegible_precision"] == 1.0
 
-    def test_corrupt_fraction_character_fails(self):
-        recipe = RecipeSchema(
-            recipe_id="rec_corrupt_frac",
-            title="Corrupted Glyph Recipe",
-            ingredients=["1 \ufffd cup flour"],
-            directions=["1. Mix."],
-        )
-        res = validate_schema_conformity(recipe)
-        assert "fractions_clean" in res.failed_checks
-        assert res.fractions_clean is False
 
-    def test_zero_duration_strings_conformity_valid(self):
-        # Compound zero duration strings e.g. "0 hours 0 minutes", "0 hrs 0 mins"
-        recipe = RecipeSchema(
-            recipe_id="rec_zero_time",
-            title="No-Bake Refrigerator Recipe",
-            prep_time="15 mins",
-            cook_time="0 hours 0 minutes",
-            total_time="15 mins",
-            ingredients=["1 cup oats", "1/2 cup peanut butter"],
-            directions=["1. Mix ingredients.", "2. Chill in refrigerator."],
-        )
-        res = validate_schema_conformity(recipe)
-        assert "iso8601_duration_valid" in res.passed_checks
-        assert res.iso8601_duration_valid is True
+# ============================================================================
+# 7. CALIBRATION & OPS TESTS
+# ============================================================================
+
+class TestCalibrationAndOps:
+    """Tests for ECE and ledger summary with pricing."""
+
+    def test_ece_perfect_calibration(self):
+        # High confidence and correct; low confidence and incorrect
+        confs = [0.95, 0.95, 0.1, 0.1]
+        correct = [True, True, False, False]
+        score = ece(confs, correct, n_bins=10)
+        assert score < 0.15
+
+    def test_ece_complete_miscalibration(self):
+        # 100% confidence, but 0% correct
+        confs = [1.0, 1.0, 1.0]
+        correct = [False, False, False]
+        score = ece(confs, correct, n_bins=10)
+        assert score == 1.0
+
+    def test_summarize_ledger_with_pricing(self):
+        ledger = {
+            "calls": [
+                {
+                    "stage": "transcribe",
+                    "model": "gemini-2.5-flash",
+                    "input_tokens": 1_000_000,
+                    "output_tokens": 500_000,
+                    "thinking_tokens": 0,
+                    "latency_ms": 1200.0,
+                    "attempts": 2,  # 1 retry
+                },
+                {
+                    "stage": "structure",
+                    "model": "gemini-2.5-pro",
+                    "input_tokens": 500_000,
+                    "output_tokens": 200_000,
+                    "thinking_tokens": 100_000,
+                    "latency_ms": 3000.0,
+                    "attempts": 1,
+                },
+            ],
+            "failures": [{"stage": "transcribe", "reason": "rate_limit"}],
+        }
+        pricing = {
+            "gemini-2.5-flash": {
+                "input_per_mtok": 0.10,
+                "output_per_mtok": 0.40,
+                "thinking_per_mtok": 0.40,
+            },
+            "gemini-2.5-pro": {
+                "input_per_mtok": 1.25,
+                "output_per_mtok": 5.00,
+                "thinking_per_mtok": 5.00,
+            },
+        }
+
+        res = summarize_ledger(ledger, pricing)
+        assert res["total_calls"] == 2
+        assert res["total_retries"] == 1
+        assert res["total_latency_ms"] == 4200.0
+        assert res["total_input_tokens"] == 1_500_000
+        assert res["total_output_tokens"] == 700_000
+
+        # Flash cost: (1M * 0.10 + 0.5M * 0.40) = 0.10 + 0.20 = $0.30
+        # Pro cost: (0.5M * 1.25 + 0.2M * 5.00 + 0.1M * 5.00) = 0.625 + 1.00 + 0.50 = $2.125
+        # Total: $2.425
+        assert pytest.approx(res["total_cost_usd"], 0.001) == 2.425
+        assert res["failures_by_stage"]["transcribe"] == 1
+
+
+# ============================================================================
+# 8. AGGREGATION TESTS
+# ============================================================================
+
+class TestAggregation:
+    """Tests for aggregate function with overall means and category breakdowns."""
+
+    def test_aggregate_means_and_breakdowns(self):
+        rows = [
+            {
+                "deck_type": "homogeneous",
+                "modality": "HANDWRITTEN_CURSIVE",
+                "faces": 2,
+                "title_cer": 0.05,
+                "ingredient_f1": 0.90,
+                "illegible_precision": None,  # should be excluded from illegible_precision count
+            },
+            {
+                "deck_type": "homogeneous",
+                "modality": "HANDWRITTEN_CURSIVE",
+                "faces": 2,
+                "title_cer": 0.15,
+                "ingredient_f1": 0.70,
+                "illegible_precision": 1.0,
+            },
+            {
+                "deck_type": "mixed",
+                "modality": "TYPEWRITTEN",
+                "faces": 1,
+                "title_cer": 0.00,
+                "ingredient_f1": 1.00,
+                "illegible_precision": "N/A",  # string N/A excluded
+            },
+        ]
+
+        agg = aggregate(rows, by=["deck_type", "modality"])
+        overall = agg["overall"]
+
+        # title_cer mean: (0.05 + 0.15 + 0.00) / 3 = 0.0667
+        assert pytest.approx(overall["title_cer"]["mean"], 0.001) == 0.0667
+        assert overall["title_cer"]["n"] == 3
+
+        # illegible_precision has only 1 valid value
+        assert overall["illegible_precision"]["mean"] == 1.0
+        assert overall["illegible_precision"]["n"] == 1
+
+        # Breakdowns
+        breakdowns = agg["breakdowns"]
+        assert "deck_type" in breakdowns
+        assert "homogeneous" in breakdowns["deck_type"]
+        assert breakdowns["deck_type"]["homogeneous"]["count"] == 2
+        assert breakdowns["deck_type"]["mixed"]["count"] == 1

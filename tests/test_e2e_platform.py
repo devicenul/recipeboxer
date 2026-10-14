@@ -121,11 +121,24 @@ def isolated_session_store(tmp_path: Path) -> SessionStore:
     return SessionStore(db_file)
 
 
+from tests.conftest import MockGeminiClient
+
+
+class MockSessionManager(SessionManager):
+    def __init__(self, mock_client: Optional[MockGeminiClient] = None, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.mock_client = mock_client or MockGeminiClient()
+
+    def create_session(self, config=None, session_id=None, settings=None, **kwargs):
+        if self.mock_client is not None and "mock_client" not in kwargs:
+            kwargs["mock_client"] = self.mock_client
+        return super().create_session(config=config, session_id=session_id, settings=settings, **kwargs)
+
+
 @pytest.fixture
 def isolated_session_manager() -> SessionManager:
-    """Isolated SessionManager with isolated state."""
-    manager = SessionManager()
-    return manager
+    """Isolated SessionManager with isolated state and mock client."""
+    return MockSessionManager()
 
 
 @pytest.fixture

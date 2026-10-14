@@ -12,6 +12,8 @@ import asyncio
 import csv
 import io
 import shutil
+import tempfile
+import uuid
 from pathlib import Path
 from typing import Any, AsyncGenerator, Dict, List
 
@@ -24,6 +26,7 @@ from recipeboxer.agent.session import PipelineSession, SessionManager
 from recipeboxer.api.app import create_app
 from recipeboxer.models.hitl import ApprovalPayload, CardPairApproval, HITLDecision
 from recipeboxer.models.pipeline import PipelineState
+from recipeboxer.storage.cache import FingerprintCache
 from tests.conftest import (
     MockGeminiClient,
     SQLiteFingerprintCache,
@@ -32,10 +35,38 @@ from tests.conftest import (
 )
 
 
+from recipeboxer.models.recipe import RecipeSchema
+
+
+class ChallengerSessionManager(SessionManager):
+    """Isolated SessionManager that provides an offline mock recipe extractor and isolated cache for testing."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._temp_dir = tempfile.TemporaryDirectory()
+
+    def create_session(self, *args, **kwargs) -> PipelineSession:
+        if "cache" not in kwargs or kwargs["cache"] is None:
+            kwargs["cache"] = FingerprintCache(Path(self._temp_dir.name) / f"cache_{uuid.uuid4().hex[:8]}.db")
+        session = super().create_session(*args, **kwargs)
+        if session.recipe_extractor_fn is None:
+            def _default_extractor(*extractor_args, **extractor_kwargs):
+                return RecipeSchema(
+                    title="Challenger Test Recipe",
+                    description="Test recipe for challenger suite",
+                    ingredients=["1 cup sugar", "2 cups flour"],
+                    directions=["1. Mix ingredients.", "2. Bake at 350F for 30 minutes."],
+                    tags=["Baking", "Challenger"],
+                    source_notes="Challenger test source",
+                )
+            session.recipe_extractor_fn = _default_extractor
+        return session
+
+
 @pytest.fixture
 def challenger_session_manager() -> SessionManager:
     """Isolated SessionManager instance for challenger stress tests."""
-    return SessionManager()
+    return ChallengerSessionManager()
 
 
 @pytest.fixture
@@ -411,6 +442,18 @@ class TestEmpiricalChallengerM3M4:
             })
             assert start_res.status_code == 200
             sid = start_res.json()["session_id"]
+            session = challenger_session_manager.get_session(sid)
+            if session is not None:
+                session.recipe_extractor_fn = (
+                    lambda *args, kw=expected_keyword, **kwargs: RecipeSchema(
+                        title=f"Grandma's Special {kw}",
+                        description=f"Authentic {kw} recipe",
+                        ingredients=[f"2 cups {kw} mix", "1 cup milk"],
+                        directions=[f"1. Prepare the {kw}.", "2. Bake at 350F."],
+                        tags=[kw],
+                        source_notes=f"Deck {kw}",
+                    )
+                )
 
             # 2. Wait for HITL
             pending_data = None

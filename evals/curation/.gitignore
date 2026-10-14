@@ -1,0 +1,5 @@
+# Materialized deck cache and temporary files
+large_deck_cache/
+materialized/
+*.tar
+__pycache__/

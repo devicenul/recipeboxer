@@ -3,6 +3,8 @@ conftest.py - Common fixtures, synthetic card scan generators, mock Antigravity 
 and FastAPI AsyncClient test fixtures for RecipeBoxer E2E testing.
 """
 
+from __future__ import annotations
+
 import asyncio
 import csv
 import hashlib
@@ -39,6 +41,36 @@ from tests.fixtures.loader import (  # noqa: E402
     sample_card_pairs,
     sample_card_standalones,
 )
+
+
+# ============================================================================
+# PYTEST HOOKS FOR TEST TIERS (Live & Score skips)
+# ============================================================================
+
+def pytest_configure(config):
+    config.addinivalue_line("markers", "live: mark test as requiring a live Gemini API key")
+    config.addinivalue_line("markers", "score: mark test as requiring an age identity key for evals scoring")
+
+
+def pytest_runtest_setup(item):
+    if item.get_closest_marker("live"):
+        has_gemini_key = bool(
+            os.getenv("GEMINI_API_KEY") or os.getenv("RECIPEBOXER_GEMINI_API_KEY")
+        )
+        if not has_gemini_key:
+            pytest.skip("Test requires GEMINI_API_KEY or RECIPEBOXER_GEMINI_API_KEY")
+
+    if item.get_closest_marker("score"):
+        age_key_env = os.getenv("RB_EVAL_AGE_KEY_FILE")
+        has_age_key = False
+        if age_key_env and Path(age_key_env).expanduser().is_file():
+            has_age_key = True
+        else:
+            default_age_path = Path.home() / ".config" / "recipeboxer" / "age.key"
+            if default_age_path.is_file():
+                has_age_key = True
+        if not has_age_key:
+            pytest.skip("Test requires age identity at RB_EVAL_AGE_KEY_FILE or ~/.config/recipeboxer/age.key")
 
 
 # ============================================================================
@@ -424,7 +456,7 @@ class SyntheticDeckInfo:
 
 
 @pytest.fixture
-def synthetic_card_deck(tmp_path: Path) -> SyntheticDeckInfo:
+def synthetic_card_deck(tmp_path: Path, mock_gemini_client: MockGeminiClient) -> SyntheticDeckInfo:
     """
     Generates a rich, realistic test directory containing:
     - 2 Front/Back pairs (Vintage Cinnamon Rolls with grease stain bleed-through; Lemon Glaze Bars)
@@ -436,7 +468,7 @@ def synthetic_card_deck(tmp_path: Path) -> SyntheticDeckInfo:
     scans_dir.mkdir(parents=True, exist_ok=True)
 
     # Recipe 1: Vintage Cinnamon Rolls (Two-sided pair, ruled card, grease stain top-right on front, top-left on back)
-    p1_front = scans_dir / "01_cinnamon_rolls_front.jpg"
+    p1_front = scans_dir / "card_7f3a9c.jpg"
     create_synthetic_card_image(
         output_path=p1_front,
         title="Grandma's Cinnamon Rolls",
@@ -460,7 +492,7 @@ def synthetic_card_deck(tmp_path: Path) -> SyntheticDeckInfo:
         stain_type=ArtifactType.OIL_GREASE_STAIN,
     )
 
-    p1_back = scans_dir / "02_cinnamon_rolls_back.jpg"
+    p1_back = scans_dir / "card_a1b2c3.jpg"
     create_synthetic_card_image(
         output_path=p1_back,
         title=None,
@@ -484,7 +516,7 @@ def synthetic_card_deck(tmp_path: Path) -> SyntheticDeckInfo:
     )
 
     # Recipe 2: Lemon Glaze Bars (Two-sided pair, unruled white card, felt tip ink)
-    p2_front = scans_dir / "03_lemon_bars_front.jpg"
+    p2_front = scans_dir / "card_c4d5e6.jpg"
     create_synthetic_card_image(
         output_path=p2_front,
         title="Luscious Lemon Glaze Bars",
@@ -505,7 +537,7 @@ def synthetic_card_deck(tmp_path: Path) -> SyntheticDeckInfo:
         ink_color=(10, 10, 10),  # Black felt tip
     )
 
-    p2_back = scans_dir / "04_lemon_bars_back.jpg"
+    p2_back = scans_dir / "card_f7a8b9.jpg"
     create_synthetic_card_image(
         output_path=p2_back,
         title=None,
@@ -524,7 +556,7 @@ def synthetic_card_deck(tmp_path: Path) -> SyntheticDeckInfo:
     )
 
     # Standalone Recipe 1: 10-Minute Chocolate Fudge
-    s1 = scans_dir / "05_chocolate_fudge_standalone.jpg"
+    s1 = scans_dir / "card_e0f1a2.jpg"
     create_synthetic_card_image(
         output_path=s1,
         title="10-Minute Quick Chocolate Fudge",
@@ -544,7 +576,7 @@ def synthetic_card_deck(tmp_path: Path) -> SyntheticDeckInfo:
     )
 
     # Standalone Recipe 2: Southern Pecan Pie
-    s2 = scans_dir / "06_pecan_pie_standalone.jpg"
+    s2 = scans_dir / "card_b3c4d5.jpg"
     create_synthetic_card_image(
         output_path=s2,
         title="Southern Pecan Pie",
@@ -564,7 +596,7 @@ def synthetic_card_deck(tmp_path: Path) -> SyntheticDeckInfo:
     )
 
     # Noise / Divider card
-    noise = scans_dir / "07_divider_tab.jpg"
+    noise = scans_dir / "card_d6e7f8.jpg"
     create_synthetic_card_image(
         output_path=noise,
         title="DESSERTS & PASTRIES",
@@ -575,7 +607,7 @@ def synthetic_card_deck(tmp_path: Path) -> SyntheticDeckInfo:
     )
 
     # Corrupt file
-    corrupt = scans_dir / "08_corrupted_scan.jpg"
+    corrupt = scans_dir / "card_9a0b1c.jpg"
     create_corrupted_image_file(corrupt)
 
     all_files = [p1_front, p1_back, p2_front, p2_back, s1, s2, noise, corrupt]
@@ -685,19 +717,256 @@ def synthetic_card_deck(tmp_path: Path) -> SyntheticDeckInfo:
         },
     ]
 
+    # Populate explicit maps on mock_gemini_client for the synthetic deck cards
+    mock_gemini_client.fingerprint_map[p1_front.name] = VisualFingerprint(
+        card_id=p1_front.name,
+        image_path=str(p1_front),
+        sha256_hash="sha_p1_front",
+        role=CardRole.SEQUENCE_START,
+        role_confidence=0.98,
+        paper_color=PaperColorInfo(
+            tone_enum=PaperColorTone.OFF_WHITE_CREAM,
+            tone_name="Off-White / Cream",
+            lab_l=88.0,
+            lab_a=2.0,
+            lab_b=16.0,
+            hex_color="#F6ECD5",
+            confidence=0.95,
+        ),
+        ruling=PaperRulingInfo(
+            has_ruling=True,
+            ruling_type=PaperRulingType.STANDARD_RULED_BLUE,
+            confidence=0.95,
+        ),
+        ink=InkInfo(
+            ink_color=InkColor.BLUE,
+            ink_type=InkType.BLUE_BALLPOINT,
+            confidence=0.95,
+        ),
+        artifacts=[
+            PhysicalArtifact(
+                artifact_type=ArtifactType.OIL_GREASE_STAIN,
+                quadrant=CardQuadrant.TOP_RIGHT,
+                severity="MODERATE",
+            )
+        ],
+        boundary_text=BoundaryText(
+            has_continuation_symbol=True,
+            has_recipe_start=True,
+            continuation_marker_text="(over ->)",
+        ),
+        recipe_title_candidate="Grandma's Cinnamon Rolls",
+    )
+    mock_gemini_client.fingerprint_map[p1_back.name] = VisualFingerprint(
+        card_id=p1_back.name,
+        image_path=str(p1_back),
+        sha256_hash="sha_p1_back",
+        role=CardRole.SEQUENCE_CONTINUATION,
+        role_confidence=0.95,
+        paper_color=PaperColorInfo(
+            tone_enum=PaperColorTone.OFF_WHITE_CREAM,
+            tone_name="Off-White / Cream",
+            lab_l=88.0,
+            lab_a=2.0,
+            lab_b=16.0,
+            hex_color="#F6ECD5",
+            confidence=0.95,
+        ),
+        ruling=PaperRulingInfo(
+            has_ruling=True,
+            ruling_type=PaperRulingType.STANDARD_RULED_BLUE,
+            confidence=0.95,
+        ),
+        ink=InkInfo(
+            ink_color=InkColor.BLUE,
+            ink_type=InkType.BLUE_BALLPOINT,
+            confidence=0.95,
+        ),
+        artifacts=[
+            PhysicalArtifact(
+                artifact_type=ArtifactType.OIL_GREASE_STAIN,
+                quadrant=CardQuadrant.TOP_LEFT,
+                severity="MODERATE",
+            )
+        ],
+        boundary_text=BoundaryText(
+            has_continuation_symbol=False,
+            has_recipe_continuation=True,
+        ),
+    )
+    mock_gemini_client.fingerprint_map[p2_front.name] = VisualFingerprint(
+        card_id=p2_front.name,
+        image_path=str(p2_front),
+        sha256_hash="sha_p2_front",
+        role=CardRole.SEQUENCE_START,
+        role_confidence=0.96,
+        paper_color=PaperColorInfo(
+            tone_enum=PaperColorTone.WHITE,
+            tone_name="Bright White",
+            lab_l=98.0,
+            lab_a=0.0,
+            lab_b=0.0,
+            hex_color="#FFFFFF",
+            confidence=0.95,
+        ),
+        ruling=PaperRulingInfo(
+            has_ruling=False,
+            ruling_type=PaperRulingType.UNRULED_BLANK,
+            confidence=0.95,
+        ),
+        ink=InkInfo(
+            ink_color=InkColor.BLACK,
+            ink_type=InkType.FELT_TIP_MARKER,
+            confidence=0.95,
+        ),
+        boundary_text=BoundaryText(
+            has_continuation_symbol=True,
+            continuation_marker_text="PTO...",
+        ),
+        recipe_title_candidate="Luscious Lemon Glaze Bars",
+    )
+    mock_gemini_client.fingerprint_map[p2_back.name] = VisualFingerprint(
+        card_id=p2_back.name,
+        image_path=str(p2_back),
+        sha256_hash="sha_p2_back",
+        role=CardRole.SEQUENCE_CONTINUATION,
+        role_confidence=0.95,
+        paper_color=PaperColorInfo(
+            tone_enum=PaperColorTone.WHITE,
+            tone_name="Bright White",
+            lab_l=98.0,
+            lab_a=0.0,
+            lab_b=0.0,
+            hex_color="#FFFFFF",
+            confidence=0.95,
+        ),
+        ruling=PaperRulingInfo(
+            has_ruling=False,
+            ruling_type=PaperRulingType.UNRULED_BLANK,
+            confidence=0.95,
+        ),
+        ink=InkInfo(
+            ink_color=InkColor.BLACK,
+            ink_type=InkType.FELT_TIP_MARKER,
+            confidence=0.95,
+        ),
+        boundary_text=BoundaryText(
+            has_continuation_symbol=False,
+            has_recipe_continuation=True,
+        ),
+    )
+    mock_gemini_client.fingerprint_map[s1.name] = VisualFingerprint(
+        card_id=s1.name,
+        image_path=str(s1),
+        sha256_hash="sha_s1",
+        role=CardRole.STANDALONE,
+        role_confidence=0.98,
+        paper_color=PaperColorInfo(
+            tone_enum=PaperColorTone.OFF_WHITE_CREAM,
+            tone_name="Off-White / Cream",
+            lab_l=90.0,
+            lab_a=1.0,
+            lab_b=10.0,
+            hex_color="#FAF5EB",
+            confidence=0.95,
+        ),
+        ruling=PaperRulingInfo(
+            has_ruling=True,
+            ruling_type=PaperRulingType.STANDARD_RULED_BLUE,
+            confidence=0.95,
+        ),
+        ink=InkInfo(
+            ink_color=InkColor.BLACK,
+            ink_type=InkType.BLACK_BALLPOINT,
+            confidence=0.95,
+        ),
+        recipe_title_candidate="10-Minute Quick Chocolate Fudge",
+    )
+    mock_gemini_client.fingerprint_map[s2.name] = VisualFingerprint(
+        card_id=s2.name,
+        image_path=str(s2),
+        sha256_hash="sha_s2",
+        role=CardRole.STANDALONE,
+        role_confidence=0.97,
+        paper_color=PaperColorInfo(
+            tone_enum=PaperColorTone.KRAFT_BROWN,
+            tone_name="Kraft Brown / Cardboard",
+            lab_l=75.0,
+            lab_a=8.0,
+            lab_b=25.0,
+            hex_color="#F0DCBE",
+            confidence=0.95,
+        ),
+        ruling=PaperRulingInfo(
+            has_ruling=False,
+            ruling_type=PaperRulingType.UNRULED_BLANK,
+            confidence=0.95,
+        ),
+        ink=InkInfo(
+            ink_color=InkColor.BLACK,
+            ink_type=InkType.BLACK_BALLPOINT,
+            confidence=0.95,
+        ),
+        recipe_title_candidate="Southern Pecan Pie",
+    )
+    mock_gemini_client.fingerprint_map[noise.name] = VisualFingerprint(
+        card_id=noise.name,
+        image_path=str(noise),
+        sha256_hash="sha_noise",
+        role=CardRole.UNKNOWN,
+        role_confidence=0.5,
+    )
+
+    mock_gemini_client.correlation_map[(p1_front.name, p1_back.name)] = CorrelationProposal(
+        proposal_id="prop_p1",
+        front_card_id=p1_front.name,
+        back_card_id=p1_back.name,
+        ordered_card_ids=[p1_front.name, p1_back.name],
+        heuristic_score=0.92,
+        semantic_score=0.95,
+        confidence=0.93,
+        recommended_action="PAIR",
+        continuity_explanation="Syntactic continuity confirmed between front ingredients and back instructions.",
+    )
+    mock_gemini_client.correlation_map[(p2_front.name, p2_back.name)] = CorrelationProposal(
+        proposal_id="prop_p2",
+        front_card_id=p2_front.name,
+        back_card_id=p2_back.name,
+        ordered_card_ids=[p2_front.name, p2_back.name],
+        heuristic_score=0.88,
+        semantic_score=0.92,
+        confidence=0.90,
+        recommended_action="PAIR",
+        continuity_explanation="Crust and filling instructions flow cleanly.",
+    )
+
+    r1 = RecipeSchema(recipe_id="rec_p1", card_ids=[p1_front.name, p1_back.name], **expected_recipes[0])
+    r2 = RecipeSchema(recipe_id="rec_p2", card_ids=[p2_front.name, p2_back.name], **expected_recipes[1])
+    r3 = RecipeSchema(recipe_id="rec_s1", card_ids=[s1.name], **expected_recipes[2])
+    r4 = RecipeSchema(recipe_id="rec_s2", card_ids=[s2.name], **expected_recipes[3])
+
+    mock_gemini_client.recipe_map[p1_front.name] = r1
+    mock_gemini_client.recipe_map[(p1_front.name, p1_back.name)] = r1
+    mock_gemini_client.recipe_map[p2_front.name] = r2
+    mock_gemini_client.recipe_map[(p2_front.name, p2_back.name)] = r2
+    mock_gemini_client.recipe_map[s1.name] = r3
+    mock_gemini_client.recipe_map[(s1.name,)] = r3
+    mock_gemini_client.recipe_map[s2.name] = r4
+    mock_gemini_client.recipe_map[(s2.name,)] = r4
+
     return SyntheticDeckInfo(
         directory=scans_dir,
         all_files=all_files,
         pairs=[
-            ("01_cinnamon_rolls_front.jpg", "02_cinnamon_rolls_back.jpg"),
-            ("03_lemon_bars_front.jpg", "04_lemon_bars_back.jpg"),
+            (p1_front.name, p1_back.name),
+            (p2_front.name, p2_back.name),
         ],
         standalones=[
-            "05_chocolate_fudge_standalone.jpg",
-            "06_pecan_pie_standalone.jpg",
+            s1.name,
+            s2.name,
         ],
-        unknowns=["07_divider_tab.jpg"],
-        corrupted=["08_corrupted_scan.jpg"],
+        unknowns=[noise.name],
+        corrupted=[corrupt.name],
         expected_recipes=expected_recipes,
     )
 
@@ -708,10 +977,21 @@ def synthetic_card_deck(tmp_path: Path) -> SyntheticDeckInfo:
 
 class MockGeminiClient:
     """
-    Deterministic mock Gemini multimodal client for testing RecipeBoxer offline.
-    Produces accurate fingerprints, correlations, and recipe schemas based on synthetic card inputs.
+    Mock Gemini multimodal client for testing RecipeBoxer offline.
+    Keyed strictly by explicit test-supplied maps or call order — NEVER by filename
+    patterns or image hashes.
     """
-    def __init__(self, api_key: str = "mock-key", simulate_latency: float = 0.0):
+    def __init__(
+        self,
+        api_key: str = "mock-key",
+        simulate_latency: float = 0.0,
+        ordered_fingerprints: Optional[List[VisualFingerprint]] = None,
+        fingerprint_map: Optional[Dict[str, VisualFingerprint]] = None,
+        ordered_correlations: Optional[List[CorrelationProposal]] = None,
+        correlation_map: Optional[Dict[Any, CorrelationProposal]] = None,
+        ordered_recipes: Optional[List[RecipeSchema]] = None,
+        recipe_map: Optional[Dict[str, RecipeSchema]] = None,
+    ):
         self.api_key = api_key
         self.simulate_latency = simulate_latency
         self.call_count = 0
@@ -721,6 +1001,40 @@ class MockGeminiClient:
             "thoughts_tokens": 0,
             "total_tokens": 0,
         }
+        self.ordered_fingerprints: List[VisualFingerprint] = list(ordered_fingerprints or [])
+        self.fingerprint_map: Dict[str, VisualFingerprint] = dict(fingerprint_map or {})
+        self.ordered_correlations: List[CorrelationProposal] = list(ordered_correlations or [])
+        self.correlation_map: Dict[Any, CorrelationProposal] = dict(correlation_map or {})
+        self.ordered_recipes: List[RecipeSchema] = list(ordered_recipes or [])
+        self.recipe_map: Dict[str, RecipeSchema] = dict(recipe_map or {})
+        self.recorded_requests: List[Dict[str, Any]] = []
+
+    def set_ordered_fingerprints(self, fps: List[VisualFingerprint]) -> None:
+        self.ordered_fingerprints = list(fps)
+
+    def set_fingerprint_map(self, mapping: Dict[str, VisualFingerprint]) -> None:
+        self.fingerprint_map = dict(mapping)
+
+    def set_ordered_correlations(self, proposals: List[CorrelationProposal]) -> None:
+        self.ordered_correlations = list(proposals)
+
+    def set_correlation_map(self, mapping: Dict[Any, CorrelationProposal]) -> None:
+        self.correlation_map = dict(mapping)
+
+    def set_ordered_recipes(self, recipes: List[RecipeSchema]) -> None:
+        self.ordered_recipes = list(recipes)
+
+    def set_recipe_map(self, mapping: Dict[str, RecipeSchema]) -> None:
+        self.recipe_map = dict(mapping)
+
+    def set_ordered_responses(self, responses: List[Any]) -> None:
+        for r in responses:
+            if isinstance(r, VisualFingerprint):
+                self.ordered_fingerprints.append(r)
+            elif isinstance(r, CorrelationProposal):
+                self.ordered_correlations.append(r)
+            elif isinstance(r, RecipeSchema):
+                self.ordered_recipes.append(r)
 
     async def analyze_fingerprint(self, image_path: Path, sha256_hash: str) -> VisualFingerprint:
         self.call_count += 1
@@ -731,97 +1045,53 @@ class MockGeminiClient:
         self.token_usage["candidates_tokens"] += 150
         self.token_usage["total_tokens"] += 600
 
-        fname = image_path.name.lower()
-
-        # Handle corrupted images
-        if "corrupt" in fname:
+        # Validate image integrity via PIL - raises on corrupted bytes
+        try:
+            with Image.open(image_path) as im:
+                im.verify()
+        except Exception:
             raise ValueError("Corrupted image file: Cannot decode image bytes")
 
-        # Classify by filename semantics for deterministic testing
-        if "front" in fname:
-            role = CardRole.FRONT_ONLY
-            is_cut_off = True
-            has_cue = True
-            first_line = "Recipe Header & Ingredients"
-            last_line = "Mix until smooth (over ->)"
-        elif "back" in fname:
-            role = CardRole.BACK_ONLY
-            is_cut_off = False
-            has_cue = False
-            first_line = "(Directions continued)"
-            last_line = "Bake and glaze completely."
-        elif "standalone" in fname:
-            role = CardRole.STANDALONE
-            is_cut_off = False
-            has_cue = False
-            first_line = "Title & Quick Ingredients"
-            last_line = "Chill or bake until set."
-        elif "divider" in fname or "blank" in fname or "noise" in fname:
-            role = CardRole.UNKNOWN
-            is_cut_off = False
-            has_cue = False
-            first_line = "Section 4: Divider"
-            last_line = "End of Tab"
-        else:
-            role = CardRole.STANDALONE
-            is_cut_off = False
-            has_cue = False
-            first_line = "General Recipe Card"
-            last_line = "Enjoy your dish."
+        # 1. Explicit map match (keyed by card ID / path string)
+        if image_path.name in self.fingerprint_map:
+            return self.fingerprint_map[image_path.name]
+        if str(image_path) in self.fingerprint_map:
+            return self.fingerprint_map[str(image_path)]
 
-        # Stains & Artifacts
-        artifacts = []
-        if "cinnamon" in fname and "front" in fname:
-            artifacts.append(PhysicalArtifact(
-                artifact_type=ArtifactType.OIL_GREASE_STAIN,
-                quadrant=CardQuadrant.TOP_RIGHT,
-                description="Grease stain on top right corner",
-            ))
-        elif "cinnamon" in fname and "back" in fname:
-            artifacts.append(PhysicalArtifact(
-                artifact_type=ArtifactType.OIL_GREASE_STAIN,
-                quadrant=CardQuadrant.TOP_LEFT,  # Mirrored
-                description="Grease stain bleed-through top left",
-            ))
+        # 2. Call order match
+        if self.ordered_fingerprints:
+            return self.ordered_fingerprints.pop(0)
 
-        # Paper color tone
-        tone = PaperColorTone.OFF_WHITE_CREAM
-        hex_color = "#F6ECD0"
-        if "lemon" in fname:
-            tone = PaperColorTone.WHITE
-            hex_color = "#FFFFFF"
-        elif "pecan" in fname:
-            tone = PaperColorTone.KRAFT_BROWN
-            hex_color = "#D2B48C"
-
+        # 3. Deterministic default neutral fingerprint (zero filename heuristics)
         return VisualFingerprint(
             card_id=image_path.name,
             image_path=str(image_path),
             sha256_hash=sha256_hash,
-            role=role,
-            role_confidence=0.98 if role != CardRole.UNKNOWN else 0.50,
+            role=CardRole.STANDALONE,
+            role_confidence=0.95,
             paper_color=PaperColorInfo(
-                tone_name=tone.value,
-                hex_approx=hex_color,
-                lab_l=90.0 if tone != PaperColorTone.KRAFT_BROWN else 75.0,
+                tone_name="Aged Cream",
+                hex_approx="#F4E8C1",
+                lab_l=90.0,
                 lab_a=2.0,
-                lab_b=15.0,
-                tone_enum=tone,
+                lab_b=18.0,
+                tone_enum=PaperColorTone.OFF_WHITE_CREAM,
             ),
             ruling=PaperRulingInfo(
-                has_ruling="lemon" not in fname and "pecan" not in fname,
-                ruling_type=PaperRulingType.STANDARD_RULED_BLUE if "lemon" not in fname and "pecan" not in fname else PaperRulingType.UNRULED_BLANK,
+                has_ruling=True,
+                ruling_type=PaperRulingType.STANDARD_RULED_BLUE,
+                line_spacing_px=24.0,
             ),
             ink=InkInfo(
-                ink_color=InkColor.BLUE if "cinnamon" in fname else InkColor.BLACK,
-                ink_type=InkType.BLUE_BALLPOINT if "cinnamon" in fname else InkType.FELT_TIP_MARKER,
+                ink_color=InkColor.BLUE,
+                ink_type=InkType.BLUE_BALLPOINT,
             ),
-            artifacts=artifacts,
+            artifacts=[],
             boundary_text=BoundaryText(
-                first_line=first_line,
-                last_line=last_line,
-                has_continuation_symbol=has_cue,
-                is_cut_off_mid_sentence=is_cut_off,
+                first_line="Card Title",
+                last_line="Directions end.",
+                has_continuation_symbol=False,
+                is_cut_off_mid_sentence=False,
             ),
         )
 
@@ -836,37 +1106,29 @@ class MockGeminiClient:
         self.token_usage["candidates_tokens"] += 200
         self.token_usage["total_tokens"] += 1000
 
-        # Check semantic continuity
-        f_name = front_fp.card_id.lower()
-        b_name = back_fp.card_id.lower()
+        # 1. Explicit map match
+        pair_key = (front_fp.card_id, back_fp.card_id)
+        if pair_key in self.correlation_map:
+            return self.correlation_map[pair_key]
+        if front_fp.card_id in self.correlation_map:
+            return self.correlation_map[front_fp.card_id]
 
-        # Exact matching pairs by prefix or keywords
-        f_prefix = f_name.replace("front", "").replace("01_", "").replace("02_", "").replace("03_", "").replace("04_", "").strip("._ ")
-        b_prefix = b_name.replace("back", "").replace("01_", "").replace("02_", "").replace("03_", "").replace("04_", "").strip("._ ")
+        # 2. Call order match
+        if self.ordered_correlations:
+            return self.ordered_correlations.pop(0)
 
-        is_match = (
-            (f_prefix and f_prefix == b_prefix) or
-            ("cinnamon" in f_name and "cinnamon" in b_name) or
-            ("lemon" in f_name and "lemon" in b_name) or
-            ("rolls" in f_name and "rolls" in b_name)
-        )
-
-        semantic_score = 0.96 if is_match else 0.05
-        confidence = 0.30 * heuristic_score + 0.70 * semantic_score
-
+        # 3. Default neutral proposal
+        confidence = round(0.50 * heuristic_score + 0.25, 4)
         return CorrelationProposal(
             proposal_id=f"prop_{uuid.uuid4().hex[:8]}",
             ordered_card_ids=[front_fp.card_id, back_fp.card_id],
             part_count=2,
             transition_scores=[confidence],
             heuristic_score=heuristic_score,
-            semantic_score=semantic_score,
+            semantic_score=0.50,
             confidence=confidence,
             is_standalone=False,
-            continuity_explanation=(
-                "Syntactic continuity matches: dough rising instructions on front continue with kneading/baking on back."
-                if is_match else "Unrelated recipe content and incompatible ingredients."
-            ),
+            continuity_explanation="Mock continuity evaluation.",
             recommended_action="PAIR" if confidence >= 0.80 else ("UNCERTAIN" if confidence >= 0.50 else "REJECT"),
         )
 
@@ -881,133 +1143,36 @@ class MockGeminiClient:
         self.token_usage["candidates_tokens"] += 400
         self.token_usage["total_tokens"] += 1600
 
-        fname = front_fp.card_id.lower()
+        # 1. Explicit map match
+        pair_key = (front_fp.card_id, back_fp.card_id) if back_fp else (front_fp.card_id,)
+        if pair_key in self.recipe_map:
+            return self.recipe_map[pair_key]
+        if front_fp.card_id in self.recipe_map:
+            return self.recipe_map[front_fp.card_id]
+        if back_fp and back_fp.card_id in self.recipe_map:
+            return self.recipe_map[back_fp.card_id]
 
-        if "cinnamon" in fname or "rolls" in fname:
-            return RecipeSchema(
-                recipe_id=f"rec_{uuid.uuid4().hex[:8]}",
-                title="Grandma's Cinnamon Rolls",
-                description="Vintage handwritten family recipe on ruled index card.",
-                yield_servings="12 rolls",
-                prep_time="30 mins",
-                cook_time="25 mins",
-                total_time="2 hrs 15 mins",
-                ingredients=[
-                    "1 pkg active dry yeast",
-                    "1/2 cup warm water (105F)",
-                    "1/2 cup lukewarm milk",
-                    "1/3 cup sugar",
-                    "1/3 cup butter",
-                    "1 tsp salt",
-                    "1 egg",
-                    "3 1/2 to 4 cups all-purpose flour",
-                    "1/3 cup butter, softened",
-                    "1 cup brown sugar",
-                    "3 tbsp ground cinnamon",
-                ],
-                directions=[
-                    "1. Dissolve yeast in warm water. Mix milk, sugar, butter.",
-                    "2. Add 2 cups flour, beat until smooth.",
-                    "3. Knead dough on floured surface 5 mins until smooth.",
-                    "4. Place in greased bowl, cover, let rise 1 hour.",
-                    "5. Punch down. Roll into 12x18 inch rectangle.",
-                    "6. Spread with softened butter, sprinkle brown sugar & cinnamon.",
-                    "7. Roll up jelly-roll style and slice into 12 rolls.",
-                    "8. Place in greased pan, let rise 45 mins, bake at 375°F for 25 mins.",
-                ],
-                tags=["Dessert", "Baking", "Breakfast"],
-                source_notes="Grandma's Recipe Box",
-            )
-        elif "lemon" in fname:
-            return RecipeSchema(
-                recipe_id=f"rec_{uuid.uuid4().hex[:8]}",
-                title="Luscious Lemon Glaze Bars",
-                description="Tangy, sweet lemon bars with buttery shortbread crust.",
-                yield_servings="24 bars",
-                prep_time="15 mins",
-                cook_time="45 mins",
-                total_time="1 hour",
-                ingredients=[
-                    "2 cups all-purpose flour",
-                    "1/2 cup powdered sugar",
-                    "1 cup cold butter, cubed",
-                    "4 large eggs",
-                    "1 1/2 cups granulated sugar",
-                    "1/4 cup flour",
-                    "1/2 cup fresh lemon juice",
-                ],
-                directions=[
-                    "1. Preheat oven to 350°F. Grease 9x13 pan.",
-                    "2. Combine crust ingredients, press into pan.",
-                    "3. Bake crust 20 mins until golden.",
-                    "4. Whisk eggs, sugar, flour, lemon juice.",
-                    "5. Pour over warm crust and bake 25 mins until set.",
-                ],
-                tags=["Dessert", "Baking", "Lemon"],
-                source_notes="Family Cookbook",
-            )
-        elif "fudge" in fname:
-            return RecipeSchema(
-                recipe_id=f"rec_{uuid.uuid4().hex[:8]}",
-                title="10-Minute Quick Chocolate Fudge",
-                description="Fast and rich chocolate fudge.",
-                yield_servings="36 squares",
-                prep_time="10 mins",
-                cook_time="0 mins",
-                total_time="2 hrs 10 mins",
-                ingredients=[
-                    "3 cups semi-sweet chocolate chips",
-                    "1 can (14 oz) sweetened condensed milk",
-                    "1 tsp vanilla extract",
-                    "Dash of salt",
-                ],
-                directions=[
-                    "1. Melt chips with condensed milk in saucepan on low heat.",
-                    "2. Stir in vanilla and salt until glossy.",
-                    "3. Pour into 8x8 foil-lined pan and chill 2 hours.",
-                ],
-                tags=["Candy", "Chocolate", "Quick"],
-                source_notes="Standalone Card",
-            )
-        elif "pecan" in fname:
-            return RecipeSchema(
-                recipe_id=f"rec_{uuid.uuid4().hex[:8]}",
-                title="Southern Pecan Pie",
-                description="Classic Southern holiday pecan pie.",
-                yield_servings="8 servings",
-                prep_time="15 mins",
-                cook_time="60 mins",
-                total_time="1 hr 15 mins",
-                ingredients=[
-                    "1 unbaked 9-inch pie shell",
-                    "3 eggs",
-                    "1 cup dark corn syrup",
-                    "1 cup sugar",
-                    "2 tbsp butter, melted",
-                    "1 tsp vanilla extract",
-                    "1 1/2 cups pecan halves",
-                ],
-                directions=[
-                    "1. Preheat oven to 350°F.",
-                    "2. Beat eggs, syrup, sugar, butter, and vanilla.",
-                    "3. Stir in pecans and pour into pie shell.",
-                    "4. Bake at 350°F for 60 mins until set.",
-                ],
-                tags=["Dessert", "Pie", "Southern"],
-                source_notes="Kraft Card",
-            )
-        else:
-            return RecipeSchema(
-                recipe_id=f"rec_{uuid.uuid4().hex[:8]}",
-                title=f"Recipe from {front_fp.card_id}",
-                description="Transcribed physical card recipe.",
-                yield_servings="4 servings",
-                prep_time="10 mins",
-                total_time="30 mins",
-                ingredients=["1 cup ingredient A", "2 tbsp ingredient B"],
-                directions=["1. Mix ingredients.", "2. Cook and serve."],
-                tags=["General"],
-            )
+        # 2. Call order match
+        if self.ordered_recipes:
+            return self.ordered_recipes.pop(0)
+
+        # 3. Default neutral recipe schema
+        cids = [front_fp.card_id]
+        if back_fp:
+            cids.append(back_fp.card_id)
+        return RecipeSchema(
+            recipe_id=f"rec_{uuid.uuid4().hex[:8]}",
+            title=f"Recipe from {front_fp.card_id}",
+            description="Transcribed physical card recipe.",
+            yield_servings="4 servings",
+            prep_time="10 mins",
+            cook_time="20 mins",
+            total_time="30 mins",
+            ingredients=["1 cup ingredient A", "2 tbsp ingredient B", "1 tsp salt"],
+            directions=["1. Mix ingredients.", "2. Cook and serve."],
+            tags=["General"],
+            card_ids=cids,
+        )
 
 
 @pytest.fixture
@@ -1466,28 +1631,30 @@ class PipelineSession:
         self.cancellation_event.set()
 
 
+class StartRequest(BaseModel):
+    scans_dir: str
+    mode: str = "parallel"
+    max_concurrency: int = 4
+    slow_batch_size: int = 2
+    slow_batch_interval_seconds: float = 0.05
+    fingerprint_model: Optional[str] = "gemini-3.7-flash"
+    correlation_model: Optional[str] = "gemini-3.7-flash"
+    extraction_model: Optional[str] = "gemini-3.7-flash"
+    thinking_mode: bool = False
+
+
+class ApproveRequest(BaseModel):
+    session_id: Optional[str] = None
+    approvals: List[CardPairApproval]
+    rejected_card_ids: List[str] = Field(default_factory=list)
+
+
 def create_test_fastapi_app(mock_client: MockGeminiClient, test_cache: SQLiteFingerprintCache) -> FastAPI:
     """Creates a FastAPI test instance with fully functional HITL pipeline endpoints."""
     app = FastAPI(title="RecipeBoxer Test Bridge", version="1.0.0")
 
     sessions: Dict[str, PipelineSession] = {}
     active_session_id_ref: List[Optional[str]] = [None]
-
-    class StartRequest(BaseModel):
-        scans_dir: str
-        mode: str = "parallel"
-        max_concurrency: int = 4
-        slow_batch_size: int = 2
-        slow_batch_interval_seconds: float = 0.05
-        fingerprint_model: Optional[str] = "gemini-3.7-flash"
-        correlation_model: Optional[str] = "gemini-3.7-flash"
-        extraction_model: Optional[str] = "gemini-3.7-flash"
-        thinking_mode: bool = False
-
-    class ApproveRequest(BaseModel):
-        session_id: Optional[str] = None
-        approvals: List[CardPairApproval]
-        rejected_card_ids: List[str] = Field(default_factory=list)
 
     @app.post("/api/pipeline/start")
     async def start_pipeline(req: StartRequest):

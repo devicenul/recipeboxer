@@ -206,4 +206,10 @@ class TestActiveProvidersIntegrity:
         data = res.json()
         assert "session_id" in data
         assert data["total_scans_found"] == 3
-        assert data["status"] in ("PROCESSING", "IDLE", "INDEXING", "EXTRACTING", "COMPLETED")
+        # INV-AC6: with no Gemini key/client, scanning succeeds but analysis fails fast
+        # with NO_API_KEY (status FAILED). HITL_PENDING is also a valid early status.
+        assert data["status"] in (
+            "PROCESSING", "IDLE", "INDEXING", "EXTRACTING", "COMPLETED", "HITL_PENDING", "FAILED",
+        )
+        if data["status"] == "FAILED" and data.get("failures"):
+            assert any(f.get("reason") == "NO_API_KEY" for f in data["failures"])

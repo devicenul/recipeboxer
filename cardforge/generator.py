@@ -17,7 +17,12 @@ import hashlib
 import json
 import math
 import os
+import io
+import json
+import math
+import os
 import random
+import secrets
 import sys
 import uuid
 from dataclasses import dataclass, field
@@ -30,14 +35,19 @@ from PIL import Image, ImageChops, ImageDraw, ImageEnhance, ImageFilter, ImageFo
 from cardforge.models import (
     CardModality,
     CardRole,
+    CardStock,
+    CardWriter,
     DegradationConfig,
     DegradationLevel,
     GeneratedCard,
     InkType,
     PaperSubstrate,
     RecipeSchema,
+    RulingStyle,
 )
 from cardforge.templates_t0 import ARCHIVAL_RECIPE_TEMPLATES
+
+_FONTS_DIR = Path(__file__).resolve().parent / "fonts"
 
 # ============================================================================
 # 2. FONT MANAGEMENT & FALLBACKS
@@ -56,7 +66,27 @@ def get_font(
 
     # Candidate font paths by style and platform
     candidates = []
-    if style == "cursive":
+    style_lower = style.lower().strip()
+
+    if style_lower in ("caveat", "caveat_cursive"):
+        fpath = _FONTS_DIR / "caveat.ttf"
+        if fpath.exists():
+            candidates.append(str(fpath))
+    elif style_lower in ("special_elite", "typewriter_distressed", "vintage_typewriter"):
+        fpath = _FONTS_DIR / "special_elite.ttf"
+        if fpath.exists():
+            candidates.append(str(fpath))
+    elif style_lower in ("marck_script", "vintage_cursive", "script"):
+        fpath = _FONTS_DIR / "marck_script.ttf"
+        if fpath.exists():
+            candidates.append(str(fpath))
+    elif style_lower in ("dejavu_serif_italic", "serif_italic"):
+        candidates.append("/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf")
+    elif style_lower in ("dejavu_sans", "sans"):
+        candidates.append("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf")
+    elif style_lower in ("dejavu_mono", "mono"):
+        candidates.append("/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf")
+    elif style == "cursive":
         candidates = [
             "/System/Library/Fonts/Supplemental/SnellRoundhand.ttc",
             "/System/Library/Fonts/Supplemental/Brush Script.ttf",
@@ -135,9 +165,13 @@ def create_paper_substrate(
     height: int,
     substrate: PaperSubstrate,
     rng: random.Random,
+    ruling: Optional[Union[RulingStyle, str]] = None,
+    base_color_override: Optional[Tuple[int, int, int]] = None,
 ) -> Tuple[Image.Image, Tuple[int, int, int]]:
     """Creates a realistic textured paper canvas."""
-    if substrate == PaperSubstrate.AGED_YELLOW:
+    if base_color_override is not None:
+        base_color = base_color_override
+    elif substrate == PaperSubstrate.AGED_YELLOW:
         base_color = (
             rng.randint(242, 248),
             rng.randint(230, 238),
@@ -185,7 +219,71 @@ def create_paper_substrate(
     draw = ImageDraw.Draw(img, "RGBA")
 
     # Draw ruling lines if specified
-    if substrate in (PaperSubstrate.RULED_INDEX, PaperSubstrate.AGED_YELLOW):
+    if ruling is not None:
+        r_str = str(getattr(ruling, "value", ruling)).upper().strip()
+        if r_str == "STANDARD_RULED":
+            line_spacing = 26
+            header_y = 60
+            margin_x = 35
+            draw.line([(margin_x, header_y), (width - margin_x, header_y)], fill=(215, 80, 80, 180), width=2)
+            for y in range(header_y + line_spacing, height - 25, line_spacing):
+                draw.line([(margin_x, y), (width - margin_x, y)], fill=(160, 190, 220, 140), width=1)
+        elif r_str == "WIDE_RULED":
+            line_spacing = 32
+            header_y = 70
+            margin_x = 35
+            draw.line([(margin_x, header_y), (width - margin_x, header_y)], fill=(215, 80, 80, 180), width=2)
+            for y in range(header_y + line_spacing, height - 25, line_spacing):
+                draw.line([(margin_x, y), (width - margin_x, y)], fill=(160, 190, 220, 140), width=1)
+        elif r_str == "NARROW_RULED":
+            line_spacing = 20
+            header_y = 50
+            margin_x = 30
+            draw.line([(margin_x, header_y), (width - margin_x, header_y)], fill=(215, 80, 80, 180), width=2)
+            draw.line([(45, 15), (45, height - 15)], fill=(215, 80, 80, 140), width=1)
+            for y in range(header_y + line_spacing, height - 20, line_spacing):
+                draw.line([(margin_x, y), (width - margin_x, y)], fill=(160, 190, 220, 130), width=1)
+        elif r_str == "BLUE_NO_HEADER":
+            line_spacing = 24
+            margin_x = 30
+            for y in range(35, height - 25, line_spacing):
+                draw.line([(margin_x, y), (width - margin_x, y)], fill=(160, 190, 220, 140), width=1)
+        elif r_str == "DOUBLE_HEADER":
+            line_spacing = 25
+            margin_x = 35
+            draw.line([(margin_x, 55), (width - margin_x, 55)], fill=(215, 80, 80, 180), width=2)
+            draw.line([(margin_x, 65), (width - margin_x, 65)], fill=(215, 80, 80, 180), width=1)
+            for y in range(90, height - 25, line_spacing):
+                draw.line([(margin_x, y), (width - margin_x, y)], fill=(160, 190, 220, 140), width=1)
+        elif r_str == "FAINT_RULED":
+            line_spacing = 25
+            header_y = 60
+            margin_x = 35
+            draw.line([(margin_x, header_y), (width - margin_x, header_y)], fill=(190, 110, 110, 100), width=1)
+            for y in range(header_y + line_spacing, height - 25, line_spacing):
+                draw.line([(margin_x, y), (width - margin_x, y)], fill=(180, 200, 220, 65), width=1)
+        elif r_str == "GREEN_LEDGER":
+            line_spacing = 24
+            margin_x = 25
+            draw.line([(160, 20), (160, height - 20)], fill=(130, 175, 140, 160), width=1)
+            for y in range(45, height - 25, line_spacing):
+                draw.line([(margin_x, y), (width - margin_x, y)], fill=(140, 180, 150, 120), width=1)
+        elif r_str == "GRID_GRAPH":
+            grid_spacing = 20
+            grid_color = (180, 210, 230, 120)
+            for x in range(20, width - 20, grid_spacing):
+                draw.line([(x, 20), (x, height - 20)], fill=grid_color, width=1)
+            for y in range(20, height - 20, grid_spacing):
+                draw.line([(20, y), (width - 20, y)], fill=grid_color, width=1)
+        elif r_str == "DOT_GRID":
+            dot_spacing = 20
+            dot_color = (170, 190, 210, 140)
+            for x in range(20, width - 20, dot_spacing):
+                for y in range(20, height - 20, dot_spacing):
+                    draw.point((x, y), fill=dot_color)
+        elif r_str == "UNRULED":
+            pass
+    elif substrate in (PaperSubstrate.RULED_INDEX, PaperSubstrate.AGED_YELLOW):
         line_spacing = 26
         header_y = 60
         margin_x = 35
@@ -647,6 +745,166 @@ def apply_rotation_skew(
     canvas = Image.new("RGBA", rotated.size, color=(*bg_color, 255))
     canvas.paste(rotated, (0, 0), rotated)
     return canvas.convert("RGB")
+
+
+def find_perspective_coeffs(
+    pa: List[Tuple[float, float]],
+    pb: List[Tuple[float, float]],
+) -> Tuple[float, ...]:
+    """Pure-Python solver for 8 perspective transformation coefficients."""
+    matrix = []
+    b = []
+    for (x, y), (u, v) in zip(pa, pb):
+        matrix.append([x, y, 1.0, 0.0, 0.0, 0.0, -u * x, -u * y])
+        b.append(float(u))
+        matrix.append([0.0, 0.0, 0.0, x, y, 1.0, -v * x, -v * y])
+        b.append(float(v))
+
+    n = 8
+    for i in range(n):
+        max_row = max(range(i, n), key=lambda r: abs(matrix[r][i]))
+        matrix[i], matrix[max_row] = matrix[max_row], matrix[i]
+        b[i], b[max_row] = b[max_row], b[i]
+
+        pivot = matrix[i][i]
+        if abs(pivot) < 1e-12:
+            return (1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0)
+        for j in range(i, n):
+            matrix[i][j] /= pivot
+        b[i] /= pivot
+
+        for r in range(n):
+            if r != i and abs(matrix[r][i]) > 1e-12:
+                factor = matrix[r][i]
+                for c in range(i, n):
+                    matrix[r][c] -= factor * matrix[i][c]
+                b[r] -= factor * b[i]
+    return tuple(b)
+
+
+def apply_perspective_warp(
+    image: Image.Image,
+    magnitude: float = 0.025,
+    rng: Optional[random.Random] = None,
+    bg_color: Tuple[int, int, int] = (255, 255, 255),
+) -> Image.Image:
+    """Applies subtle perspective quad warp simulating photographing at an angle."""
+    if magnitude <= 0.001:
+        return image
+    r = rng or random.Random()
+    w, h = image.size
+    dx1 = r.uniform(-magnitude, magnitude) * w
+    dy1 = r.uniform(-magnitude, magnitude) * h
+    dx2 = r.uniform(-magnitude, magnitude) * w
+    dy2 = r.uniform(-magnitude, magnitude) * h
+    dx3 = r.uniform(-magnitude, magnitude) * w
+    dy3 = r.uniform(-magnitude, magnitude) * h
+    dx4 = r.uniform(-magnitude, magnitude) * w
+    dy4 = r.uniform(-magnitude, magnitude) * h
+
+    pts_src = [(0, 0), (w, 0), (w, h), (0, h)]
+    pts_dst = [
+        (max(0, dx1), max(0, dy1)),
+        (min(w, w + dx2), max(0, dy2)),
+        (min(w, w + dx3), min(h, h + dy3)),
+        (max(0, dx4), min(h, h + dy4)),
+    ]
+    try:
+        coeffs = find_perspective_coeffs(pts_dst, pts_src)
+        return image.transform((w, h), Image.PERSPECTIVE, coeffs, Image.BICUBIC, fillcolor=bg_color)
+    except Exception:
+        return image
+
+
+def apply_crease(
+    image: Image.Image,
+    count: int = 1,
+    orientation: str = "HORIZONTAL",
+    rng: Optional[random.Random] = None,
+) -> Image.Image:
+    """Simulates realistic paper fold creases across the card."""
+    if count <= 0:
+        return image
+    r = rng or random.Random()
+    w, h = image.size
+    overlay = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(overlay)
+
+    for _ in range(count):
+        if orientation == "HORIZONTAL" or (orientation == "RANDOM" and r.random() < 0.5):
+            cy = r.randint(int(h * 0.25), int(h * 0.75))
+            draw.line([(0, cy), (w, cy + r.randint(-2, 2))], fill=(80, 60, 40, 75), width=1)
+            draw.line([(0, cy + 1), (w, cy + 1 + r.randint(-2, 2))], fill=(255, 255, 255, 80), width=1)
+        elif orientation == "VERTICAL" or (orientation == "RANDOM" and r.random() < 0.75):
+            cx = r.randint(int(w * 0.25), int(w * 0.75))
+            draw.line([(cx, 0), (cx + r.randint(-2, 2), h)], fill=(80, 60, 40, 75), width=1)
+            draw.line([(cx + 1, 0), (cx + 1 + r.randint(-2, 2), h)], fill=(255, 255, 255, 80), width=1)
+        else:
+            draw.line([(0, r.randint(0, h // 2)), (w, r.randint(h // 2, h))], fill=(80, 60, 40, 60), width=1)
+            draw.line([(0, r.randint(0, h // 2) + 1), (w, r.randint(h // 2, h) + 1)], fill=(255, 255, 255, 70), width=1)
+
+    overlay = overlay.filter(ImageFilter.GaussianBlur(radius=0.6))
+    base_rgba = image.convert("RGBA")
+    return Image.alpha_composite(base_rgba, overlay).convert("RGB")
+
+
+def apply_glare(
+    image: Image.Image,
+    cx: Optional[int] = None,
+    cy: Optional[int] = None,
+    radius: Optional[int] = None,
+    alpha: int = 65,
+    rng: Optional[random.Random] = None,
+) -> Image.Image:
+    """Simulates camera flash or lamp specular glare on paper surface."""
+    r = rng or random.Random()
+    w, h = image.size
+    cx = cx or r.randint(int(w * 0.3), int(w * 0.7))
+    cy = cy or r.randint(int(h * 0.25), int(h * 0.7))
+    rx = radius or r.randint(int(w * 0.2), int(w * 0.35))
+    ry = int(rx * r.uniform(0.7, 1.1))
+
+    overlay = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(overlay)
+    for step in range(5, 0, -1):
+        frac = step / 5.0
+        cur_rx = int(rx * frac)
+        cur_ry = int(ry * frac)
+        step_alpha = int(alpha * (1.1 - frac))
+        draw.ellipse(
+            [cx - cur_rx, cy - cur_ry, cx + cur_rx, cy + cur_ry],
+            fill=(255, 255, 250, step_alpha),
+        )
+
+    overlay = overlay.filter(ImageFilter.GaussianBlur(radius=rx * 0.45))
+    base_rgba = image.convert("RGBA")
+    return Image.alpha_composite(base_rgba, overlay).convert("RGB")
+
+
+def apply_jpeg_noise(
+    image: Image.Image,
+    quality: int = 55,
+) -> Image.Image:
+    """Simulates JPEG compression artifacts and discrete cosine transform noise."""
+    buf = io.BytesIO()
+    image.save(buf, format="JPEG", quality=quality)
+    buf.seek(0)
+    return Image.open(buf).copy().convert("RGB")
+
+
+def apply_show_through(
+    front_img: Image.Image,
+    back_img: Image.Image,
+    opacity: float = 0.08,
+) -> Tuple[Image.Image, Image.Image]:
+    """Applies authentic show-through: faint mirrored ghost text from reverse side."""
+    flipped_front = front_img.transpose(Image.FLIP_LEFT_RIGHT)
+    flipped_back = back_img.transpose(Image.FLIP_LEFT_RIGHT)
+    ghost_front = flipped_front.filter(ImageFilter.GaussianBlur(radius=1.5))
+    ghost_back = flipped_back.filter(ImageFilter.GaussianBlur(radius=1.5))
+    res_back = Image.blend(back_img, ghost_front, opacity)
+    res_front = Image.blend(front_img, ghost_back, opacity)
+    return res_front, res_back
 
 
 # ============================================================================
@@ -1282,6 +1540,391 @@ class SyntheticCardGenerator:
             ))
 
         return cards
+
+    def generate_recipe_card_faces(
+        self,
+        recipe: RecipeSchema,
+        num_faces: int = 2,
+        stock: Optional[CardStock] = None,
+        writer: Optional[CardWriter] = None,
+        degradation: Optional[DegradationConfig] = None,
+        face_ids: Optional[List[str]] = None,
+        continuation_cue: Optional[bool] = None,
+    ) -> List[GeneratedCard]:
+        """Generates 1 to 5 synchronized card faces for a recipe with exact verbatim tracking.
+
+        Supports physical pairing coordination for front/back pairs (mirrored stains, dog-ears,
+        tears, creases, and show-through), stock_id / writer_id attachment, and configurable
+        continuation cues (present or absent).
+        """
+        stk = stock or CardStock()
+        wtr = writer or CardWriter()
+        deg = degradation or DegradationConfig.from_level(stk.aging_level, self.rng, include_advanced=True)
+        num_faces = max(1, min(5, num_faces))
+        rec_id = recipe.recipe_id or f"rec_{secrets.token_hex(4)}"
+
+        if face_ids is None or len(face_ids) != num_faces:
+            face_ids = [f"{secrets.token_hex(6)}.jpg" for _ in range(num_faces)]
+        recipe.card_ids = face_ids
+
+        cw = stk.width
+        ch = stk.height
+
+        if continuation_cue is None:
+            has_cue = (self.rng.random() < 0.65) if num_faces > 1 else False
+        else:
+            has_cue = bool(continuation_cue) if num_faces > 1 else False
+
+        ink_col = wtr.ink_color
+        modality = wtr.modality
+        font_style = wtr.font_style
+
+        # Split recipe content across faces
+        ings = list(recipe.ingredients) or ["1 cup flour", "1/2 cup sugar"]
+        dirs = list(recipe.directions) or ["Mix well and bake."]
+        title = recipe.title or "Historical Recipe"
+
+        face_plans = []
+        if num_faces == 1:
+            face_plans.append({
+                "has_title": True,
+                "header": None,
+                "ings": ings[:7],
+                "dirs": dirs[:5],
+                "cue": None,
+                "show_meta": True,
+            })
+        elif num_faces == 2:
+            face_plans.append({
+                "has_title": True,
+                "header": None,
+                "ings": ings,
+                "dirs": dirs[:max(1, len(dirs) // 2)] if len(ings) <= 6 else [],
+                "cue": ("(over ->)" if modality == CardModality.HANDWRITTEN_CURSIVE else "PTO >>>") if has_cue else None,
+                "show_meta": False,
+            })
+            face_plans.append({
+                "has_title": False,
+                "header": (f"({title[:24]} cont.)" if modality == CardModality.HANDWRITTEN_CURSIVE else f"(CONTINUED - {title[:20].upper()})") if (has_cue and self.rng.random() < 0.75) else None,
+                "ings": [],
+                "dirs": dirs[max(1, len(dirs) // 2):] if len(ings) <= 6 else dirs,
+                "cue": None,
+                "show_meta": True,
+            })
+        elif num_faces == 3:
+            mid_ing = max(1, len(ings) * 2 // 3)
+            mid_dir = max(1, len(dirs) // 2)
+            face_plans.append({
+                "has_title": True,
+                "header": None,
+                "ings": ings[:mid_ing],
+                "dirs": [],
+                "cue": ("(over ->)" if modality == CardModality.HANDWRITTEN_CURSIVE else "PTO >>>") if has_cue else None,
+                "show_meta": False,
+            })
+            face_plans.append({
+                "has_title": False,
+                "header": (f"(Directions - {title[:18]} cont.)") if has_cue else None,
+                "ings": ings[mid_ing:],
+                "dirs": dirs[:mid_dir],
+                "cue": ("(see Card 2 ->)" if modality == CardModality.HANDWRITTEN_CURSIVE else "SEE CARD 2 >>>") if has_cue else None,
+                "show_meta": False,
+            })
+            face_plans.append({
+                "has_title": False,
+                "header": (f"Card 2: {title[:22]}") if has_cue else None,
+                "ings": [],
+                "dirs": dirs[mid_dir:],
+                "cue": None,
+                "show_meta": True,
+            })
+        elif num_faces == 4:
+            q_dir = max(1, len(dirs) // 3)
+            face_plans.append({
+                "has_title": True,
+                "header": None,
+                "ings": ings[:max(1, len(ings) // 2)],
+                "dirs": [],
+                "cue": ("(over ->)" if modality == CardModality.HANDWRITTEN_CURSIVE else "PTO >>>") if has_cue else None,
+                "show_meta": False,
+            })
+            face_plans.append({
+                "has_title": False,
+                "header": "(Continued from front)" if has_cue else None,
+                "ings": ings[max(1, len(ings) // 2):],
+                "dirs": dirs[:q_dir],
+                "cue": ("(turn to Card 2 ->)" if modality == CardModality.HANDWRITTEN_CURSIVE else "SEE CARD 2 >>>") if has_cue else None,
+                "show_meta": False,
+            })
+            face_plans.append({
+                "has_title": False,
+                "header": f"Card 2: {title[:20]} (cont.)" if has_cue else None,
+                "ings": [],
+                "dirs": dirs[q_dir: 2 * q_dir],
+                "cue": ("(over to Card 2 back ->)" if modality == CardModality.HANDWRITTEN_CURSIVE else "PTO >>>") if has_cue else None,
+                "show_meta": False,
+            })
+            face_plans.append({
+                "has_title": False,
+                "header": f"Card 2 Back: {title[:18]} (finishing)" if has_cue else None,
+                "ings": [],
+                "dirs": dirs[2 * q_dir:],
+                "cue": None,
+                "show_meta": True,
+            })
+        else:  # num_faces == 5
+            q_dir = max(1, len(dirs) // 4)
+            face_plans.append({
+                "has_title": True,
+                "header": None,
+                "ings": ings[:max(1, len(ings) // 2)],
+                "dirs": [],
+                "cue": ("(over ->)" if modality == CardModality.HANDWRITTEN_CURSIVE else "PTO >>>") if has_cue else None,
+                "show_meta": False,
+            })
+            face_plans.append({
+                "has_title": False,
+                "header": "(Continued from front)" if has_cue else None,
+                "ings": ings[max(1, len(ings) // 2):],
+                "dirs": dirs[:q_dir],
+                "cue": "(see Card 2 ->)" if has_cue else None,
+                "show_meta": False,
+            })
+            face_plans.append({
+                "has_title": False,
+                "header": f"Card 2: {title[:20]}" if has_cue else None,
+                "ings": [],
+                "dirs": dirs[q_dir: 2 * q_dir],
+                "cue": "(over to Card 2 back ->)" if has_cue else None,
+                "show_meta": False,
+            })
+            face_plans.append({
+                "has_title": False,
+                "header": "Card 2 Back (cont.)" if has_cue else None,
+                "ings": [],
+                "dirs": dirs[2 * q_dir: 3 * q_dir],
+                "cue": "(see Card 3 ->)" if has_cue else None,
+                "show_meta": False,
+            })
+            face_plans.append({
+                "has_title": False,
+                "header": f"Card 3: {title[:20]} (finishing)" if has_cue else None,
+                "ings": [],
+                "dirs": dirs[3 * q_dir:],
+                "cue": None,
+                "show_meta": True,
+            })
+
+        # Render each face canvas
+        raw_faces: List[Tuple[Image.Image, str, List[Dict[str, Any]]]] = []
+
+        for idx, fp in enumerate(face_plans):
+            img, _ = create_paper_substrate(
+                cw, ch, stk.substrate, self.rng,
+                ruling=stk.ruling,
+                base_color_override=stk.base_color,
+            )
+            draw = ImageDraw.Draw(img, "RGBA")
+            verbatim_lines: List[str] = []
+            y = 22
+
+            if fp["has_title"]:
+                title_font = get_font("headline" if modality == CardModality.PRINTED_CLIPPING else font_style, size=19)
+                t_str = title.upper() if modality == CardModality.TYPEWRITTEN else title
+                draw.text((40, y), t_str, fill=(*ink_col, 255), font=title_font)
+                verbatim_lines.append(t_str)
+                y = 66
+            elif fp["header"]:
+                hdr_font = get_font(font_style, size=14)
+                draw.text((40, y), fp["header"], fill=(*ink_col, 230), font=hdr_font)
+                verbatim_lines.append(fp["header"])
+                y = 58
+            else:
+                y = 38
+
+            # Ingredients
+            if fp["ings"]:
+                ing_hdr = "--- INGREDIENTS ---" if modality == CardModality.TYPEWRITTEN else "Ingredients:"
+                if fp["has_title"] or len(face_plans) > 1:
+                    hdr_font = get_font("typewriter" if modality == CardModality.TYPEWRITTEN else "headline", size=13)
+                    draw.text((40, y), ing_hdr, fill=(*ink_col, 240), font=hdr_font)
+                    verbatim_lines.append(ing_hdr)
+                    y += 20
+                if modality == CardModality.TYPEWRITTEN:
+                    y = render_typewritten_lines(
+                        draw, [f"- {ig}" for ig in fp["ings"]], 40, y, cw, ch, ink_col, 13, self.rng
+                    )
+                    for ig in fp["ings"]:
+                        verbatim_lines.append(f"- {ig}")
+                elif modality == CardModality.PRINTED_CLIPPING:
+                    y = render_typewritten_lines(
+                        draw, [f"• {ig}" for ig in fp["ings"]], 40, y, cw, ch, ink_col, 13, self.rng
+                    )
+                    for ig in fp["ings"]:
+                        verbatim_lines.append(f"• {ig}")
+                else:
+                    y = render_handwritten_lines(
+                        draw, fp["ings"], 40, y, cw, ch, ink_col, 13, self.rng, font_style=font_style
+                    )
+                    for ig in fp["ings"]:
+                        verbatim_lines.append(ig)
+
+            # Directions
+            if fp["dirs"]:
+                if fp["ings"]:
+                    y += 8
+                dir_hdr = "--- DIRECTIONS ---" if modality == CardModality.TYPEWRITTEN else "Directions:"
+                if fp["has_title"] or len(face_plans) > 1:
+                    hdr_font = get_font("typewriter" if modality == CardModality.TYPEWRITTEN else "headline", size=13)
+                    draw.text((40, y), dir_hdr, fill=(*ink_col, 240), font=hdr_font)
+                    verbatim_lines.append(dir_hdr)
+                    y += 20
+                if modality == CardModality.TYPEWRITTEN:
+                    y = render_typewritten_lines(
+                        draw, fp["dirs"], 40, y, cw, ch, ink_col, 12, self.rng
+                    )
+                elif modality == CardModality.PRINTED_CLIPPING:
+                    y = render_typewritten_lines(
+                        draw, fp["dirs"], 40, y, cw, ch, ink_col, 12, self.rng
+                    )
+                else:
+                    y = render_handwritten_lines(
+                        draw, fp["dirs"], 40, y, cw, ch, ink_col, 13, self.rng, font_style=font_style
+                    )
+                for d in fp["dirs"]:
+                    verbatim_lines.append(d)
+
+            # Notes / Yield at bottom
+            if fp["show_meta"] and (recipe.yield_servings or recipe.total_time):
+                meta_line = f"Yield: {recipe.yield_servings or '4 servings'} | Time: {recipe.total_time or '45 mins'}"
+                if modality == CardModality.TYPEWRITTEN:
+                    meta_line = meta_line.upper()
+                draw.text((40, ch - 38), meta_line, fill=(*ink_col, 215), font=get_font(font_style, size=12))
+                verbatim_lines.append(meta_line)
+
+            # Continuation Cue
+            if fp["cue"]:
+                c_font = get_font("typewriter" if modality == CardModality.TYPEWRITTEN else font_style, size=13)
+                draw.text((cw - 220, ch - 28), fp["cue"], fill=(*ink_col, 245), font=c_font)
+                verbatim_lines.append(fp["cue"])
+
+            raw_faces.append((img, "\n".join(verbatim_lines), []))
+
+        # Coordinate Front/Back physical pairing degradation
+        # Pairs: (0, 1), (2, 3)
+        processed_images: List[Image.Image] = [f[0] for f in raw_faces]
+
+        for p_front in [0, 2]:
+            p_back = p_front + 1
+            if p_back < len(processed_images):
+                f_img = processed_images[p_front]
+                b_img = processed_images[p_back]
+
+                # Mirrored oil smudge
+                if deg.oil_smudges > 0:
+                    f_box = (cw - 150, 25, cw - 30, 125)
+                    b_box = (30, 25, 150, 125)
+                    f_img = apply_oil_smudge(f_img, f_box, self.rng, alpha=105)
+                    b_img = apply_oil_smudge(b_img, b_box, self.rng, alpha=65)
+
+                # Mirrored coffee ring
+                if deg.coffee_rings > 0:
+                    rcx = self.rng.randint(int(cw * 0.55), int(cw * 0.75))
+                    rcy = self.rng.randint(70, 160)
+                    rr = self.rng.randint(45, 60)
+                    f_img = apply_coffee_ring(f_img, rcx, rcy, rr, self.rng, alpha=130)
+                    b_img = apply_coffee_ring(b_img, cw - rcx, rcy, rr, self.rng, alpha=70)
+
+                # Mirrored dog ear
+                if deg.dog_ears:
+                    f_img = apply_dog_ear(f_img, "TOP_RIGHT", size=36)
+                    b_img = apply_dog_ear(b_img, "TOP_LEFT", size=36)
+
+                # Mirrored edge tear
+                if deg.edge_tears:
+                    f_img = apply_edge_tear(f_img, "RIGHT", self.rng)
+                    b_img = apply_edge_tear(b_img, "LEFT", self.rng)
+
+                # Mirrored crease
+                if deg.creases > 0:
+                    f_img = apply_crease(f_img, count=deg.creases, orientation="HORIZONTAL", rng=self.rng)
+                    b_img = apply_crease(b_img, count=deg.creases, orientation="HORIZONTAL", rng=self.rng)
+
+                # Mirrored show-through / bleed-through
+                if deg.bleed_through:
+                    f_img, b_img = apply_show_through(f_img, b_img, opacity=0.065)
+
+                processed_images[p_front] = f_img
+                processed_images[p_back] = b_img
+
+        # Apply global degradation to each face
+        final_cards: List[GeneratedCard] = []
+        for idx in range(num_faces):
+            c_img = processed_images[idx]
+            cid = face_ids[idx]
+            v_text = raw_faces[idx][1]
+
+            if deg.ink_fade > 0:
+                c_img = apply_ink_fade(c_img, deg.ink_fade, self.rng)
+            if deg.glare and idx == 0:
+                c_img = apply_glare(c_img, rng=self.rng)
+            if abs(deg.rotation_skew_deg) > 0.1:
+                c_img = apply_rotation_skew(c_img, deg.rotation_skew_deg)
+            if deg.perspective_warp > 0.001:
+                c_img = apply_perspective_warp(c_img, deg.perspective_warp, self.rng)
+            if deg.jpeg_noise > 0.01:
+                q_val = max(35, int(85 - deg.jpeg_noise * 70))
+                c_img = apply_jpeg_noise(c_img, quality=q_val)
+
+            if num_faces == 1:
+                role = CardRole.STANDALONE
+                cluster_role = "standalone"
+            elif idx == 0:
+                role = CardRole.SEQUENCE_START
+                cluster_role = "card1_front"
+            else:
+                role = CardRole.SEQUENCE_CONTINUATION
+                c_num = (idx // 2) + 1
+                c_face = "front" if (idx % 2 == 0) else "back"
+                cluster_role = f"card{c_num}_{c_face}"
+
+            cue_val = face_plans[idx].get("cue")
+
+            final_cards.append(GeneratedCard(
+                image=c_img,
+                card_id=cid,
+                filename=cid,
+                modality=modality,
+                role=role,
+                stock_id=stk.stock_id,
+                writer_id=wtr.writer_id,
+                verbatim_text=v_text,
+                face_index=idx,
+                total_faces=num_faces,
+                recipe_cluster={
+                    "recipe_id": rec_id,
+                    "sequence_position": idx,
+                    "cluster_role": cluster_role,
+                    "total_cards": num_faces,
+                    "continuation_cue": cue_val,
+                },
+                physical_characteristics={
+                    "stock_id": stk.stock_id,
+                    "writer_id": wtr.writer_id,
+                    "paper_tone": stk.substrate.value,
+                    "ruling_type": str(stk.ruling),
+                    "ink_type": wtr.ink_type.value,
+                    "dimensions": {
+                        "width_px": cw,
+                        "height_px": ch,
+                        "aspect_ratio": round(cw / ch, 3),
+                    },
+                    "artifacts": [],
+                },
+                recipe=recipe,
+            ))
+
+        return final_cards
 
 
 

@@ -20,6 +20,7 @@ import pytest
 from recipeboxer.correlation.optimizer import PairingOptimizer
 from recipeboxer.correlation.semantic import GeminiSemanticVerifier
 from recipeboxer.extraction.extractor import GeminiRecipeExtractor
+from recipeboxer.models.recipe import RecipeSchema
 from recipeboxer.models.domain import (
     ArtifactType,
     BoundaryText,
@@ -361,31 +362,39 @@ class TestM2MultiCardSequenceChainingPermutations:
             assert res.proposals[0].part_count == 4
 
 
+class CallOrderMockClient:
+    """Mock client keyed strictly by call order."""
+
+    def __init__(self, responses: List[RecipeSchema]):
+        self._responses = list(responses)
+        self._index = 0
+
+    def __call__(self, *args, **kwargs) -> RecipeSchema:
+        resp = self._responses[self._index]
+        self._index += 1
+        return resp
+
+
 class TestM2StrictRecipeContentIsolation:
     """Verifies that recipe extraction produces isolated recipes without cross-recipe leakage."""
 
     @pytest.mark.asyncio
-    async def test_all_24_recipes_extracted_in_strict_isolation(self, manifest_data: Dict[str, Any]):
-        extractor = GeminiRecipeExtractor()
-        recipes = get_unique_recipes_from_manifest(manifest_data)
-        extracted_recipes = []
+    async def test_rhubarb_jam_isolated_from_rhubarb_pie(self):
+        jam_recipe = RecipeSchema(
+            title="Strawberry Rhubarb Freezer Jam",
+            ingredients=["4 cups chopped strawberries", "2 cups diced rhubarb", "1 box powdered pectin", "4 cups sugar"],
+            directions=["Crush fruit in large bowl.", "Stir in pectin and sugar.", "Ladle into clean jars and freeze."],
+        )
+        pie_recipe = RecipeSchema(
+            title="Old-Fashioned Rhubarb Pie",
+            ingredients=["4 cups chopped fresh rhubarb", "1 1/3 cups sugar", "1/3 cup flour", "pastry for 9-inch double crust pie"],
+            directions=["Line pie pan with bottom crust.", "Mix rhubarb, sugar, and flour; fill crust.", "Cover with top crust and bake at 400F."],
+        )
+        client = CallOrderMockClient([jam_recipe, pie_recipe])
+        extractor = GeminiRecipeExtractor(client=client)
 
-        for r_meta in recipes.values():
-            card_ids = r_meta["card_ids"]
-            recipe = await extractor.extract(front_input=card_ids)
-            assert recipe.title == r_meta["title"], f"Title mismatch: {recipe.title} vs {r_meta['title']}"
-            assert len(recipe.ingredients) == len(r_meta["ground_truth"]["ingredients"])
-            assert len(recipe.directions) == len(r_meta["ground_truth"]["directions"])
-            assert recipe.source_notes == r_meta["source_notes"]
-            extracted_recipes.append(recipe)
-
-        assert len(extracted_recipes) == 24
-
-    @pytest.mark.asyncio
-    async def test_rhubarb_jam_isolated_from_rhubarb_pie(self, manifest_data: Dict[str, Any]):
-        extractor = GeminiRecipeExtractor()
-        jam = await extractor.extract(front_input=["rec_vhc_strawberry_rhubarb_jam_1954_front.jpg", "rec_vhc_strawberry_rhubarb_jam_1954_back.jpg"])
-        pie = await extractor.extract(front_input=["rec_vhc_rhubarb_pie_1965_front.jpg", "rec_vhc_rhubarb_pie_1965_back.jpg"])
+        jam = await extractor.extract(front_input=["card_01.jpg", "card_02.jpg"])
+        pie = await extractor.extract(front_input=["card_03.jpg", "card_04.jpg"])
 
         # Jam must not contain pie crust / flour / pastry ingredients
         jam_text = " ".join(jam.ingredients + jam.directions).lower()
@@ -400,10 +409,22 @@ class TestM2StrictRecipeContentIsolation:
         assert "pectin" not in pie_text
 
     @pytest.mark.asyncio
-    async def test_swedish_meatballs_isolated_from_beef_stroganoff(self, manifest_data: Dict[str, Any]):
-        extractor = GeminiRecipeExtractor()
-        meatballs = await extractor.extract(front_input=["rec_typ_swedish_meatballs_1961_front.jpg", "rec_typ_swedish_meatballs_1961_back.jpg"])
-        stroganoff = await extractor.extract(front_input=["rec_typ_beef_stroganoff_1956_front.jpg", "rec_typ_beef_stroganoff_1956_back.jpg"])
+    async def test_swedish_meatballs_isolated_from_beef_stroganoff(self):
+        meatballs_recipe = RecipeSchema(
+            title="Traditional Swedish Meatballs",
+            ingredients=["1 lb ground beef", "1/2 lb ground pork", "1/4 tsp ground allspice", "1/4 tsp nutmeg", "1/2 cup breadcrumbs"],
+            directions=["Combine meats, spices, and breadcrumbs into meatballs.", "Brown in skillet with butter."],
+        )
+        stroganoff_recipe = RecipeSchema(
+            title="Classic Beef Stroganoff",
+            ingredients=["1.5 lbs beef top sirloin cut into strips", "8 oz sliced mushrooms", "1 cup sour cream", "12 oz egg noodles"],
+            directions=["Sear sirloin strips in butter.", "Cook mushrooms and stir in sour cream.", "Serve hot over egg noodles."],
+        )
+        client = CallOrderMockClient([meatballs_recipe, stroganoff_recipe])
+        extractor = GeminiRecipeExtractor(client=client)
+
+        meatballs = await extractor.extract(front_input=["card_05.jpg", "card_06.jpg"])
+        stroganoff = await extractor.extract(front_input=["card_07.jpg", "card_08.jpg"])
 
         mb_text = " ".join(meatballs.ingredients + meatballs.directions).lower()
         strog_text = " ".join(stroganoff.ingredients + stroganoff.directions).lower()
@@ -415,3 +436,4 @@ class TestM2StrictRecipeContentIsolation:
         # Stroganoff has sirloin / mushrooms / egg noodles
         assert "stroganoff" in strog_text or "sirloin" in strog_text or "egg noodles" in strog_text
         assert "allspice" not in strog_text
+
