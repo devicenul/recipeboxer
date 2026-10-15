@@ -714,12 +714,20 @@ async def run_headless_analysis(
     }
 
 
+    # RT3-08: record which fitted models were active (a failed bundle load is never silent)
+    try:
+        from recipeboxer.correlation.linkmodel import default_models
+        provenance: Dict[str, Any] = {"up3_models": default_models().provenance()}
+    except Exception as prov_exc:  # pragma: no cover - defensive
+        provenance = {"up3_models": {"loaded": False, "error": f"{type(prov_exc).__name__}: {prov_exc}"}}
+
     result = {
         "status": status,
         "recipes": recipes_out,
         "unassigned_image_ids": unassigned_image_ids,
         "failures": failures_out,
         "ledger": ledger_out,
+        "provenance": provenance,
     }
 
     if out_file:

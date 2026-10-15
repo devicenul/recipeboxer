@@ -679,7 +679,9 @@ class RecipeBoxerAgent:
                             transition_scores=[],
                             heuristic_score=0.0,
                             semantic_score=0.0,
-                            confidence=fp.role_confidence,
+                            # RT3-03 (INV-AC4): the fingerprint role confidence is not grouping evidence;
+                            # a grouping-failure fallback has no evidence-based confidence.
+                            confidence=None,
                             is_standalone=True,
                             continuity_explanation="Unmatched card presented as standalone candidate for human review.",
                             recommended_action="STANDALONE",

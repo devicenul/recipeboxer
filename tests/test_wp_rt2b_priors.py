@@ -60,7 +60,8 @@ def test_optimizer_standalone_confidence_derived_from_role_or_none():
 
     result1 = optimizer.optimize_proposals([fp1], proposals=[])
     assert len(result1.proposals) == 1
-    assert result1.proposals[0].confidence == 0.95
+    # WP-RT3FIX (RT3-03): role_confidence is a classification prior, not grouping evidence -> None
+    assert result1.proposals[0].confidence is None
 
     # When role_confidence is None
     fp2 = VisualFingerprint(

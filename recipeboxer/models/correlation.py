@@ -133,6 +133,10 @@ class PairEvidence(BaseModel):
     features: List[FeatureEvidence] = Field(default_factory=list)
     total_log_lr: float = 0.0 # sum(weight*log_lr) over computable features
     p_link: Optional[float] = None      # calibrated probability (G8) or None before calibration
+    # RT3-07: when a WP-UP4 guard gated this link, p_link is capped at GATE_CAP and is NOT a calibrated
+    # probability; ``gate`` names the guard and ``p_link_ungated`` keeps the model output.
+    gate: Optional[str] = None
+    p_link_ungated: Optional[float] = None
     content_evidence_used: bool = False
 
 

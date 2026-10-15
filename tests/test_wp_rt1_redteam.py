@@ -149,7 +149,9 @@ class TestFind04OptimizerSemanticNone:
         result = opt.optimize_proposals([fp1], [])
         assert len(result.proposals) == 1
         st = result.proposals[0]
-        assert st.confidence == 0.42  # Derived from role_confidence, NOT 0.85
+        # WP-RT3FIX (RT3-03): the fingerprint role confidence is a classification prior, not grouping
+        # evidence -> no reported confidence (and never a hard-coded 0.85).
+        assert st.confidence is None
 
 
 # ===========================================================================

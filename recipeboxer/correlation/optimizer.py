@@ -560,7 +560,9 @@ class PairingOptimizer:
                 role_str = _get_enum_str(fp.role) if fp else ""
                 # Check if classified as standalone
                 if role_str == "STANDALONE" or (fp and getattr(fp, "is_standalone", False)):
-                    conf = getattr(fp, "role_confidence", None)
+                    # RT3-03: the fingerprint role confidence is a classification prior, not evidence
+                    # that this card is a complete standalone recipe -> no reported confidence.
+                    conf = None
                     standalone_prop = CorrelationProposal(
                         proposal_id=f"prop_{uuid.uuid4().hex[:8]}",
                         ordered_card_ids=[cid],

@@ -5,6 +5,9 @@ Executes the System Under Test (SUT) against evaluation tiers (T0-T4) adhering s
 - INV-AC1, INV-AC5: Subprocess execution with scrubbed environment allow-list, cwd=temp dir,
   audit hook injection (sut_boot.py) aborting with exit code 86 and CHEAT_DETECTED.
 - Opaque image copying with random filenames and reverse mapping post-run.
+- WP-RT3FIX (RT3-01): the SUT runs with a fresh private HOME / TMPDIR / XDG_* sandbox and a strict audit-hook
+  allowlist (``RB_SUT_SANDBOX``) that also denies the real ``$HOME/.cache/projects``, the identity dir and the
+  agent artifact dir.
 - Support for --oracle-plan (skipping correlation grouping via --image-sets) and --variant.
 """
 
@@ -22,7 +25,7 @@ import tarfile
 import tempfile
 import uuid
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Set, Tuple, Union
 
 from evals.harness.obfuscation import DeckMapping, prepare_obfuscated_deck
 
@@ -82,8 +85,69 @@ def get_git_commit() -> str:
     return "unknown"
 
 
-def build_scrubbed_env(allow_live_key: bool = False) -> Dict[str, str]:
-    """Builds a strictly scrubbed environment dictionary for SUT subprocess execution."""
+SANDBOX_ENV = "RB_SUT_SANDBOX"
+
+
+def real_deny_roots() -> List[str]:
+    """Host paths the SUT must never touch even if HOME isolation failed (RT3-01)."""
+    home = os.path.expanduser("~")
+    roots = [
+        os.path.join(home, ".cache", "projects"),
+        os.path.join(home, ".config", "recipeboxer"),
+        os.path.join(home, ".gemini"),
+    ]
+    for k in ("RB_EVAL_AGE_KEY_FILE", "RB_EVAL_KEY"):
+        v = os.environ.get(k, "").strip()
+        if v:
+            roots.append(os.path.dirname(os.path.abspath(v)) or v)
+            roots.append(os.path.abspath(v))
+    # Antigravity agent artifact dir (contains plaintext spot-check packages)
+    for base in ("/storage/emulated", "/mnt/shared"):
+        if os.path.isdir(base):
+            try:
+                for uid in os.listdir(base):
+                    roots.append(os.path.join(base, uid, "AntiGravity", ".gemini"))
+            except OSError:
+                pass
+    roots.append("/mnt/shared/AntiGravity/.gemini")
+    return sorted(set(roots))
+
+
+def prepare_sut_sandbox(root: Union[str, Path]) -> Dict[str, Path]:
+    """Creates a private HOME / TMPDIR / XDG_* tree for one SUT subprocess (RT3-01)."""
+    root = Path(root)
+    dirs = {
+        "root": root,
+        "home": root / "home",
+        "tmp": root / "tmp",
+        "xdg_config": root / "home" / ".config",
+        "xdg_cache": root / "home" / ".cache",
+        "xdg_data": root / "home" / ".local" / "share",
+        "xdg_state": root / "home" / ".local" / "state",
+        "xdg_runtime": root / "run",
+    }
+    for d in dirs.values():
+        d.mkdir(parents=True, exist_ok=True)
+    try:
+        os.chmod(dirs["xdg_runtime"], 0o700)
+    except OSError:
+        pass
+    return dirs
+
+
+def build_scrubbed_env(
+    allow_live_key: bool = False,
+    sandbox: Optional[Dict[str, Path]] = None,
+    allow_roots: Optional[Sequence[Union[str, Path]]] = None,
+    strict: bool = True,
+) -> Dict[str, str]:
+    """Builds a strictly scrubbed environment dictionary for SUT subprocess execution.
+
+    When ``sandbox`` (see ``prepare_sut_sandbox``) is given, HOME / TMPDIR / TEMP / TMP / XDG_* point into the
+    private sandbox and ``RB_SUT_SANDBOX`` carries the audit-hook config (strict allowlist + deny roots) for
+    ``sut_boot.py``. ``PROJECT_CACHE_DIR`` is never forwarded when sandboxed (it points into the eval host's
+    project cache).
+    """
     scrubbed: Dict[str, str] = {}
     current_env = os.environ
 
@@ -108,6 +172,19 @@ def build_scrubbed_env(allow_live_key: bool = False) -> Dict[str, str]:
         for k in ("GEMINI_API_KEY", "RECIPEBOXER_GEMINI_API_KEY"):
             if k in current_env and current_env[k].strip():
                 scrubbed[k] = current_env[k].strip()
+
+    if sandbox is not None:
+        scrubbed.pop("PROJECT_CACHE_DIR", None)
+        scrubbed["HOME"] = str(sandbox["home"])
+        for k in ("TMPDIR", "TEMP", "TMP"):
+            scrubbed[k] = str(sandbox["tmp"])
+        scrubbed["XDG_CONFIG_HOME"] = str(sandbox["xdg_config"])
+        scrubbed["XDG_CACHE_HOME"] = str(sandbox["xdg_cache"])
+        scrubbed["XDG_DATA_HOME"] = str(sandbox["xdg_data"])
+        scrubbed["XDG_STATE_HOME"] = str(sandbox["xdg_state"])
+        scrubbed["XDG_RUNTIME_DIR"] = str(sandbox["xdg_runtime"])
+        allow = [str(sandbox["root"])] + [str(a) for a in (allow_roots or [])]
+        scrubbed[SANDBOX_ENV] = json.dumps({"strict": bool(strict), "allow": allow, "deny": real_deny_roots()})
 
     return scrubbed
 
@@ -214,6 +291,21 @@ def resolve_deck_images(
     return decks
 
 
+def _safe_extractall(tar: tarfile.TarFile, dest: Path) -> None:
+    """Extracts a tar archive refusing absolute paths, traversal, links and special files (RT3-13)."""
+    dest = Path(dest).resolve()
+    try:
+        tar.extractall(path=dest, filter="data")
+        return
+    except TypeError:  # Python without extraction filters
+        pass
+    for member in tar.getmembers():
+        target = (dest / member.name).resolve()
+        if not (member.isfile() or member.isdir()) or os.path.commonpath([str(dest), str(target)]) != str(dest):
+            raise tarfile.TarError(f"Refusing unsafe tar member: {member.name!r}")
+    tar.extractall(path=dest)
+
+
 def run_benchmark(
     tier: str,
     out_dir: Union[str, Path],
@@ -267,7 +359,7 @@ def run_benchmark(
         t2_temp_dir_ctx = tempfile.TemporaryDirectory(prefix="t2_corpus_")
         t2_dir = Path(t2_temp_dir_ctx.name)
         with tarfile.open(fileobj=io.BytesIO(tar_bytes)) as tar:
-            tar.extractall(path=t2_dir)
+            _safe_extractall(tar, t2_dir)
         images_dir = t2_dir
 
     deck_filter = set(decks) if decks else None
@@ -289,6 +381,7 @@ def run_benchmark(
     deck_outputs: List[Dict[str, Any]] = []
     all_ledger_calls: List[Dict[str, Any]] = []
     overall_status = "ok"
+    sandbox_ctxs: List[tempfile.TemporaryDirectory] = []
 
     for deck_id, img_paths in resolved_decks.items():
         _log(f"\nProcessing Deck '{deck_id}' ({len(img_paths)} images)...")
@@ -354,8 +447,11 @@ def run_benchmark(
             if oracle_file_path:
                 cmd.extend(["--image-sets", str(oracle_file_path)])
 
-            # Scrubbed execution environment
-            sut_env = build_scrubbed_env(allow_live_key=has_live_key)
+            # Scrubbed execution environment with a private HOME/TMPDIR/XDG sandbox (RT3-01)
+            sandbox_ctx = tempfile.TemporaryDirectory(prefix="rb_sbx_")
+            sandbox_ctxs.append(sandbox_ctx)
+            sandbox = prepare_sut_sandbox(sandbox_ctx.name)
+            sut_env = build_scrubbed_env(allow_live_key=has_live_key, sandbox=sandbox, allow_roots=[str(temp_dir)])
 
             eff_deck_timeout = compute_deck_timeout(len(img_paths), timeout_s)
             _log(f"Executing SUT subprocess for deck '{deck_id}' (cwd={temp_dir}, timeout={eff_deck_timeout}s)...")
@@ -440,6 +536,7 @@ def run_benchmark(
                         "recipes": mapped_recipes,
                         "unassigned_image_ids": mapped_unassigned,
                         "failures": mapped_failures,
+                        "provenance": sut_res.get("provenance"),
                     })
 
                     # Ledger calls
@@ -621,6 +718,12 @@ def run_benchmark(
     if deck_failure_summaries:
         outputs_payload["failure_summary"] = deck_failure_summaries
     (out_path / "outputs.json").write_text(json.dumps(outputs_payload, indent=2), encoding="utf-8")
+
+    for sb_ctx in sandbox_ctxs:
+        try:
+            sb_ctx.cleanup()
+        except Exception:
+            pass
 
     if t2_temp_dir_ctx is not None:
         try:

@@ -551,10 +551,9 @@ class SetVerifier:
                 flags.append(f"UNVERIFIED_QUOTE: {uq}")
                 logger.warning("SetVerifier: cited quote %r conflicts with available card text/OCR", uq)
             # Lower confidence by 50% when hallucinated quotes conflict with available text
+            # (RT3-FIX: a missing model confidence stays None -- never replaced by a constant)
             if eff_confidence is not None:
                 eff_confidence = round(max(0.0, eff_confidence * 0.5), 4)
-            else:
-                eff_confidence = 0.35
 
         if unchecked_quotes:
             for uq in unchecked_quotes:

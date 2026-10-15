@@ -74,6 +74,9 @@ METRIC_DIRECTIONS: Dict[str, str] = {
     "schema_conformity_rate": "higher",
     # Calibration metrics
     "ece": "lower",
+    "ece_all": "lower",
+    "ece_matched": "lower",
+    "confidence_coverage": "higher",
     # Judge metrics
     "score": "higher",
     "judge_score": "higher",
@@ -384,6 +387,21 @@ def _render_markdown(report: dict, tier: str, feedback: str) -> str:
         lines.append(f"| **Stage Failures** | `{n_failures}` | Lower | Pipeline stage failures reported during run |")
 
     lines.append("")
+
+    # Calibration Section (RT3-02): all-prediction ECE is the headline; matched-only is diagnostic
+    if isinstance(calibration, dict) and calibration:
+        cov = calibration.get("confidence_coverage")
+        lines.extend([
+            "### Confidence Calibration",
+            "",
+            "| Metric | Score | Direction | Description |",
+            "|:---|:---:|:---:|:---|",
+            f"| **ECE (all predictions)** | `{_fmt_metric(calibration.get('ece_all', calibration.get('ece')))}` | Lower | 10-bin ECE over every predicted recipe with a confidence; unmatched (hallucinated/fragment) predictions count as incorrect |",
+            f"| **ECE (matched only)** | `{_fmt_metric(calibration.get('ece_matched'))}` | Lower | Diagnostic: Hungarian-matched predictions only (excludes false-positive recipes; flatters calibration) |",
+            f"| **Confidence Coverage** | `{_fmt_metric(cov)}` | Higher | Share of predicted recipes carrying a confidence (None = abstention, not scored in ECE) |",
+            f"| **Predictions with Confidence** | `{calibration.get('n_with_confidence', 'N/A')} / {calibration.get('n_pred', 'N/A')}` | N/A | Scored population for ECE (all) |",
+            "",
+        ])
 
     # LLM Judge Section
     judge_score = judge.get("score") or judge.get("aggregate_score") or report.get("judge_score")

@@ -69,7 +69,7 @@ The evaluation harness ([`evals/harness/run.py`](file:///storage/emulated/10/Ant
 ```
 
 ### 3.1 Subprocess Environment Sanitization
-- **Scrubbed Environment**: All environment variables containing `AGE`, `VAULT`, `SECRET`, or `RB_EVAL` are stripped. Only an explicit allowlist (`PATH`, `HOME`, `TMPDIR`, `PYTHONPATH`, and injected live Gemini keys) is passed.
+- **Scrubbed Environment**: All environment variables containing `AGE`, `VAULT`, `SECRET`, or `RB_EVAL` are stripped. Only an explicit allowlist (`PATH`, `PYTHONPATH`, locale, and injected live Gemini keys) is passed. `HOME`/`TMPDIR`/`XDG_*` are replaced by a private per-deck sandbox (§3.2).
 - **Randomized Opaque Filenames**: Deck images are copied to an ephemeral directory with random 12-hex filenames (`secrets.token_hex(6)` + extension) and shuffled order. The harness maps opaque names back to original corpus IDs **after** the SUT process terminates.
 - **Naming Variants (`--variant`)**:
   - `opaque`: Default randomized names.
@@ -80,7 +80,10 @@ The evaluation harness ([`evals/harness/run.py`](file:///storage/emulated/10/Ant
 ### 3.2 Runtime Anti-Cheat Audit Hook (`evals/harness/sut_boot.py`)
 At process initialization, `sut_boot.py` installs a Python runtime audit hook (`sys.addaudithook`):
 - Intercepts file open events (`open`, `io.open`, `os.open`).
-- If any read attempts target `evals/`, `tests/fixtures/`, `manifest.json`, `*.gt.enc`, or age key paths, the audit hook:
+- **SUT sandbox (RT3-01, WP-RT3FIX)**: each deck's SUT subprocess gets a fresh private `HOME`, `TMPDIR`/`TEMP`/`TMP` and `XDG_{CONFIG,CACHE,DATA,STATE,RUNTIME}` tree (`evals/harness/run.py::prepare_sut_sandbox`). `PROJECT_CACHE_DIR` is not forwarded. The hook config is passed in `RB_SUT_SANDBOX` and removed from the SUT's environment at boot.
+- **Strict allowlist (harness mode)**: every opened, listed or globbed path must lie in the interpreter prefixes (venv, stdlib, site-packages), the pycache prefix, the `recipeboxer` package dir, the cwd/input dir, the private sandbox, or a system dir (`/dev`, `/proc` for the SUT's own process only, `/sys`, `/etc`, `/usr/share`, `/usr/lib*`, `/lib*`). The import machinery may list (not open) the exact `sys.path` entries.
+- **Deny roots and name patterns (always on)**: `$HOME/.cache/projects/**` of the current HOME, plus the harness-passed real `$HOME/.cache/projects`, `~/.config/recipeboxer`, `~/.gemini` and the Antigravity artifact dir (`*/AntiGravity/.gemini`). Interpreter-owned roots are exempt. Path segments `/.gemini/`, `/t3gt/`, `/t3_cache/`, `/gutenberg_cache/`, `/t2_corpus_`, `/honest_v*`, `/bench_out`, `/redteam*` and `/cardforge/` are denied anywhere.
+- If any read attempts target `evals/`, `tests/fixtures/`, `manifest.json`, `*.gt.enc`, or age key paths (or any of the paths above), the audit hook:
   1. Immediately emits `CHEAT_DETECTED: Unauthorized access to <path>` to `stderr`.
   2. Terminates the SUT subprocess with exit code **86**.
   3. Sets SUT run status to `"cheat_detected"` in `outputs.json`.
@@ -133,7 +136,7 @@ Predictions are Hungarian-matched to ground-truth recipes based on card-overlap 
 - **Direction F1 & Order $\tau$**: Instruction step match rate and sequence ordering.
 - **Hallucination & Omission Rates**: Measures unsupported recipe content vs unextracted gold content.
 - **Illegible Precision**: Accuracy of `[illegible: reason]` markers when transcribing damaged text.
-- **Confidence Calibration (ECE)**: Expected Calibration Error across 10 bins comparing model confidence to factual accuracy.
+- **Confidence Calibration (ECE)**: Expected Calibration Error across 10 bins comparing the SUT's `recipes[].confidence` to correctness (matched recipe with content similarity >= 0.5 AND ingredient F1 >= 0.7). See §5.5.
 
 ### 5.3 Operational & LLM Judge Metrics
 - **Operational Metrics (`evals/metrics/ops.py`)**: Total HTTP calls, token consumption (input, output, reasoning), latency percentiles, stage-level failures, and total USD spend calculated from `recipeboxer/data/pricing.toml`.
@@ -142,6 +145,19 @@ Predictions are Hungarian-matched to ground-truth recipes based on card-overlap 
 ### 5.4 Feedback Policy
 - **Tier T0**: Allows `--feedback aggregate` or `--feedback per_item` for granular line-by-line debugging.
 - **Tiers T1–T4**: Strictly **aggregate only**. Passing `--feedback per_item` raises `ValueError`, and all per-item diffs are stripped from reports to prevent test-set memorization.
+
+### 5.5 Calibration Populations (RT3-02, WP-RT3FIX)
+The scorer (`evals/scoring/evaluator.py::calibration_summary`) reports `metrics.calibration` with:
+- **`ece_all`** (headline; also exposed as `ece`): ECE over **every predicted recipe that carries a confidence**. Unmatched predictions (hallucinated recipes, grouping fragments) are scored as **incorrect**.
+- **`ece_matched`** (diagnostic): the same ECE restricted to Hungarian-matched predictions. Before WP-RT3FIX this was the only ECE reported (under `ece`). It excludes false-positive recipes, so it flatters calibration. Do not quote it as the headline number.
+- **`confidence_coverage`** = `n_with_confidence / n_pred`. A `None` confidence is an abstention. It is not scored in ECE, but it lowers coverage. Always report coverage next to ECE, because a SUT could otherwise improve ECE by withholding doubtful confidences.
+- Counts: `n_pred`, `n_with_confidence`, `n_matched_with_confidence`, `accuracy_all`, `mean_confidence_all`.
+
+> [!NOTE]
+> The UP3 `recipe` confidence model (`calibration_default.json["up3"]["models"]["recipe"]`) was fitted on fresh decks, but only on **matched** predicted recipes (it never saw a false-positive recipe). Its held-out "ECE ≈ 0.05" claim (WP-UP3) is therefore a matched-only number. Use `ece_all` for Gate claims. See `_agents/remediation/WP-RT3FIX.md` for the refit status and the before/after held-out numbers.
+
+> [!WARNING]
+> Baselines recorded before WP-RT3FIX store the matched-only value under `calibration.ece`. When comparing against such a baseline, compare against `ece_matched`.
 
 ---
 

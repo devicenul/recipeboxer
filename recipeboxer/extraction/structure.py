@@ -189,7 +189,7 @@ def _postprocess_recipe(
                         text=mn_clean,
                         kind="margin_note",
                         source_face=face.face_index,
-                        confidence=0.9,
+                        confidence=getattr(face, "confidence", None),  # RT3-06: transcript confidence, never a constant
                         legibility=Legibility.CLEAR,
                     )
                 )

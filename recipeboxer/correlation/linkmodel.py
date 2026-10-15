@@ -20,6 +20,7 @@ filenames, image hashes or corpus-specific strings are used.
 from __future__ import annotations
 
 import json
+import logging
 import math
 import re
 from pathlib import Path
@@ -29,6 +30,8 @@ import numpy as np
 
 from recipeboxer.models.correlation import PairEvidence
 from recipeboxer.models.domain import VisualFingerprint
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_MODEL_PATH = Path(__file__).resolve().parent / "calibration_default.json"
 
@@ -384,6 +387,12 @@ class Up3Models:
     def __init__(self, models: Optional[Dict[str, LogisticModel]] = None, meta: Optional[Dict[str, Any]] = None):
         self.models = dict(models or {})
         self.meta = dict(meta or {})
+        self.load_status: Dict[str, Any] = {"loaded": bool(self.models), "path": None, "error": None,
+                                            "failed_models": []}
+
+    def provenance(self) -> Dict[str, Any]:
+        """Run-provenance record (RT3-08): which fitted models are active and whether loading failed."""
+        return dict(self.load_status, active_models=sorted(k for k in self.models if self.get(k) is not None))
 
     def get(self, name: str) -> Optional[LogisticModel]:
         m = self.models.get(name)
@@ -394,16 +403,30 @@ class Up3Models:
         p = Path(path) if path else DEFAULT_MODEL_PATH
         try:
             data = json.loads(p.read_text(encoding="utf-8"))
-        except Exception:
-            return cls()
+        except Exception as exc:
+            # RT3-08: never silent -- production falls back to the legacy (unfitted) path.
+            logger.error("UP3 model bundle %s could not be loaded (%s: %s); falling back to legacy grouping "
+                         "and recipe confidences", p, type(exc).__name__, exc)
+            out = cls()
+            out.load_status = {"loaded": False, "path": p.name, "error": f"{type(exc).__name__}: {exc}",
+                               "failed_models": []}
+            return out
         up3 = data.get("up3") or {}
         models = {}
+        failed: List[str] = []
         for k, v in (up3.get("models") or {}).items():
             try:
                 models[k] = LogisticModel.from_dict(v)
-            except Exception:
-                continue
-        return cls(models, up3.get("meta") or {})
+            except Exception as exc:
+                logger.error("UP3 model %r in %s could not be loaded (%s: %s); it is disabled", k, p,
+                             type(exc).__name__, exc)
+                failed.append(k)
+        out = cls(models, up3.get("meta") or {})
+        out.load_status = {"loaded": bool(models), "path": p.name, "error": None if models else "no models in bundle",
+                           "failed_models": failed}
+        if not models:
+            logger.error("UP3 model bundle %s contains no loadable models; legacy path in use", p)
+        return out
 
     def to_dict(self) -> Dict[str, Any]:
         return {"meta": self.meta, "models": {k: m.to_dict() for k, m in self.models.items()}}

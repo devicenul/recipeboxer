@@ -36,13 +36,16 @@ class TextSpan(BaseModel):
         description="Classification: headnote, note, family_story, margin_note, ad",
     )
     source_face: int = Field(default=0, ge=0, description="0-indexed card face index")
-    confidence: float = Field(default=1.0, ge=0.0, le=1.0, description="Confidence score 0.0 to 1.0")
+    # None = no evidence-based confidence (e.g. transcript margin note without a face confidence; RT3-06)
+    confidence: Optional[float] = Field(default=1.0, ge=0.0, le=1.0, description="Confidence score 0.0 to 1.0")
     legibility: Legibility = Field(default=Legibility.CLEAR, description="Legibility status")
     illegible_spans: List[IllegibleSpan] = Field(default_factory=list, description="Illegible spans")
 
     @field_validator("confidence")
     @classmethod
-    def validate_confidence(cls, v: float) -> float:
+    def validate_confidence(cls, v: Optional[float]) -> Optional[float]:
+        if v is None:
+            return None
         if not (0.0 <= v <= 1.0):
             raise ValueError(f"confidence must be between 0.0 and 1.0, got {v}")
         return float(v)

@@ -29,6 +29,60 @@ from evals.metrics.ops import summarize_ledger
 logger = logging.getLogger("evals.scoring.evaluator")
 
 
+def _parse_confidence(raw: Any) -> Optional[float]:
+    """Parses a SUT recipe confidence; None (abstention) for missing / non-numeric values."""
+    if raw is None or isinstance(raw, bool):
+        return None
+    try:
+        v = float(raw)
+    except (TypeError, ValueError):
+        return None
+    if v != v:  # NaN
+        return None
+    return v
+
+
+def calibration_summary(
+    conf_all: List[float],
+    correct_all: List[bool],
+    conf_matched: List[float],
+    correct_matched: List[bool],
+    n_pred: int,
+) -> Dict[str, Any]:
+    """Calibration block of the report (RT3-02).
+
+    - ``ece_all`` (headline; also exposed as ``ece``): 10-bin ECE over **every predicted recipe** with a
+      non-None confidence. Matched predictions are correct iff content_sim >= 0.5 AND ingredient_f1 >= 0.7;
+      unmatched predictions (hallucinated recipes / grouping fragments) are incorrect by definition.
+    - ``ece_matched`` (diagnostic, flatters the SUT): the same ECE restricted to Hungarian-matched predictions.
+    - ``confidence_coverage`` = n_with_confidence / n_pred. A None confidence is an abstention: it is not
+      scored in ECE but lowers coverage, so a SUT cannot improve ECE by withholding doubtful confidences
+      without that being visible.
+    """
+    def _safe_ece(c: List[float], y: List[bool]) -> Optional[float]:
+        if not c or not y:
+            return None
+        try:
+            return ece(c, y)
+        except Exception:
+            return None
+
+    e_all = _safe_ece(conf_all, correct_all)
+    return {
+        "ece": e_all,
+        "ece_all": e_all,
+        "ece_matched": _safe_ece(conf_matched, correct_matched),
+        "confidence_coverage": round(len(conf_all) / n_pred, 4) if n_pred > 0 else None,
+        "n_pred": int(n_pred),
+        "n_with_confidence": len(conf_all),
+        "n_matched_with_confidence": len(conf_matched),
+        "accuracy_all": round(sum(1 for y in correct_all if y) / len(correct_all), 4) if correct_all else None,
+        "mean_confidence_all": round(sum(conf_all) / len(conf_all), 4) if conf_all else None,
+        "definition": "ece/ece_all: all predicted recipes with confidence (unmatched = incorrect); "
+                      "ece_matched: matched predictions only; None confidence = abstention (see confidence_coverage)",
+    }
+
+
 def evaluate_deck(
     deck_output: Dict[str, Any],
     deck_gt: Dict[str, Any],
@@ -73,8 +127,15 @@ def evaluate_deck(
 
     matched_rows: List[Dict[str, Any]] = []
     omitted_rows: List[Dict[str, Any]] = []
+    # Calibration populations (RT3-02):
+    # - matched-only: matched predictions with a non-None confidence (``ece_matched``);
+    # - all predictions: every predicted recipe with a non-None confidence, where unmatched (hallucinated /
+    #   fragment) predictions count as incorrect (``ece_all``). None confidences are abstentions and are
+    #   reported via ``confidence_coverage = n_with_confidence / n_pred``.
     confidences: List[float] = []
     correct_list: List[bool] = []
+    confidences_all: List[float] = []
+    correct_all: List[bool] = []
     n_unscored_no_structured_gt = 0
 
     # 3. Score matched recipe pairs
@@ -138,19 +199,26 @@ def evaluate_deck(
 
         # Calibration tracking
         if pred_rec_obj:
-            raw_conf = pred_rec_obj.get("confidence")
-            if raw_conf is not None:
-                try:
-                    conf = float(raw_conf)
-                    confidences.append(conf)
-                    is_correct = (sim >= 0.5) and (
-                        row.get("ingredient_f1") is not None and row.get("ingredient_f1", 0.0) >= 0.7
-                    )
-                    correct_list.append(is_correct)
-                except (ValueError, TypeError):
-                    pass
+            conf = _parse_confidence(pred_rec_obj.get("confidence"))
+            if conf is not None:
+                is_correct = (sim >= 0.5) and (
+                    row.get("ingredient_f1") is not None and row.get("ingredient_f1", 0.0) >= 0.7
+                )
+                confidences.append(conf)
+                correct_list.append(is_correct)
+                confidences_all.append(conf)
+                correct_all.append(is_correct)
 
         matched_rows.append(row)
+
+    # 3b. Unmatched (hallucinated / fragment) predictions enter the all-prediction calibration as incorrect
+    for pred_idx in unmatched_preds:
+        pred_rec_obj = pred_recipes[pred_idx] if 0 <= pred_idx < len(pred_recipes) else None
+        if pred_rec_obj:
+            conf = _parse_confidence(pred_rec_obj.get("confidence"))
+            if conf is not None:
+                confidences_all.append(conf)
+                correct_all.append(False)
 
     # 4. Score unmatched gold recipes (recipe-level omissions)
     for gold_idx in unmatched_golds:
@@ -221,19 +289,15 @@ def evaluate_deck(
         "n_stage_failures": len(deck_output.get("failures", [])),
     }
 
-    # Calibration ECE
-    calibration_ece = None
-    if confidences and correct_list:
-        try:
-            calibration_ece = ece(confidences, correct_list)
-        except Exception:
-            calibration_ece = None
+    # Calibration ECE (RT3-02): all predictions (headline) + matched-only (diagnostic) + coverage
+    calibration = calibration_summary(confidences_all, correct_all, confidences, correct_list, n_pred_total)
 
     return {
         "deck_id": deck_output.get("deck_id", deck_gt.get("deck_id", "d01")),
         "grouping": grouping_scores,
         "extraction": extraction_summary,
-        "calibration_ece": calibration_ece,
+        "calibration_ece": calibration["ece_all"],
+        "calibration": calibration,
         "recipe_rows": matched_rows,
         "omitted_rows": omitted_rows,
         "matched_pairs": matched_pairs,
@@ -244,6 +308,9 @@ def evaluate_deck(
         + [(None, g, 0.0) for g in unmatched_golds],
         "confidences": confidences,
         "correct_list": correct_list,
+        "confidences_all": confidences_all,
+        "correct_all": correct_all,
+        "n_pred": n_pred_total,
     }
 
 
@@ -293,6 +360,9 @@ def score_evaluation(
     all_omitted_rows: List[Dict[str, Any]] = []
     all_confidences: List[float] = []
     all_correct: List[bool] = []
+    all_confidences_all: List[float] = []
+    all_correct_all: List[bool] = []
+    all_n_pred = 0
     all_grouping_scores: List[Dict[str, Any]] = []
 
     for out_d in out_decks:
@@ -312,6 +382,9 @@ def score_evaluation(
         all_grouping_scores.append(res.get("grouping", {}))
         all_confidences.extend(res.get("confidences", []))
         all_correct.extend(res.get("correct_list", []))
+        all_confidences_all.extend(res.get("confidences_all", []))
+        all_correct_all.extend(res.get("correct_all", []))
+        all_n_pred += int(res.get("n_pred", 0) or 0)
 
     # Overall grouping aggregate
     overall_grouping: Dict[str, Any] = {}
@@ -370,13 +443,10 @@ def score_evaluation(
         "n_stage_failures": total_stage_failures,
     }
 
-    # Overall calibration ECE
-    overall_ece = None
-    if all_confidences and all_correct:
-        try:
-            overall_ece = ece(all_confidences, all_correct)
-        except Exception:
-            pass
+    # Overall calibration (RT3-02)
+    overall_calibration = calibration_summary(
+        all_confidences_all, all_correct_all, all_confidences, all_correct, all_n_pred
+    )
 
     # Category aggregations strictly grounded in GT attributes
     category_metrics: Dict[str, Any] = {}
@@ -445,7 +515,7 @@ def score_evaluation(
         "metrics": {
             "grouping": overall_grouping,
             "extraction": overall_extraction,
-            "calibration": {"ece": overall_ece},
+            "calibration": overall_calibration,
             "judge": {},
             "ops": ops_summary,
         },

@@ -620,6 +620,9 @@ class GroupingEngine:
                 gate = self._link_gate(edge, ev, fp_map, screening.desc, sv_q, rescue_pos, strict_mode)
                 if gate is not None:
                     gate_counts[gate] = gate_counts.get(gate, 0) + 1
+                    # RT3-07: record the gate so HITL evidence does not present the cap as a probability
+                    ev.gate = gate
+                    ev.p_link_ungated = round(p, 4)
                     p = min(p, GATE_CAP)
             ev.p_link = round(p, 4)
             links[edge] = ev.p_link
@@ -787,6 +790,8 @@ class GroupingEngine:
 
                 # Reported chain confidence (legacy) = minimum transition confidence along the chain.
                 chain_conf = min(s_scores) if s_scores else (min(t_scores) if t_scores else None)
+                # RT3-05: provenance of chain_conf for the explanation text
+                conf_src = "sv_raw" if s_scores else ("link_min" if t_scores else None)
                 if can_verify and all(
                     (chain[k], chain[k + 1]) in verified_positive_edges for k in range(len(chain) - 1)
                 ):
@@ -804,6 +809,7 @@ class GroupingEngine:
                     multi_rows.append((list(chain), vec))
                     if multi_m is not None:
                         chain_conf = float(multi_m.predict_proba(vec)[0])
+                        conf_src = "fitted"
                 has_low_confidence = bool(chain_conf is not None and chain_conf < review_threshold)
                 avg_h = sum(t_scores) / len(t_scores) if t_scores else 0.50
                 avg_s = sum(s_scores) / len(s_scores) if s_scores else (1.0 if all_transitions_verified else 0.0)
@@ -830,7 +836,14 @@ class GroupingEngine:
                         needs_review_cards.add(cid)
                         action = "NEEDS_REVIEW"
 
-                conf_str = f"Calibrated p={chain_conf:.3f}." if chain_conf is not None else "Uncalibrated."
+                if chain_conf is None:
+                    conf_str = "No evidence-based confidence."
+                elif conf_src == "fitted":
+                    conf_str = f"Calibrated p={chain_conf:.3f}."
+                elif conf_src == "sv_raw":
+                    conf_str = f"Uncalibrated SetVerifier confidence={chain_conf:.3f}."
+                else:
+                    conf_str = f"Minimum link probability={chain_conf:.3f}."
                 expl_parts = [
                     f"Linked {len(chain)}-card sequence ({' -> '.join(chain)}). {conf_str}"
                 ]
