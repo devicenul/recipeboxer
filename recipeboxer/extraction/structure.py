@@ -289,7 +289,10 @@ async def structure(
     # 4. Execute generation with error handling and repair loop on parse errors
     response: Optional[LLMResponse] = None
     try:
-        response = await llm_client.generate(request)
+        # WP-UP4: one extra stage-level retry (with backoff) on an empty/blank model response.
+        from recipeboxer.extraction.repair import generate_with_empty_retry
+
+        response = await generate_with_empty_retry(llm_client, request)
     except BudgetExceeded:
         # BudgetExceeded must ALWAYS propagate without swallowing
         raise

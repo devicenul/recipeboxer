@@ -24,6 +24,17 @@ from recipeboxer.correlation.background import DeckBackground
 from recipeboxer.correlation.calibration import DEFAULT_CALIBRATION_PATH, LinkCalibrator
 from recipeboxer.correlation.content import completeness_prior
 from recipeboxer.correlation.evidence import compute_raw_features, pair_evidence
+from recipeboxer.correlation.guards import (
+    GATE_CAP,
+    STRICT_MIN_SV_CONF,
+    STRONG_MIN_SV_CONF,
+    DomainSupport,
+    is_nonrecipe,
+    physical_conflict,
+    starts_new_recipe,
+    sv_positive_ok,
+    sv_quality,
+)
 from recipeboxer.correlation.optimizer import path_cover
 from recipeboxer.correlation.screening import top_k_candidates
 from recipeboxer.correlation.semantic import SetVerifier
@@ -217,6 +228,8 @@ class GroupingEngine:
     # The fitted up3 models were fit on decks of 30-260 cards. Tiny decks (where screening is moot
     # because every pair fits in the pool) are outside that domain: keep the legacy path there.
     MIN_CARDS_FITTED = 10
+    # WP-UP4 guards (see correlation/guards.py). Disable only for ablations.
+    GUARDS_ENABLED = True
 
     def __init__(
         self,
@@ -229,6 +242,32 @@ class GroupingEngine:
         self.models = models
         # Feature rows of the last run (edge/proposal -> vector); consumed by evals/calibration_fit.py.
         self.last_rows: Dict[str, Any] = {}
+
+    @staticmethod
+    def _domain_support(up3: Any) -> DomainSupport:
+        """Fitted support travels with the model bundle (explicit bundles without one: guard unavailable)."""
+        return DomainSupport.from_meta(getattr(up3, "meta", None) or {})
+
+    @staticmethod
+    def _link_gate(edge, ev, fp_map, desc, sv_q, rescue_pos, strict_mode) -> Optional[str]:
+        """WP-UP4: reason why a link is forbidden (probability capped at GATE_CAP), or None."""
+        a_id, b_id = edge
+        fa, fb = fp_map.get(a_id), fp_map.get(b_id)
+        da, db = desc.get(a_id), desc.get(b_id)
+        if fa is None or fb is None or da is None or db is None:
+            return None
+        if is_nonrecipe(da, fa) or is_nonrecipe(db, fb):
+            return "nonrecipe"
+        if physical_conflict(ev):
+            return "physical_conflict"
+        q = sv_q.get(edge)
+        if starts_new_recipe(fa, fb, db) and not sv_positive_ok(q, STRONG_MIN_SV_CONF):
+            return "new_heading"
+        if edge in rescue_pos and not sv_positive_ok(q, STRICT_MIN_SV_CONF):
+            return "rescue_unconfirmed"
+        if strict_mode and not sv_positive_ok(q, STRICT_MIN_SV_CONF):
+            return "strict_unconfirmed"
+        return None
 
     def _rescue_jobs(self, fps, fp_map, screening, verifications) -> List[Tuple[str, VisualFingerprint, List[VisualFingerprint]]]:
         """Second-pass rescue for title-less fragments that no first-pass verification claimed.
@@ -354,6 +393,7 @@ class GroupingEngine:
         up3 = self.models if self.models is not None else default_models()
         pre_m, rank_m, link_m = up3.get("pre"), up3.get("rank"), up3.get("link")
         multi_m, single_m = up3.get("multi"), up3.get("single")
+        link_ood_m = up3.get("link_ood")
         # The fitted models were fit on SetVerifier-backed runs; without a verifier (offline / no LLM)
         # the legacy top-k + calibrator path is kept unchanged.
         _sv_possible = eff_toggles.set_verify and (llm_client is not None or self.set_verifier is not None)
@@ -367,6 +407,8 @@ class GroupingEngine:
 
         # 2. Candidate screening
         screening = None
+        domain_report: Dict[str, Any] = {"available": False, "ood": False}
+        strict_mode = False
         all_evidence: List[PairEvidence] = []
         if use_ranked:
             from recipeboxer.correlation.ranking import ranked_candidates
@@ -379,6 +421,10 @@ class GroupingEngine:
             )
             candidates_by_anchor = screening.candidates
             all_evidence = list(screening.evidence.values())
+            # WP-UP4 out-of-distribution guard: decks whose cards fall outside the fitted support run in
+            # strict mode (every link needs validated SetVerifier confirmation; no orphan rescue).
+            domain_report = self._domain_support(up3).assess(fps, screening.desc)
+            strict_mode = bool(domain_report.get("ood"))
         else:
             active_embedder = embedder if eff_toggles.embeddings else None
             candidates_by_anchor = top_k_candidates(
@@ -463,7 +509,7 @@ class GroupingEngine:
             # their most likely predecessors (fitted rank model) in one extra, bounded verification round.
             # Skipped when every first-pass verification failed (verifier unavailable / unusable).
             verifier_ok = bool(verifications) or not jobs
-            if use_ranked and screening is not None and self.RESCUE_MAX_FRAC > 0 and verifier_ok:
+            if use_ranked and screening is not None and self.RESCUE_MAX_FRAC > 0 and verifier_ok and not strict_mode:
                 rescue_jobs = self._rescue_jobs(fps, fp_map, screening, verifications)
                 if rescue_jobs:
                     r_results = await asyncio.gather(*(_verify_one(j) for j in rescue_jobs))
@@ -492,6 +538,7 @@ class GroupingEngine:
         sv_seen: Set[Tuple[str, str]] = set()
         rescue_pos: Set[Tuple[str, str]] = set()
         pos_conf: Dict[Tuple[str, str], float] = {}
+        sv_q: Dict[Tuple[str, str], Tuple[int, int, float]] = {}  # WP-UP4: quote quality of positive edges
 
         for ver, is_rescue in [(v, False) for v in verifications] + [(v, True) for v in rescue_verifications]:
             seq = [ver.anchor] + list(ver.continuations or [])
@@ -504,6 +551,9 @@ class GroupingEngine:
                     rescue_pos.add(e)
                 if ver.confidence is not None:
                     pos_conf[e] = max(pos_conf.get(e, 0.0), float(ver.confidence))
+                q = sv_quality(ver)
+                if e not in sv_q or (sv_positive_ok(q, 0.0), q[2]) > (sv_positive_ok(sv_q[e], 0.0), sv_q[e][2]):
+                    sv_q[e] = q
             for c in list(ver.continuations or []) + list(ver.rejected or []):
                 sv_seen.add((ver.anchor, c))
             for rej in (ver.rejected or []):
@@ -534,6 +584,9 @@ class GroupingEngine:
                 ev_edges.add((u_id, v_id))
 
         use_link_model = bool(use_ranked and can_verify and link_m is not None)
+        # WP-UP4 hard link constraints (fitted path only; the legacy path is unchanged).
+        guard_active = bool(use_ranked and can_verify and screening is not None and self.GUARDS_ENABLED)
+        gate_counts: Dict[str, int] = {}
         link_rows: List[Tuple[Tuple[str, str], Any]] = []
         for ev in all_evidence:
             edge = (ev.a, ev.b)
@@ -557,9 +610,17 @@ class GroupingEngine:
                 )
                 link_rows.append((edge, vec))
             if use_link_model:
-                p = float(link_m.predict_proba(vec)[0])
+                # WP-UP4: in strict (out-of-support) mode use the link model fitted on manuscript-style
+                # decks when shipped; the card-fitted model under-rates confirmed links there.
+                lm = link_ood_m if (strict_mode and link_ood_m is not None) else link_m
+                p = float(lm.predict_proba(vec)[0])
             else:
                 p = calibrator.predict(ev, set_verified=set_verified_outcome)
+            if guard_active:
+                gate = self._link_gate(edge, ev, fp_map, screening.desc, sv_q, rescue_pos, strict_mode)
+                if gate is not None:
+                    gate_counts[gate] = gate_counts.get(gate, 0) + 1
+                    p = min(p, GATE_CAP)
             ev.p_link = round(p, 4)
             links[edge] = ev.p_link
             pair_ev_by_edge[edge] = ev
@@ -810,6 +871,8 @@ class GroupingEngine:
             "rescue_calls": len(rescue_verifications),
             "screening": "up3_ranked" if use_ranked else "legacy_top_k",
             "link_model": "up3_fitted" if use_link_model else "legacy_calibrator",
+            "domain_guard": dict(domain_report, strict_mode=strict_mode),
+            "link_gates": dict(sorted(gate_counts.items())),
         }
         if screening is not None:
             stats.update({f"screen_{k}": v for k, v in screening.stats.items()})

@@ -43,6 +43,10 @@ logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
 
+# WP-UP4: an empty/blank structured response always gets at least this many attempts (one retry with
+# backoff), regardless of a per-request ``max_attempts`` cap; see GenAIClient.generate.
+MIN_ATTEMPTS_ON_EMPTY = 2
+
 
 class LLMStage(str, Enum):
     """Pipeline stages invoking multimodal LLM generation."""
@@ -707,6 +711,38 @@ class GenAIClient(LLMClient):
                     if sdk_parsed is not None and isinstance(sdk_parsed, request.response_model):
                         parsed = sdk_parsed
                     else:
+                        # WP-UP4: an empty / whitespace-only body is a transient failure (dropped
+                        # stream, output budget consumed by thinking, safety blank), not a model
+                        # judgement. Always allow at least one backoff retry, even under a
+                        # per-request cap of 1, and surface a distinct retryable error.
+                        if not (raw_text or "").strip():
+                            empty_cap = max(max_attempts, MIN_ATTEMPTS_ON_EMPTY)
+                            if attempts < empty_cap:
+                                max_attempts = empty_cap
+                                sleep_s = min(
+                                    60.0,
+                                    base_delay * (2 ** (attempts - 1)) + random.uniform(0.0, 0.5 * base_delay),
+                                )
+                                logger.warning(
+                                    "Attempt %d/%d returned an EMPTY response (finish_reason=%s); retrying in %.1fs",
+                                    attempts, max_attempts, finish_reason, sleep_s,
+                                )
+                                await asyncio.sleep(sleep_s)
+                                continue
+                            raise create_stage_error(
+                                request.stage,
+                                f"Model returned an empty response after {attempts} attempts "
+                                f"(finish_reason={finish_reason})",
+                                reason=FailureReason.INVALID_RESPONSE,
+                                retryable=True,
+                                details={
+                                    "raw_text": "",
+                                    "empty_response": True,
+                                    "finish_reason": finish_reason,
+                                    "attempts": attempts,
+                                    "model": request.model,
+                                },
+                            )
                         json_str = _extract_json_text(raw_text)
                         try:
                             json_obj = json.loads(json_str)
@@ -723,9 +759,9 @@ class GenAIClient(LLMClient):
                                 continue
                             raise create_stage_error(
                                 request.stage,
-                                f"Model response is not valid JSON: {exc}",
+                                f"Model response is not valid JSON: {exc} (after {attempts} attempts)",
                                 reason=FailureReason.INVALID_RESPONSE,
-                                details={"raw_text": raw_text[:500], "json_error": str(exc)},
+                                details={"raw_text": raw_text[:500], "json_error": str(exc), "attempts": attempts},
                             ) from exc
 
                         try:

@@ -45,6 +45,16 @@ from recipeboxer.vision.heuristics import calculate_heuristic_distance
 logger = logging.getLogger(__name__)
 
 SET_VERIFY_PROMPT_ID = "set_verify_v1"
+# WP-UP4: prompt for anchors that are themselves a back side / continuation card.
+SET_VERIFY_EXT_PROMPT_ID = "set_verify_v2"
+
+
+def _is_continuation_anchor(fp: VisualFingerprint) -> bool:
+    """True when the anchor face is a back side or a continuation card (not a recipe start)."""
+    if getattr(fp, "looks_like_back", False) is True:
+        return True
+    role = str(getattr(getattr(fp, "role", None), "value", getattr(fp, "role", "")) or "").upper()
+    return "CONTINUATION" in role or "BACK" in role
 
 
 @runtime_checkable
@@ -301,6 +311,7 @@ class SetVerifier:
         self.llm_client = llm_client
         self.model_name = self.settings.get_stage_model(LLMStage.SET_VERIFY)
         self.prompt_record: PromptRecord = get_prompt(SET_VERIFY_PROMPT_ID)
+        self.ext_prompt_record: PromptRecord = get_prompt(SET_VERIFY_EXT_PROMPT_ID)
         self._cache = cache if cache is not None else {}
 
     def _cache_get(self, key: str) -> Optional[SetVerification]:
@@ -338,6 +349,12 @@ class SetVerifier:
             BudgetExceeded: If budget cap is exceeded (propagated unmodified).
             SemanticVerificationUnavailable: If model unavailable, rate-limited, timeout, or no client.
         """
+        # WP-UP4: back / continuation anchors use set_verify_v2, which explicitly allows a back ->
+        # next-card-front continuation (v1 asks for the recipe that *begins* on the Anchor and tended to
+        # reject those). Start anchors keep v1 (and its cache).
+        is_ext_anchor = _is_continuation_anchor(anchor)
+        prec = self.ext_prompt_record if is_ext_anchor else self.prompt_record
+
         # Base case: 0 candidates
         if not candidates:
             return SetVerification(
@@ -348,8 +365,8 @@ class SetVerifier:
                 confidence=None,
                 flags=[],
                 model=self.model_name,
-                prompt_id=self.prompt_record.id,
-                prompt_version=self.prompt_record.version,
+                prompt_id=prec.id,
+                prompt_version=prec.version,
             )
 
         # Cache check
@@ -357,7 +374,7 @@ class SetVerifier:
             anchor.sha256_hash or "",
             [c.sha256_hash or "" for c in candidates],
             self.model_name,
-            self.prompt_record.version,
+            prec.version,
         )
         cached = self._cache_get(cache_key)
         if cached is None and hasattr(self._cache, "get_by_anchor"):
@@ -393,7 +410,12 @@ class SetVerifier:
         parts: List[Union[TextPart, ImagePart]] = []
 
         anchor_intro = (
-            "Evaluate whether any candidate cards continue the recipe started on the Anchor card.\n\n"
+            (
+                "Evaluate whether any candidate cards continue the recipe text on the Anchor face (the Anchor "
+                "may be a back side or a later card; its continuation may be the front of the next card).\n\n"
+                if is_ext_anchor
+                else "Evaluate whether any candidate cards continue the recipe started on the Anchor card.\n\n"
+            )
             + _format_fingerprint_text("Anchor", anchor)
         )
         parts.append(TextPart(text=anchor_intro))
@@ -413,7 +435,7 @@ class SetVerifier:
         req = LLMRequest(
             stage=LLMStage.SET_VERIFY,
             model=self.model_name,
-            system_instruction=self.prompt_record.text,
+            system_instruction=prec.text,
             parts=parts,
             response_model=SetVerificationResponse,
             temperature=0.1,
@@ -466,8 +488,8 @@ class SetVerifier:
                     confidence=prop.confidence,
                     flags=[],
                     model=self.model_name,
-                    prompt_id=self.prompt_record.id,
-                    prompt_version=self.prompt_record.version,
+                    prompt_id=prec.id,
+                    prompt_version=prec.version,
                 )
                 self._cache_set(cache_key, res)
                 return res
@@ -551,8 +573,8 @@ class SetVerifier:
             unverified_quotes=unverified_quotes,
             unchecked_quotes=unchecked_quotes,
             model=self.model_name,
-            prompt_id=self.prompt_record.id,
-            prompt_version=self.prompt_record.version,
+            prompt_id=prec.id,
+            prompt_version=prec.version,
         )
 
         self._cache_set(cache_key, result)

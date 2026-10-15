@@ -546,13 +546,84 @@ def fit_up3_bundle(
     payload = json.loads(out.read_text(encoding="utf-8")) if out.exists() else {}
     bundle = payload.get("up3") or {"models": {}}
     bundle.setdefault("models", {}).update({k: m.to_dict() for k, m in models.items()})
+    prev_meta = bundle.get("meta") or {}
     bundle["meta"] = {
         "description": "WP-UP3 fitted logistic models (pure NumPy); fit on fresh CardForge decks only.",
         "fit_decks": fit_decks,
     }
+    if prev_meta.get("support"):  # WP-UP4: keep the fitted domain support (OOD guard)
+        bundle["meta"]["support"] = prev_meta["support"]
     payload["up3"] = bundle
     out.write_text(json.dumps(payload, indent=2), encoding="utf-8")
     return {k: m.meta for k, m in models.items()}
+
+
+def fit_domain_support(
+    dump_files: List[Union[str, Path]],
+    output_path: Union[str, Path] = DEFAULT_CALIBRATION_PATH,
+) -> Dict[str, Any]:
+    """WP-UP4: fit the domain support of the fitted models (OOD guard) from dev-harness dumps.
+
+    ``dump_files`` are harness ``--dump`` JSON files of the decks the models were FIT on (fresh
+    CardForge decks only; never T1-T4). Only the fingerprints (``fps``) are read - no labels.
+    The support is stored in ``calibration_default.json["up3"]["meta"]["support"]``.
+    """
+    from recipeboxer.correlation.guards import DomainSupport
+    from recipeboxer.correlation.linkmodel import card_descriptor
+    from recipeboxer.models.domain import VisualFingerprint
+
+    assert_not_forbidden_path(output_path)
+    fps = []
+    for f in dump_files:
+        assert_not_forbidden_path(f)
+        data = json.loads(Path(f).read_text(encoding="utf-8"))
+        fps.extend(VisualFingerprint.model_validate(x) for x in data.get("fps", []))
+    sup = DomainSupport.fit(fps, [card_descriptor(fp) for fp in fps]).to_dict()
+    sup["n_cards"] = len(fps)
+    sup["source"] = [Path(f).stem for f in dump_files]
+    out = Path(output_path)
+    payload = json.loads(out.read_text(encoding="utf-8")) if out.exists() else {}
+    bundle = payload.setdefault("up3", {"models": {}})
+    bundle.setdefault("meta", {})["support"] = sup
+    out.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    return sup
+
+
+def fit_link_ood(
+    rows_dir: Union[str, Path],
+    fit_decks: List[str],
+    output_path: Union[str, Path] = DEFAULT_CALIBRATION_PATH,
+    l2: float = 3.0,
+) -> Dict[str, Any]:
+    """WP-UP4: fit ``link_ood`` (same features as ``link``) on engine rows of FRESH out-of-support decks
+    (manuscript-style CardForge pages generated for UP4; never T1-T4). Used only in strict mode."""
+    import numpy as np
+
+    from recipeboxer.correlation.linkmodel import LINK_FEATURES, LogisticModel
+
+    assert_not_forbidden_path(rows_dir)
+    assert_not_forbidden_path(output_path)
+    X, y, w = [], [], []
+    for d in fit_decks:
+        p = Path(rows_dir) / f"{d}.pkl"
+        if not p.exists():
+            continue
+        rows = _load_pickle(p).get("link", [])
+        for _, v, yy in rows:
+            X.append(v)
+            y.append(1.0 if yy else 0.0)
+            w.append(1.0 / max(1, len(rows)))
+    if len(y) < 10 or not (0 < sum(y) < len(y)):
+        raise ValueError("not enough labelled link rows for link_ood")
+    wa = np.array(w)
+    m = LogisticModel(LINK_FEATURES).fit(np.array(X), np.array(y), l2=l2, w=wa / wa.mean())
+    m.meta = {"n_fit": len(y), "pos_fit": int(sum(y)), "fit_decks": fit_decks,
+              "domain": "out-of-support (manuscript-style pages); strict mode only"}
+    out = Path(output_path)
+    payload = json.loads(out.read_text(encoding="utf-8")) if out.exists() else {}
+    payload.setdefault("up3", {"models": {}}).setdefault("models", {})["link_ood"] = m.to_dict()
+    out.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    return m.meta
 
 
 def main(argv: Optional[List[str]] = None) -> int:
@@ -591,12 +662,24 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--up3-rows", type=str, default=None, help="Dir of <deck>.pkl labelled engine rows.")
     parser.add_argument("--up3-decks", type=str, default="", help="Comma-separated FIT deck names.")
     parser.add_argument("--up3-xcal", type=str, default="", help="Comma-separated extraction-calibration pickles.")
+    parser.add_argument("--up4-support", type=str, default="",
+                        help="WP-UP4: comma-separated harness dump JSONs of the FIT decks -> domain support.")
+    parser.add_argument("--up4-link-ood", type=str, default="",
+                        help="WP-UP4: rows dir of out-of-support FIT decks -> link_ood model (with --up3-decks).")
     args = parser.parse_args(args=argv)
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 
     try:
         assert_not_forbidden_path(args.out)
+        if args.up4_link_ood:
+            meta = fit_link_ood(args.up4_link_ood, [d for d in args.up3_decks.split(",") if d], output_path=args.out)
+            print(f"UP4 link_ood fitted -> {args.out}: {json.dumps(meta)}")
+            return 0
+        if args.up4_support:
+            sup = fit_domain_support([f for f in args.up4_support.split(",") if f], output_path=args.out)
+            print(f"UP4 domain support fitted ({sup['n_cards']} cards, wpl_q99={sup['wpl_q99']}) -> {args.out}")
+            return 0
         if args.up3:
             meta = fit_up3_bundle(
                 feats_dir=args.up3_feats or ".",

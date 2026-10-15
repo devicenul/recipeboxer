@@ -114,7 +114,7 @@ async def validate_and_repair(
         )
 
         try:
-            response = await llm_client.generate(request)
+            response = await generate_with_empty_retry(llm_client, request)  # WP-UP4
         except BudgetExceeded:
             raise
         except Exception as gen_err:
@@ -173,6 +173,79 @@ async def validate_and_repair(
     )
 
 
+def is_empty_response_error(exc: BaseException) -> bool:
+    """True when a stage error stems from an empty / blank model body (transient, not a judgement)."""
+    details = getattr(exc, "details", None) or {}
+    if details.get("empty_response"):
+        return True
+    reason = getattr(exc, "reason", None)
+    if reason in (FailureReason.INVALID_RESPONSE, FailureReason.SCHEMA_VALIDATION):
+        raw = details.get("raw_text")
+        if raw is not None and not str(raw).strip():
+            return True
+        msg = str(exc)
+        if "Expecting value: line 1 column 1 (char 0)" in msg and not str(raw or "").strip():
+            return True
+    return False
+
+
+def _is_empty_response(response: Any) -> bool:
+    return getattr(response, "parsed", None) is None and not str(getattr(response, "raw_text", "") or "").strip()
+
+
+EMPTY_RETRY_BACKOFF_S = 2.0
+
+
+async def generate_with_empty_retry(
+    llm_client: LLMClient,
+    request: LLMRequest,
+    *,
+    backoff_s: Optional[float] = None,
+) -> Any:
+    """``llm_client.generate`` with ONE extra stage-level retry on an empty/blank response (WP-UP4).
+
+    Empty bodies are usually transient (dropped stream) or caused by the thinking budget consuming the
+    output budget; the retry therefore waits ``backoff_s`` and doubles ``max_output_tokens`` (when set).
+    Any other failure (including BudgetExceeded) propagates unchanged; if the retry is also empty the
+    original error type/reason (INVALID_RESPONSE) propagates.
+    """
+    import asyncio
+
+    delay = EMPTY_RETRY_BACKOFF_S if backoff_s is None else float(backoff_s)
+    try:
+        response = await llm_client.generate(request)
+        if not _is_empty_response(response):
+            return response
+        first_exc: Optional[BaseException] = None
+    except BudgetExceeded:
+        raise
+    except Exception as exc:  # noqa: BLE001 - classified below
+        if not is_empty_response_error(exc):
+            raise
+        first_exc = exc
+    logger.warning(
+        "Stage %s returned an empty response; retrying once in %.1fs with a larger output budget",
+        getattr(request.stage, "value", request.stage), delay,
+    )
+    if delay > 0:
+        await asyncio.sleep(delay)
+    update: Dict[str, Any] = {"metadata": {**(request.metadata or {}), "empty_retry": True}}
+    if request.max_output_tokens:
+        update["max_output_tokens"] = int(request.max_output_tokens) * 2
+    retry_request = request.model_copy(update=update)
+    try:
+        response = await llm_client.generate(retry_request)
+    except BudgetExceeded:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        if first_exc is not None and is_empty_response_error(exc):
+            raise exc from first_exc
+        raise
+    return response
+
+
 __all__ = [
     "validate_and_repair",
+    "generate_with_empty_retry",
+    "is_empty_response_error",
 ]
