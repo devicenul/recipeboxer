@@ -1,0 +1,560 @@
+{
+  "schema": "rb-baseline/1",
+  "name": "honest_v0",
+  "created": "2026-10-15",
+  "description": "Gate A honest baseline: pre-uplift production code (tag gate-a-candidate) run black-box through the evals harness on the CF2-regenerated corpus. Old code has no usage ledger, so token/USD totals are unavailable; call counts come from HTTP logs.",
+  "sut_commit": "b1191cbe1137eb66c57a23454120c62261dec8b4 (gate-a-candidate)",
+  "corpus_commit": "48ee619",
+  "scorer": "working tree after WP-RT2a (pre-commit), re-scorable from encrypted outputs",
+  "profile": "balanced",
+  "models": {
+    "all_stages": "gemini-3.7-flash"
+  },
+  "variant": "opaque",
+  "coverage": {
+    "T1": [
+      "d01 homogeneous",
+      "d02 mixed",
+      "d03 near_duplicate"
+    ],
+    "T1_excluded": {
+      "d04": "319-card deck omitted: pre-uplift code does O(N^2) pairwise LLM verification (tens of thousands of calls)"
+    },
+    "T3": "all 25 recipes, structured GT drafted_unreviewed (user spot-check pending)",
+    "T2": "not run"
+  },
+  "ops": {
+    "T1_http_calls": 759,
+    "T1_http_errors": {
+      "503": 1
+    },
+    "T1_wall_seconds": 4584,
+    "T3_http_calls": 224,
+    "T3_wall_seconds": 1789
+  },
+  "T1": {
+    "status": "ok",
+    "grouping": {
+      "bcubed_p": 0.8906333333333333,
+      "bcubed_r": 0.7347666666666667,
+      "bcubed_f1": 0.8039999999999999,
+      "ari": 0.47006666666666663,
+      "exact_cluster_acc": 0.47223333333333334,
+      "order_kendall_tau": 0.6,
+      "standalone_acc": 0.4902,
+      "false_merge_rate": 0.018133333333333335,
+      "false_split_rate": 0.5762666666666667,
+      "n_pred": 15.333333333333334,
+      "n_gold": 11.333333333333334
+    },
+    "extraction_overall": {
+      "title_cer": {
+        "mean": 0.7861,
+        "n": 47
+      },
+      "ingredient_p": {
+        "mean": 0.4838,
+        "n": 47
+      },
+      "ingredient_r": {
+        "mean": 0.6917,
+        "n": 47
+      },
+      "ingredient_f1": {
+        "mean": 0.4673,
+        "n": 47
+      },
+      "qty_unit_exact": {
+        "mean": 0.4824,
+        "n": 47
+      },
+      "direction_f1": {
+        "mean": 0.4622,
+        "n": 47
+      },
+      "direction_tau": {
+        "mean": 1.0,
+        "n": 25
+      },
+      "hallucination_rate": {
+        "mean": 0.3266,
+        "n": 47
+      },
+      "omission_rate": {
+        "mean": 0.3336,
+        "n": 47
+      },
+      "illegible_precision": {
+        "mean": null,
+        "n": 0
+      },
+      "verbatim_cer": {
+        "mean": 0.4793,
+        "n": 34
+      },
+      "schema_invalid": {
+        "mean": 0.0,
+        "n": 47
+      },
+      "faces_count": {
+        "mean": 1.9706,
+        "n": 34
+      },
+      "difficulty": {
+        "mean": null,
+        "n": 0
+      },
+      "field_cer": {
+        "title": {
+          "mean": 0.7861,
+          "n": 47
+        },
+        "ingredients": {
+          "mean": 0.4938,
+          "n": 47
+        },
+        "directions": {
+          "mean": 0.5375,
+          "n": 47
+        },
+        "yield": {
+          "mean": 0.8235,
+          "n": 34
+        },
+        "source_note": {
+          "mean": 0.9926,
+          "n": 34
+        }
+      }
+    },
+    "extraction_by_deck_type": {
+      "homogeneous": {
+        "title_cer": {
+          "mean": 0.895,
+          "n": 17
+        },
+        "ingredient_p": {
+          "mean": 0.3529,
+          "n": 17
+        },
+        "ingredient_r": {
+          "mean": 0.6134,
+          "n": 17
+        },
+        "ingredient_f1": {
+          "mean": 0.3294,
+          "n": 17
+        },
+        "qty_unit_exact": {
+          "mean": 0.3529,
+          "n": 17
+        },
+        "direction_f1": {
+          "mean": 0.4518,
+          "n": 17
+        },
+        "direction_tau": {
+          "mean": 1.0,
+          "n": 8
+        },
+        "hallucination_rate": {
+          "mean": 0.3333,
+          "n": 17
+        },
+        "omission_rate": {
+          "mean": 0.3845,
+          "n": 17
+        },
+        "illegible_precision": {
+          "mean": null,
+          "n": 0
+        },
+        "verbatim_cer": {
+          "mean": 0.5015,
+          "n": 12
+        },
+        "schema_invalid": {
+          "mean": 0.0,
+          "n": 17
+        },
+        "faces_count": {
+          "mean": 1.8333,
+          "n": 12
+        },
+        "difficulty": {
+          "mean": null,
+          "n": 0
+        },
+        "field_cer": {
+          "title": {
+            "mean": 0.895,
+            "n": 17
+          },
+          "ingredients": {
+            "mean": 0.6541,
+            "n": 17
+          },
+          "directions": {
+            "mean": 0.5219,
+            "n": 17
+          },
+          "yield": {
+            "mean": 0.8333,
+            "n": 12
+          },
+          "source_note": {
+            "mean": 0.9854,
+            "n": 12
+          }
+        }
+      },
+      "mixed": {
+        "title_cer": {
+          "mean": 0.3333,
+          "n": 18
+        },
+        "ingredient_p": {
+          "mean": 0.6613,
+          "n": 18
+        },
+        "ingredient_r": {
+          "mean": 0.8587,
+          "n": 18
+        },
+        "ingredient_f1": {
+          "mean": 0.647,
+          "n": 18
+        },
+        "qty_unit_exact": {
+          "mean": 0.6889,
+          "n": 18
+        },
+        "direction_f1": {
+          "mean": 0.4764,
+          "n": 18
+        },
+        "direction_tau": {
+          "mean": 1.0,
+          "n": 10
+        },
+        "hallucination_rate": {
+          "mean": 0.3972,
+          "n": 18
+        },
+        "omission_rate": {
+          "mean": 0.204,
+          "n": 18
+        },
+        "illegible_precision": {
+          "mean": null,
+          "n": 0
+        },
+        "verbatim_cer": {
+          "mean": 0.4165,
+          "n": 12
+        },
+        "schema_invalid": {
+          "mean": 0.0,
+          "n": 18
+        },
+        "faces_count": {
+          "mean": 2.1667,
+          "n": 12
+        },
+        "difficulty": {
+          "mean": null,
+          "n": 0
+        },
+        "field_cer": {
+          "title": {
+            "mean": 0.3333,
+            "n": 18
+          },
+          "ingredients": {
+            "mean": 0.2927,
+            "n": 18
+          },
+          "directions": {
+            "mean": 0.5704,
+            "n": 18
+          },
+          "yield": {
+            "mean": 0.75,
+            "n": 12
+          },
+          "source_note": {
+            "mean": 0.9833,
+            "n": 12
+          }
+        }
+      },
+      "near_duplicate": {
+        "title_cer": {
+          "mean": 1.3111,
+          "n": 12
+        },
+        "ingredient_p": {
+          "mean": 0.4028,
+          "n": 12
+        },
+        "ingredient_r": {
+          "mean": 0.5521,
+          "n": 12
+        },
+        "ingredient_f1": {
+          "mean": 0.3929,
+          "n": 12
+        },
+        "qty_unit_exact": {
+          "mean": 0.3563,
+          "n": 12
+        },
+        "direction_f1": {
+          "mean": 0.4557,
+          "n": 12
+        },
+        "direction_tau": {
+          "mean": 1.0,
+          "n": 7
+        },
+        "hallucination_rate": {
+          "mean": 0.2112,
+          "n": 12
+        },
+        "omission_rate": {
+          "mean": 0.4557,
+          "n": 12
+        },
+        "illegible_precision": {
+          "mean": null,
+          "n": 0
+        },
+        "verbatim_cer": {
+          "mean": 0.5282,
+          "n": 10
+        },
+        "schema_invalid": {
+          "mean": 0.0,
+          "n": 12
+        },
+        "faces_count": {
+          "mean": 1.9,
+          "n": 10
+        },
+        "difficulty": {
+          "mean": null,
+          "n": 0
+        },
+        "field_cer": {
+          "title": {
+            "mean": 1.3111,
+            "n": 12
+          },
+          "ingredients": {
+            "mean": 0.5684,
+            "n": 12
+          },
+          "directions": {
+            "mean": 0.5102,
+            "n": 12
+          },
+          "yield": {
+            "mean": 0.9,
+            "n": 10
+          },
+          "source_note": {
+            "mean": 1.0125,
+            "n": 10
+          }
+        }
+      }
+    },
+    "n_stage_failures": 3,
+    "calibration": {
+      "ece": 0.361933
+    }
+  },
+  "T3": {
+    "status": "ok",
+    "grouping": {
+      "bcubed_p": 0.8718,
+      "bcubed_r": 1.0,
+      "bcubed_f1": 0.9315,
+      "ari": 0.3299,
+      "exact_cluster_acc": 0.76,
+      "order_kendall_tau": 1.0,
+      "standalone_acc": 0.8837,
+      "false_merge_rate": 0.0123,
+      "false_split_rate": 0.0,
+      "n_pred": 22.0,
+      "n_gold": 25.0
+    },
+    "extraction_overall": {
+      "title_cer": {
+        "mean": 0.838,
+        "n": 25
+      },
+      "ingredient_p": {
+        "mean": 0.4674,
+        "n": 25
+      },
+      "ingredient_r": {
+        "mean": 0.472,
+        "n": 25
+      },
+      "ingredient_f1": {
+        "mean": 0.4695,
+        "n": 25
+      },
+      "qty_unit_exact": {
+        "mean": 0.5029,
+        "n": 25
+      },
+      "direction_f1": {
+        "mean": 0.4597,
+        "n": 25
+      },
+      "direction_tau": {
+        "mean": 1.0,
+        "n": 12
+      },
+      "hallucination_rate": {
+        "mean": 0.3264,
+        "n": 25
+      },
+      "omission_rate": {
+        "mean": 0.6442,
+        "n": 25
+      },
+      "illegible_precision": {
+        "mean": null,
+        "n": 0
+      },
+      "verbatim_cer": {
+        "mean": 0.8411,
+        "n": 25
+      },
+      "schema_invalid": {
+        "mean": 0.0,
+        "n": 25
+      },
+      "faces_count": {
+        "mean": 1.04,
+        "n": 25
+      },
+      "difficulty": {
+        "mean": null,
+        "n": 0
+      },
+      "field_cer": {
+        "title": {
+          "mean": 0.838,
+          "n": 25
+        },
+        "ingredients": {
+          "mean": 0.4271,
+          "n": 25
+        },
+        "directions": {
+          "mean": 0.4166,
+          "n": 25
+        },
+        "yield": {
+          "mean": 0.0,
+          "n": 25
+        },
+        "source_note": {
+          "mean": 1.6428,
+          "n": 25
+        }
+      }
+    },
+    "extraction_by_deck_type": {
+      "real_distractor": {
+        "title_cer": {
+          "mean": 0.838,
+          "n": 25
+        },
+        "ingredient_p": {
+          "mean": 0.4674,
+          "n": 25
+        },
+        "ingredient_r": {
+          "mean": 0.472,
+          "n": 25
+        },
+        "ingredient_f1": {
+          "mean": 0.4695,
+          "n": 25
+        },
+        "qty_unit_exact": {
+          "mean": 0.5029,
+          "n": 25
+        },
+        "direction_f1": {
+          "mean": 0.4597,
+          "n": 25
+        },
+        "direction_tau": {
+          "mean": 1.0,
+          "n": 12
+        },
+        "hallucination_rate": {
+          "mean": 0.3264,
+          "n": 25
+        },
+        "omission_rate": {
+          "mean": 0.6442,
+          "n": 25
+        },
+        "illegible_precision": {
+          "mean": null,
+          "n": 0
+        },
+        "verbatim_cer": {
+          "mean": 0.8411,
+          "n": 25
+        },
+        "schema_invalid": {
+          "mean": 0.0,
+          "n": 25
+        },
+        "faces_count": {
+          "mean": 1.04,
+          "n": 25
+        },
+        "difficulty": {
+          "mean": null,
+          "n": 0
+        },
+        "field_cer": {
+          "title": {
+            "mean": 0.838,
+            "n": 25
+          },
+          "ingredients": {
+            "mean": 0.4271,
+            "n": 25
+          },
+          "directions": {
+            "mean": 0.4166,
+            "n": 25
+          },
+          "yield": {
+            "mean": 0.0,
+            "n": 25
+          },
+          "source_note": {
+            "mean": 1.6428,
+            "n": 25
+          }
+        }
+      }
+    },
+    "n_stage_failures": 4,
+    "calibration": {
+      "ece": 0.401205
+    }
+  },
+  "outputs_archive": "evals/baselines/honest_v0_outputs.tar.gz.enc (age, vault recipients)"
+}
