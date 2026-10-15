@@ -485,7 +485,9 @@ async def test_self_consistency_disabled_when_off() -> None:
 
 @pytest.mark.asyncio
 async def test_self_consistency_agreement_raises_confidence(base_settings: Settings) -> None:
-    """When secondary read agrees on fields, overall confidence is boosted and no disagreement warnings emitted."""
+    """When secondary read agrees, no disagreement warnings are emitted and NO fabricated confidence
+    boost is applied (WP-UP3: the former 0.85+0.10 prior violated INV-AC4; Recipe.confidence is set
+    only by the fitted recipe-confidence model)."""
     recipe = make_fictitious_recipe()
     recipe.confidence = 0.80
     recipe.warnings.append(RecipeWarning(code="LOW_CONFIDENCE", message="Faded card face"))
@@ -499,9 +501,8 @@ async def test_self_consistency_agreement_raises_confidence(base_settings: Setti
 
     assert client.call_count == 1
     assert len(warnings) == 0
-    # Confidence is raised on agreement
-    assert out_recipe.confidence is not None
-    assert out_recipe.confidence > 0.80
+    # Confidence is left untouched (no hard-coded boost)
+    assert out_recipe.confidence == 0.80
 
 
 @pytest.mark.asyncio

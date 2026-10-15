@@ -1,0 +1,196 @@
+        # 1. DeckBackground fitting
+        pair_fn = (lambda a, b: compute_raw_features(a, b, images=images)) if images else None
+        background = DeckBackground.fit(fps, raw_pair_fn=pair_fn)
+
+        from recipeboxer.correlation.linkmodel import default_models, link_feature_vector, rank_feature_vector
+
+        up3 = self.models if self.models is not None else default_models()
+        pre_m, rank_m, link_m = up3.get("pre"), up3.get("rank"), up3.get("link")
+        multi_m, single_m = up3.get("multi"), up3.get("single")
+        use_ranked = pre_m is not None and rank_m is not None
+
+        def _feat_filter(name: str) -> bool:
+            return _feature_is_active(name, eff_toggles)
+
+        # 2. Candidate screening
+        screening = None
+        all_evidence: List[PairEvidence] = []
+        if use_ranked:
+            from recipeboxer.correlation.ranking import ranked_candidates
+
+            screening = await asyncio.to_thread(
+                ranked_candidates, fps, background, pre_m, rank_m,
+                images=images, feature_filter=_feat_filter, pool_m=self.POOL_M,
+                k_min=self.K_MIN, k_max=self.K_MAX, p_keep=self.P_KEEP,
+            )
+            candidates_by_anchor = screening.candidates
+            all_evidence = list(screening.evidence.values())
+        else:
+            active_embedder = embedder if eff_toggles.embeddings else None
+            candidates_by_anchor = top_k_candidates(
+                fps,
+                background,
+                k=5,
+                embedder=active_embedder,
+                images=images,
+            )
+            for ev_list in candidates_by_anchor.values():
+                for ev in ev_list:
+                    # Filter features based on active FeatureToggles and recompute total_log_lr
+                    active_features = [f for f in ev.features if _feature_is_active(f.name, eff_toggles)]
+                    new_total_log_lr = sum(
+                        f.weight * f.log_lr
+                        for f in active_features
+                        if f.log_lr is not None
+                    )
+                    ev.features = active_features
+                    ev.total_log_lr = round(new_total_log_lr, 4)
+                    all_evidence.append(ev)
+
+        # 3. Multimodal Set-Level Verification (bounded concurrency; single grouping code path)
+        verifications: List[SetVerification] = []
+        verification_by_anchor: Dict[str, SetVerification] = {}
+        rescue_verifications: List[SetVerification] = []
+        fp_map = {fp.card_id: fp for fp in fps}
+
+        can_verify = eff_toggles.set_verify and (llm_client is not None or self.set_verifier is not None)
+        verifier = None
+        max_conc = max(1, int(getattr(eff_settings, "llm_max_concurrency", 8) or 8))
+        sem = asyncio.Semaphore(max_conc)
+
+        async def _verify_one(job: Tuple[str, VisualFingerprint, List[VisualFingerprint]]):
+            anchor_id, anchor_fp, cand_fps = job
+            async with sem:
+                try:
+                    return anchor_id, await verifier.verify(anchor_fp, cand_fps, images=images)
+                except BudgetExceeded:
+                    raise
+                except Exception as exc:
+                    logger.warning(f"SetVerifier failed for anchor card {anchor_id}: {exc}")
+                    return anchor_id, None
+
+        if can_verify:
+            verifier = self.set_verifier or SetVerifier(llm_client=llm_client, settings=eff_settings)
+            jobs: List[Tuple[str, VisualFingerprint, List[VisualFingerprint]]] = []
+            for anchor_id, ev_list in candidates_by_anchor.items():
+                if not ev_list:
+                    continue
+                anchor_fp = fp_map.get(anchor_id)
+                if not anchor_fp or not _is_candidate_anchor(anchor_fp):
+                    continue
+                cand_fps = [fp_map[ev.b] for ev in ev_list if ev.b in fp_map]
+                if not cand_fps:
+                    continue
+                jobs.append((anchor_id, anchor_fp, cand_fps))
+
+            results = await asyncio.gather(*(_verify_one(j) for j in jobs))
+            for anchor_id, ver in results:  # deterministic order (job order)
+                if ver is None:
+                    continue
+                verifications.append(ver)
+                verification_by_anchor[anchor_id] = ver
+
+            # 3b. WP-UP3 orphan rescue: title-less fragments that no verification claimed are offered to
+            # their most likely predecessors (fitted rank model) in one extra, bounded verification round.
+            if use_ranked and screening is not None and self.RESCUE_MAX_FRAC > 0:
+                rescue_jobs = self._rescue_jobs(fps, fp_map, screening, verifications)
+                if rescue_jobs:
+                    r_results = await asyncio.gather(*(_verify_one(j) for j in rescue_jobs))
+                    for anchor_id, ver in r_results:
+                        if ver is None:
+                            continue
+                        rescue_verifications.append(ver)
+                        verification_by_anchor.setdefault(anchor_id, ver)
+
+        # 4. Link probabilities
+        calibrator = self.calibrator
+        if calibrator is None:
+            default_path = Path(DEFAULT_CALIBRATION_PATH)
+            if default_path.exists():
+                try:
+                    calibrator = LinkCalibrator.load(default_path)
+                except Exception as exc:
+                    logger.warning(f"Failed to load default calibration from {default_path}: {exc}")
+                    calibrator = LinkCalibrator()
+            else:
+                calibrator = LinkCalibrator()
+
+        verified_positive_edges: Set[Tuple[str, str]] = set()
+        verified_negative_edges: Set[Tuple[str, str]] = set()
+        pos_direct: Set[Tuple[str, str]] = set()
+        sv_seen: Set[Tuple[str, str]] = set()
+        rescue_pos: Set[Tuple[str, str]] = set()
+        pos_conf: Dict[Tuple[str, str], float] = {}
+
+        for ver, is_rescue in [(v, False) for v in verifications] + [(v, True) for v in rescue_verifications]:
+            seq = [ver.anchor] + list(ver.continuations or [])
+            for idx in range(len(seq) - 1):
+                e = (seq[idx], seq[idx + 1])
+                verified_positive_edges.add(e)
+                if idx == 0:
+                    pos_direct.add(e)
+                if is_rescue:
+                    rescue_pos.add(e)
+                if ver.confidence is not None:
+                    pos_conf[e] = max(pos_conf.get(e, 0.0), float(ver.confidence))
+            for c in list(ver.continuations or []) + list(ver.rejected or []):
+                sv_seen.add((ver.anchor, c))
+            for rej in (ver.rejected or []):
+                for s_node in seq:
+                    verified_negative_edges.add((s_node, rej))
+                    verified_negative_edges.add((rej, s_node))
+        n_into: Dict[str, int] = {}
+        n_out: Dict[str, int] = {}
+        for a_id, b_id in verified_positive_edges:
+            n_into[b_id] = n_into.get(b_id, 0) + 1
+            n_out[a_id] = n_out.get(a_id, 0) + 1
+
+        links: Dict[Tuple[str, str], float] = {}
+        pair_ev_by_edge: Dict[Tuple[str, str], PairEvidence] = {}
+        rank_logit: Dict[Tuple[str, str], float] = dict(screening.rank_logit) if screening is not None else {}
+
+        # Verified positive edges outside the screened pool still need evidence.
+        ev_edges = {(ev.a, ev.b) for ev in all_evidence}
+        for u_id, v_id in sorted(verified_positive_edges):
+            if (u_id, v_id) not in ev_edges and u_id in fp_map and v_id in fp_map:
+                ev = pair_evidence(fp_map[u_id], fp_map[v_id], background, images=images)
+                ev.features = [f for f in ev.features if _feature_is_active(f.name, eff_toggles)]
+                ev.total_log_lr = round(sum(f.weight * f.log_lr for f in ev.features if f.log_lr is not None), 4)
+                if screening is not None:
+                    rank_logit[(u_id, v_id)] = float(rank_m.logit(rank_feature_vector(
+                        ev, screening.desc[u_id], screening.desc[v_id], fp_map[u_id], fp_map[v_id]))[0])
+                all_evidence.append(ev)
+                ev_edges.add((u_id, v_id))
+
+        use_link_model = bool(use_ranked and can_verify and link_m is not None)
+        link_rows: List[Tuple[Tuple[str, str], Any]] = []
+        for ev in all_evidence:
+            edge = (ev.a, ev.b)
+            set_verified_outcome: Optional[bool] = None
+            if edge in verified_positive_edges:
+                set_verified_outcome = True
+            elif edge in verified_negative_edges:
+                set_verified_outcome = False
+            if use_ranked and can_verify:
+                vec = link_feature_vector(
+                    rank_logit.get(edge, 0.0),
+                    pos_direct=edge in pos_direct,
+                    pos_chain=edge in verified_positive_edges,
+                    neg=edge in verified_negative_edges,
+                    seen=edge in sv_seen or edge in verified_positive_edges,
+                    conf=pos_conf.get(edge),
+                    rescue=edge in rescue_pos,
+                    n_into_b=n_into.get(edge[1], 0),
+                    n_out_a=n_out.get(edge[0], 0),
+                    n_cards=len(fps),
+                )
+                link_rows.append((edge, vec))
+            if use_link_model:
+                p = float(link_m.predict_proba(vec)[0])
+            else:
+                p = calibrator.predict(ev, set_verified=set_verified_outcome)
+            ev.p_link = round(p, 4)
+            links[edge] = ev.p_link
+            pair_ev_by_edge[edge] = ev
+        verifications = verifications + rescue_verifications
+

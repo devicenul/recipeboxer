@@ -7,8 +7,10 @@ screening, multimodal set-level verification (SetVerifier), probability calibrat
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
+import math
 import os
 import uuid
 from pathlib import Path
@@ -194,15 +196,79 @@ class GroupingEngine:
     4. LinkCalibrator prediction
     5. path_cover global min-cost optimization
     6. HITL routing based on calibrated confidence, unverified signals, and degraded inputs.
+
+    WP-UP3: when fitted models are available (``calibration_default.json["up3"]``) steps 2/4 and the
+    proposal confidences use them: fitted all-pairs prefilter + rank model with adaptive k (see
+    ``ranking.py``), an orphan-fragment rescue verification pass, a fitted link model over SetVerifier
+    outcomes, and fitted cluster models giving P(proposal is exactly one complete item) for both
+    multi-card and single-card (standalone / distractor) proposals.
     """
+
+    # Adaptive screening / rescue parameters (chosen on fit decks only; see WP-UP3.md).
+    POOL_M = 10          # minimum pool size; effective M = clip(POOL_M_FRAC * N, POOL_M, POOL_M_MAX)
+    POOL_M_FRAC = 0.2
+    POOL_M_MAX = 30
+    K_MIN = 3
+    K_MAX = 10
+    P_KEEP = 0.02
+    RESCUE_MAX_FRAC = 0.15
+    ANCHOR_EXT_P = 0.15
+    RESCUE_CANDS = 6
+    # The fitted up3 models were fit on decks of 30-260 cards. Tiny decks (where screening is moot
+    # because every pair fits in the pool) are outside that domain: keep the legacy path there.
+    MIN_CARDS_FITTED = 10
 
     def __init__(
         self,
         calibrator: Optional[LinkCalibrator] = None,
         set_verifier: Optional[SetVerifier] = None,
+        models: Optional[Any] = None,
     ) -> None:
         self.calibrator = calibrator
         self.set_verifier = set_verifier
+        self.models = models
+        # Feature rows of the last run (edge/proposal -> vector); consumed by evals/calibration_fit.py.
+        self.last_rows: Dict[str, Any] = {}
+
+    def _rescue_jobs(self, fps, fp_map, screening, verifications) -> List[Tuple[str, VisualFingerprint, List[VisualFingerprint]]]:
+        """Second-pass rescue for title-less fragments that no first-pass verification claimed.
+
+        Each orphan is offered to its top-3 most likely predecessors (fitted rank model) that have not
+        already judged it and that do not already have a verified successor. Anchors are grouped,
+        ranked by their best candidate score and capped at RESCUE_MAX_FRACxN calls. Depends only on
+        first-pass results + rank model (no filenames, hashes or capture order).
+        """
+        claimed: Set[str] = set()
+        has_succ: Set[str] = set()
+        seen: Set[Tuple[str, str]] = set()
+        for v in verifications:
+            seq = [v.anchor] + list(v.continuations or [])
+            claimed.update(seq[1:])
+            has_succ.update(seq[:-1])
+            for c in list(v.continuations or []) + list(v.rejected or []):
+                seen.add((v.anchor, c))
+        incoming: Dict[str, List[Tuple[float, str]]] = {}
+        for (a_id, b_id), z in screening.rank_logit.items():
+            incoming.setdefault(b_id, []).append((z, a_id))
+        per_anchor: Dict[str, List[Tuple[float, str]]] = {}
+        for fp in fps:
+            b_id = fp.card_id
+            d = screening.desc.get(b_id) or {}
+            if b_id in claimed or d.get("has_title", 0.0) >= 1.0:
+                continue
+            preds = sorted(incoming.get(b_id, []), key=lambda t: (-t[0], t[1]))
+            for z, a_id in preds[:3]:
+                if (a_id, b_id) in seen or a_id in has_succ:
+                    continue
+                per_anchor.setdefault(a_id, []).append((z, b_id))
+        cap = max(1, int(self.RESCUE_MAX_FRAC * len(fps)))
+        ranked = sorted(per_anchor.items(), key=lambda kv: (-max(z for z, _ in kv[1]), kv[0]))[:cap]
+        jobs = []
+        for a_id, lst in ranked:
+            cands = [fp_map[b] for _, b in sorted(lst, key=lambda t: (-t[0], t[1]))[: self.RESCUE_CANDS] if b in fp_map]
+            if a_id in fp_map and cands:
+                jobs.append((a_id, fp_map[a_id], cands))
+        return jobs
 
     async def group(
         self,
@@ -283,59 +349,131 @@ class GroupingEngine:
         pair_fn = (lambda a, b: compute_raw_features(a, b, images=images)) if images else None
         background = DeckBackground.fit(fps, raw_pair_fn=pair_fn)
 
-        # 2. Top-k candidate screening
-        active_embedder = embedder if eff_toggles.embeddings else None
-        candidates_by_anchor = top_k_candidates(
-            fps,
-            background,
-            k=5,
-            embedder=active_embedder,
-            images=images,
+        from recipeboxer.correlation.linkmodel import default_models, link_feature_vector, rank_feature_vector
+
+        up3 = self.models if self.models is not None else default_models()
+        pre_m, rank_m, link_m = up3.get("pre"), up3.get("rank"), up3.get("link")
+        multi_m, single_m = up3.get("multi"), up3.get("single")
+        # The fitted models were fit on SetVerifier-backed runs; without a verifier (offline / no LLM)
+        # the legacy top-k + calibrator path is kept unchanged.
+        _sv_possible = eff_toggles.set_verify and (llm_client is not None or self.set_verifier is not None)
+        use_ranked = (
+            pre_m is not None and rank_m is not None and _sv_possible
+            and len(fps) >= self.MIN_CARDS_FITTED
         )
 
-        all_evidence: List[PairEvidence] = []
-        for ev_list in candidates_by_anchor.values():
-            for ev in ev_list:
-                # Filter features based on active FeatureToggles and recompute total_log_lr
-                active_features = [f for f in ev.features if _feature_is_active(f.name, eff_toggles)]
-                new_total_log_lr = sum(
-                    f.weight * f.log_lr
-                    for f in active_features
-                    if f.log_lr is not None
-                )
-                ev.features = active_features
-                ev.total_log_lr = round(new_total_log_lr, 4)
-                all_evidence.append(ev)
+        def _feat_filter(name: str) -> bool:
+            return _feature_is_active(name, eff_toggles)
 
-        # 3. Multimodal Set-Level Verification
+        # 2. Candidate screening
+        screening = None
+        all_evidence: List[PairEvidence] = []
+        if use_ranked:
+            from recipeboxer.correlation.ranking import ranked_candidates
+
+            screening = await asyncio.to_thread(
+                ranked_candidates, fps, background, pre_m, rank_m,
+                images=images, feature_filter=_feat_filter,
+                pool_m=int(min(self.POOL_M_MAX, max(self.POOL_M, round(self.POOL_M_FRAC * len(fps))))),
+                k_min=self.K_MIN, k_max=self.K_MAX, p_keep=self.P_KEEP,
+            )
+            candidates_by_anchor = screening.candidates
+            all_evidence = list(screening.evidence.values())
+        else:
+            active_embedder = embedder if eff_toggles.embeddings else None
+            candidates_by_anchor = top_k_candidates(
+                fps,
+                background,
+                k=5,
+                embedder=active_embedder,
+                images=images,
+            )
+            for ev_list in candidates_by_anchor.values():
+                for ev in ev_list:
+                    # Filter features based on active FeatureToggles and recompute total_log_lr
+                    active_features = [f for f in ev.features if _feature_is_active(f.name, eff_toggles)]
+                    new_total_log_lr = sum(
+                        f.weight * f.log_lr
+                        for f in active_features
+                        if f.log_lr is not None
+                    )
+                    ev.features = active_features
+                    ev.total_log_lr = round(new_total_log_lr, 4)
+                    all_evidence.append(ev)
+
+        # 3. Multimodal Set-Level Verification (bounded concurrency; single grouping code path)
         verifications: List[SetVerification] = []
         verification_by_anchor: Dict[str, SetVerification] = {}
+        rescue_verifications: List[SetVerification] = []
+        fp_map = {fp.card_id: fp for fp in fps}
 
         can_verify = eff_toggles.set_verify and (llm_client is not None or self.set_verifier is not None)
-        if can_verify:
-            verifier = self.set_verifier or SetVerifier(llm_client=llm_client, settings=eff_settings)
-            fp_map = {fp.card_id: fp for fp in fps}
+        verifier = None
+        max_conc = max(1, int(getattr(eff_settings, "llm_max_concurrency", 8) or 8))
+        sem = asyncio.Semaphore(max_conc)
 
-            for anchor_id, ev_list in candidates_by_anchor.items():
-                if not ev_list:
-                    continue
-                anchor_fp = fp_map.get(anchor_id)
-                if not anchor_fp or not _is_candidate_anchor(anchor_fp):
-                    continue
-                cand_fps = [fp_map[ev.b] for ev in ev_list if ev.b in fp_map]
-                if not cand_fps:
-                    continue
-
+        async def _verify_one(job: Tuple[str, VisualFingerprint, List[VisualFingerprint]]):
+            anchor_id, anchor_fp, cand_fps = job
+            async with sem:
                 try:
-                    ver = await verifier.verify(anchor_fp, cand_fps, images=images)
-                    verifications.append(ver)
-                    verification_by_anchor[anchor_id] = ver
+                    return anchor_id, await verifier.verify(anchor_fp, cand_fps, images=images)
                 except BudgetExceeded:
                     raise
                 except Exception as exc:
                     logger.warning(f"SetVerifier failed for anchor card {anchor_id}: {exc}")
+                    return anchor_id, None
 
-        # 4. Calibration
+        if can_verify:
+            verifier = self.set_verifier or SetVerifier(llm_client=llm_client, settings=eff_settings)
+            jobs: List[Tuple[str, VisualFingerprint, List[VisualFingerprint]]] = []
+            ext_jobs: List[Tuple[str, VisualFingerprint, List[VisualFingerprint]]] = []
+            for anchor_id, ev_list in candidates_by_anchor.items():
+                if not ev_list:
+                    continue
+                anchor_fp = fp_map.get(anchor_id)
+                if not anchor_fp:
+                    continue
+                is_ext = not _is_candidate_anchor(anchor_fp)
+                if is_ext:
+                    # WP-UP3: backs / continuation cards can precede another card (e.g. back of card 1 ->
+                    # front of card 2). Verify them too when the fitted rank model finds a likely successor.
+                    top_p = screening.rank_p((anchor_id, ev_list[0].b)) if screening is not None else None
+                    if top_p is None or top_p < self.ANCHOR_EXT_P:
+                        continue
+                cand_fps = [fp_map[ev.b] for ev in ev_list if ev.b in fp_map]
+                if not cand_fps:
+                    continue
+                (ext_jobs if is_ext else jobs).append((anchor_id, anchor_fp, cand_fps))
+
+            # Extension anchors are skipped when every candidate pair was already offered in the reverse
+            # direction by a primary anchor (the verifier judges set membership, so it has been examined).
+            offered = {(a, c.card_id) for a, _, cs in jobs for c in cs}
+            for anchor_id, anchor_fp, cand_fps in ext_jobs:
+                if any((c.card_id, anchor_id) not in offered for c in cand_fps):
+                    jobs.append((anchor_id, anchor_fp, cand_fps))
+
+            results = await asyncio.gather(*(_verify_one(j) for j in jobs))
+            for anchor_id, ver in results:  # deterministic order (job order)
+                if ver is None:
+                    continue
+                verifications.append(ver)
+                verification_by_anchor[anchor_id] = ver
+
+            # 3b. WP-UP3 orphan rescue: title-less fragments that no verification claimed are offered to
+            # their most likely predecessors (fitted rank model) in one extra, bounded verification round.
+            # Skipped when every first-pass verification failed (verifier unavailable / unusable).
+            verifier_ok = bool(verifications) or not jobs
+            if use_ranked and screening is not None and self.RESCUE_MAX_FRAC > 0 and verifier_ok:
+                rescue_jobs = self._rescue_jobs(fps, fp_map, screening, verifications)
+                if rescue_jobs:
+                    r_results = await asyncio.gather(*(_verify_one(j) for j in rescue_jobs))
+                    for anchor_id, ver in r_results:
+                        if ver is None:
+                            continue
+                        rescue_verifications.append(ver)
+                        verification_by_anchor.setdefault(anchor_id, ver)
+
+        # 4. Link probabilities
         calibrator = self.calibrator
         if calibrator is None:
             default_path = Path(DEFAULT_CALIBRATION_PATH)
@@ -348,57 +486,84 @@ class GroupingEngine:
             else:
                 calibrator = LinkCalibrator()
 
-        # Build set verification lookup for all verified transitions in each set
         verified_positive_edges: Set[Tuple[str, str]] = set()
         verified_negative_edges: Set[Tuple[str, str]] = set()
+        pos_direct: Set[Tuple[str, str]] = set()
+        sv_seen: Set[Tuple[str, str]] = set()
+        rescue_pos: Set[Tuple[str, str]] = set()
+        pos_conf: Dict[Tuple[str, str], float] = {}
 
-        for ver in verifications:
+        for ver, is_rescue in [(v, False) for v in verifications] + [(v, True) for v in rescue_verifications]:
             seq = [ver.anchor] + list(ver.continuations or [])
             for idx in range(len(seq) - 1):
-                verified_positive_edges.add((seq[idx], seq[idx + 1]))
+                e = (seq[idx], seq[idx + 1])
+                verified_positive_edges.add(e)
+                if idx == 0:
+                    pos_direct.add(e)
+                if is_rescue:
+                    rescue_pos.add(e)
+                if ver.confidence is not None:
+                    pos_conf[e] = max(pos_conf.get(e, 0.0), float(ver.confidence))
+            for c in list(ver.continuations or []) + list(ver.rejected or []):
+                sv_seen.add((ver.anchor, c))
             for rej in (ver.rejected or []):
                 for s_node in seq:
                     verified_negative_edges.add((s_node, rej))
                     verified_negative_edges.add((rej, s_node))
+        n_into: Dict[str, int] = {}
+        n_out: Dict[str, int] = {}
+        for a_id, b_id in verified_positive_edges:
+            n_into[b_id] = n_into.get(b_id, 0) + 1
+            n_out[a_id] = n_out.get(a_id, 0) + 1
 
         links: Dict[Tuple[str, str], float] = {}
         pair_ev_by_edge: Dict[Tuple[str, str], PairEvidence] = {}
+        rank_logit: Dict[Tuple[str, str], float] = dict(screening.rank_logit) if screening is not None else {}
 
+        # Verified positive edges outside the screened pool still need evidence.
+        ev_edges = {(ev.a, ev.b) for ev in all_evidence}
+        for u_id, v_id in sorted(verified_positive_edges):
+            if (u_id, v_id) not in ev_edges and u_id in fp_map and v_id in fp_map:
+                ev = pair_evidence(fp_map[u_id], fp_map[v_id], background, images=images)
+                ev.features = [f for f in ev.features if _feature_is_active(f.name, eff_toggles)]
+                ev.total_log_lr = round(sum(f.weight * f.log_lr for f in ev.features if f.log_lr is not None), 4)
+                if screening is not None:
+                    rank_logit[(u_id, v_id)] = float(rank_m.logit(rank_feature_vector(
+                        ev, screening.desc[u_id], screening.desc[v_id], fp_map[u_id], fp_map[v_id]))[0])
+                all_evidence.append(ev)
+                ev_edges.add((u_id, v_id))
+
+        use_link_model = bool(use_ranked and can_verify and link_m is not None)
+        link_rows: List[Tuple[Tuple[str, str], Any]] = []
         for ev in all_evidence:
             edge = (ev.a, ev.b)
-            # Determine set-verification outcome
             set_verified_outcome: Optional[bool] = None
             if edge in verified_positive_edges:
                 set_verified_outcome = True
             elif edge in verified_negative_edges:
                 set_verified_outcome = False
-            elif not can_verify:
-                set_verified_outcome = None
-
-            p = calibrator.predict(ev, set_verified=set_verified_outcome)
+            if use_ranked and can_verify:
+                vec = link_feature_vector(
+                    rank_logit.get(edge, 0.0),
+                    pos_direct=edge in pos_direct,
+                    pos_chain=edge in verified_positive_edges,
+                    neg=edge in verified_negative_edges,
+                    seen=edge in sv_seen or edge in verified_positive_edges,
+                    conf=pos_conf.get(edge),
+                    rescue=edge in rescue_pos,
+                    n_into_b=n_into.get(edge[1], 0),
+                    n_out_a=n_out.get(edge[0], 0),
+                    n_cards=len(fps),
+                )
+                link_rows.append((edge, vec))
+            if use_link_model:
+                p = float(link_m.predict_proba(vec)[0])
+            else:
+                p = calibrator.predict(ev, set_verified=set_verified_outcome)
             ev.p_link = round(p, 4)
             links[edge] = ev.p_link
             pair_ev_by_edge[edge] = ev
-
-        # Ensure any verified positive edges from SetVerifier are included in links even if not screened in top_k
-        fp_by_id = {fp.card_id: fp for fp in fps}
-        for u_id, v_id in verified_positive_edges:
-            edge = (u_id, v_id)
-            if edge not in links and u_id in fp_by_id and v_id in fp_by_id:
-                ev = pair_evidence(fp_by_id[u_id], fp_by_id[v_id], background, images=images)
-                active_features = [f for f in ev.features if _feature_is_active(f.name, eff_toggles)]
-                new_total_log_lr = sum(
-                    f.weight * f.log_lr
-                    for f in active_features
-                    if f.log_lr is not None
-                )
-                ev.features = active_features
-                ev.total_log_lr = round(new_total_log_lr, 4)
-                p = calibrator.predict(ev, set_verified=True)
-                ev.p_link = round(p, 4)
-                links[edge] = ev.p_link
-                pair_ev_by_edge[edge] = ev
-                all_evidence.append(ev)
+        verifications = verifications + rescue_verifications
 
         # 5. Completeness priors & node costs
         node_costs: Dict[str, Dict[str, Any]] = {}
@@ -447,6 +612,23 @@ class GroupingEngine:
         needs_review_cards: Set[str] = set()
         fp_by_id = {fp.card_id: fp for fp in fps}
 
+        from recipeboxer.correlation.linkmodel import multi_feature_vector, single_feature_vector
+
+        log_n = math.log(max(2, len(fps)))
+        out_ps: Dict[str, List[Tuple[str, float]]] = {}
+        in_ps: Dict[str, List[Tuple[str, float]]] = {}
+        for (a_id, b_id), p in links.items():
+            out_ps.setdefault(a_id, []).append((b_id, p))
+            in_ps.setdefault(b_id, []).append((a_id, p))
+
+        def _rank_p(edge: Tuple[str, str]) -> float:
+            z = rank_logit.get(edge)
+            return 0.0 if z is None else 1.0 / (1.0 + math.exp(-max(-35.0, min(35.0, z))))
+
+        collect_cluster = bool(use_ranked and can_verify and screening is not None)
+        single_rows: List[Tuple[List[str], Any]] = []
+        multi_rows: List[Tuple[List[str], Any]] = []
+
         for chain in chains:
             if len(chain) == 1:
                 cid = chain[0]
@@ -465,8 +647,26 @@ class GroupingEngine:
                     if is_deg:
                         needs_review_cards.add(cid)
 
-                # INVARIANT (INV-AC4 / FIND-04): Standalones carry no evidence-based link probability;
-                # confidence must be None (never a prior like 0.90).
+                # INVARIANT (INV-AC4 / FIND-04): never a hard-coded prior. WP-UP3: when SetVerifier ran
+                # and a fitted 'single' model exists, confidence is the FITTED probability that this card
+                # is truly a standalone item (held-out calibrated); otherwise None.
+                single_conf: Optional[float] = None
+                if collect_cluster:
+                    outs = out_ps.get(cid, [])
+                    ins = in_ps.get(cid, [])
+                    ctx = {
+                        "max_out_link": max((p for _, p in outs), default=0.0),
+                        "max_in_link": max((p for _, p in ins), default=0.0),
+                        "max_out_rank": max((_rank_p((cid, b)) for b, _ in outs), default=0.0),
+                        "max_in_rank": max((_rank_p((a, cid)) for a, _ in ins), default=0.0),
+                        "n_out_above_half": float(sum(1 for _, p in outs if p >= 0.5)),
+                        "sv_any_continuation": 1.0 if (verification_by_anchor.get(cid) and verification_by_anchor[cid].continuations) else 0.0,
+                        "log_n": log_n,
+                    }
+                    vec = single_feature_vector(screening.desc[cid], ctx)
+                    single_rows.append(([cid], vec))
+                    if single_m is not None:
+                        single_conf = round(float(single_m.predict_proba(vec)[0]), 4)
                 prop = CorrelationProposal(
                     proposal_id=f"prop_{uuid.uuid4().hex[:8]}",
                     ordered_card_ids=[cid],
@@ -474,13 +674,16 @@ class GroupingEngine:
                     transition_scores=[],
                     heuristic_score=0.0,
                     semantic_score=1.0 if can_verify else None,
-                    confidence=None,
+                    confidence=single_conf,
                     is_standalone=True,
-                    continuity_explanation="Single-sided card classified as standalone recipe." if can_verify else "Unverified card proposal awaiting review.",
+                    continuity_explanation=("Single-sided card classified as standalone recipe." if can_verify else "Unverified card proposal awaiting review.")
+                    + (f" Fitted P(standalone)={single_conf:.3f}." if single_conf is not None else ""),
                     recommended_action=action,
                     semantic_verified=sem_verified,
                     degraded_reason=deg_reason,
                 )
+                if single_conf is not None and single_conf < review_threshold:
+                    needs_review_cards.add(cid)
                 proposals.append(prop)
 
             else:
@@ -521,8 +724,25 @@ class GroupingEngine:
                     else:
                         all_transitions_verified = False
 
-                # Reported chain confidence = minimum calibrated transition probability along the chain
+                # Reported chain confidence (legacy) = minimum transition confidence along the chain.
                 chain_conf = min(s_scores) if s_scores else (min(t_scores) if t_scores else None)
+                if can_verify and all(
+                    (chain[k], chain[k + 1]) in verified_positive_edges for k in range(len(chain) - 1)
+                ):
+                    all_transitions_verified = True
+                if collect_cluster:
+                    # WP-UP3: fitted P(this chain is exactly one complete recipe), held-out calibrated.
+                    chain_set = set(chain)
+                    ctx = {
+                        "max_tail_out_other": max((p for b, p in out_ps.get(chain[-1], []) if b not in chain_set), default=0.0),
+                        "max_head_in_other": max((p for a, p in in_ps.get(chain[0], []) if a not in chain_set), default=0.0),
+                        "log_n": log_n,
+                    }
+                    sv_flags = [(chain[k], chain[k + 1]) in verified_positive_edges for k in range(len(chain) - 1)]
+                    vec = multi_feature_vector([screening.desc[c] for c in chain], t_scores, sv_flags, ctx)
+                    multi_rows.append((list(chain), vec))
+                    if multi_m is not None:
+                        chain_conf = float(multi_m.predict_proba(vec)[0])
                 has_low_confidence = bool(chain_conf is not None and chain_conf < review_threshold)
                 avg_h = sum(t_scores) / len(t_scores) if t_scores else 0.50
                 avg_s = sum(s_scores) / len(s_scores) if s_scores else (1.0 if all_transitions_verified else 0.0)
@@ -586,7 +806,14 @@ class GroupingEngine:
             "proposals_count": len(proposals),
             "needs_review_count": len(sorted_needs_review),
             "unverified_proposals_count": sum(1 for p in proposals if not p.semantic_verified),
+            "set_verify_calls": len(verifications),
+            "rescue_calls": len(rescue_verifications),
+            "screening": "up3_ranked" if use_ranked else "legacy_top_k",
+            "link_model": "up3_fitted" if use_link_model else "legacy_calibrator",
         }
+        if screening is not None:
+            stats.update({f"screen_{k}": v for k, v in screening.stats.items()})
+        self.last_rows = {"link": link_rows, "single": single_rows, "multi": multi_rows}
 
         return GroupingResult(
             chains=chains,

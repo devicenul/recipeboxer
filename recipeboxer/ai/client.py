@@ -455,6 +455,64 @@ def _extract_retry_after(exc: Exception) -> Optional[float]:
     return None
 
 
+# WP-UP3: transient transport-layer exception class names (matched against the MRO by name so that
+# no optional dependency has to be importable).
+_TRANSIENT_EXC_NAMES = frozenset({
+    "TransportError", "NetworkError", "ProtocolError", "RemoteProtocolError", "LocalProtocolError",
+    "ReadError", "WriteError", "ConnectError", "CloseError", "ReadTimeout", "WriteTimeout",
+    "ConnectTimeout", "PoolTimeout", "TimeoutException", "ServerDisconnectedError",
+    "ClientConnectionError", "ClientPayloadError", "ClientOSError", "EndOfStream",
+    "ClosedResourceError", "BrokenResourceError", "IncompleteRead", "ServerError",
+    "ChunkedEncodingError", "SSLError", "ConnectionError",
+})
+_TRANSPORT_MODULES = frozenset({"httpx", "httpcore", "anyio", "aiohttp", "h11", "h2", "ssl", "websockets", "urllib3"})
+_PROGRAMMING_ERRORS = (TypeError, AttributeError, KeyError, NameError, AssertionError, NotImplementedError, IndexError)
+
+
+def _exception_chain(exc: BaseException, limit: int = 6) -> List[BaseException]:
+    """Returns exc followed by its __cause__/__context__ chain (bounded, cycle-safe)."""
+    out: List[BaseException] = []
+    seen: set = set()
+    cur: Optional[BaseException] = exc
+    while cur is not None and id(cur) not in seen and len(out) < limit:
+        out.append(cur)
+        seen.add(id(cur))
+        cur = cur.__cause__ or cur.__context__
+    return out
+
+
+def _status_code_of(exc: BaseException) -> Optional[int]:
+    """Extracts an HTTP status code from SDK/HTTP exceptions (code, status_code, response.status_code)."""
+    for attr in ("code", "status_code"):
+        val = getattr(exc, attr, None)
+        if isinstance(val, bool):
+            continue
+        if isinstance(val, int) and 100 <= val <= 599:
+            return val
+        if isinstance(val, str) and val.isdigit() and 100 <= int(val) <= 599:
+            return int(val)
+    resp = getattr(exc, "response", None)
+    if resp is not None:
+        val = getattr(resp, "status_code", None) or getattr(resp, "status", None)
+        if isinstance(val, int) and not isinstance(val, bool) and 100 <= val <= 599:
+            return val
+    return None
+
+
+def describe_exception(exc: BaseException) -> str:
+    """Human-readable, never-empty description: 'Type[status=503]: message (cause: Type: msg)'."""
+    def _one(e: BaseException) -> str:
+        name = type(e).__name__
+        code = _status_code_of(e)
+        msg = str(e).strip() or "<empty message>"
+        return f"{name}[status={code}]: {msg}" if code is not None else f"{name}: {msg}"
+
+    chain = _exception_chain(exc, limit=3)
+    text = _one(chain[0])
+    if len(chain) > 1:
+        text += " (cause: " + "; ".join(_one(c) for c in chain[1:]) + ")"
+    return text[:600]
+
 class GenAIClient(LLMClient):
     """Production LLM client utilizing the official google-genai SDK (client.aio.models).
 
@@ -563,6 +621,12 @@ class GenAIClient(LLMClient):
         # Retry loop with jittered backoff
         attempts = 0
         max_attempts = max(1, self.max_retries)
+        try:
+            req_cap = int((request.metadata or {}).get("max_attempts") or 0)
+        except (TypeError, ValueError):
+            req_cap = 0
+        if req_cap > 0:
+            max_attempts = max(1, min(max_attempts, req_cap))
         last_error: Optional[Exception] = None
         base_delay = self.retry_delay_base
 
@@ -714,6 +778,7 @@ class GenAIClient(LLMClient):
             except Exception as exc:
                 last_error = exc
                 is_retryable, reason = self._classify_error(exc)
+                exc_desc = describe_exception(exc)
 
                 if is_retryable and attempts < max_attempts:
                     retry_after = _extract_retry_after(exc)
@@ -724,58 +789,93 @@ class GenAIClient(LLMClient):
                             60.0,
                             base_delay * (2 ** (attempts - 1)) + random.uniform(0.0, 0.5 * base_delay),
                         )
+                    logger.warning(
+                        "Attempt %d/%d transient %s (%s); retrying in %.1fs",
+                        attempts, max_attempts, reason.value, exc_desc, sleep_s,
+                    )
                     await asyncio.sleep(sleep_s)
                     continue
 
                 # Final attempt failed or non-retryable error
                 raise create_stage_error(
                     request.stage,
-                    f"LLM generation failed ({reason.value}) after {attempts} attempts: {exc}",
+                    f"LLM generation failed ({reason.value}) after {attempts} attempts: {exc_desc}",
                     reason=reason,
+                    retryable=is_retryable,
                     details={
                         "model": request.model,
                         "attempts": attempts,
-                        "exception": str(exc),
+                        "exception": exc_desc,
+                        "exception_type": type(exc).__name__,
+                        "status_code": _status_code_of(exc),
                     },
                 ) from exc
 
         # Fallback if loop ends without response
+        last_desc = describe_exception(last_error) if last_error is not None else "no response"
         raise create_stage_error(
             request.stage,
-            f"LLM generation exhausted max attempts ({max_attempts}): {last_error}",
+            f"LLM generation exhausted max attempts ({max_attempts}): {last_desc}",
             reason=FailureReason.MODEL_UNAVAILABLE,
-            details={"attempts": attempts, "error": str(last_error)},
+            details={"attempts": attempts, "error": last_desc},
         )
 
-    def _classify_error(self, exc: Exception) -> tuple[bool, FailureReason]:
-        """Determines if an exception is retryable and assigns the appropriate FailureReason."""
-        if isinstance(exc, (asyncio.TimeoutError, TimeoutError)):
-            return True, FailureReason.TIMEOUT
+    def _classify_error(self, exc: BaseException) -> tuple[bool, FailureReason]:
+        """Determines if an exception is retryable and assigns the appropriate FailureReason.
 
-        # Check for status codes on API errors or HTTP exceptions
-        # Check for status codes on API errors or HTTP exceptions
-        status_code = getattr(exc, "code", None) or getattr(exc, "status_code", None)
-        exc_str = str(exc).lower()
+        WP-UP3 policy:
+        - Real client errors (HTTP 4xx other than 408/409/429) are terminal (non-retryable).
+        - 429 -> RATE_LIMITED (retryable); 408/504/deadline/timeouts -> TIMEOUT (retryable).
+        - 5xx, transport/protocol/connection failures (httpx/httpcore/anyio/aiohttp/OSError family),
+          and *unknown exceptions with an empty message* -> retryable MODEL_UNAVAILABLE. Such
+          exceptions previously fell through to a terminal branch and surfaced as
+          "MODEL_UNAVAILABLE after 1 attempts: " with an empty message.
+        The exception cause/context chain is inspected as well (SDKs often wrap transport errors).
+        """
+        chain = _exception_chain(exc)
+
+        for e in chain:
+            if isinstance(e, (asyncio.TimeoutError, TimeoutError)):
+                return True, FailureReason.TIMEOUT
+
+        status_int = None
+        for e in chain:
+            status_int = _status_code_of(e)
+            if status_int is not None:
+                break
+        exc_str = " ".join(str(e) for e in chain).lower()
+        status_txt = " ".join(str(getattr(e, "status", "") or "") for e in chain).upper()
 
         # Immediate detection of schema / additionalProperties unsupported error
         if "additionalproperties" in exc_str or ("schema" in exc_str and "unsupported" in exc_str):
             return False, FailureReason.SCHEMA_UNSUPPORTED
 
-        if status_code is not None:
-            try:
-                status_int = int(status_code)
-                if status_int == 429:
-                    return True, FailureReason.RATE_LIMITED
-                if status_int in (401, 403):
-                    return False, FailureReason.NO_API_KEY
-                if status_int in (500, 502, 503, 504):
-                    return True, FailureReason.MODEL_UNAVAILABLE
-                if status_int == 400:
-                    if "schema" in exc_str:
-                        return False, FailureReason.SCHEMA_UNSUPPORTED
-                    return False, FailureReason.INVALID_REQUEST
-            except (ValueError, TypeError):
-                pass
+        if status_int is not None:
+            if status_int == 429:
+                return True, FailureReason.RATE_LIMITED
+            if status_int in (408, 504):
+                return True, FailureReason.TIMEOUT
+            if status_int in (401, 403):
+                return False, FailureReason.NO_API_KEY
+            if status_int == 409:
+                return True, FailureReason.MODEL_UNAVAILABLE
+            if 500 <= status_int <= 599:
+                return True, FailureReason.MODEL_UNAVAILABLE
+            if status_int == 400:
+                if "schema" in exc_str:
+                    return False, FailureReason.SCHEMA_UNSUPPORTED
+                return False, FailureReason.INVALID_REQUEST
+            if status_int == 404:
+                return False, FailureReason.MODEL_UNAVAILABLE
+            if 400 <= status_int <= 499:
+                return False, FailureReason.INVALID_REQUEST
+
+        if any(s in status_txt for s in ("UNAVAILABLE", "INTERNAL", "ABORTED")):
+            return True, FailureReason.MODEL_UNAVAILABLE
+        if "RESOURCE_EXHAUSTED" in status_txt:
+            return True, FailureReason.RATE_LIMITED
+        if "DEADLINE_EXCEEDED" in status_txt:
+            return True, FailureReason.TIMEOUT
 
         # String matching for API errors and disconnects
         if any(term in exc_str for term in ("invalid_argument", "invalid request", "bad request")):
@@ -784,10 +884,32 @@ class GenAIClient(LLMClient):
             return True, FailureReason.RATE_LIMITED
         if any(term in exc_str for term in ("timeout", "timed out", "deadline")):
             return True, FailureReason.TIMEOUT
-        if any(term in exc_str for term in ("connection", "disconnect", "reset by peer", "503", "502")):
+        if any(term in exc_str for term in (
+            "connection", "disconnect", "reset by peer", "broken pipe", "incomplete",
+            "unavailable", "overloaded", "internal error", "503", "502", "500",
+        )):
             return True, FailureReason.MODEL_UNAVAILABLE
 
-        return False, FailureReason.MODEL_UNAVAILABLE
+        # Transport-layer exception families (by MRO name, no hard import dependency)
+        for e in chain:
+            if isinstance(e, (ConnectionError, EOFError)):
+                return True, FailureReason.MODEL_UNAVAILABLE
+            mro_names = {c.__name__ for c in type(e).__mro__}
+            mod_root = (type(e).__module__ or "").split(".")[0]
+            if mro_names & _TRANSIENT_EXC_NAMES:
+                return True, FailureReason.MODEL_UNAVAILABLE
+            if mod_root in _TRANSPORT_MODULES:
+                return True, FailureReason.MODEL_UNAVAILABLE
+            if isinstance(e, OSError):
+                return True, FailureReason.MODEL_UNAVAILABLE
+
+        # Local programming errors are never transient
+        if isinstance(exc, _PROGRAMMING_ERRORS):
+            return False, FailureReason.UNKNOWN
+
+        # Unknown exception (including ones with no message at all, which is how several transport
+        # errors surface): treat as transient, bounded by max_retries with backoff.
+        return True, FailureReason.MODEL_UNAVAILABLE
 
 
 def create_llm_client(settings: Optional[Settings] = None, **kwargs: Any) -> Optional[LLMClient]:

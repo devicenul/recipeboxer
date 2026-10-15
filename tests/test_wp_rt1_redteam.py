@@ -184,18 +184,35 @@ class TestFind05ConfidencePropagation:
         ])
 
         out_file = tmp_path / "out.json"
-        await run_headless_analysis(
-            input_dir=input_dir,
-            out_file=out_file,
-            auto_approve=True,
-            injected_client=client,
-        )
+        # WP-UP3: recipes[].confidence = linkmodel.recipe_confidence(proposal_confidence, recipe, n_cards),
+        # i.e. the fitted P(grouped AND extracted correctly). Record its input to prove the REAL proposal
+        # confidence (0.77) is propagated rather than a fabricated constant.
+        import recipeboxer.correlation.linkmodel as _lm
+        seen: list = []
+        _orig = _lm.recipe_confidence
+
+        def _spy(group_conf, recipe, n_cards, models=None):
+            out = _orig(group_conf, recipe, n_cards) if models is None else _orig(group_conf, recipe, n_cards, models)
+            seen.append((group_conf, out))
+            return out
+
+        _lm.recipe_confidence = _spy
+        try:
+            await run_headless_analysis(
+                input_dir=input_dir,
+                out_file=out_file,
+                auto_approve=True,
+                injected_client=client,
+            )
+        finally:
+            _lm.recipe_confidence = _orig
 
         import json
         data = json.loads(out_file.read_text())
         recipes = data.get("recipes", [])
         assert len(recipes) == 1
-        assert recipes[0]["confidence"] == expected_conf
+        assert seen and seen[0][0] == expected_conf
+        assert recipes[0]["confidence"] == seen[0][1]
         assert recipes[0]["confidence"] != 1.0
 
     def test_evaluator_skips_null_confidences(self) -> None:

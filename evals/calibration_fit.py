@@ -443,6 +443,118 @@ def fit_and_save_calibration(
     return calibrator
 
 
+def _load_pickle(path: Path) -> Any:
+    import pickle
+
+    assert_not_forbidden_path(path)
+    with open(path, "rb") as fh:
+        return pickle.load(fh)  # noqa: S301 - agent-generated local caches only
+
+
+def fit_up3_bundle(
+    feats_dir: Union[str, Path],
+    rows_dir: Optional[Union[str, Path]],
+    fit_decks: List[str],
+    xcal_files: Optional[List[Union[str, Path]]] = None,
+    output_path: Union[str, Path] = DEFAULT_CALIBRATION_PATH,
+    l2: Optional[Dict[str, float]] = None,
+) -> Dict[str, Any]:
+    """WP-UP3: fits the fitted-model bundle and merges it into calibration_default.json["up3"].
+
+    Inputs are caches produced by the UP3 dev harness on FRESH CardForge decks (never T1-T4):
+    - ``feats_dir/<deck>.pkl``: all ordered pairs with full (row[2]) and text-only (row[4]) rank vectors
+      and gold clusters -> ``pre`` (text-only prefilter) and ``rank`` models (label: true consecutive link;
+      each deck weighted equally).
+    - ``rows_dir/<deck>.pkl``: engine ``last_rows`` labelled with gold -> ``link``, ``single``, ``multi``.
+    - ``xcal_files``: extraction-calibration rows (scorer-identical labels) -> ``recipe`` model.
+    """
+    import numpy as np
+
+    from recipeboxer.correlation.linkmodel import (
+        LINK_FEATURES,
+        MULTI_FEATURES,
+        RANK_FEATURES,
+        RECIPE_FEATURES,
+        SINGLE_FEATURES,
+        LogisticModel,
+    )
+
+    lam = {"pre": 3.0, "rank": 3.0, "link": 3.0, "single": 5.0, "multi": 5.0, "recipe": 2.0}
+    lam.update(l2 or {})
+    assert_not_forbidden_path(output_path)
+    models: Dict[str, Any] = {}
+    feats_dir = Path(feats_dir)
+
+    # pre / rank (all pairs)
+    Xs, Xt, ys, ws = [], [], [], []
+    for d in fit_decks:
+        p = feats_dir / f"{d}.pkl"
+        if not p.exists():
+            continue
+        data = _load_pickle(p)
+        idx = {c: i for i, c in enumerate(data["ids"])}
+        true = {(idx[g[i]], idx[g[i + 1]]) for g in data["gold"] for i in range(len(g) - 1)
+                if g[i] in idx and g[i + 1] in idx}
+        rows = data["rows"]
+        Xs.append(np.array([r[2] for r in rows]))
+        Xt.append(np.array([r[4] for r in rows]))
+        ys.append(np.array([1.0 if (r[0], r[1]) in true else 0.0 for r in rows]))
+        ws.append(np.full(len(rows), 1.0 / max(1, len(rows))))
+    if Xs:
+        y = np.concatenate(ys)
+        w = np.concatenate(ws)
+        w = w / w.mean()
+        for name, X in (("rank", np.vstack(Xs)), ("pre", np.vstack(Xt))):
+            m = LogisticModel(RANK_FEATURES).fit(X, y, l2=lam[name], w=w)
+            m.meta = {"n_fit": int(len(y)), "pos_fit": int(y.sum()), "fit_decks": fit_decks}
+            models[name] = m
+
+    # link / single / multi (engine rows)
+    if rows_dir is not None:
+        names = {"link": LINK_FEATURES, "single": SINGLE_FEATURES, "multi": MULTI_FEATURES}
+        acc: Dict[str, Tuple[List[Any], List[float]]] = {k: ([], []) for k in names}
+        for d in fit_decks:
+            p = Path(rows_dir) / f"{d}.pkl"
+            if not p.exists():
+                continue
+            lab = _load_pickle(p)
+            for k in names:
+                for _, v, yy in lab.get(k, []):
+                    acc[k][0].append(v)
+                    acc[k][1].append(1.0 if yy else 0.0)
+        for k, (X, y) in acc.items():
+            if len(y) >= 10 and 0 < sum(y) < len(y):
+                m = LogisticModel(names[k]).fit(np.array(X), np.array(y), l2=lam[k])
+                m.meta = {"n_fit": len(y), "pos_fit": int(sum(y)), "fit_decks": fit_decks}
+                models[k] = m
+
+    # recipe (extraction x grouping)
+    if xcal_files:
+        X, y = [], []
+        for f in xcal_files:
+            for r in _load_pickle(Path(f)):
+                if r.get("group_conf") is None:
+                    continue
+                X.append(r["vec"])
+                y.append(1.0 if r["correct"] else 0.0)
+        if len(y) >= 10 and 0 < sum(y) < len(y):
+            m = LogisticModel(RECIPE_FEATURES).fit(np.array(X), np.array(y), l2=lam["recipe"])
+            m.meta = {"n_fit": len(y), "pos_fit": int(sum(y)), "source": [Path(f).name for f in xcal_files]}
+            models["recipe"] = m
+
+    out = Path(output_path)
+    payload = json.loads(out.read_text(encoding="utf-8")) if out.exists() else {}
+    bundle = payload.get("up3") or {"models": {}}
+    bundle.setdefault("models", {}).update({k: m.to_dict() for k, m in models.items()})
+    bundle["meta"] = {
+        "description": "WP-UP3 fitted logistic models (pure NumPy); fit on fresh CardForge decks only.",
+        "fit_decks": fit_decks,
+    }
+    payload["up3"] = bundle
+    out.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    return {k: m.meta for k, m in models.items()}
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     """CLI entry point for evals.calibration_fit."""
     parser = argparse.ArgumentParser(
@@ -474,12 +586,27 @@ def main(argv: Optional[List[str]] = None) -> int:
         default=100,
         help="Number of synthetic cards to generate if using CardForge.",
     )
+    parser.add_argument("--up3", action="store_true", help="WP-UP3: fit the fitted-model bundle instead.")
+    parser.add_argument("--up3-feats", type=str, default=None, help="Dir of <deck>.pkl all-pairs features.")
+    parser.add_argument("--up3-rows", type=str, default=None, help="Dir of <deck>.pkl labelled engine rows.")
+    parser.add_argument("--up3-decks", type=str, default="", help="Comma-separated FIT deck names.")
+    parser.add_argument("--up3-xcal", type=str, default="", help="Comma-separated extraction-calibration pickles.")
     args = parser.parse_args(args=argv)
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 
     try:
         assert_not_forbidden_path(args.out)
+        if args.up3:
+            meta = fit_up3_bundle(
+                feats_dir=args.up3_feats or ".",
+                rows_dir=args.up3_rows,
+                fit_decks=[d for d in args.up3_decks.split(",") if d],
+                xcal_files=[f for f in args.up3_xcal.split(",") if f],
+                output_path=args.out,
+            )
+            print(f"UP3 models fitted and merged into {args.out}: {json.dumps(meta)}")
+            return 0
         fit_and_save_calibration(
             output_path=args.out,
             source=args.source,

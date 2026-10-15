@@ -267,6 +267,14 @@ class LinkCalibrator:
             "default_offsets": self.default_offsets,
             "curves": serializable_curves,
         }
+        # WP-UP3: keep the fitted model bundle stored alongside the legacy curves.
+        if target_path.exists():
+            try:
+                prev = json.loads(target_path.read_text(encoding="utf-8"))
+                if isinstance(prev, dict) and "up3" in prev:
+                    payload["up3"] = prev["up3"]
+            except Exception:
+                pass
         target_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
     @classmethod

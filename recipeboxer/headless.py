@@ -630,10 +630,22 @@ async def run_headless_analysis(
             if "image_urls" in r_dump:
                 r_dump["image_urls"] = [f"/api/cards/{cid}/image" for cid in cids]
 
-        # Real proposal/recipe confidence (INV-AC4, FIND-05)
+        # Scored recipe confidence (INV-AC4, FIND-05; WP-UP3 semantics).
+        # recipes[].confidence := P(this predicted recipe is grouped correctly AND extracted correctly),
+        # i.e. the scorer's correctness (content_sim >= 0.5 AND ingredient_f1 >= 0.7 on the matched gold).
+        # Grouping factor: confidence of the proposal whose card set equals this recipe's cards (fallback:
+        # min over overlapping proposals; then the recipe's own evidence-based confidence if any).
+        # It is combined with extraction-quality signals by the fitted 'recipe' model
+        # (recipeboxer/correlation/linkmodel.py::recipe_confidence). None when there is no evidence.
         rec_conf = None
-        if hasattr(r, "confidence") and getattr(r, "confidence", None) is not None:
-            rec_conf = float(r.confidence)
+        grp_conf = None
+        cid_set = set(cids)
+        exact_props = [
+            p for p in session.proposals
+            if set(getattr(p, "ordered_card_ids", []) or []) == cid_set and getattr(p, "confidence", None) is not None
+        ]
+        if exact_props:
+            grp_conf = float(exact_props[0].confidence)
         else:
             matching_proposals = [
                 p for p in session.proposals
@@ -641,7 +653,16 @@ async def run_headless_analysis(
                 and getattr(p, "confidence", None) is not None
             ]
             if matching_proposals:
-                rec_conf = min(float(p.confidence) for p in matching_proposals)
+                grp_conf = min(float(p.confidence) for p in matching_proposals)
+            elif getattr(r, "confidence", None) is not None:
+                grp_conf = float(r.confidence)
+        if grp_conf is not None:
+            try:
+                from recipeboxer.correlation.linkmodel import recipe_confidence
+                rec_conf = recipe_confidence(grp_conf, r, len(cids))
+            except Exception as conf_exc:  # never fabricate: fall back to the grouping factor
+                logger.warning(f"recipe_confidence failed: {conf_exc}")
+                rec_conf = grp_conf
 
         pred_id = getattr(r, "recipe_id", None) or f"p{idx}"
         recipes_out.append({

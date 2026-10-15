@@ -8,6 +8,7 @@ for the HITL UI. Agreement raises overall confidence; never silently picks.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from pathlib import Path
@@ -370,6 +371,17 @@ async def self_consistency(
     parts: List[Union[TextPart, ImagePart]] = [TextPart(text=user_text)]
     parts.extend(face_parts)
 
+    # WP-UP3 timeout handling: the second read is OPTIONAL verification. Give each attempt a
+    # realistic budget (it carries images + transcripts and may run on a different model), cap
+    # attempts at 2 and bound total wall-clock, instead of 4 escalating STRUCTURE timeouts.
+    try:
+        base_timeout = float(settings.get_stage_timeout(LLMStage.STRUCTURE))
+    except Exception:
+        base_timeout = 90.0
+    sc_timeout_s = max(60.0, 1.5 * base_timeout)
+    sc_max_attempts = 2
+    sc_overall_cap_s = sc_timeout_s * (1.0 + 1.25) + 15.0
+
     request = LLMRequest(
         stage=LLMStage.STRUCTURE,
         model=second_model,
@@ -377,19 +389,24 @@ async def self_consistency(
         parts=parts,
         response_model=RecipeStructureResponse,
         temperature=temperature,
-        metadata={"consistency_mode": sc_mode, "secondary_read": True},
+        timeout_s=sc_timeout_s,
+        metadata={"consistency_mode": sc_mode, "secondary_read": True, "max_attempts": sc_max_attempts},
     )
 
     try:
-        response = await llm_client.generate(request)
+        response = await asyncio.wait_for(llm_client.generate(request), timeout=sc_overall_cap_s)
     except BudgetExceeded:
         raise
     except Exception as exc:
-        logger.warning("Self-consistency second read failed: %s", exc)
+        if isinstance(exc, (asyncio.TimeoutError, TimeoutError)):
+            msg = f"TIMEOUT: second read exceeded {sc_overall_cap_s:.0f}s overall cap"
+        else:
+            msg = str(exc).strip() or type(exc).__name__
+        logger.warning("Self-consistency second read failed: %s", msg)
         return recipe, [
             RecipeWarning(
                 code="VERIFICATION_SKIPPED",
-                message=f"Self-consistency second read failed: {exc}",
+                message=f"Self-consistency second read failed: {msg}",
                 field_path="consistency",
             )
         ]
@@ -432,10 +449,10 @@ async def self_consistency(
     disagreements = diff_recipes(recipe, second_recipe)
 
     if not disagreements:
-        # Agreement raises confidence
-        current_conf = recipe.confidence if recipe.confidence is not None else 0.85
-        recipe.confidence = min(1.0, round(current_conf + 0.10, 2))
-        logger.info("Self-consistency readings agree; boosted confidence to %.2f", recipe.confidence)
+        # Agreement is evidence, but NOT a confidence value: WP-UP3 removed the former hard-coded
+        # 0.85 + 0.10 boost (a fabricated prior, INV-AC4). Recipe.confidence is only ever set by the
+        # evidence (headless scores recipes via recipeboxer.correlation.linkmodel.recipe_confidence).
+        logger.info("Self-consistency readings agree (no MODEL_DISAGREEMENT warnings)")
     else:
         # Disagreements found: attach warnings with both readings; never silently pick
         recipe.warnings.extend(disagreements)
