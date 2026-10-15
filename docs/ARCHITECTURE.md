@@ -22,27 +22,31 @@ flowchart TD
         PrepMeta --> FP
     end
 
-    subgraph Correlation["2. Correlation & Grouping Engine"]
+    subgraph Correlation["2. Correlation & Grouping Engine (UP3/UP4)"]
         FP --> DeckBg["DeckBackground Likelihood Ratios\n(Collection-relative background fit)\nrecipeboxer/correlation/background.py"]
-        DeckBg --> TopK["Top-k Candidate Screening\n(Content tokens + Physical LR)\nrecipeboxer/correlation/screening.py"]
-        TopK --> SetVer["SetVerifier (LLM)\n(Multi-card set verification & quote citations)\nrecipeboxer/correlation/semantic.py"]
-        SetVer --> Calib["LinkCalibrator\n(Isotonic calibration of LR & set verify)\nrecipeboxer/correlation/calibration.py"]
-        Calib --> PathCover["Global Optimization (Path Cover)\n(Hungarian matching on -log p + completeness prior)\nrecipeboxer/correlation/optimizer.py"]
-        PathCover --> HITL{"HITL Review Barrier\n(p < 0.70, conflict, or degraded?)\nrecipeboxer/agent/orchestrator.py"}
+        DeckBg --> PreFilter["All-Pairs Text Prefilter\n(Fitted 'pre' model over all ordered pairs)\nrecipeboxer/correlation/ranking.py"]
+        PreFilter --> RankModel["Candidate Pool Ranking & Adaptive k\n(Fitted 'rank' model; k in [3, 10], p >= 0.02)\nrecipeboxer/correlation/ranking.py"]
+        RankModel --> SetVer["SetVerifier (LLM with Bounded Concurrency)\n(Primary & extension anchors; set_verify_v1/v2)\nrecipeboxer/correlation/semantic.py"]
+        SetVer --> LinkModel["Fitted Link / Single / Multi Models\n(calibration_default.json up3 bundle)\nrecipeboxer/correlation/linkmodel.py"]
+        LinkModel --> DomainGuard["Domain Support Guard & Strict Mode\n(OOD detection, link gates, GATE_CAP=0.02)\nrecipeboxer/correlation/guards.py"]
+        DomainGuard --> PathCover["Global Optimization (Path Cover)\n(Hungarian matching on -log p + completeness prior)\nrecipeboxer/correlation/optimizer.py"]
+        PathCover --> OrphanRescue["Orphan Rescue\n(Bounded pass for unclaimed title-less cards)\nrecipeboxer/correlation/engine.py"]
+        OrphanRescue --> HITL{"HITL Review Barrier\n(p < review_threshold, conflict, degraded)\nrecipeboxer/agent/orchestrator.py"}
     end
 
-    subgraph Extraction["3. Extraction Pipeline"]
+    subgraph Extraction["3. Extraction Pipeline & Confidence"]
         HITL -- "Approved Sequences" --> FacePrep["Prepare Faces\n(Deskew, crop, CLAHE variant, 1600px cap)\nrecipeboxer/extraction/image_prep.py"]
-        FacePrep --> Transcribe["Pass 1: Verbatim Transcription\n(Modality-routed, legibility markers)\nrecipeboxer/extraction/transcribe.py"]
+        FacePrep --> Transcribe["Pass 1: Verbatim Transcription\n(Modality-routed, empty-retry)\nrecipeboxer/extraction/transcribe.py"]
         Transcribe --> Structure["Pass 2: Structure Schema v2\n(Sections, ingredients, steps, timings)\nrecipeboxer/extraction/structure.py"]
         Structure --> Repair["Validate & Repair Loop\n(Pydantic validation, max 2 retries)\nrecipeboxer/extraction/repair.py"]
         Repair --> Ground["Pass 3: Grounding Verifier\n(Fuzzy CER match vs transcript & OCR)\nrecipeboxer/extraction/grounding.py"]
         Ground --> Normalize["Deterministic Normalizers\n(Fractions, archaic units, noise)\nrecipeboxer/extraction/normalize.py"]
         Normalize --> Consistency["Pass 4: Self-Consistency (Optional)\n(Second independent read if flagged)\nrecipeboxer/extraction/consistency.py"]
+        Consistency --> RecipeConf["Recipe Confidence Model\n(Fitted P(grouped AND extracted correctly) or null)\nrecipeboxer/correlation/linkmodel.py"]
     end
 
     subgraph Export["4. Exporters"]
-        Consistency --> Exporters["Multi-Format Exporters\n(Plan to Eat, JSON-LD, Docs, DOCX, PDF, etc.)\nrecipeboxer/exporter/*"]
+        RecipeConf --> Exporters["Multi-Format Exporters\n(Plan to Eat, JSON-LD, Docs, DOCX, PDF, etc.)\nrecipeboxer/exporter/*"]
     end
 ```
 
@@ -78,11 +82,27 @@ All multimodal generative AI operations in RecipeBoxer are routed through a hard
 Production code interacts exclusively with the `LLMClient` protocol:
 - **Pydantic Response Schemas**: Native structured output via `response_schema` parameter, guaranteeing outputs adhere to strict schemas without fragile JSON regex parsing.
 - **MIME Sniffing**: `sniff_mime_type(data: bytes)` inspects magic bytes (PNG, JPEG, WebP, GIF, TIFF, BMP) directly from byte buffers, never relying on file extensions.
-- **Resilience & Backoff**: Configured with jittered exponential retry backoff on transient HTTP 429, 5xx, and timeout responses (respecting `Retry-After` headers).
 - **Rate Limiting & Concurrency**: In-process token bucket rate limiter (`llm_rpm_limit`, default 60 RPM) and asyncio semaphore (`llm_max_concurrency`, default 5).
+- **Single Grouping Code Path**: Headless pipeline and orchestrator execute through `GroupingEngine.group` directly. `ConcurrentGroupingEngine` is a docstring-only subclass alias, guaranteeing zero drift between headless CLI, test suites, and calibration runs.
 
-### 2.2 Usage Accounting & `CostLedger` (`recipeboxer/ai/cost.py`)
-- **`PriceTable`**: Loaded from package data [`recipeboxer/data/pricing.toml`](file:///storage/emulated/10/AntiGravity/Workspaces/recipeboxer/recipeboxer/data/pricing.toml) (or custom override via settings). Contains verified Standard (non-batch) paid-tier rates per million tokens (MTok) for input, output, and reasoning/thinking tokens. Unpriced models trigger a strict warning and are treated as unpriced (`cost = None`), never silently zero.
+### 2.2 Error Classification & Retry Policy (WP-UP3, WP-UP4)
+To ensure reliable operation under API rate limits and network degradation without silent fabrication:
+- **Exception Classification (`_classify_error`)**: Recursively inspects the exception cause/context chain:
+  - `429 RESOURCE_EXHAUSTED`: Classified as `RATE_LIMITED` (retryable; honors `Retry-After` headers with jittered backoff).
+  - `408`, `504`, `asyncio.TimeoutError`: Classified as `TIMEOUT` (retryable).
+  - `5xx`, transport/connection failures (`httpx`, `httpcore`, `anyio`, `aiohttp`, `OSError`, SSL timeouts), and unknown exceptions with empty messages: Classified as `MODEL_UNAVAILABLE` (retryable). Exception messages always format exception type and HTTP status code, eliminating empty error strings.
+  - Client errors (`4xx` other than `408`/`429`): Classified as terminal non-retryable errors.
+- **Empty-Response Policy (WP-UP4)**:
+  - Model responses that return empty or whitespace-only bodies (from dropped streams, safety filtering, or thinking token exhaustion) are treated as transient failures.
+  - The client always forces at least two attempts (`MIN_ATTEMPTS_ON_EMPTY = 2`), even if a per-request metadata cap specifies 1 attempt.
+  - Terminal empty responses produce a typed `INVALID_RESPONSE` error with `retryable = True` and `details.empty_response = True`.
+- **Stage-Level Empty Retry (`recipeboxer/extraction/repair.py`)**:
+  - `generate_with_empty_retry` wraps `transcribe()`, `structure()`, and `validate_and_repair()`.
+  - When an empty response is encountered, it performs one stage-level retry after a 2.0s delay with `max_output_tokens` doubled and `metadata.empty_retry = True` (never retrying `BudgetExceeded`).
+
+### 2.3 Usage Accounting & `CostLedger` (`recipeboxer/ai/cost.py`)
+
+- **`PriceTable`**: Loaded from package data [`recipeboxer/data/pricing.toml`](../../../../../../storage/emulated/10/AntiGravity/Workspaces/recipeboxer/recipeboxer/data/pricing.toml) (or custom override via settings). Contains verified Standard (non-batch) paid-tier rates per million tokens (MTok) for input, output, and reasoning/thinking tokens. Unpriced models trigger a strict warning and are treated as unpriced (`cost = None`), never silently zero.
 - **`CostLedger`**: Tracks token usage (`input_tokens`, `output_tokens`, `thinking_tokens`), execution latency, and accumulated USD cost per pipeline stage and model.
 - **Pre-Run Estimation**: `estimate_run_cost(n_cards, profile, prices)` calculates low, expected, and high spending bounds based on card count and stage-specific multipliers before invoking the model.
 
@@ -96,7 +116,7 @@ Production code interacts exclusively with the `LLMClient` protocol:
 
 ## 3. Failure Model & Anti-Cheat Semantics
 
-RecipeBoxer adheres strictly to non-negotiable anti-cheat guardrails ([`_agents/INVARIANTS.md`](file:///storage/emulated/10/AntiGravity/Workspaces/recipeboxer/_agents/INVARIANTS.md) §10):
+RecipeBoxer adheres strictly to non-negotiable anti-cheat guardrails ([`_agents/INVARIANTS.md`](../../../../../../storage/emulated/10/AntiGravity/Workspaces/recipeboxer/_agents/INVARIANTS.md) §10):
 
 ### 3.1 Typed Failure Hierarchy (`recipeboxer/models/failures.py`)
 When a stage cannot execute or the LLM cannot process an input, the pipeline must **never fabricate content**:
@@ -108,7 +128,7 @@ When a stage cannot execute or the LLM cannot process an input, the pipeline mus
 - **`StageUnavailableError`**: Base exception raised by stage adapters, mapped to `FingerprintUnavailable`, `SemanticVerificationUnavailable`, and `ExtractionUnavailable`.
 
 ### 3.2 Invariants Enforced Across Codebase
-1. **INV-AC1 (No Answer Key)**: Production code under `recipeboxer/` has zero references to `tests/`, `evals/`, test fixtures, manifests, or `RB_EVAL_AGE_KEY_FILE`. Enforced by static AST inspection in [`tests/anticheat/test_static_invariants.py`](file:///storage/emulated/10/AntiGravity/Workspaces/recipeboxer/tests/anticheat/test_static_invariants.py) and runtime stack-frame inspection in `evals/vault.py`.
+1. **INV-AC1 (No Answer Key)**: Production code under `recipeboxer/` has zero references to `tests/`, `evals/`, test fixtures, manifests, or `RB_EVAL_AGE_KEY_FILE`. Enforced by static AST inspection in [`tests/anticheat/test_static_invariants.py`](../../../../../../storage/emulated/10/AntiGravity/Workspaces/recipeboxer/tests/anticheat/test_static_invariants.py) and runtime stack-frame inspection in `evals/vault.py`.
 2. **INV-AC2 (No Filename Meaning)**: Filenames and card IDs are strictly opaque identifiers (`secrets.token_hex(6)`). Production code never checks substrings, regexes, or tokens (`front`, `back`, `card1`) on filenames. Natural sort order is used solely as an input sequence prior.
 3. **INV-AC3 (No Corpus Content)**: No ground-truth recipe titles, distinctive recipe text phrases, or fixture image SHA-256 digests appear in production code.
 4. **INV-AC4 (No Silent Fabrication)**: Offline mode or missing keys produce explicit `StageFailure` instances. Failed extractions are recorded in `session.failures`—never substituted with canned recipes or placeholder text stubs.
@@ -144,7 +164,7 @@ Features that remain distinct even on identical stationery:
 
 ---
 
-## 5. Correlation & Global Optimization Pipeline
+## 5. Correlation & Global Optimization Pipeline (UP3/UP4)
 
 ```
   [ VisualFingerprints (N cards) ]
@@ -153,27 +173,54 @@ Features that remain distinct even on identical stationery:
   [ DeckBackground.fit ] ──────────► Fits collection-relative background distributions
                  │
                  ▼
-  [ top_k_candidates ] ────────────► O(N·k) candidate pruning via content tokens & physical LR
+  [ All-Pairs Text Prefilter ] ────► Fast text-only 'pre' model scores all N(N-1) ordered pairs
                  │
                  ▼
-  [ SetVerifier (LLM) ] ───────────► Evaluates Anchor + Candidates together; cites verbatim quotes
+  [ Candidate Pool & Rank Model ] ─► Top-M candidates scored by fitted 'rank' model (adaptive k in [3, 10])
                  │
                  ▼
-  [ LinkCalibrator ] ──────────────► Isotonic regression maps total log-LR to calibrated p_link
+  [ SetVerifier (LLM) ] ───────────► Primary & extension anchors; cites verbatim quotes; bounded concurrency
+                 │
+                 ▼
+  [ Domain Guard & Strict Mode ] ──► OOD detection (>= 20% out-of-support); conservative link gates (cap 0.02)
+                 │
+                 ▼
+  [ Fitted Link Model ] ───────────► Logistic regression on rank logit, SV flags/confidence, and log N
                  │
                  ▼
   [ path_cover (Hungarian) ] ──────► Global min-cost path cover on -log(p) with completeness priors
                  │
                  ▼
+  [ Orphan Rescue ] ───────────────► Bounded pass offers unclaimed title-less cards to top predecessors
+                 │
+                 ▼
+  [ Proposal & Recipe Confidence ] ─► Single/multi models for proposals; recipe model: P(grouped & extracted)
+                 │
+                 ▼
   [ GroupingResult ] ──────────────► Chains, proposals, evidence, verifications, and needs_review
 ```
 
-1. **Fingerprinting (`recipeboxer/vision/fingerprint.py`)**: One structured LLM call per card using prompt `fingerprint_v2.md`. Extracts visible title, boundary lines, printed page markers (`"cont'd"`, `"2"`), section headers, and handwriting descriptors.
-2. **Top-k Screening (`recipeboxer/correlation/screening.py`)**: Prunes the $O(N^2)$ candidate space down to $k$ successors per card (default $k=5$) using text token overlap, capture-order adjacency, and physical likelihood ratio.
-3. **Set-Level Verification (`recipeboxer/correlation/semantic.py`)**: The anchor card and its top candidates are sent to the model in a single prompt (`set_verify_v1.md`). The model returns which candidates continue the recipe, specifies ordering, and cites verbatim text quotes from the cards as proof. Quote citations are verified against card text via `_is_phrase_match`.
-4. **Calibration (`recipeboxer/correlation/calibration.py`)**: `LinkCalibrator` applies isotonic regression to convert total log likelihood ratios and set-verification decisions into well-calibrated continuation probabilities ($p_{\text{link}} \in [0, 1]$). Default calibration parameters are pre-fitted strictly on T0 and fresh synthetic cards.
-5. **Global Optimization (`recipeboxer/correlation/optimizer.py`)**: `path_cover` executes bipartite Hungarian matching on edge costs $-\log(p_{\text{link}})$, incorporating "no predecessor" / "no successor" cutoff costs derived from the completeness prior and enforcing that each recipe chain has at most one title-bearing start face.
-6. **HITL Review Routing**: Proposals with $p < 0.70$ (`grouping_review_threshold`), chains with conflicting evidence, or degraded inputs are routed to `needs_review` with cited quote evidence for human verification.
+1. **Visual Fingerprinting (`recipeboxer/vision/fingerprint.py`)**: One structured LLM call per card using prompt `fingerprint_v2.md`. Extracts visible title, boundary lines, printed page markers (`"cont'd"`, `"2"`), section headers, and handwriting descriptors.
+2. **All-Pairs Text Screening (`recipeboxer/correlation/ranking.py`)**: A fast text-only screening pass evaluates all ordered card pairs $(A, B)$ using the fitted `pre` logistic regression model. The candidate pool is formed from top-$M$ outgoing and incoming pairs plus capture-order neighbors ($\pm 1$), with $M = \text{clip}(0.2 \cdot N, 10, 30)$. Full multimodal evidence is calculated on this pruned pool and scored by the fitted `rank` model.
+3. **Adaptive $k$ Candidate Pruning**: Selects an adaptive candidate count $k \in [3, 10]$ per anchor, retaining candidates with rank probability $p \ge 0.02$. The ranking model has no capture-order feature, ensuring capture-order invariance.
+4. **Anchor Extension & Set-Level Verification (`recipeboxer/correlation/semantic.py`)**:
+   - Primary anchors (cards with titles or start markers) and their candidates are verified in a single prompt (`set_verify_v1.md`).
+   - Extension anchors: Continuation cards and back faces whose top successor has rank $p \ge 0.15$ are also verified using `set_verify_v2.md` to capture back $\rightarrow$ next-card-front links. Extension jobs are deduplicated if their pairs were already verified in reverse.
+   - Verification runs under bounded concurrency (`asyncio.Semaphore(llm_max_concurrency)`) in deterministic job order.
+5. **Domain Support Guard & Strict Mode (`recipeboxer/correlation/guards.py`)**:
+   - Evaluates whether cards fall outside the training support (e.g. boundary-line words-per-line $> 7.0$ or rare descriptor patterns). If $\ge 20\%$ of cards are out-of-distribution (e.g., historical manuscript scrapbooks), **strict mode** activates.
+   - In strict mode: orphan rescue is disabled, and links are only accepted if `SetVerifier` confirmed them with $\ge 1$ verified quote, 0 unverified quotes, and confidence $\ge 0.60$.
+   - **Link Gates**: Conservative gates (`nonrecipe`, `physical_conflict`, `new_heading`, `rescue_unconfirmed`, `strict_unconfirmed`) cap edge probability at `GATE_CAP = 0.02`. The gate reason is recorded in `PairEvidence.gate` and `p_link_ungated`.
+6. **Fitted Link Model (`recipeboxer/correlation/linkmodel.py`)**:
+   - Replaces heuristic calibration with a fitted logistic regression (`link` model in `calibration_default.json["up3"]`).
+   - Features: rank model logit, SetVerifier direct/chain/negative/seen flags, SetVerifier confidence, rescue flag, in/out degrees, and $\log(N)$.
+   - Decks with $N < 10$ or runs without SetVerifier gracefully fall back to the legacy `LinkCalibrator`.
+7. **Global Path Cover Optimization (`recipeboxer/correlation/optimizer.py`)**: `path_cover` executes bipartite Hungarian matching on edge costs $-\log(p_{\text{link}})$, incorporating "no predecessor" / "no successor" cutoff costs derived from completeness priors and enforcing at most one title-bearing start face per recipe.
+8. **Orphan Rescue**: Unclaimed title-less card fragments that no verification accepted are offered to their top-3 predecessors in an extra bounded verification pass (capped at $0.15 \cdot N$ calls; skipped in strict mode or if first-pass verifications failed).
+9. **Proposal & Recipe Confidence Scoring**:
+   - **Proposal Confidence**: Standalone proposals are scored by the fitted `single` model ($P(\text{standalone})$); multi-card chains are scored by the fitted `multi` model ($P(\text{exact chain})$).
+   - **Recipe Confidence (`headless.py::recipe_confidence`)**: `recipes[].confidence` represents the fitted joint probability $P(\text{grouped correctly AND extracted correctly})$. It combines the proposal's grouping confidence with extraction-quality signals (ingredient line count, direction count, inferred title flag, warnings). If unverified or without evidence, it is strictly `None`—**never a hardcoded constant prior** (INV-AC4).
+10. **HITL Review Routing**: Proposals with confidence below `review_threshold`, chains with unverified transitions, or degraded inputs are routed to `needs_review` with quote evidence and physical LLR features.
 
 ---
 
@@ -208,7 +255,7 @@ Clean-break schema optimized for structured model outputs and front-end legibili
 ## 7. Prompt Registry & Versioning (`recipeboxer/prompts/`)
 
 Prompts are managed as isolated Markdown documents with standardized frontmatter and version hashes:
-- **Storage**: Located in [`recipeboxer/prompts/*.md`](file:///storage/emulated/10/AntiGravity/Workspaces/recipeboxer/recipeboxer/prompts/).
+- **Storage**: Located in [`recipeboxer/prompts/*.md`](../../../../../../storage/emulated/10/AntiGravity/Workspaces/recipeboxer/recipeboxer/prompts).
 - **Registry Function**: `recipeboxer.prompts.get_prompt(prompt_id: str) -> PromptRecord` returns `PromptRecord(id, text, version)`.
 - **Version Hashes**: The version string is the short (8-hex) SHA-256 digest of the trimmed prompt text. This hash is embedded into recipe `Provenance` and `Transcript` objects, ensuring complete reproducibility of extraction runs.
 - **Active Prompts**:

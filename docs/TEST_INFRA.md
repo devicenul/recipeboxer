@@ -39,7 +39,7 @@ recipeboxer/
 
 ## 2. Anti-Cheat Verification & Static Invariants
 
-All tests enforcing benchmark honesty reside in [`tests/anticheat/`](file:///storage/emulated/10/AntiGravity/Workspaces/recipeboxer/tests/anticheat/):
+All tests enforcing benchmark honesty reside in [`tests/anticheat/`](../../../../../../storage/emulated/10/AntiGravity/Workspaces/recipeboxer/tests/anticheat):
 
 ### 2.1 Static AST Invariant Tests (`test_static_invariants.py`)
 These tests inspect the Python Abstract Syntax Tree (AST) of the `recipeboxer/` production package to guarantee architectural invariants:

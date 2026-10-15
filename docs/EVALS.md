@@ -7,14 +7,14 @@ This document specifies the honest benchmarking methodology, corpus tier taxonom
 ## 1. Honesty Rules & Remediation Context
 
 ### 1.1 The October 2026 Audit Findings
-Prior to the remediation initiative, an internal audit ([`_agents/remediation/REMEDIATION_PLAN.md`](file:///storage/emulated/10/AntiGravity/Workspaces/recipeboxer/_agents/remediation/REMEDIATION_PLAN.md) §2) uncovered severe evaluation cheats and answer-key leaks:
+Prior to the remediation initiative, an internal audit ([`_agents/remediation/REMEDIATION_PLAN.md`](../../../../../../storage/emulated/10/AntiGravity/Workspaces/recipeboxer/_agents/remediation/REMEDIATION_PLAN.md) §2) uncovered severe evaluation cheats and answer-key leaks:
 - **Direct Manifest Lookups**: `extractor.py:125-193`, `semantic.py:48-71`, and `router.py:35-58` checked image SHA-256 hashes against `manifest.json`, returning pre-computed recipe text and cluster assignments without executing models.
 - **Filename Semantics**: `fingerprint.py:253-379` and `heuristics.py:512-567` inspected card filenames for tokens (`front`, `back`, `card1`, category codes), synthesizing card roles, rulings, ink colors, and continuation links from filename strings.
 - **Canned Recipe Fallbacks**: `extractor.py:773-901` hardcoded full recipe outputs (cinnamon rolls, lemon bars, fudge, pecan pie) on missing keys or failures.
 - **Harness Leaks**: The legacy harness preserved original image SHA-256 hashes across obfuscation, passed ground-truth attributes directly to the System Under Test (SUT), maintained a global de-obfuscation registry, and defaulted to an offline mock judge returning 4.96 / 5.0.
 
 ### 1.2 The Non-Negotiable Honesty Invariants
-To guarantee all reported scores reflect genuine machine intelligence from pixels to predictions, six non-negotiable invariants are enforced across the codebase ([`_agents/INVARIANTS.md`](file:///storage/emulated/10/AntiGravity/Workspaces/recipeboxer/_agents/INVARIANTS.md) §10):
+To guarantee all reported scores reflect genuine machine intelligence from pixels to predictions, six non-negotiable invariants are enforced across the codebase ([`_agents/INVARIANTS.md`](../../../../../../storage/emulated/10/AntiGravity/Workspaces/recipeboxer/_agents/INVARIANTS.md) §10):
 1. **INV-AC1 (No Answer Key)**: Production code under `recipeboxer/` cannot read evaluation directories (`evals/`, `tests/`), manifests, vault files, or age decryption keys.
 2. **INV-AC2 (No Filename Meaning)**: Filenames and card IDs are strictly opaque identifiers (`secrets.token_hex(6)`). No token, keyword, or regex heuristics are permitted.
 3. **INV-AC3 (No Corpus Content)**: No ground-truth titles, distinctive phrases, or fixture hashes exist as literals in production code.
@@ -40,7 +40,7 @@ The evaluation corpora are divided into five distinct tiers balancing developer 
 
 ## 3. Black-Box Harness & Audit Hook
 
-The evaluation harness ([`evals/harness/run.py`](file:///storage/emulated/10/AntiGravity/Workspaces/recipeboxer/evals/harness/run.py)) executes the production CLI entry point (`recipeboxer analyze --input DIR --out FILE --auto-approve`) in strict isolation:
+The evaluation harness ([`evals/harness/run.py`](../../../../../../storage/emulated/10/AntiGravity/Workspaces/recipeboxer/evals/harness/run.py)) executes the production CLI entry point (`recipeboxer analyze --input DIR --out FILE --auto-approve`) in strict isolation:
 
 ```
                   ┌──────────────────────────────────────────────┐
@@ -94,7 +94,7 @@ At process initialization, `sut_boot.py` installs a Python runtime audit hook (`
 
 ### 4.1 Cryptographic Storage (`evals/vault.py`)
 - Ground truth for tiers T1–T4 is stored strictly encrypted with **`age`** (via `pyrage`).
-- The vault uses multi-recipient encryption keyed to maintainer and CI public keys listed in [`evals/vault/recipients.txt`](file:///storage/emulated/10/AntiGravity/Workspaces/recipeboxer/evals/vault/recipients.txt).
+- The vault uses multi-recipient encryption keyed to maintainer and CI public keys listed in [`evals/vault/recipients.txt`](../../../../../../storage/emulated/10/AntiGravity/Workspaces/recipeboxer/evals/vault/recipients.txt).
 - Private age identity keys are stored outside the repository workspace (default: `~/.config/recipeboxer/age.key` or `RB_EVAL_AGE_KEY_FILE`).
 - `evals/vault.py` enforces stack-frame inspection refusing to run if imported by `recipeboxer.*`.
 
@@ -109,7 +109,7 @@ For full details on CI secrets, maintainer setup, and contributor workflows, ref
 
 ## 5. Scoring Protocols & Metric Taxonomy
 
-Scoring is executed by the standalone scorer CLI ([`evals/score.py`](file:///storage/emulated/10/AntiGravity/Workspaces/recipeboxer/evals/score.py)):
+Scoring is executed by the standalone scorer CLI ([`evals/score.py`](../../../../../../storage/emulated/10/AntiGravity/Workspaces/recipeboxer/evals/score.py)):
 
 ```bash
 python -m evals.score \
@@ -129,7 +129,7 @@ python -m evals.score \
 - **False-Merge Rate & False-Split Rate**: Error diagnostics tracking improper merging of distinct recipes versus improper splitting of multi-card sets.
 
 ### 5.2 Extraction Metrics (`evals/metrics/extraction.py`)
-Predictions are Hungarian-matched to ground-truth recipes based on card-overlap Intersection over Union (IoU):
+Predictions are Hungarian-matched to ground-truth recipes based on card-overlap Intersection over Union (IoU) and content similarity:
 - **Title CER**: Character Error Rate between predicted and gold titles.
 - **Ingredient Precision, Recall & F1**: Line-level Hungarian matching requiring Character Error Rate $\le 0.10$.
 - **Quantity & Unit Exact Match**: Precision on parsed numerical quantities and units.
@@ -137,6 +137,12 @@ Predictions are Hungarian-matched to ground-truth recipes based on card-overlap 
 - **Hallucination & Omission Rates**: Measures unsupported recipe content vs unextracted gold content.
 - **Illegible Precision**: Accuracy of `[illegible: reason]` markers when transcribing damaged text.
 - **Confidence Calibration (ECE)**: Expected Calibration Error across 10 bins comparing the SUT's `recipes[].confidence` to correctness (matched recipe with content similarity >= 0.5 AND ingredient F1 >= 0.7). See §5.5.
+
+#### Matched-Only vs. End-to-End Metric Populations
+The scorer reports extraction metrics under two distinct scopes:
+- **Matched-Only (`extraction_matched_only`)**: Evaluates extraction quality strictly on predicted recipes that successfully match a ground-truth recipe. Unmatched predictions (grouping split fragments or hallucinations) and omitted gold recipes are excluded from per-field means. This isolates transcription/structuring fidelity from grouping errors.
+- **End-to-End (`extraction_end_to_end`)**: Evaluates entire pipeline performance from pixels to recipes. Omitted gold recipes are scored with zero precision/recall and 1.0 omission rate; unmatched predicted recipes count as hallucinations. This captures the complete user-facing accuracy including grouping splits and merges.
+
 
 ### 5.3 Operational & LLM Judge Metrics
 - **Operational Metrics (`evals/metrics/ops.py`)**: Total HTTP calls, token consumption (input, output, reasoning), latency percentiles, stage-level failures, and total USD spend calculated from `recipeboxer/data/pricing.toml`.
@@ -218,28 +224,55 @@ All pricing verified as of 2026-10-14 against Google AI Studio Standard paid tie
 
 ### 7.1 Pre-Remediation vs. Certified Honest Baseline (`honest_v0`)
 
-| Metric Category | Metric | Contaminated Baseline<br>([`pre_remediation.json`](file:///storage/emulated/10/AntiGravity/Workspaces/recipeboxer/evals/baselines/pre_remediation.json)) | Gate A Honest Baseline<br>([`honest_v0.json`](file:///storage/emulated/10/AntiGravity/Workspaces/recipeboxer/evals/baselines/honest_v0.json)) | Post-Uplift Target<br>(Gate B / `honest_v1`) |
+| Metric Category | Metric | Contaminated Baseline<br>([`pre_remediation.json`](../../../../../../storage/emulated/10/AntiGravity/Workspaces/recipeboxer/evals/baselines/pre_remediation.json)) | Gate A Honest Baseline<br>([`honest_v0.json`](../../../../../../storage/emulated/10/AntiGravity/Workspaces/recipeboxer/evals/baselines/honest_v0.json)) | Gate B Honest Baseline<br>([`honest_v1.json`](../../../../../../storage/emulated/10/AntiGravity/Workspaces/recipeboxer/evals/baselines/honest_v1.json)) |
 |---|---|:---:|:---:|:---:|
 | **Integrity** | Status | **CONTAMINATED** (Cheats active) | **HONEST** (Cheats removed) | **HONEST** (Pipeline uplifted) |
-| **Grouping** | B-Cubed F1 | `1.0000` *(Fake)* | `0.8040` (T1 mean) | *TBD after honest_v1* |
-| | Exact Cluster Acc | `1.0000` *(Fake)* | `0.4722` (T1 mean) | *TBD after honest_v1* |
-| | Order Kendall $\tau$ | `1.0000` *(Fake)* | `0.6000` (T1 mean) | *TBD after honest_v1* |
-| | False Merge Rate | `0.0000` *(Fake)* | `0.0181` (T1 mean) | *TBD after honest_v1* |
-| | False Split Rate | `0.0000` *(Fake)* | `0.5763` (T1 mean) | *TBD after honest_v1* |
-| **Extraction** | Title CER | `0.0000` *(Canned recipes)* | `0.7861` (T1 mean) | *TBD after honest_v1* |
-| | Ingredient F1 | `1.0000` *(Canned recipes)* | `0.4673` (T1 mean) | *TBD after honest_v1* |
-| | Quantity/Unit Exact | `1.0000` *(Canned recipes)* | `0.4824` (T1 mean) | *TBD after honest_v1* |
-| | Direction F1 | `1.0000` *(Canned recipes)* | `0.4622` (T1 mean) | *TBD after honest_v1* |
-| | Direction Order $\tau$| `1.0000` *(Canned recipes)* | `1.0000` (T1 mean) | *TBD after honest_v1* |
-| | Hallucination Rate | `0.0000` *(Canned recipes)* | `0.3266` (T1 mean) | *TBD after honest_v1* |
-| | Omission Rate | `0.0000` *(Canned recipes)* | `0.3336` (T1 mean) | *TBD after honest_v1* |
-| **Operations** | T1 HTTP Calls | ~48 *(Direct returns)* | 759 calls (d01–d03) | *TBD after honest_v1* |
-| | T1 Wall Time | 0.10s *(Instant cache)* | 4,584s (d01–d03) | *TBD after honest_v1* |
+| **Grouping** | B-Cubed F1 | `1.0000` *(Fake)* | `0.8040` (T1 d01–d03) | `0.9791` (T1 d01–d03) / `0.8264` (d04) |
+| | Exact Cluster Acc | `1.0000` *(Fake)* | `0.4722` (T1 d01–d03) | `0.9389` (T1 d01–d03) / `0.5448` (d04) |
+| | Order Kendall $\tau$ | `1.0000` *(Fake)* | `0.6000` (T1 d01–d03) | `1.0000` (T1 d01–d03) / `1.0000` (d04) |
+| | False Merge Rate | `0.0000` *(Fake)* | `0.0181` (T1 d01–d03) | `0.0000` (T1 d01–d03) / `0.0000` (d04) |
+| | False Split Rate | `0.0000` *(Fake)* | `0.5763` (T1 d01–d03) | `0.0939` (T1 d01–d03) / `0.5664` (d04) |
+| **Extraction** | Title CER | `0.0000` *(Canned recipes)* | `0.1407` (T1 d01–d03) | `0.0000` (T1 d01–d03) / `0.0753` (d04) |
+| | Ingredient F1 | `1.0000` *(Canned recipes)* | `0.6168` (T1 d01–d03 e2e) | `0.8818` (T1 d01–d03 e2e) / `0.7285` (d04 e2e) |
+| | Quantity/Unit Exact | `1.0000` *(Canned recipes)* | `0.6620` (T1 d01–d03 e2e) | `0.8215` (T1 d01–d03) / `0.7780` (d04) |
+| | Direction F1 | `1.0000` *(Canned recipes)* | `0.6232` (T1 d01–d03 e2e) | `0.8356` (T1 d01–d03 e2e) / `0.8179` (d04 e2e) |
+| | Direction Order $\tau$| `1.0000` *(Canned recipes)* | `1.0000` (T1 d01–d03) | `1.0000` (T1 d01–d03) / `1.0000` (d04) |
+| | Hallucination Rate | `0.0000` *(Canned recipes)* | `0.1578` (T1 d01–d03 e2e) | `0.0605` (T1 d01–d03 e2e) / `0.0559` (d04 e2e) |
+| | Omission Rate | `0.0000` *(Canned recipes)* | `0.4237` (T1 d01–d03 e2e) | `0.1849` (T1 d01–d03 e2e) / `0.2933` (d04 e2e) |
+| **Operations** | T1 HTTP Calls | ~48 *(Direct returns)* | 759 calls (d01–d03) | 195 calls (d01–d03) / 1,086 calls (d04) |
+| | T1 USD Spend | $0.00 *(Instant cache)* | n/a (no ledger) | $1.49 (d01–d03) / $8.34 (d04) |
 
-### 7.2 Concurrent Work Packages: WP-SV & WP-M1
-- **WP-SV (Scorer Updates)**: Enhances `evals/score.py` and `evals/scoring/**` with hierarchical metric aggregation, robustness against missing fields, Kendall $\tau$ tie-handling normalization, and strict regression enforcement.
-- **WP-M1 (Model Defaults & Calibration)**: Updates default models in `recipeboxer/config.py` to match verified priced models in `pricing.toml` and calibrates thinking configurations.
-- **Honest v1 Milestone (`honest_v1.json`)**: When Gate B benchmarks run with the newly integrated `GroupingEngine`, `ExtractionPipeline`, and model defaults, official Gate B numbers will replace the placeholder markers above. All performance metrics marked as **`TBD after honest_v1`** will be certified at that gate.
+### 7.2 Gate A (`honest_v0`) vs. Gate B (`honest_v1`) Comprehensive Comparison
+
+The following table summarizes pipeline progression across all evaluated tiers. T1 (d01–d03) and T3 were evaluated in both `honest_v0` and `honest_v1`. The 319-card homogeneous deck `d04` and Tier T2 (held-out) were evaluated only in `honest_v1` (`d04` was omitted from `honest_v0` due to pre-uplift $O(N^2)$ LLM verification; T2 was held out until Gate B).
+
+| Metric | T1: d01–d03 (v0) | T1: d01–d03 (v1) | T1: d04 (v1 only) | T2 Held-Out (v1 only) | T3 Real-Web (v0) | T3 Real-Web (v1) |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|
+| **Grouping B-Cubed F1** | `0.8040` | `0.9791` | `0.8264` | `0.9210` | `0.9315` | `0.9419` |
+| **False Split Rate** | `0.5763` | `0.0939` | `0.5664` | `0.3348` | `0.0000` | `1.0000` |
+| **False Merge Rate** | `0.0181` | `0.0000` | `0.0000` | `0.0000` | `0.0123` | `0.0000` |
+| **Ingredient F1 (e2e)** | `0.6168` | `0.8818` | `0.7285` | `0.8394` | `0.4695` | `0.6279` |
+| *Ingredient F1 (matched-only)* | *0.6355* | *0.8818* | *0.7285* | *0.8394* | *0.4098* | *0.7475* |
+| **Direction F1 (e2e)** | `0.6232` | `0.8356` | `0.8179` | `0.8221` | `0.4597` | `0.5102` |
+| *Direction F1 (matched-only)* | *0.6421* | *0.8356* | *0.8179* | *0.8221* | *0.3924* | *0.6073* |
+| **Hallucination Rate (e2e)** | `0.1578` | `0.0605` | `0.0559` | `0.0644` | `0.3264` | `0.1956` |
+| **Omission Rate (e2e)** | `0.4237` | `0.1849` | `0.2933` | `0.2018` | `0.8042` | `0.4546` |
+| **ECE (`ece_all`)** | `0.3940` | `0.1499` | `0.0487` | `0.1377` | `0.0000`* | `0.2844` |
+| *ECE (`ece_matched` diagnostic)* | *0.3940* | *0.1541* | *0.0420* | *0.1560* | *0.0000** | *0.3386* |
+| **HTTP Calls** | 759 | 195 | 1,086 | 225 | 224 | 117 |
+| **Total Spend (USD)** | n/a (no ledger) | $1.49 | $8.34 | $1.54 | n/a (no ledger) | $1.16 |
+
+\* *In `honest_v0`, T3 reported ECE 0.0000 because pre-uplift code emitted no recipe confidences, which scored trivially before WP-RT3FIX introduced `confidence_coverage` and uncalibrated fallback tracking.*
+
+> [!NOTE]
+> **Matched-Only vs. End-to-End Metrics**: End-to-end (e2e) metrics evaluate the complete system output from raw images to final extracted recipes, treating missing recipes as zero-score omissions and false clusters as hallucinations. Matched-only metrics isolate transcription and formatting accuracy strictly on recipes whose card groupings were correctly identified.
+> 
+> **`ece_all` vs. `ece_matched`**: `ece_all` is the headline calibration metric; it evaluates all predicted recipes carrying a confidence score, counting unmatched recipes as incorrect ($0\%$ accuracy). `ece_matched` evaluates only predictions that matched ground truth, providing an internal diagnostic of model probability calibration on correct card groupings.
+
+### 7.3 Gate Status
+- **Gate A (`honest_v0.json`)**: passed 2026-10-15. Baseline on pre-uplift code with the eval cheats removed.
+- **Gate B (`honest_v1.json`)**: passed 2026-10-15 after Red-Team #3 findings were fixed (WP-RT3FIX). Versus `honest_v0`, grouping and extraction improved on T1 d01–d03 and T3 (see §7.2); `d04` (319 cards) now completes with ~O(N·k) calls. T2 has no `honest_v0` comparison. Caveats: UP4 received aggregate T3 feedback, so T3 is no longer fully held out (T2 is the cleanest held-out tier); large same-stock decks still have a high false-split rate (d04 0.57) and T3 calibration is weak (`ece_all` 0.28). See `docs/ROADMAP.md`.
+
 
 ---
 
@@ -255,10 +288,10 @@ All pricing verified as of 2026-10-14 against Google AI Studio Standard paid tie
 - **Ground Truth Construction**:
   - Verbatim text is derived directly from human volunteer transcriptions (trusted).
   - Structured ground truth is drafted text-only (never from the card image) using an independent model tier.
-  - Maintainers spot-check ~20% of structured ground truth via [`evals/curation_t3/spotcheck.py`](file:///storage/emulated/10/AntiGravity/Workspaces/recipeboxer/evals/curation_t3/spotcheck.py).
+  - Maintainers spot-check ~20% of structured ground truth via [`evals/curation_t3/spotcheck.py`](../../../../../../storage/emulated/10/AntiGravity/Workspaces/recipeboxer/evals/curation_t3/spotcheck.py).
 
 ### 8.2 Tier T4 (Real-User) Photo Intake Plan
-Tier 4 incorporates personal recipe collections. Follow the intake guide in [**`evals/INTAKE.md`**](file:///storage/emulated/10/AntiGravity/Workspaces/recipeboxer/evals/INTAKE.md):
+Tier 4 incorporates personal recipe collections. Follow the intake guide in [**`evals/INTAKE.md`**](../../../../../../storage/emulated/10/AntiGravity/Workspaces/recipeboxer/evals/INTAKE.md):
 - **Photo Recommendations**: 10–20 recipes, at least 5 multi-card sets. Shoot in natural kitchen lighting in sequential camera-roll order.
-- **Privacy Stripping**: The intake tool ([`evals/intake_real.py`](file:///storage/emulated/10/AntiGravity/Workspaces/recipeboxer/evals/intake_real.py)) permanently strips GPS coordinates and device serial numbers while preserving `DateTimeOriginal` for capture sequence evaluation. Images are assigned opaque random 12-hex IDs.
+- **Privacy Stripping**: The intake tool ([`evals/intake_real.py`](../../../../../../storage/emulated/10/AntiGravity/Workspaces/recipeboxer/evals/intake_real.py)) permanently strips GPS coordinates and device serial numbers while preserving `DateTimeOriginal` for capture sequence evaluation. Images are assigned opaque random 12-hex IDs.
 - **Paid API Key Recommendation**: For personal or family recipe cards, **use a paid Gemini API key with a spend cap** in Google AI Studio. Google's terms for free-tier API usage permit user inputs to be used for model training; paid tier usage generally does not.

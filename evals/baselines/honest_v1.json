@@ -1,0 +1,2226 @@
+{
+  "schema": "rb-baseline/1",
+  "name": "honest_v1",
+  "created": "2026-10-15",
+  "description": "Gate B honest baseline: remediated + uplifted pipeline (WP-UP2/UP3/UP4) run black-box through the evals harness, Balanced profile. Calibration/link models fitted only on fresh cardforge decks and public-domain OPenn pages (never T1-T4). Note: UP4 received aggregate T3 feedback, so T3 is no longer fully held out; T2 is the cleanest held-out tier.",
+  "sut_commit": "6590f32 (WP-UP4)",
+  "scorer_commit": "f020add (WP-RT3FIX: ece = ece_all over all predictions; ece_matched diagnostic)",
+  "profile": "balanced",
+  "models": {
+    "FINGERPRINT/SET_VERIFY/TRANSCRIBE/STRUCTURE/GROUNDING/REPAIR": "gemini-3.8-flash",
+    "CONSISTENCY": "gemini-3.6-flash"
+  },
+  "variant": "opaque",
+  "ops": {
+    "T1_d01_d03": {
+      "calls": 195,
+      "input_tokens": 635284,
+      "output_tokens": 91978,
+      "usd": 1.4907
+    },
+    "T1_d04": {
+      "calls": 1086,
+      "input_tokens": 4494592,
+      "output_tokens": 453961,
+      "usd": 8.3385
+    },
+    "T2": {
+      "calls": 225,
+      "input_tokens": 687022,
+      "output_tokens": 101675,
+      "usd": 1.5396
+    },
+    "T3": {
+      "calls": 117,
+      "input_tokens": 355570,
+      "output_tokens": 90239,
+      "usd": 1.1568
+    },
+    "note": "usd from per-run ledger cost totals (verified pricing 2026-10-14)"
+  },
+  "outputs_archive": "evals/baselines/honest_v1_outputs.tar.gz.enc (age, vault recipients)",
+  "T1_d01_d03": {
+    "tier": "T1",
+    "status": "ok",
+    "grouping": {
+      "bcubed_p": 1.0,
+      "bcubed_r": 0.9595,
+      "bcubed_f1": 0.9791,
+      "ari": 0.946,
+      "exact_cluster_acc": 0.9389,
+      "order_kendall_tau": 1.0,
+      "order_kendall_tau_n": 3,
+      "standalone_acc": 0.9047,
+      "false_merge_rate": 0.0,
+      "false_split_rate": 0.0939,
+      "n_pred": 12.0,
+      "n_gold": 11.3333
+    },
+    "extraction_matched_only": {
+      "title_cer": {
+        "mean": 0.0,
+        "n": 34
+      },
+      "ingredient_p": {
+        "mean": 0.8848,
+        "n": 34
+      },
+      "ingredient_r": {
+        "mean": 0.8791,
+        "n": 34
+      },
+      "ingredient_f1": {
+        "mean": 0.8818,
+        "n": 34
+      },
+      "qty_unit_exact": {
+        "mean": 0.8215,
+        "n": 34
+      },
+      "direction_f1": {
+        "mean": 0.8356,
+        "n": 34
+      },
+      "direction_tau": {
+        "mean": 1.0,
+        "n": 25
+      },
+      "hallucination_rate": {
+        "mean": 0.0605,
+        "n": 34
+      },
+      "omission_rate": {
+        "mean": 0.1849,
+        "n": 34
+      },
+      "illegible_precision": {
+        "mean": 0.0,
+        "n": 1
+      },
+      "verbatim_cer": {
+        "mean": 0.2983,
+        "n": 34
+      },
+      "schema_invalid": {
+        "mean": 0.0,
+        "n": 34
+      },
+      "content_similarity": {
+        "mean": 0.7306,
+        "n": 34
+      },
+      "faces_count": {
+        "mean": 1.9706,
+        "n": 34
+      },
+      "difficulty": {
+        "mean": null,
+        "n": 0
+      },
+      "field_cer": {
+        "title": {
+          "mean": 0.0,
+          "n": 34
+        },
+        "ingredients": {
+          "mean": 0.0622,
+          "n": 34
+        },
+        "directions": {
+          "mean": 0.1999,
+          "n": 34
+        },
+        "yield": {
+          "mean": 0.3,
+          "n": 34
+        },
+        "source_note": {
+          "mean": 1.0,
+          "n": 34
+        }
+      }
+    },
+    "extraction_end_to_end": {
+      "title_cer": {
+        "mean": 0.0,
+        "n": 34
+      },
+      "ingredient_p": {
+        "mean": 0.8848,
+        "n": 34
+      },
+      "ingredient_r": {
+        "mean": 0.8791,
+        "n": 34
+      },
+      "ingredient_f1": {
+        "mean": 0.8818,
+        "n": 34
+      },
+      "qty_unit_exact": {
+        "mean": 0.8215,
+        "n": 34
+      },
+      "direction_f1": {
+        "mean": 0.8356,
+        "n": 34
+      },
+      "direction_tau": {
+        "mean": 1.0,
+        "n": 25
+      },
+      "hallucination_rate": {
+        "mean": 0.0605,
+        "n": 34
+      },
+      "omission_rate": {
+        "mean": 0.1849,
+        "n": 34
+      },
+      "illegible_precision": {
+        "mean": 0.0,
+        "n": 1
+      },
+      "verbatim_cer": {
+        "mean": 0.2983,
+        "n": 34
+      },
+      "schema_invalid": {
+        "mean": 0.0,
+        "n": 34
+      },
+      "content_similarity": {
+        "mean": 0.7306,
+        "n": 34
+      },
+      "faces_count": {
+        "mean": 1.9706,
+        "n": 34
+      },
+      "difficulty": {
+        "mean": null,
+        "n": 0
+      },
+      "field_cer": {
+        "title": {
+          "mean": 0.0,
+          "n": 34
+        },
+        "ingredients": {
+          "mean": 0.0622,
+          "n": 34
+        },
+        "directions": {
+          "mean": 0.1999,
+          "n": 34
+        },
+        "yield": {
+          "mean": 0.3,
+          "n": 34
+        },
+        "source_note": {
+          "mean": 1.0,
+          "n": 34
+        }
+      }
+    },
+    "extraction_by_deck_type": {
+      "homogeneous": {
+        "title_cer": {
+          "mean": 0.0,
+          "n": 12
+        },
+        "ingredient_p": {
+          "mean": 1.0,
+          "n": 12
+        },
+        "ingredient_r": {
+          "mean": 1.0,
+          "n": 12
+        },
+        "ingredient_f1": {
+          "mean": 1.0,
+          "n": 12
+        },
+        "qty_unit_exact": {
+          "mean": 0.9315,
+          "n": 12
+        },
+        "direction_f1": {
+          "mean": 0.8827,
+          "n": 12
+        },
+        "direction_tau": {
+          "mean": 1.0,
+          "n": 8
+        },
+        "hallucination_rate": {
+          "mean": 0.0,
+          "n": 12
+        },
+        "omission_rate": {
+          "mean": 0.0888,
+          "n": 12
+        },
+        "illegible_precision": {
+          "mean": 0.0,
+          "n": 1
+        },
+        "verbatim_cer": {
+          "mean": 0.243,
+          "n": 12
+        },
+        "schema_invalid": {
+          "mean": 0.0,
+          "n": 12
+        },
+        "content_similarity": {
+          "mean": 0.7674,
+          "n": 12
+        },
+        "faces_count": {
+          "mean": 1.8333,
+          "n": 12
+        },
+        "difficulty": {
+          "mean": null,
+          "n": 0
+        },
+        "field_cer": {
+          "title": {
+            "mean": 0.0,
+            "n": 12
+          },
+          "ingredients": {
+            "mean": 0.0,
+            "n": 12
+          },
+          "directions": {
+            "mean": 0.131,
+            "n": 12
+          },
+          "yield": {
+            "mean": 0.2667,
+            "n": 12
+          },
+          "source_note": {
+            "mean": 1.0,
+            "n": 12
+          }
+        },
+        "metrics": {
+          "title_cer": {
+            "mean": 0.0,
+            "n": 12
+          },
+          "ingredient_p": {
+            "mean": 1.0,
+            "n": 12
+          },
+          "ingredient_r": {
+            "mean": 1.0,
+            "n": 12
+          },
+          "ingredient_f1": {
+            "mean": 1.0,
+            "n": 12
+          },
+          "qty_unit_exact": {
+            "mean": 0.9315,
+            "n": 12
+          },
+          "direction_f1": {
+            "mean": 0.8827,
+            "n": 12
+          },
+          "direction_tau": {
+            "mean": 1.0,
+            "n": 8
+          },
+          "hallucination_rate": {
+            "mean": 0.0,
+            "n": 12
+          },
+          "omission_rate": {
+            "mean": 0.0888,
+            "n": 12
+          },
+          "illegible_precision": {
+            "mean": 0.0,
+            "n": 1
+          },
+          "verbatim_cer": {
+            "mean": 0.243,
+            "n": 12
+          },
+          "schema_invalid": {
+            "mean": 0.0,
+            "n": 12
+          },
+          "content_similarity": {
+            "mean": 0.7674,
+            "n": 12
+          },
+          "faces_count": {
+            "mean": 1.8333,
+            "n": 12
+          },
+          "difficulty": {
+            "mean": null,
+            "n": 0
+          },
+          "field_cer": {
+            "title": {
+              "mean": 0.0,
+              "n": 12
+            },
+            "ingredients": {
+              "mean": 0.0,
+              "n": 12
+            },
+            "directions": {
+              "mean": 0.131,
+              "n": 12
+            },
+            "yield": {
+              "mean": 0.2667,
+              "n": 12
+            },
+            "source_note": {
+              "mean": 1.0,
+              "n": 12
+            }
+          }
+        },
+        "count": 12
+      },
+      "mixed": {
+        "title_cer": {
+          "mean": 0.0,
+          "n": 12
+        },
+        "ingredient_p": {
+          "mean": 0.8671,
+          "n": 12
+        },
+        "ingredient_r": {
+          "mean": 0.8611,
+          "n": 12
+        },
+        "ingredient_f1": {
+          "mean": 0.8639,
+          "n": 12
+        },
+        "qty_unit_exact": {
+          "mean": 0.8086,
+          "n": 12
+        },
+        "direction_f1": {
+          "mean": 0.7236,
+          "n": 12
+        },
+        "direction_tau": {
+          "mean": 1.0,
+          "n": 10
+        },
+        "hallucination_rate": {
+          "mean": 0.0331,
+          "n": 12
+        },
+        "omission_rate": {
+          "mean": 0.2535,
+          "n": 12
+        },
+        "illegible_precision": {
+          "mean": null,
+          "n": 0
+        },
+        "verbatim_cer": {
+          "mean": 0.38,
+          "n": 12
+        },
+        "schema_invalid": {
+          "mean": 0.0,
+          "n": 12
+        },
+        "content_similarity": {
+          "mean": 0.6412,
+          "n": 12
+        },
+        "faces_count": {
+          "mean": 2.1667,
+          "n": 12
+        },
+        "difficulty": {
+          "mean": null,
+          "n": 0
+        },
+        "field_cer": {
+          "title": {
+            "mean": 0.0,
+            "n": 12
+          },
+          "ingredients": {
+            "mean": 0.1067,
+            "n": 12
+          },
+          "directions": {
+            "mean": 0.3187,
+            "n": 12
+          },
+          "yield": {
+            "mean": 0.4167,
+            "n": 12
+          },
+          "source_note": {
+            "mean": 1.0,
+            "n": 12
+          }
+        },
+        "metrics": {
+          "title_cer": {
+            "mean": 0.0,
+            "n": 12
+          },
+          "ingredient_p": {
+            "mean": 0.8671,
+            "n": 12
+          },
+          "ingredient_r": {
+            "mean": 0.8611,
+            "n": 12
+          },
+          "ingredient_f1": {
+            "mean": 0.8639,
+            "n": 12
+          },
+          "qty_unit_exact": {
+            "mean": 0.8086,
+            "n": 12
+          },
+          "direction_f1": {
+            "mean": 0.7236,
+            "n": 12
+          },
+          "direction_tau": {
+            "mean": 1.0,
+            "n": 10
+          },
+          "hallucination_rate": {
+            "mean": 0.0331,
+            "n": 12
+          },
+          "omission_rate": {
+            "mean": 0.2535,
+            "n": 12
+          },
+          "illegible_precision": {
+            "mean": null,
+            "n": 0
+          },
+          "verbatim_cer": {
+            "mean": 0.38,
+            "n": 12
+          },
+          "schema_invalid": {
+            "mean": 0.0,
+            "n": 12
+          },
+          "content_similarity": {
+            "mean": 0.6412,
+            "n": 12
+          },
+          "faces_count": {
+            "mean": 2.1667,
+            "n": 12
+          },
+          "difficulty": {
+            "mean": null,
+            "n": 0
+          },
+          "field_cer": {
+            "title": {
+              "mean": 0.0,
+              "n": 12
+            },
+            "ingredients": {
+              "mean": 0.1067,
+              "n": 12
+            },
+            "directions": {
+              "mean": 0.3187,
+              "n": 12
+            },
+            "yield": {
+              "mean": 0.4167,
+              "n": 12
+            },
+            "source_note": {
+              "mean": 1.0,
+              "n": 12
+            }
+          }
+        },
+        "count": 12
+      },
+      "near_duplicate": {
+        "title_cer": {
+          "mean": 0.0,
+          "n": 10
+        },
+        "ingredient_p": {
+          "mean": 0.768,
+          "n": 10
+        },
+        "ingredient_r": {
+          "mean": 0.7555,
+          "n": 10
+        },
+        "ingredient_f1": {
+          "mean": 0.7613,
+          "n": 10
+        },
+        "qty_unit_exact": {
+          "mean": 0.7047,
+          "n": 10
+        },
+        "direction_f1": {
+          "mean": 0.9133,
+          "n": 10
+        },
+        "direction_tau": {
+          "mean": 1.0,
+          "n": 7
+        },
+        "hallucination_rate": {
+          "mean": 0.166,
+          "n": 10
+        },
+        "omission_rate": {
+          "mean": 0.2179,
+          "n": 10
+        },
+        "illegible_precision": {
+          "mean": null,
+          "n": 0
+        },
+        "verbatim_cer": {
+          "mean": 0.2665,
+          "n": 10
+        },
+        "schema_invalid": {
+          "mean": 0.0,
+          "n": 10
+        },
+        "content_similarity": {
+          "mean": 0.7936,
+          "n": 10
+        },
+        "faces_count": {
+          "mean": 1.9,
+          "n": 10
+        },
+        "difficulty": {
+          "mean": null,
+          "n": 0
+        },
+        "field_cer": {
+          "title": {
+            "mean": 0.0,
+            "n": 10
+          },
+          "ingredients": {
+            "mean": 0.0835,
+            "n": 10
+          },
+          "directions": {
+            "mean": 0.1401,
+            "n": 10
+          },
+          "yield": {
+            "mean": 0.2,
+            "n": 10
+          },
+          "source_note": {
+            "mean": 1.0,
+            "n": 10
+          }
+        },
+        "metrics": {
+          "title_cer": {
+            "mean": 0.0,
+            "n": 10
+          },
+          "ingredient_p": {
+            "mean": 0.768,
+            "n": 10
+          },
+          "ingredient_r": {
+            "mean": 0.7555,
+            "n": 10
+          },
+          "ingredient_f1": {
+            "mean": 0.7613,
+            "n": 10
+          },
+          "qty_unit_exact": {
+            "mean": 0.7047,
+            "n": 10
+          },
+          "direction_f1": {
+            "mean": 0.9133,
+            "n": 10
+          },
+          "direction_tau": {
+            "mean": 1.0,
+            "n": 7
+          },
+          "hallucination_rate": {
+            "mean": 0.166,
+            "n": 10
+          },
+          "omission_rate": {
+            "mean": 0.2179,
+            "n": 10
+          },
+          "illegible_precision": {
+            "mean": null,
+            "n": 0
+          },
+          "verbatim_cer": {
+            "mean": 0.2665,
+            "n": 10
+          },
+          "schema_invalid": {
+            "mean": 0.0,
+            "n": 10
+          },
+          "content_similarity": {
+            "mean": 0.7936,
+            "n": 10
+          },
+          "faces_count": {
+            "mean": 1.9,
+            "n": 10
+          },
+          "difficulty": {
+            "mean": null,
+            "n": 0
+          },
+          "field_cer": {
+            "title": {
+              "mean": 0.0,
+              "n": 10
+            },
+            "ingredients": {
+              "mean": 0.0835,
+              "n": 10
+            },
+            "directions": {
+              "mean": 0.1401,
+              "n": 10
+            },
+            "yield": {
+              "mean": 0.2,
+              "n": 10
+            },
+            "source_note": {
+              "mean": 1.0,
+              "n": 10
+            }
+          }
+        },
+        "count": 10
+      }
+    },
+    "recipe_counts": {
+      "n_matched": 34,
+      "n_unmatched_pred": 2,
+      "n_omitted_gold": 0,
+      "hallucinated_recipe_rate": 0.0556,
+      "omitted_recipe_rate": 0.0
+    },
+    "n_stage_failures": 0,
+    "calibration": {
+      "ece": 0.149914,
+      "ece_all": 0.149914,
+      "ece_matched": 0.154103,
+      "confidence_coverage": 1.0,
+      "n_pred": 36,
+      "n_with_confidence": 36,
+      "n_matched_with_confidence": 34,
+      "accuracy_all": 0.6667,
+      "mean_confidence_all": 0.7695,
+      "definition": "ece/ece_all: all predicted recipes with confidence (unmatched = incorrect); ece_matched: matched predictions only; None confidence = abstention (see confidence_coverage)"
+    }
+  },
+  "T1_d04": {
+    "tier": "T1",
+    "status": "ok",
+    "grouping": {
+      "bcubed_p": 0.9937,
+      "bcubed_r": 0.7073,
+      "bcubed_f1": 0.8264,
+      "ari": 0.6004,
+      "exact_cluster_acc": 0.5448,
+      "order_kendall_tau": 1.0,
+      "order_kendall_tau_n": 1,
+      "standalone_acc": 0.3429,
+      "false_merge_rate": 0.0,
+      "false_split_rate": 0.5664,
+      "n_pred": 224.0,
+      "n_gold": 145.0
+    },
+    "extraction_matched_only": {
+      "title_cer": {
+        "mean": 0.0753,
+        "n": 145
+      },
+      "ingredient_p": {
+        "mean": 0.7641,
+        "n": 145
+      },
+      "ingredient_r": {
+        "mean": 0.7093,
+        "n": 145
+      },
+      "ingredient_f1": {
+        "mean": 0.7285,
+        "n": 145
+      },
+      "qty_unit_exact": {
+        "mean": 0.778,
+        "n": 145
+      },
+      "direction_f1": {
+        "mean": 0.8179,
+        "n": 145
+      },
+      "direction_tau": {
+        "mean": 1.0,
+        "n": 112
+      },
+      "hallucination_rate": {
+        "mean": 0.0559,
+        "n": 145
+      },
+      "omission_rate": {
+        "mean": 0.2933,
+        "n": 145
+      },
+      "illegible_precision": {
+        "mean": 0.0,
+        "n": 2
+      },
+      "verbatim_cer": {
+        "mean": 0.3451,
+        "n": 145
+      },
+      "schema_invalid": {
+        "mean": 0.0,
+        "n": 145
+      },
+      "content_similarity": {
+        "mean": 0.7098,
+        "n": 145
+      },
+      "faces_count": {
+        "mean": 2.2,
+        "n": 145
+      },
+      "difficulty": {
+        "mean": null,
+        "n": 0
+      },
+      "field_cer": {
+        "title": {
+          "mean": 0.0753,
+          "n": 145
+        },
+        "ingredients": {
+          "mean": 0.2453,
+          "n": 145
+        },
+        "directions": {
+          "mean": 0.2083,
+          "n": 145
+        },
+        "yield": {
+          "mean": 0.3545,
+          "n": 145
+        },
+        "source_note": {
+          "mean": 1.0,
+          "n": 145
+        }
+      }
+    },
+    "extraction_end_to_end": {
+      "title_cer": {
+        "mean": 0.0753,
+        "n": 145
+      },
+      "ingredient_p": {
+        "mean": 0.7641,
+        "n": 145
+      },
+      "ingredient_r": {
+        "mean": 0.7093,
+        "n": 145
+      },
+      "ingredient_f1": {
+        "mean": 0.7285,
+        "n": 145
+      },
+      "qty_unit_exact": {
+        "mean": 0.778,
+        "n": 145
+      },
+      "direction_f1": {
+        "mean": 0.8179,
+        "n": 145
+      },
+      "direction_tau": {
+        "mean": 1.0,
+        "n": 112
+      },
+      "hallucination_rate": {
+        "mean": 0.0559,
+        "n": 145
+      },
+      "omission_rate": {
+        "mean": 0.2933,
+        "n": 145
+      },
+      "illegible_precision": {
+        "mean": 0.0,
+        "n": 2
+      },
+      "verbatim_cer": {
+        "mean": 0.3451,
+        "n": 145
+      },
+      "schema_invalid": {
+        "mean": 0.0,
+        "n": 145
+      },
+      "content_similarity": {
+        "mean": 0.7098,
+        "n": 145
+      },
+      "faces_count": {
+        "mean": 2.2,
+        "n": 145
+      },
+      "difficulty": {
+        "mean": null,
+        "n": 0
+      },
+      "field_cer": {
+        "title": {
+          "mean": 0.0753,
+          "n": 145
+        },
+        "ingredients": {
+          "mean": 0.2453,
+          "n": 145
+        },
+        "directions": {
+          "mean": 0.2083,
+          "n": 145
+        },
+        "yield": {
+          "mean": 0.3545,
+          "n": 145
+        },
+        "source_note": {
+          "mean": 1.0,
+          "n": 145
+        }
+      }
+    },
+    "extraction_by_deck_type": {
+      "large": {
+        "title_cer": {
+          "mean": 0.0753,
+          "n": 145
+        },
+        "ingredient_p": {
+          "mean": 0.7641,
+          "n": 145
+        },
+        "ingredient_r": {
+          "mean": 0.7093,
+          "n": 145
+        },
+        "ingredient_f1": {
+          "mean": 0.7285,
+          "n": 145
+        },
+        "qty_unit_exact": {
+          "mean": 0.778,
+          "n": 145
+        },
+        "direction_f1": {
+          "mean": 0.8179,
+          "n": 145
+        },
+        "direction_tau": {
+          "mean": 1.0,
+          "n": 112
+        },
+        "hallucination_rate": {
+          "mean": 0.0559,
+          "n": 145
+        },
+        "omission_rate": {
+          "mean": 0.2933,
+          "n": 145
+        },
+        "illegible_precision": {
+          "mean": 0.0,
+          "n": 2
+        },
+        "verbatim_cer": {
+          "mean": 0.3451,
+          "n": 145
+        },
+        "schema_invalid": {
+          "mean": 0.0,
+          "n": 145
+        },
+        "content_similarity": {
+          "mean": 0.7098,
+          "n": 145
+        },
+        "faces_count": {
+          "mean": 2.2,
+          "n": 145
+        },
+        "difficulty": {
+          "mean": null,
+          "n": 0
+        },
+        "field_cer": {
+          "title": {
+            "mean": 0.0753,
+            "n": 145
+          },
+          "ingredients": {
+            "mean": 0.2453,
+            "n": 145
+          },
+          "directions": {
+            "mean": 0.2083,
+            "n": 145
+          },
+          "yield": {
+            "mean": 0.3545,
+            "n": 145
+          },
+          "source_note": {
+            "mean": 1.0,
+            "n": 145
+          }
+        },
+        "metrics": {
+          "title_cer": {
+            "mean": 0.0753,
+            "n": 145
+          },
+          "ingredient_p": {
+            "mean": 0.7641,
+            "n": 145
+          },
+          "ingredient_r": {
+            "mean": 0.7093,
+            "n": 145
+          },
+          "ingredient_f1": {
+            "mean": 0.7285,
+            "n": 145
+          },
+          "qty_unit_exact": {
+            "mean": 0.778,
+            "n": 145
+          },
+          "direction_f1": {
+            "mean": 0.8179,
+            "n": 145
+          },
+          "direction_tau": {
+            "mean": 1.0,
+            "n": 112
+          },
+          "hallucination_rate": {
+            "mean": 0.0559,
+            "n": 145
+          },
+          "omission_rate": {
+            "mean": 0.2933,
+            "n": 145
+          },
+          "illegible_precision": {
+            "mean": 0.0,
+            "n": 2
+          },
+          "verbatim_cer": {
+            "mean": 0.3451,
+            "n": 145
+          },
+          "schema_invalid": {
+            "mean": 0.0,
+            "n": 145
+          },
+          "content_similarity": {
+            "mean": 0.7098,
+            "n": 145
+          },
+          "faces_count": {
+            "mean": 2.2,
+            "n": 145
+          },
+          "difficulty": {
+            "mean": null,
+            "n": 0
+          },
+          "field_cer": {
+            "title": {
+              "mean": 0.0753,
+              "n": 145
+            },
+            "ingredients": {
+              "mean": 0.2453,
+              "n": 145
+            },
+            "directions": {
+              "mean": 0.2083,
+              "n": 145
+            },
+            "yield": {
+              "mean": 0.3545,
+              "n": 145
+            },
+            "source_note": {
+              "mean": 1.0,
+              "n": 145
+            }
+          }
+        },
+        "count": 145
+      }
+    },
+    "recipe_counts": {
+      "n_matched": 145,
+      "n_unmatched_pred": 79,
+      "n_omitted_gold": 0,
+      "hallucinated_recipe_rate": 0.3527,
+      "omitted_recipe_rate": 0.0
+    },
+    "n_stage_failures": 0,
+    "calibration": {
+      "ece": 0.048727,
+      "ece_all": 0.048727,
+      "ece_matched": 0.041998,
+      "confidence_coverage": 1.0,
+      "n_pred": 224,
+      "n_with_confidence": 224,
+      "n_matched_with_confidence": 145,
+      "accuracy_all": 0.4241,
+      "mean_confidence_all": 0.4728,
+      "definition": "ece/ece_all: all predicted recipes with confidence (unmatched = incorrect); ece_matched: matched predictions only; None confidence = abstention (see confidence_coverage)"
+    }
+  },
+  "T2": {
+    "tier": "T2",
+    "status": "ok",
+    "grouping": {
+      "bcubed_p": 1.0,
+      "bcubed_r": 0.8589,
+      "bcubed_f1": 0.921,
+      "ari": 0.7598,
+      "exact_cluster_acc": 0.8278,
+      "order_kendall_tau": 1.0,
+      "order_kendall_tau_n": 3,
+      "standalone_acc": 0.6204,
+      "false_merge_rate": 0.0,
+      "false_split_rate": 0.3348,
+      "n_pred": 14.3333,
+      "n_gold": 11.3333
+    },
+    "extraction_matched_only": {
+      "title_cer": {
+        "mean": 0.0308,
+        "n": 34
+      },
+      "ingredient_p": {
+        "mean": 0.8511,
+        "n": 34
+      },
+      "ingredient_r": {
+        "mean": 0.8343,
+        "n": 34
+      },
+      "ingredient_f1": {
+        "mean": 0.8394,
+        "n": 34
+      },
+      "qty_unit_exact": {
+        "mean": 0.8583,
+        "n": 34
+      },
+      "direction_f1": {
+        "mean": 0.8221,
+        "n": 34
+      },
+      "direction_tau": {
+        "mean": 1.0,
+        "n": 30
+      },
+      "hallucination_rate": {
+        "mean": 0.0644,
+        "n": 34
+      },
+      "omission_rate": {
+        "mean": 0.2018,
+        "n": 34
+      },
+      "illegible_precision": {
+        "mean": null,
+        "n": 0
+      },
+      "verbatim_cer": {
+        "mean": 0.3321,
+        "n": 34
+      },
+      "schema_invalid": {
+        "mean": 0.0,
+        "n": 34
+      },
+      "content_similarity": {
+        "mean": 0.7274,
+        "n": 34
+      },
+      "faces_count": {
+        "mean": 2.0882,
+        "n": 34
+      },
+      "difficulty": {
+        "mean": null,
+        "n": 0
+      },
+      "field_cer": {
+        "title": {
+          "mean": 0.0308,
+          "n": 34
+        },
+        "ingredients": {
+          "mean": 0.1197,
+          "n": 34
+        },
+        "directions": {
+          "mean": 0.2278,
+          "n": 34
+        },
+        "yield": {
+          "mean": 0.3,
+          "n": 34
+        },
+        "source_note": {
+          "mean": 1.0,
+          "n": 34
+        }
+      }
+    },
+    "extraction_end_to_end": {
+      "title_cer": {
+        "mean": 0.0308,
+        "n": 34
+      },
+      "ingredient_p": {
+        "mean": 0.8511,
+        "n": 34
+      },
+      "ingredient_r": {
+        "mean": 0.8343,
+        "n": 34
+      },
+      "ingredient_f1": {
+        "mean": 0.8394,
+        "n": 34
+      },
+      "qty_unit_exact": {
+        "mean": 0.8583,
+        "n": 34
+      },
+      "direction_f1": {
+        "mean": 0.8221,
+        "n": 34
+      },
+      "direction_tau": {
+        "mean": 1.0,
+        "n": 30
+      },
+      "hallucination_rate": {
+        "mean": 0.0644,
+        "n": 34
+      },
+      "omission_rate": {
+        "mean": 0.2018,
+        "n": 34
+      },
+      "illegible_precision": {
+        "mean": null,
+        "n": 0
+      },
+      "verbatim_cer": {
+        "mean": 0.3321,
+        "n": 34
+      },
+      "schema_invalid": {
+        "mean": 0.0,
+        "n": 34
+      },
+      "content_similarity": {
+        "mean": 0.7274,
+        "n": 34
+      },
+      "faces_count": {
+        "mean": 2.0882,
+        "n": 34
+      },
+      "difficulty": {
+        "mean": null,
+        "n": 0
+      },
+      "field_cer": {
+        "title": {
+          "mean": 0.0308,
+          "n": 34
+        },
+        "ingredients": {
+          "mean": 0.1197,
+          "n": 34
+        },
+        "directions": {
+          "mean": 0.2278,
+          "n": 34
+        },
+        "yield": {
+          "mean": 0.3,
+          "n": 34
+        },
+        "source_note": {
+          "mean": 1.0,
+          "n": 34
+        }
+      }
+    },
+    "extraction_by_deck_type": {
+      "homogeneous": {
+        "title_cer": {
+          "mean": 0.0833,
+          "n": 12
+        },
+        "ingredient_p": {
+          "mean": 0.7381,
+          "n": 12
+        },
+        "ingredient_r": {
+          "mean": 0.6905,
+          "n": 12
+        },
+        "ingredient_f1": {
+          "mean": 0.7048,
+          "n": 12
+        },
+        "qty_unit_exact": {
+          "mean": 0.7361,
+          "n": 12
+        },
+        "direction_f1": {
+          "mean": 0.8962,
+          "n": 12
+        },
+        "direction_tau": {
+          "mean": 1.0,
+          "n": 12
+        },
+        "hallucination_rate": {
+          "mean": 0.0492,
+          "n": 12
+        },
+        "omission_rate": {
+          "mean": 0.2391,
+          "n": 12
+        },
+        "illegible_precision": {
+          "mean": null,
+          "n": 0
+        },
+        "verbatim_cer": {
+          "mean": 0.3476,
+          "n": 12
+        },
+        "schema_invalid": {
+          "mean": 0.0,
+          "n": 12
+        },
+        "content_similarity": {
+          "mean": 0.7613,
+          "n": 12
+        },
+        "faces_count": {
+          "mean": 1.8333,
+          "n": 12
+        },
+        "difficulty": {
+          "mean": null,
+          "n": 0
+        },
+        "field_cer": {
+          "title": {
+            "mean": 0.0833,
+            "n": 12
+          },
+          "ingredients": {
+            "mean": 0.2863,
+            "n": 12
+          },
+          "directions": {
+            "mean": 0.1688,
+            "n": 12
+          },
+          "yield": {
+            "mean": 0.15,
+            "n": 12
+          },
+          "source_note": {
+            "mean": 1.0,
+            "n": 12
+          }
+        },
+        "metrics": {
+          "title_cer": {
+            "mean": 0.0833,
+            "n": 12
+          },
+          "ingredient_p": {
+            "mean": 0.7381,
+            "n": 12
+          },
+          "ingredient_r": {
+            "mean": 0.6905,
+            "n": 12
+          },
+          "ingredient_f1": {
+            "mean": 0.7048,
+            "n": 12
+          },
+          "qty_unit_exact": {
+            "mean": 0.7361,
+            "n": 12
+          },
+          "direction_f1": {
+            "mean": 0.8962,
+            "n": 12
+          },
+          "direction_tau": {
+            "mean": 1.0,
+            "n": 12
+          },
+          "hallucination_rate": {
+            "mean": 0.0492,
+            "n": 12
+          },
+          "omission_rate": {
+            "mean": 0.2391,
+            "n": 12
+          },
+          "illegible_precision": {
+            "mean": null,
+            "n": 0
+          },
+          "verbatim_cer": {
+            "mean": 0.3476,
+            "n": 12
+          },
+          "schema_invalid": {
+            "mean": 0.0,
+            "n": 12
+          },
+          "content_similarity": {
+            "mean": 0.7613,
+            "n": 12
+          },
+          "faces_count": {
+            "mean": 1.8333,
+            "n": 12
+          },
+          "difficulty": {
+            "mean": null,
+            "n": 0
+          },
+          "field_cer": {
+            "title": {
+              "mean": 0.0833,
+              "n": 12
+            },
+            "ingredients": {
+              "mean": 0.2863,
+              "n": 12
+            },
+            "directions": {
+              "mean": 0.1688,
+              "n": 12
+            },
+            "yield": {
+              "mean": 0.15,
+              "n": 12
+            },
+            "source_note": {
+              "mean": 1.0,
+              "n": 12
+            }
+          }
+        },
+        "count": 12
+      },
+      "mixed": {
+        "title_cer": {
+          "mean": 0.0,
+          "n": 12
+        },
+        "ingredient_p": {
+          "mean": 0.92,
+          "n": 12
+        },
+        "ingredient_r": {
+          "mean": 0.92,
+          "n": 12
+        },
+        "ingredient_f1": {
+          "mean": 0.92,
+          "n": 12
+        },
+        "qty_unit_exact": {
+          "mean": 0.904,
+          "n": 12
+        },
+        "direction_f1": {
+          "mean": 0.7665,
+          "n": 12
+        },
+        "direction_tau": {
+          "mean": 1.0,
+          "n": 10
+        },
+        "hallucination_rate": {
+          "mean": 0.0609,
+          "n": 12
+        },
+        "omission_rate": {
+          "mean": 0.1909,
+          "n": 12
+        },
+        "illegible_precision": {
+          "mean": null,
+          "n": 0
+        },
+        "verbatim_cer": {
+          "mean": 0.3409,
+          "n": 12
+        },
+        "schema_invalid": {
+          "mean": 0.0,
+          "n": 12
+        },
+        "content_similarity": {
+          "mean": 0.6561,
+          "n": 12
+        },
+        "faces_count": {
+          "mean": 2.25,
+          "n": 12
+        },
+        "difficulty": {
+          "mean": null,
+          "n": 0
+        },
+        "field_cer": {
+          "title": {
+            "mean": 0.0,
+            "n": 12
+          },
+          "ingredients": {
+            "mean": 0.0285,
+            "n": 12
+          },
+          "directions": {
+            "mean": 0.2829,
+            "n": 12
+          },
+          "yield": {
+            "mean": 0.4167,
+            "n": 12
+          },
+          "source_note": {
+            "mean": 1.0,
+            "n": 12
+          }
+        },
+        "metrics": {
+          "title_cer": {
+            "mean": 0.0,
+            "n": 12
+          },
+          "ingredient_p": {
+            "mean": 0.92,
+            "n": 12
+          },
+          "ingredient_r": {
+            "mean": 0.92,
+            "n": 12
+          },
+          "ingredient_f1": {
+            "mean": 0.92,
+            "n": 12
+          },
+          "qty_unit_exact": {
+            "mean": 0.904,
+            "n": 12
+          },
+          "direction_f1": {
+            "mean": 0.7665,
+            "n": 12
+          },
+          "direction_tau": {
+            "mean": 1.0,
+            "n": 10
+          },
+          "hallucination_rate": {
+            "mean": 0.0609,
+            "n": 12
+          },
+          "omission_rate": {
+            "mean": 0.1909,
+            "n": 12
+          },
+          "illegible_precision": {
+            "mean": null,
+            "n": 0
+          },
+          "verbatim_cer": {
+            "mean": 0.3409,
+            "n": 12
+          },
+          "schema_invalid": {
+            "mean": 0.0,
+            "n": 12
+          },
+          "content_similarity": {
+            "mean": 0.6561,
+            "n": 12
+          },
+          "faces_count": {
+            "mean": 2.25,
+            "n": 12
+          },
+          "difficulty": {
+            "mean": null,
+            "n": 0
+          },
+          "field_cer": {
+            "title": {
+              "mean": 0.0,
+              "n": 12
+            },
+            "ingredients": {
+              "mean": 0.0285,
+              "n": 12
+            },
+            "directions": {
+              "mean": 0.2829,
+              "n": 12
+            },
+            "yield": {
+              "mean": 0.4167,
+              "n": 12
+            },
+            "source_note": {
+              "mean": 1.0,
+              "n": 12
+            }
+          }
+        },
+        "count": 12
+      },
+      "near_duplicate": {
+        "title_cer": {
+          "mean": 0.0049,
+          "n": 10
+        },
+        "ingredient_p": {
+          "mean": 0.9042,
+          "n": 10
+        },
+        "ingredient_r": {
+          "mean": 0.9042,
+          "n": 10
+        },
+        "ingredient_f1": {
+          "mean": 0.9042,
+          "n": 10
+        },
+        "qty_unit_exact": {
+          "mean": 0.95,
+          "n": 10
+        },
+        "direction_f1": {
+          "mean": 0.8,
+          "n": 10
+        },
+        "direction_tau": {
+          "mean": 1.0,
+          "n": 8
+        },
+        "hallucination_rate": {
+          "mean": 0.0868,
+          "n": 10
+        },
+        "omission_rate": {
+          "mean": 0.1702,
+          "n": 10
+        },
+        "illegible_precision": {
+          "mean": null,
+          "n": 0
+        },
+        "verbatim_cer": {
+          "mean": 0.3029,
+          "n": 10
+        },
+        "schema_invalid": {
+          "mean": 0.0,
+          "n": 10
+        },
+        "content_similarity": {
+          "mean": 0.7723,
+          "n": 10
+        },
+        "faces_count": {
+          "mean": 2.2,
+          "n": 10
+        },
+        "difficulty": {
+          "mean": null,
+          "n": 0
+        },
+        "field_cer": {
+          "title": {
+            "mean": 0.0049,
+            "n": 10
+          },
+          "ingredients": {
+            "mean": 0.029,
+            "n": 10
+          },
+          "directions": {
+            "mean": 0.2327,
+            "n": 10
+          },
+          "yield": {
+            "mean": 0.34,
+            "n": 10
+          },
+          "source_note": {
+            "mean": 1.0,
+            "n": 10
+          }
+        },
+        "metrics": {
+          "title_cer": {
+            "mean": 0.0049,
+            "n": 10
+          },
+          "ingredient_p": {
+            "mean": 0.9042,
+            "n": 10
+          },
+          "ingredient_r": {
+            "mean": 0.9042,
+            "n": 10
+          },
+          "ingredient_f1": {
+            "mean": 0.9042,
+            "n": 10
+          },
+          "qty_unit_exact": {
+            "mean": 0.95,
+            "n": 10
+          },
+          "direction_f1": {
+            "mean": 0.8,
+            "n": 10
+          },
+          "direction_tau": {
+            "mean": 1.0,
+            "n": 8
+          },
+          "hallucination_rate": {
+            "mean": 0.0868,
+            "n": 10
+          },
+          "omission_rate": {
+            "mean": 0.1702,
+            "n": 10
+          },
+          "illegible_precision": {
+            "mean": null,
+            "n": 0
+          },
+          "verbatim_cer": {
+            "mean": 0.3029,
+            "n": 10
+          },
+          "schema_invalid": {
+            "mean": 0.0,
+            "n": 10
+          },
+          "content_similarity": {
+            "mean": 0.7723,
+            "n": 10
+          },
+          "faces_count": {
+            "mean": 2.2,
+            "n": 10
+          },
+          "difficulty": {
+            "mean": null,
+            "n": 0
+          },
+          "field_cer": {
+            "title": {
+              "mean": 0.0049,
+              "n": 10
+            },
+            "ingredients": {
+              "mean": 0.029,
+              "n": 10
+            },
+            "directions": {
+              "mean": 0.2327,
+              "n": 10
+            },
+            "yield": {
+              "mean": 0.34,
+              "n": 10
+            },
+            "source_note": {
+              "mean": 1.0,
+              "n": 10
+            }
+          }
+        },
+        "count": 10
+      }
+    },
+    "recipe_counts": {
+      "n_matched": 34,
+      "n_unmatched_pred": 9,
+      "n_omitted_gold": 0,
+      "hallucinated_recipe_rate": 0.2093,
+      "omitted_recipe_rate": 0.0
+    },
+    "n_stage_failures": 0,
+    "calibration": {
+      "ece": 0.137665,
+      "ece_all": 0.137665,
+      "ece_matched": 0.156024,
+      "confidence_coverage": 1.0,
+      "n_pred": 43,
+      "n_with_confidence": 43,
+      "n_matched_with_confidence": 34,
+      "accuracy_all": 0.6047,
+      "mean_confidence_all": 0.6145,
+      "definition": "ece/ece_all: all predicted recipes with confidence (unmatched = incorrect); ece_matched: matched predictions only; None confidence = abstention (see confidence_coverage)"
+    }
+  },
+  "T3": {
+    "tier": "T3",
+    "status": "partial",
+    "grouping": {
+      "bcubed_p": 0.9615,
+      "bcubed_r": 0.9231,
+      "bcubed_f1": 0.9419,
+      "ari": 0.0,
+      "exact_cluster_acc": 0.92,
+      "order_kendall_tau": null,
+      "order_kendall_tau_n": 0,
+      "standalone_acc": 0.9388,
+      "false_merge_rate": 0.0,
+      "false_split_rate": 1.0,
+      "n_pred": 25.0,
+      "n_gold": 25.0
+    },
+    "extraction_matched_only": {
+      "title_cer": {
+        "mean": 0.484,
+        "n": 21
+      },
+      "ingredient_p": {
+        "mean": 0.7694,
+        "n": 21
+      },
+      "ingredient_r": {
+        "mean": 0.7446,
+        "n": 21
+      },
+      "ingredient_f1": {
+        "mean": 0.7475,
+        "n": 21
+      },
+      "qty_unit_exact": {
+        "mean": 0.6449,
+        "n": 21
+      },
+      "direction_f1": {
+        "mean": 0.6073,
+        "n": 21
+      },
+      "direction_tau": {
+        "mean": 1.0,
+        "n": 4
+      },
+      "hallucination_rate": {
+        "mean": 0.2329,
+        "n": 21
+      },
+      "omission_rate": {
+        "mean": 0.3508,
+        "n": 21
+      },
+      "illegible_precision": {
+        "mean": 0.1212,
+        "n": 3
+      },
+      "verbatim_cer": {
+        "mean": 0.715,
+        "n": 21
+      },
+      "schema_invalid": {
+        "mean": 0.0,
+        "n": 21
+      },
+      "content_similarity": {
+        "mean": 0.4304,
+        "n": 21
+      },
+      "faces_count": {
+        "mean": 1.0476,
+        "n": 21
+      },
+      "difficulty": {
+        "mean": null,
+        "n": 0
+      },
+      "field_cer": {
+        "title": {
+          "mean": 0.484,
+          "n": 21
+        },
+        "ingredients": {
+          "mean": 0.261,
+          "n": 21
+        },
+        "directions": {
+          "mean": 0.3209,
+          "n": 21
+        },
+        "yield": {
+          "mean": 0.0,
+          "n": 21
+        },
+        "source_note": {
+          "mean": 0.381,
+          "n": 21
+        }
+      }
+    },
+    "extraction_end_to_end": {
+      "title_cer": {
+        "mean": 0.5665,
+        "n": 25
+      },
+      "ingredient_p": {
+        "mean": 0.6463,
+        "n": 25
+      },
+      "ingredient_r": {
+        "mean": 0.6254,
+        "n": 25
+      },
+      "ingredient_f1": {
+        "mean": 0.6279,
+        "n": 25
+      },
+      "qty_unit_exact": {
+        "mean": 0.5417,
+        "n": 25
+      },
+      "direction_f1": {
+        "mean": 0.5102,
+        "n": 25
+      },
+      "direction_tau": {
+        "mean": 1.0,
+        "n": 4
+      },
+      "hallucination_rate": {
+        "mean": 0.1956,
+        "n": 25
+      },
+      "omission_rate": {
+        "mean": 0.4546,
+        "n": 25
+      },
+      "illegible_precision": {
+        "mean": 0.1212,
+        "n": 3
+      },
+      "verbatim_cer": {
+        "mean": 0.7606,
+        "n": 25
+      },
+      "schema_invalid": {
+        "mean": 0.0,
+        "n": 25
+      },
+      "content_similarity": {
+        "mean": 0.3615,
+        "n": 25
+      },
+      "faces_count": {
+        "mean": 1.04,
+        "n": 25
+      },
+      "difficulty": {
+        "mean": null,
+        "n": 0
+      },
+      "field_cer": {
+        "title": {
+          "mean": 0.5665,
+          "n": 25
+        },
+        "ingredients": {
+          "mean": 0.3793,
+          "n": 25
+        },
+        "directions": {
+          "mean": 0.4296,
+          "n": 25
+        },
+        "yield": {
+          "mean": 0.0,
+          "n": 25
+        },
+        "source_note": {
+          "mean": 0.36,
+          "n": 25
+        }
+      }
+    },
+    "extraction_by_deck_type": {
+      "real_distractor": {
+        "title_cer": {
+          "mean": 0.484,
+          "n": 21
+        },
+        "ingredient_p": {
+          "mean": 0.7694,
+          "n": 21
+        },
+        "ingredient_r": {
+          "mean": 0.7446,
+          "n": 21
+        },
+        "ingredient_f1": {
+          "mean": 0.7475,
+          "n": 21
+        },
+        "qty_unit_exact": {
+          "mean": 0.6449,
+          "n": 21
+        },
+        "direction_f1": {
+          "mean": 0.6073,
+          "n": 21
+        },
+        "direction_tau": {
+          "mean": 1.0,
+          "n": 4
+        },
+        "hallucination_rate": {
+          "mean": 0.2329,
+          "n": 21
+        },
+        "omission_rate": {
+          "mean": 0.3508,
+          "n": 21
+        },
+        "illegible_precision": {
+          "mean": 0.1212,
+          "n": 3
+        },
+        "verbatim_cer": {
+          "mean": 0.715,
+          "n": 21
+        },
+        "schema_invalid": {
+          "mean": 0.0,
+          "n": 21
+        },
+        "content_similarity": {
+          "mean": 0.4304,
+          "n": 21
+        },
+        "faces_count": {
+          "mean": 1.0476,
+          "n": 21
+        },
+        "difficulty": {
+          "mean": null,
+          "n": 0
+        },
+        "field_cer": {
+          "title": {
+            "mean": 0.484,
+            "n": 21
+          },
+          "ingredients": {
+            "mean": 0.261,
+            "n": 21
+          },
+          "directions": {
+            "mean": 0.3209,
+            "n": 21
+          },
+          "yield": {
+            "mean": 0.0,
+            "n": 21
+          },
+          "source_note": {
+            "mean": 0.381,
+            "n": 21
+          }
+        },
+        "metrics": {
+          "title_cer": {
+            "mean": 0.484,
+            "n": 21
+          },
+          "ingredient_p": {
+            "mean": 0.7694,
+            "n": 21
+          },
+          "ingredient_r": {
+            "mean": 0.7446,
+            "n": 21
+          },
+          "ingredient_f1": {
+            "mean": 0.7475,
+            "n": 21
+          },
+          "qty_unit_exact": {
+            "mean": 0.6449,
+            "n": 21
+          },
+          "direction_f1": {
+            "mean": 0.6073,
+            "n": 21
+          },
+          "direction_tau": {
+            "mean": 1.0,
+            "n": 4
+          },
+          "hallucination_rate": {
+            "mean": 0.2329,
+            "n": 21
+          },
+          "omission_rate": {
+            "mean": 0.3508,
+            "n": 21
+          },
+          "illegible_precision": {
+            "mean": 0.1212,
+            "n": 3
+          },
+          "verbatim_cer": {
+            "mean": 0.715,
+            "n": 21
+          },
+          "schema_invalid": {
+            "mean": 0.0,
+            "n": 21
+          },
+          "content_similarity": {
+            "mean": 0.4304,
+            "n": 21
+          },
+          "faces_count": {
+            "mean": 1.0476,
+            "n": 21
+          },
+          "difficulty": {
+            "mean": null,
+            "n": 0
+          },
+          "field_cer": {
+            "title": {
+              "mean": 0.484,
+              "n": 21
+            },
+            "ingredients": {
+              "mean": 0.261,
+              "n": 21
+            },
+            "directions": {
+              "mean": 0.3209,
+              "n": 21
+            },
+            "yield": {
+              "mean": 0.0,
+              "n": 21
+            },
+            "source_note": {
+              "mean": 0.381,
+              "n": 21
+            }
+          }
+        },
+        "count": 21
+      }
+    },
+    "recipe_counts": {
+      "n_matched": 21,
+      "n_unmatched_pred": 4,
+      "n_omitted_gold": 4,
+      "hallucinated_recipe_rate": 0.16,
+      "omitted_recipe_rate": 0.16
+    },
+    "n_stage_failures": 1,
+    "calibration": {
+      "ece": 0.284436,
+      "ece_all": 0.284436,
+      "ece_matched": 0.338619,
+      "confidence_coverage": 1.0,
+      "n_pred": 25,
+      "n_with_confidence": 25,
+      "n_matched_with_confidence": 21,
+      "accuracy_all": 0.28,
+      "mean_confidence_all": 0.1539,
+      "definition": "ece/ece_all: all predicted recipes with confidence (unmatched = incorrect); ece_matched: matched predictions only; None confidence = abstention (see confidence_coverage)"
+    }
+  }
+}

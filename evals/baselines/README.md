@@ -8,8 +8,9 @@ This directory stores historical and milestone benchmark baselines recorded acro
 
 | Baseline File | Date | Git Commit | Status / Integrity | Description |
 |:---|:---:|:---:|:---:|:---|
-| [`pre_remediation.json`](file:///storage/emulated/10/AntiGravity/Workspaces/recipeboxer/evals/baselines/pre_remediation.json) | 2026-10-14 | `1272a55f0be19a82c509ccfbbec9811fdd072f85` | **CONTAMINATED** | Pre-remediation baseline recorded under Phase 0 (WP-00b). Contains eval cheats and answer-key lookups. |
-| `honest_v0.json` *(upcoming)* | Gate A | Certified | **HONEST** | First certified honest baseline across T1 (dev-eval), T2 (held-out), and T3 (real-web) corpora without cheats. |
+| [`pre_remediation.json`](../../../../../../../storage/emulated/10/AntiGravity/Workspaces/recipeboxer/evals/baselines/pre_remediation.json) | 2026-10-14 | `1272a55f0be19a82c509ccfbbec9811fdd072f85` | **CONTAMINATED** | Pre-remediation baseline recorded under Phase 0 (WP-00b). Contains eval cheats and answer-key lookups. |
+| [`honest_v0.json`](../../../../../../../storage/emulated/10/AntiGravity/Workspaces/recipeboxer/evals/baselines/honest_v0.json) | 2026-10-15 | `b1191cbe1137eb66c57a23454120c62261dec8b4` | **HONEST** | Gate A honest baseline on pre-uplift code across T1 (d01–d03) and T3 corpora without cheats. |
+| [`honest_v1.json`](../../../../../../../storage/emulated/10/AntiGravity/Workspaces/recipeboxer/evals/baselines/honest_v1.json) | 2026-10-15 | `6590f32` (SUT) / `f020add` (Scorer) | **HONEST** | Gate B honest baseline: remediated + uplifted pipeline (WP-UP2/UP3/UP4) across T1 (d01–d03, d04), T2 (held-out), and T3 (real-web). |
 
 ---
 
@@ -34,14 +35,49 @@ This directory stores historical and milestone benchmark baselines recorded acro
 
 ---
 
-## Certified Honest Baseline (`honest_v0.json`)
+## Honest Baseline (`honest_v0.json`)
 
-At **Gate A** (following completion of Phase 1 and Phase 2), the first certified honest baseline (`honest_v0.json`) is recorded:
+At **Gate A** (following completion of Phase 1 and Phase 2), the first honest baseline (`honest_v0.json`) was recorded:
 1. **Zero Cheats**: All answer-key lookups, filename heuristics, and canned recipe fallbacks in `recipeboxer/` are completely removed (verified by AST anti-cheat canaries in `tests/anticheat/`).
 2. **Black-Box Runner**: Images are copied into a temporary directory with randomized filenames and order. Execution runs in a scrubbed subprocess with a `sys.addaudithook` preventing access to ground-truth vaults, answer keys, or fixtures.
 3. **Encrypted Vault Ground Truth**: Ground-truth data is encrypted with `age` and decrypted strictly in memory by the trusted scorer (`evals/score.py`) after the SUT completes.
 4. **Live Independent LLM Judge**: Qualitative rubric scoring uses `LiveJudge` on an independent model tier from the extractor (e.g. Pro judge if extractor is Flash), blinded to system and model names. Judge scores are reported and never gate.
-5. **Multi-Corpus Scope**: Evaluated across T1 (dev-eval synthetic), T2 (held-out synthetic), and T3 (public-domain real-web archives with human transcriptions).
+5. **Multi-Corpus Scope**: Evaluated across T1 (dev-eval synthetic d01–d03) and T3 (public-domain real-web archives with human transcriptions). The 319-card homogeneous deck `d04` was excluded due to legacy $O(N^2)$ LLM verification scaling.
+
+---
+
+## Post-Uplift Honest Baseline (`honest_v1.json`)
+
+At **Gate B**, the post-uplift honest baseline (`honest_v1.json`) was recorded with the remediated and hardened pipeline (WP-UP2, WP-UP3, WP-UP4):
+
+- **System Under Test (SUT) Commit**: `6590f32` (WP-UP4).
+- **Scorer Commit**: `f020add` (WP-RT3FIX: `ece` = `ece_all` over all predictions; `ece_matched` diagnostic).
+- **Quality Profile**: `balanced`.
+- **Model Assignment**:
+  - `gemini-3.8-flash`: `FINGERPRINT`, `SET_VERIFY`, `TRANSCRIBE`, `STRUCTURE`, `GROUNDING`, `REPAIR`.
+  - `gemini-3.6-flash`: `CONSISTENCY`.
+- **Outputs Archive**: Stored encrypted at `evals/baselines/honest_v1_outputs.tar.gz.enc` using `age` (recipients from `evals/vault/recipients.txt`).
+
+### Decrypting and Re-Scoring the Outputs Archive
+
+To audit or reproduce the scoring without re-running model inference:
+
+```bash
+# 1. Decrypt the outputs archive using a maintainer age identity key:
+age --decrypt -i ~/.config/recipeboxer/age.key -o /tmp/honest_v1_outputs.tar.gz evals/baselines/honest_v1_outputs.tar.gz.enc
+
+# 2. Extract run outputs:
+mkdir -p /tmp/honest_v1_outputs && tar -xzf /tmp/honest_v1_outputs.tar.gz -C /tmp/honest_v1_outputs
+
+# 3. Re-score any tier using trusted score CLI:
+python -m evals.score --tier T1 --outputs /tmp/honest_v1_outputs/T1_d01_d03 --report /tmp/report_t1_d01_d03 --feedback aggregate
+python -m evals.score --tier T2 --outputs /tmp/honest_v1_outputs/T2 --report /tmp/report_t2 --feedback aggregate
+```
+
+### Held-Out Evaluation Caveat
+> [!IMPORTANT]
+> **T2 is the Cleanest Held-Out Tier**: During WP-UP4 development, aggregate metric feedback on Tier T3 was observed to address precision regressions via the domain-support guard (`guards.py`). As a result, T3 is no longer strictly blind. **Tier T2 (held-out)** was never inspected, tuned on, or re-run during uplift work, making T2 the definitive held-out tier for Gate B generalization claims.
+
 
 ---
 

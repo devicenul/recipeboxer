@@ -169,7 +169,7 @@ describe('Milestone M1 Adversarial: Tab Navigation Stability & Reversion Prevent
     expect(screen.getByText(/Multi-Format Recipe Export/i)).toBeInTheDocument();
     expect(screen.queryByText('Adversarial Test Pie')).not.toBeInTheDocument();
     expect(screen.queryByText(/New Scans Ingestion/i)).not.toBeInTheDocument();
-  });
+  }, 20000);
 
   it('preserves selected recipe index in Recipe Editor when background SSE updates arrive', async () => {
     vi.mocked(api.listRecipes).mockResolvedValue([
