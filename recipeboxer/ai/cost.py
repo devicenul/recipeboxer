@@ -11,6 +11,7 @@ Implements:
 
 from __future__ import annotations
 
+import importlib.resources
 import logging
 import math
 from dataclasses import dataclass, field
@@ -25,7 +26,7 @@ except ImportError:
 
 from recipeboxer.ai.client import LLMStage, UsageLedger, UsageRecord, UsageTokens
 from recipeboxer.config import DEFAULT_FLASH_MODEL, QUALITY_PROFILES, get_settings
-from recipeboxer.models.failures import BudgetExceeded, FailureReason, StageUnavailableError
+from recipeboxer.models.failures import BudgetExceeded, BudgetUnpriced, FailureReason, StageUnavailableError
 
 logger = logging.getLogger(__name__)
 
@@ -58,28 +59,60 @@ class PriceTable:
 
     @classmethod
     def load(cls, path: Optional[Union[Path, str]] = None) -> "PriceTable":
-        """Loads and parses pricing configuration from TOML file.
+        """Loads and parses pricing configuration from TOML file or package data.
 
         Args:
-            path: Optional custom path to pricing TOML file. Defaults to config/pricing.toml.
+            path: Optional custom path to pricing TOML file. Defaults to package data pricing.toml.
 
         Returns:
             Configured PriceTable instance.
         """
-        if path is None:
-            settings = get_settings()
-            path = getattr(settings, "pricing_path", Path("config/pricing.toml"))
+        raw_bytes: Optional[bytes] = None
+        source_desc: str = ""
 
-        p = Path(path).resolve()
-        if not p.exists() or not p.is_file():
-            logger.warning(f"Pricing configuration file not found at '{p}'. PriceTable initialized empty.")
-            return cls(prices={}, meta={})
+        # 1. Custom path explicitly supplied
+        if path is not None:
+            p = Path(path).resolve()
+            if p.exists() and p.is_file():
+                try:
+                    raw_bytes = p.read_bytes()
+                    source_desc = str(p)
+                except Exception as exc:
+                    logger.error(f"Failed to read pricing TOML file '{p}': {exc}.")
+            elif str(path) in ("config/pricing.toml", "pricing.toml") or Path(path).name == "pricing.toml":
+                # Tolerant fallback to packaged default if legacy repo-relative path is requested
+                logger.info(f"Explicit path '{path}' not found on disk, checking package data.")
+            else:
+                logger.warning(f"Pricing configuration file not found at '{p}'. PriceTable initialized empty.")
+                return cls(prices={}, meta={})
+
+        # 2. Check settings override if no explicit path was provided or resolved
+        if raw_bytes is None:
+            try:
+                settings = get_settings()
+                user_path = getattr(settings, "pricing_path", None)
+                if user_path is not None:
+                    p = Path(user_path).resolve()
+                    if p.exists() and p.is_file():
+                        raw_bytes = p.read_bytes()
+                        source_desc = str(p)
+            except Exception as exc:
+                logger.debug(f"Could not load pricing_path from settings: {exc}")
+
+        # 3. Default to package data (recipeboxer/data/pricing.toml) via importlib.resources
+        if raw_bytes is None:
+            try:
+                traversable = importlib.resources.files("recipeboxer.data").joinpath("pricing.toml")
+                raw_bytes = traversable.read_bytes()
+                source_desc = "recipeboxer.data/pricing.toml"
+            except Exception as exc:
+                logger.error(f"Failed to load package data pricing.toml: {exc}. PriceTable initialized empty.")
+                return cls(prices={}, meta={})
 
         try:
-            with open(p, "rb") as f:
-                data = tomllib.load(f)
+            data = tomllib.loads(raw_bytes.decode("utf-8"))
         except Exception as exc:
-            logger.error(f"Failed to parse pricing TOML file '{p}': {exc}. PriceTable initialized empty.")
+            logger.error(f"Failed to parse pricing TOML ({source_desc}): {exc}. PriceTable initialized empty.")
             return cls(prices={}, meta={})
 
         meta = dict(data.get("meta", {}))
@@ -371,15 +404,22 @@ class BudgetGuard:
         self.cap_usd = float(cap_usd) if cap_usd is not None else None
         self.max_calls = int(max_calls) if max_calls is not None else None
 
-    def check_before_call(self, ledger: CostLedger, est_usd: float = 0.0) -> None:
+    def check_before_call(
+        self,
+        ledger: CostLedger,
+        est_usd: float = 0.0,
+        model: Optional[str] = None,
+    ) -> None:
         """Inspects current ledger state and raises BudgetExceeded if limits are reached.
 
         Args:
             ledger: Active CostLedger recording spend.
             est_usd: Estimated cost of the impending call.
+            model: Optional model identifier for the impending call.
 
         Raises:
             BudgetExceeded: If max_calls or cap_usd ceiling would be breached.
+            BudgetUnpriced: If USD cap is active but pricing is unknown (unpriced model or empty table).
         """
         current_calls = getattr(ledger, "calls", 0)
         current_usd = getattr(ledger, "total_usd", 0.0)
@@ -399,8 +439,35 @@ class BudgetGuard:
                 },
             )
 
-        # 2. Enforce USD spend cap
+        # 2. Enforce USD spend cap & Fail closed if pricing is unknown
         if self.cap_usd is not None:
+            # Check price table existence and contents
+            prices = getattr(ledger, "prices", None)
+            if prices is None or not getattr(prices, "prices", {}):
+                msg = f"Budget guard cannot enforce cap_usd=${self.cap_usd:.4f}: price table is empty or uninitialized (BUDGET_UNPRICED)."
+                logger.error(msg)
+                raise BudgetUnpriced(
+                    msg,
+                    details={"cap_usd": self.cap_usd, "breach": "BUDGET_UNPRICED", "reason": "empty_price_table"},
+                )
+
+            unpriced_calls = getattr(ledger, "unpriced_calls", 0)
+            if unpriced_calls > 0:
+                msg = f"Budget guard cannot enforce cap_usd=${self.cap_usd:.4f}: {unpriced_calls} prior calls were unpriced (BUDGET_UNPRICED)."
+                logger.error(msg)
+                raise BudgetUnpriced(
+                    msg,
+                    details={"cap_usd": self.cap_usd, "unpriced_calls": unpriced_calls, "breach": "BUDGET_UNPRICED", "reason": "prior_unpriced_calls"},
+                )
+
+            if model is not None and not prices.is_priced(model):
+                msg = f"Budget guard cannot enforce cap_usd=${self.cap_usd:.4f}: model '{model}' is not priced in pricing table (BUDGET_UNPRICED)."
+                logger.error(msg)
+                raise BudgetUnpriced(
+                    msg,
+                    details={"cap_usd": self.cap_usd, "model": model, "breach": "BUDGET_UNPRICED", "reason": "unpriced_model"},
+                )
+
             # Tripped if already at/above cap or if estimated impending call exceeds cap
             projected = current_usd + max(0.0, est_usd)
             if projected > self.cap_usd or (self.cap_usd == 0.0 and current_calls > 0) or (current_usd >= self.cap_usd and self.cap_usd > 0.0):
@@ -600,6 +667,7 @@ __all__ = [
     "CostLedger",
     "BudgetGuard",
     "BudgetExceeded",
+    "BudgetUnpriced",
     "estimate_run_cost",
     "DEFAULT_STAGE_ASSUMPTIONS",
 ]

@@ -487,6 +487,16 @@ async def run_headless_analysis(
         else:
             valid_recipes.append(r)
 
+    # Deduplicate failures per (stage, image set) (WP-LIVE1 Task 3)
+    deduped_failures: List[Dict[str, Any]] = []
+    seen_failure_keys: set[tuple[str, tuple[str, ...]]] = set()
+    for item in failures_out:
+        key = (item["stage"], tuple(sorted(str(cid) for cid in item.get("image_ids", []))))
+        if key not in seen_failure_keys:
+            seen_failure_keys.add(key)
+            deduped_failures.append(item)
+    failures_out = deduped_failures
+
     # Determine overall status
     is_no_live_model = False
     for f in session.failures:
@@ -610,5 +620,12 @@ async def run_headless_analysis(
         out_p = Path(out_file).resolve()
         out_p.parent.mkdir(parents=True, exist_ok=True)
         out_p.write_text(json.dumps(result, indent=2, default=str), encoding="utf-8")
+        if os.environ.get("RB_DEBUG_GROUPING") == "1":
+            dbg_src = Path("grouping_debug.json")
+            if dbg_src.exists() and dbg_src.resolve() != (out_p.parent / "grouping_debug.json").resolve():
+                try:
+                    (out_p.parent / "grouping_debug.json").write_text(dbg_src.read_text(encoding="utf-8"), encoding="utf-8")
+                except Exception:
+                    pass
 
     return result

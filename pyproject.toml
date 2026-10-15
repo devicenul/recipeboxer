@@ -56,7 +56,7 @@ where = ["."]
 include = ["recipeboxer*"]
 
 [tool.setuptools.package-data]
-recipeboxer = ["py.typed", "**/*.json", "**/*.yaml", "**/*.txt", "**/*.csv"]
+recipeboxer = ["py.typed", "**/*.json", "**/*.yaml", "**/*.txt", "**/*.csv", "**/*.toml"]
 
 [tool.pytest.ini_options]
 minversion = "8.0"

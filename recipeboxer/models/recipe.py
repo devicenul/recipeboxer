@@ -644,6 +644,159 @@ class Recipe(BaseModel):
 # Alias for import stability per contract §1.9
 RecipeSchema = Recipe
 
+
+# -----------------------------------------------------------------------------
+# Gemini Developer API Compatible Structured Response Models
+# (Flat, no Dict[str, Any], no extra='allow', strict Enums/Primitives/Lists)
+# -----------------------------------------------------------------------------
+
+class RecipeIllegibleSpanResponse(BaseModel):
+    """Developer API compatible descriptor for an unreadable span."""
+    text_guess: Optional[str] = Field(default=None, description="Best-effort guess of unreadable text or null")
+    reason: str = Field(default="ambiguous", description="Reason for illegibility: faded, torn, stain, crossed_out, ambiguous")
+
+    def to_domain(self) -> IllegibleSpan:
+        return IllegibleSpan(text_guess=self.text_guess, reason=self.reason)
+
+
+class RecipeTextSpanResponse(BaseModel):
+    """Developer API compatible narrative text segment or note."""
+    text: str = Field(..., description="Text content")
+    kind: Optional[str] = Field(default=None, description="Classification: headnote, note, family_story, margin_note, ad")
+    source_face: int = Field(default=0, ge=0, description="0-indexed card face index")
+    legibility: Legibility = Field(default=Legibility.CLEAR, description="Legibility status")
+    illegible_spans: List[RecipeIllegibleSpanResponse] = Field(default_factory=list, description="Illegible spans")
+
+    def to_domain(self) -> TextSpan:
+        return TextSpan(
+            text=self.text,
+            kind=self.kind,
+            source_face=self.source_face,
+            legibility=self.legibility,
+            illegible_spans=[s.to_domain() for s in self.illegible_spans],
+        )
+
+
+class RecipeIngredientLineResponse(BaseModel):
+    """Developer API compatible ingredient line specification."""
+    original_text: str = Field(..., description="Verbatim text as transcribed from card face")
+    quantity: Optional[str] = Field(default=None, description="Primary quantity or null if missing/to taste")
+    quantity_max: Optional[str] = Field(default=None, description="Upper bound for quantity range or null")
+    unit: Optional[str] = Field(default=None, description="Measurement unit or null")
+    item: str = Field(default="", description="Ingredient name / item")
+    preparation: Optional[str] = Field(default=None, description="Preparation note or null")
+    source_face: int = Field(default=0, ge=0, description="0-indexed card face index")
+    legibility: Legibility = Field(default=Legibility.CLEAR, description="Legibility status")
+    illegible_spans: List[RecipeIllegibleSpanResponse] = Field(default_factory=list, description="Illegible spans")
+
+    def to_domain(self) -> IngredientLine:
+        return IngredientLine(
+            original_text=self.original_text,
+            quantity=self.quantity,
+            quantity_max=self.quantity_max,
+            unit=self.unit,
+            item=self.item,
+            preparation=self.preparation,
+            source_face=self.source_face,
+            legibility=self.legibility,
+            illegible_spans=[s.to_domain() for s in self.illegible_spans],
+        )
+
+
+class RecipeStepResponse(BaseModel):
+    """Developer API compatible instruction step."""
+    original_text: str = Field(..., description="Verbatim instruction text from card")
+    text: Optional[str] = Field(default=None, description="Instruction step text")
+    source_face: int = Field(default=0, ge=0, description="0-indexed card face index")
+    legibility: Legibility = Field(default=Legibility.CLEAR, description="Legibility status")
+    illegible_spans: List[RecipeIllegibleSpanResponse] = Field(default_factory=list, description="Illegible spans")
+
+    def to_domain(self) -> Step:
+        return Step(
+            original_text=self.original_text,
+            text=self.text or self.original_text,
+            source_face=self.source_face,
+            legibility=self.legibility,
+            illegible_spans=[s.to_domain() for s in self.illegible_spans],
+        )
+
+
+class RecipeSectionResponse(BaseModel):
+    """Developer API compatible logical grouping of ingredients and steps."""
+    name: Optional[str] = Field(default=None, description="Section heading, or null for main")
+    ingredients: List[RecipeIngredientLineResponse] = Field(default_factory=list, description="Section ingredients")
+    steps: List[RecipeStepResponse] = Field(default_factory=list, description="Section instructions")
+
+    def to_domain(self) -> RecipeSection:
+        return RecipeSection(
+            name=self.name,
+            ingredients=[i.to_domain() for i in self.ingredients],
+            steps=[s.to_domain() for s in self.steps],
+        )
+
+
+class RecipeTimeValueResponse(BaseModel):
+    """Developer API compatible duration representation."""
+    original_text: str = Field(default="", description="Verbatim time string (e.g. '20 mins')")
+    minutes: Optional[int] = Field(default=None, description="Total minutes duration")
+    normalized_iso: Optional[str] = Field(default=None, description="ISO 8601 duration (e.g. 'PT20M')")
+
+    def to_domain(self) -> TimeValue:
+        return TimeValue(
+            original_text=self.original_text,
+            minutes=self.minutes,
+            normalized_iso=self.normalized_iso,
+        )
+
+
+class RecipeYieldValueResponse(BaseModel):
+    """Developer API compatible yield or serving size representation."""
+    original_text: str = Field(default="", description="Verbatim yield text (e.g. '24 cookies')")
+    normalized_servings: Optional[float] = Field(default=None, description="Normalized numeric servings count")
+    unit: Optional[str] = Field(default=None, description="Unit name (e.g. 'servings', 'cookies', 'bars')")
+
+    def to_domain(self) -> YieldValue:
+        return YieldValue(
+            original_text=self.original_text,
+            normalized_servings=self.normalized_servings,
+            unit=self.unit,
+        )
+
+
+class RecipeStructureResponse(BaseModel):
+    """Gemini Developer API compatible structured response schema for recipe structuring."""
+
+    title: str = Field(..., description="Primary recipe title")
+    title_is_inferred: bool = Field(default=False, description="True if title was not explicitly written on card")
+    description: Optional[str] = Field(default="", description="Recipe description, intro, or headnote")
+    headnote: Optional[RecipeTextSpanResponse] = Field(default=None, description="Headnote, family story, or marginalia")
+    notes: List[RecipeTextSpanResponse] = Field(default_factory=list, description="Narrative notes, margin notes, clipping ads")
+    sections: List[RecipeSectionResponse] = Field(default_factory=list, description="Ordered sections of ingredients and steps")
+    prep_time: Optional[RecipeTimeValueResponse] = Field(default=None, description="Preparation time")
+    cook_time: Optional[RecipeTimeValueResponse] = Field(default=None, description="Cooking time")
+    total_time: Optional[RecipeTimeValueResponse] = Field(default=None, description="Total time")
+    yield_value: Optional[RecipeYieldValueResponse] = Field(default=None, description="Recipe yield or servings")
+    tags: List[str] = Field(default_factory=list, description="Categorical tags")
+    source_notes: Optional[str] = Field(default="", description="Attribution, handwritten card author, provenance")
+
+    def to_recipe(self) -> Recipe:
+        """Maps flat Developer-API-compatible response to authoritative Recipe Schema v2."""
+        return Recipe(
+            title=self.title,
+            title_is_inferred=self.title_is_inferred,
+            description=self.description or "",
+            headnote=self.headnote.to_domain() if self.headnote else None,
+            notes=[n.to_domain() for n in self.notes],
+            sections=[s.to_domain() for s in self.sections],
+            prep_time=self.prep_time.to_domain() if self.prep_time else TimeValue(original_text=""),
+            cook_time=self.cook_time.to_domain() if self.cook_time else TimeValue(original_text=""),
+            total_time=self.total_time.to_domain() if self.total_time else TimeValue(original_text=""),
+            yield_value=self.yield_value.to_domain() if self.yield_value else YieldValue(original_text=""),
+            tags=list(self.tags),
+            source_notes=self.source_notes or "",
+        )
+
+
 __all__ = [
     "Legibility",
     "IllegibleSpan",
@@ -657,4 +810,13 @@ __all__ = [
     "RecipeWarning",
     "Recipe",
     "RecipeSchema",
+    "RecipeIllegibleSpanResponse",
+    "RecipeTextSpanResponse",
+    "RecipeIngredientLineResponse",
+    "RecipeStepResponse",
+    "RecipeSectionResponse",
+    "RecipeTimeValueResponse",
+    "RecipeYieldValueResponse",
+    "RecipeStructureResponse",
 ]
+

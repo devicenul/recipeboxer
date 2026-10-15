@@ -46,7 +46,7 @@ The immediate milestone is **Gate B** sign-off:
   5. **Red-Team Certified**: Zero audit hook trips, zero prompt leaks, zero static AST invariant failures.
 - **Concurrent Enablers**:
   - `WP-SV`: Scorer enhancements, tie-handling normalization, hierarchical reporting.
-  - `WP-M1`: Model default updates in `recipeboxer/config.py` aligned with verified rates in `config/pricing.toml`.
+  - `WP-M1`: Model default updates in `recipeboxer/config.py` aligned with verified rates in `recipeboxer/data/pricing.toml`.
 
 ---
 

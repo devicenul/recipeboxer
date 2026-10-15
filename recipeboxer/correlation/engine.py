@@ -348,6 +348,19 @@ class GroupingEngine:
             else:
                 calibrator = LinkCalibrator()
 
+        # Build set verification lookup for all verified transitions in each set
+        verified_positive_edges: Set[Tuple[str, str]] = set()
+        verified_negative_edges: Set[Tuple[str, str]] = set()
+
+        for ver in verifications:
+            seq = [ver.anchor] + list(ver.continuations or [])
+            for idx in range(len(seq) - 1):
+                verified_positive_edges.add((seq[idx], seq[idx + 1]))
+            for rej in (ver.rejected or []):
+                for s_node in seq:
+                    verified_negative_edges.add((s_node, rej))
+                    verified_negative_edges.add((rej, s_node))
+
         links: Dict[Tuple[str, str], float] = {}
         pair_ev_by_edge: Dict[Tuple[str, str], PairEvidence] = {}
 
@@ -355,12 +368,10 @@ class GroupingEngine:
             edge = (ev.a, ev.b)
             # Determine set-verification outcome
             set_verified_outcome: Optional[bool] = None
-            if ev.a in verification_by_anchor:
-                ver = verification_by_anchor[ev.a]
-                if ev.b in ver.continuations:
-                    set_verified_outcome = True
-                elif ev.b in ver.rejected:
-                    set_verified_outcome = False
+            if edge in verified_positive_edges:
+                set_verified_outcome = True
+            elif edge in verified_negative_edges:
+                set_verified_outcome = False
             elif not can_verify:
                 set_verified_outcome = None
 
@@ -385,6 +396,31 @@ class GroupingEngine:
         # 6. Global Min-Cost Path Cover Optimization
         node_ids = [fp.card_id for fp in fps]
         chains = path_cover(node_ids, links, node_costs)
+
+        # Opt-in maintainer debug dump (RB_DEBUG_GROUPING=1)
+        if os.environ.get("RB_DEBUG_GROUPING") == "1":
+            try:
+                debug_payload = {
+                    "cards": node_ids,
+                    "links": [
+                        {"from": k[0], "to": k[1], "p_link": float(v)}
+                        for k, v in sorted(links.items(), key=lambda x: -x[1])
+                    ],
+                    "node_costs": node_costs,
+                    "chains": chains,
+                    "verifications": [
+                        {
+                            "anchor": v.anchor,
+                            "continuations": v.continuations,
+                            "rejected": v.rejected,
+                            "evidence_quotes": v.evidence_quotes,
+                        }
+                        for v in verifications
+                    ],
+                }
+                Path("grouping_debug.json").write_text(json.dumps(debug_payload, indent=2), encoding="utf-8")
+            except Exception as d_exc:
+                logger.warning(f"Failed to write RB_DEBUG_GROUPING dump: {d_exc}")
 
         # 7. Build CorrelationProposals and HITL Routing
         proposals: List[CorrelationProposal] = []

@@ -43,6 +43,7 @@ from recipeboxer.models.recipe import (
     Legibility,
     Recipe,
     RecipeSection,
+    RecipeStructureResponse,
     RecipeWarning,
     Step,
     TextSpan,
@@ -269,7 +270,7 @@ async def structure(
         model=model,
         system_instruction=prompt_record.text,
         parts=parts,
-        response_model=Recipe,
+        response_model=RecipeStructureResponse,
         temperature=0.0,
         timeout_s=timeout_s,
         metadata={
@@ -311,15 +312,23 @@ async def structure(
     # 5. Extract and validate Recipe instance
     recipe: Optional[Recipe] = None
     if response.parsed is not None:
-        if isinstance(response.parsed, Recipe):
+        if isinstance(response.parsed, RecipeStructureResponse):
+            recipe = response.parsed.to_recipe()
+        elif isinstance(response.parsed, Recipe):
             recipe = response.parsed
         elif isinstance(response.parsed, dict):
-            recipe = Recipe.model_validate(response.parsed)
+            try:
+                recipe = RecipeStructureResponse.model_validate(response.parsed).to_recipe()
+            except Exception:
+                recipe = Recipe.model_validate(response.parsed)
     elif response.raw_text:
         try:
             json_text = _extract_json_text(response.raw_text)
             data = json.loads(json_text)
-            recipe = Recipe.model_validate(data)
+            try:
+                recipe = RecipeStructureResponse.model_validate(data).to_recipe()
+            except Exception:
+                recipe = Recipe.model_validate(data)
         except Exception as parse_err:
             raise ExtractionUnavailable(
                 f"Failed to parse structured recipe schema: {parse_err}",

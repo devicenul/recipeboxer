@@ -136,7 +136,7 @@ Predictions are Hungarian-matched to ground-truth recipes based on card-overlap 
 - **Confidence Calibration (ECE)**: Expected Calibration Error across 10 bins comparing model confidence to factual accuracy.
 
 ### 5.3 Operational & LLM Judge Metrics
-- **Operational Metrics (`evals/metrics/ops.py`)**: Total HTTP calls, token consumption (input, output, reasoning), latency percentiles, stage-level failures, and total USD spend calculated from `config/pricing.toml`.
+- **Operational Metrics (`evals/metrics/ops.py`)**: Total HTTP calls, token consumption (input, output, reasoning), latency percentiles, stage-level failures, and total USD spend calculated from `recipeboxer/data/pricing.toml`.
 - **LLM-as-a-Judge (`evals/judge.py`)**: Blinded rubric evaluation (0–5 scale) assessing culinary coherence and formatting. **Must use a different model tier than the extractor** (e.g. Pro judge if extractor is Flash) to prevent self-preference bias. Judge scores are informational and never gate.
 
 ### 5.4 Feedback Policy
@@ -176,7 +176,7 @@ python -m evals.harness.run \
   --budget-usd 5.00
 ```
 
-### 6.2 Verified Model Pricing (`config/pricing.toml`)
+### 6.2 Verified Model Pricing (`recipeboxer/data/pricing.toml`)
 All pricing verified as of 2026-10-14 against Google AI Studio Standard paid tier (rates per million tokens):
 
 | Model ID | Input / MTok | Output / MTok | Thinking / MTok | Notes |

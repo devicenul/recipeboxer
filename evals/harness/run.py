@@ -44,6 +44,7 @@ ENV_ALLOWLIST = {
     "RECIPEBOXER_API_PORT",
     "RECIPEBOXER_MAX_CONCURRENCY",
     "RB_FEATURE_TOGGLES",
+    "RB_DEBUG_GROUPING",
 }
 
 FORBIDDEN_ENV_SUBSTRINGS = ["AGE", "VAULT", "SECRET", "RB_EVAL"]
@@ -396,11 +397,16 @@ def run_benchmark(
                     ]
 
                     mapped_failures: List[Dict[str, Any]] = []
+                    seen_mapped_f: set[tuple[str, tuple[str, ...]]] = set()
                     for f in sut_res.get("failures", []):
                         f_copy = dict(f)
                         raw_f_cids = f.get("image_ids", [])
-                        f_copy["image_ids"] = [deck_map.map_temp_to_orig(cid) for cid in raw_f_cids]
-                        mapped_failures.append(f_copy)
+                        f_orig_cids = [deck_map.map_temp_to_orig(cid) for cid in raw_f_cids]
+                        f_copy["image_ids"] = f_orig_cids
+                        f_key = (f_copy.get("stage", ""), tuple(sorted(str(cid) for cid in f_orig_cids)))
+                        if f_key not in seen_mapped_f:
+                            seen_mapped_f.add(f_key)
+                            mapped_failures.append(f_copy)
 
                     deck_outputs.append({
                         "deck_id": deck_id,

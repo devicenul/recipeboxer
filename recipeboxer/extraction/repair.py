@@ -16,7 +16,7 @@ from pydantic import ValidationError
 
 from recipeboxer.ai.client import LLMClient, LLMRequest, LLMStage, TextPart
 from recipeboxer.models.failures import BudgetExceeded, ExtractionUnavailable, FailureReason
-from recipeboxer.models.recipe import Recipe, RecipeWarning
+from recipeboxer.models.recipe import Recipe, RecipeStructureResponse, RecipeWarning
 from recipeboxer.prompts import get_prompt
 
 logger = logging.getLogger(__name__)
@@ -108,7 +108,7 @@ async def validate_and_repair(
             model=model_name,
             system_instruction=prompt_record.text,
             parts=[TextPart(text=user_content)],
-            response_model=Recipe,
+            response_model=RecipeStructureResponse,
             temperature=0.0,
             metadata={"repair_round": round_idx},
         )
@@ -124,19 +124,31 @@ async def validate_and_repair(
 
         repaired_recipe: Optional[Recipe] = None
 
-        if response.parsed and isinstance(response.parsed, Recipe):
+        if response.parsed and isinstance(response.parsed, RecipeStructureResponse):
+            try:
+                repaired_recipe = response.parsed.to_recipe()
+            except Exception as val_exc:
+                last_error = _format_validation_error(val_exc)
+                current_payload = response.parsed.model_dump()
+        elif response.parsed and isinstance(response.parsed, Recipe):
             repaired_recipe = response.parsed
         elif response.parsed and isinstance(response.parsed, dict):
             try:
-                repaired_recipe = Recipe.model_validate(response.parsed)
-            except Exception as parse_exc:
-                last_error = _format_validation_error(parse_exc)
-                current_payload = response.parsed
+                repaired_recipe = RecipeStructureResponse.model_validate(response.parsed).to_recipe()
+            except Exception:
+                try:
+                    repaired_recipe = Recipe.model_validate(response.parsed)
+                except Exception as parse_exc:
+                    last_error = _format_validation_error(parse_exc)
+                    current_payload = response.parsed
         elif response.raw_text:
             try:
                 cleaned_resp = _clean_markdown_fences(response.raw_text)
                 resp_json = json.loads(cleaned_resp)
-                repaired_recipe = Recipe.model_validate(resp_json)
+                try:
+                    repaired_recipe = RecipeStructureResponse.model_validate(resp_json).to_recipe()
+                except Exception:
+                    repaired_recipe = Recipe.model_validate(resp_json)
             except Exception as parse_exc:
                 last_error = _format_validation_error(parse_exc)
                 current_payload = response.raw_text

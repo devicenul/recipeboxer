@@ -66,7 +66,7 @@ All multimodal generative AI operations in RecipeBoxer are routed through a hard
   └──────────────┬──────────────┘                 └─────────────────────────────┘
                  │
   ┌──────────────┴──────────────┐
-  │   UsageLedger / CostLedger  │ ◄─── Loads rates from config/pricing.toml
+  │   UsageLedger / CostLedger  │ ◄─── Loads rates from recipeboxer/data/pricing.toml
   └──────────────┬──────────────┘
                  │
   ┌──────────────┴──────────────┐
@@ -82,7 +82,7 @@ Production code interacts exclusively with the `LLMClient` protocol:
 - **Rate Limiting & Concurrency**: In-process token bucket rate limiter (`llm_rpm_limit`, default 60 RPM) and asyncio semaphore (`llm_max_concurrency`, default 5).
 
 ### 2.2 Usage Accounting & `CostLedger` (`recipeboxer/ai/cost.py`)
-- **`PriceTable`**: Loaded from [`config/pricing.toml`](file:///storage/emulated/10/AntiGravity/Workspaces/recipeboxer/config/pricing.toml). Contains verified Standard (non-batch) paid-tier rates per million tokens (MTok) for input, output, and reasoning/thinking tokens. Unpriced models trigger a strict warning and are treated as unpriced (`cost = None`), never silently zero.
+- **`PriceTable`**: Loaded from package data [`recipeboxer/data/pricing.toml`](file:///storage/emulated/10/AntiGravity/Workspaces/recipeboxer/recipeboxer/data/pricing.toml) (or custom override via settings). Contains verified Standard (non-batch) paid-tier rates per million tokens (MTok) for input, output, and reasoning/thinking tokens. Unpriced models trigger a strict warning and are treated as unpriced (`cost = None`), never silently zero.
 - **`CostLedger`**: Tracks token usage (`input_tokens`, `output_tokens`, `thinking_tokens`), execution latency, and accumulated USD cost per pipeline stage and model.
 - **Pre-Run Estimation**: `estimate_run_cost(n_cards, profile, prices)` calculates low, expected, and high spending bounds based on card count and stage-specific multipliers before invoking the model.
 

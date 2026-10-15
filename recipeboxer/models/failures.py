@@ -37,6 +37,9 @@ class FailureReason(str, Enum):
     INVALID_RESPONSE = "INVALID_RESPONSE"
     SCHEMA_VALIDATION = "SCHEMA_VALIDATION"
     BUDGET_EXCEEDED = "BUDGET_EXCEEDED"
+    BUDGET_UNPRICED = "BUDGET_UNPRICED"
+    INVALID_REQUEST = "INVALID_REQUEST"
+    SCHEMA_UNSUPPORTED = "SCHEMA_UNSUPPORTED"
     INPUT_UNREADABLE = "INPUT_UNREADABLE"
     UNKNOWN = "UNKNOWN"
 
@@ -121,6 +124,27 @@ class BudgetExceeded(StageUnavailableError):
         message: str = "Budget cap exceeded",
         *,
         reason: FailureReason = FailureReason.BUDGET_EXCEEDED,
+        card_ids: Optional[List[str]] = None,
+        retryable: bool = False,
+        details: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        super().__init__(
+            message,
+            reason=reason,
+            card_ids=card_ids,
+            retryable=retryable,
+            details=details,
+        )
+
+
+class BudgetUnpriced(BudgetExceeded):
+    """Execution refused to start because USD cost is unknown while a USD spend cap is set."""
+
+    def __init__(
+        self,
+        message: str = "USD cost is unknown and a USD cap is set (BUDGET_UNPRICED)",
+        *,
+        reason: FailureReason = FailureReason.BUDGET_UNPRICED,
         card_ids: Optional[List[str]] = None,
         retryable: bool = False,
         details: Optional[Dict[str, Any]] = None,

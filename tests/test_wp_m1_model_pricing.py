@@ -25,7 +25,7 @@ from recipeboxer.models.session import IngestionConfig
 
 def test_pricing_table_covers_all_quality_profiles():
     """Verify every model in QUALITY_PROFILES for every profile and stage is priced."""
-    table = PriceTable.load("config/pricing.toml")
+    table = PriceTable.load()
 
     for profile_name, stage_map in QUALITY_PROFILES.items():
         for stage, model_id in stage_map.items():
@@ -41,7 +41,7 @@ def test_pricing_table_covers_all_quality_profiles():
 
 def test_pricing_table_covers_all_defaults():
     """Verify all default model constants and field defaults are priced."""
-    table = PriceTable.load("config/pricing.toml")
+    table = PriceTable.load()
 
     defaults = [
         DEFAULT_FLASH_MODEL,
@@ -64,7 +64,7 @@ def test_pricing_table_covers_all_defaults():
 
 def test_pricing_table_covers_profile_params_models():
     """Verify any model referenced in PROFILE_PARAMS is priced."""
-    table = PriceTable.load("config/pricing.toml")
+    table = PriceTable.load()
 
     for profile_name, params in PROFILE_PARAMS.items():
         if "other_model" in params:

@@ -214,6 +214,8 @@ async def transcribe(
     model = settings.get_stage_model(LLMStage.TRANSCRIBE)
     thinking_budget = compute_transcribe_thinking_budget(settings, prompt_id, faces)
     timeout_s = settings.get_stage_timeout(LLMStage.TRANSCRIBE)
+    if (thinking_budget is not None and thinking_budget > 1024) or len(faces) > 2:
+        timeout_s = max(timeout_s, 120.0 + len(faces) * 15.0)
 
     # 3. Build multimodal LLM parts with neutral labels
     parts: List[Union[TextPart, ImagePart]] = [

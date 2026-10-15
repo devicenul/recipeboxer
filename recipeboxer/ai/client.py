@@ -563,7 +563,7 @@ class GenAIClient(LLMClient):
                 eff_guard = getattr(self.ledger, "guard", None)
             if eff_guard is not None and self.ledger is not None:
                 est_usd = float(request.metadata.get("est_usd", 0.0)) if request.metadata else 0.0
-                eff_guard.check_before_call(self.ledger, est_usd=est_usd)
+                eff_guard.check_before_call(self.ledger, est_usd=est_usd, model=request.model)
 
             attempts += 1
             await self._rate_limiter.acquire()
@@ -712,7 +712,14 @@ class GenAIClient(LLMClient):
             return True, FailureReason.TIMEOUT
 
         # Check for status codes on API errors or HTTP exceptions
+        # Check for status codes on API errors or HTTP exceptions
         status_code = getattr(exc, "code", None) or getattr(exc, "status_code", None)
+        exc_str = str(exc).lower()
+
+        # Immediate detection of schema / additionalProperties unsupported error
+        if "additionalproperties" in exc_str or ("schema" in exc_str and "unsupported" in exc_str):
+            return False, FailureReason.SCHEMA_UNSUPPORTED
+
         if status_code is not None:
             try:
                 status_int = int(status_code)
@@ -723,12 +730,15 @@ class GenAIClient(LLMClient):
                 if status_int in (500, 502, 503, 504):
                     return True, FailureReason.MODEL_UNAVAILABLE
                 if status_int == 400:
-                    return False, FailureReason.INVALID_RESPONSE
+                    if "schema" in exc_str:
+                        return False, FailureReason.SCHEMA_UNSUPPORTED
+                    return False, FailureReason.INVALID_REQUEST
             except (ValueError, TypeError):
                 pass
 
-        # Network disconnects / connection resets
-        exc_str = str(exc).lower()
+        # String matching for API errors and disconnects
+        if any(term in exc_str for term in ("invalid_argument", "invalid request", "bad request")):
+            return False, FailureReason.INVALID_REQUEST
         if any(term in exc_str for term in ("429", "resource_exhausted", "quota")):
             return True, FailureReason.RATE_LIMITED
         if any(term in exc_str for term in ("timeout", "timed out", "deadline")):

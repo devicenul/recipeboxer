@@ -23,7 +23,7 @@ from recipeboxer.config import (
 )
 from recipeboxer.extraction.grounding import levenshtein_distance
 from recipeboxer.models.failures import BudgetExceeded, ExtractionUnavailable, FailureReason, StageUnavailableError
-from recipeboxer.models.recipe import IngredientLine, Recipe, RecipeWarning, Step
+from recipeboxer.models.recipe import IngredientLine, Recipe, RecipeStructureResponse, RecipeWarning, Step
 from recipeboxer.prompts import get_prompt
 
 try:
@@ -375,7 +375,7 @@ async def self_consistency(
         model=second_model,
         system_instruction=prompt_record.text,
         parts=parts,
-        response_model=Recipe,
+        response_model=RecipeStructureResponse,
         temperature=temperature,
         metadata={"consistency_mode": sc_mode, "secondary_read": True},
     )
@@ -395,16 +395,25 @@ async def self_consistency(
         ]
 
     second_recipe: Optional[Recipe] = None
-    if response.parsed and isinstance(response.parsed, Recipe):
+    if response.parsed and isinstance(response.parsed, RecipeStructureResponse):
+        second_recipe = response.parsed.to_recipe()
+    elif response.parsed and isinstance(response.parsed, Recipe):
         second_recipe = response.parsed
     elif response.parsed and isinstance(response.parsed, dict):
         try:
-            second_recipe = Recipe.model_validate(response.parsed)
+            second_recipe = RecipeStructureResponse.model_validate(response.parsed).to_recipe()
         except Exception:
-            pass
+            try:
+                second_recipe = Recipe.model_validate(response.parsed)
+            except Exception:
+                pass
     elif response.raw_text:
         try:
-            second_recipe = Recipe.model_validate(json.loads(response.raw_text))
+            parsed_json = json.loads(response.raw_text)
+            try:
+                second_recipe = RecipeStructureResponse.model_validate(parsed_json).to_recipe()
+            except Exception:
+                second_recipe = Recipe.model_validate(parsed_json)
         except Exception:
             pass
 

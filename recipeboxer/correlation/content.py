@@ -527,6 +527,15 @@ def _compute_title_position(
             note="Preceding card A has title and following card B has no independent title",
         )
     elif title_a and title_b and not is_b_continuation_title:
+        norm_a = re.sub(r"[^a-z0-9]", "", title_a.lower())
+        norm_b = re.sub(r"[^a-z0-9]", "", title_b.lower())
+        if norm_a and norm_b and (norm_a == norm_b or norm_a in norm_b or norm_b in norm_a):
+            return FeatureEvidence(
+                name="title_position",
+                raw=0.95,
+                log_lr=None,
+                note=f"Matching titles across cards: '{title_a}' and '{title_b}'",
+            )
         # Title clash: two distinct recipe titles indicate separate recipes
         return FeatureEvidence(
             name="title_position",

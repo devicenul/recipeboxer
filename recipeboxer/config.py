@@ -85,7 +85,7 @@ PROFILE_PARAMS: Dict[str, Dict[str, Any]] = {
 DEFAULT_STAGE_TIMEOUTS: Dict[str, float] = {
     "FINGERPRINT": 30.0,
     "SET_VERIFY": 45.0,
-    "TRANSCRIBE": 60.0,
+    "TRANSCRIBE": 120.0,
     "STRUCTURE": 45.0,
     "GROUNDING": 30.0,
     "REPAIR": 30.0,
@@ -209,9 +209,9 @@ class Settings(BaseSettings):
         ge=0,
         description="Maximum number of LLM generation calls allowed in a run",
     )
-    pricing_path: Path = Field(
-        default=Path("config/pricing.toml"),
-        description="Path to user-editable pricing configuration file",
+    pricing_path: Optional[Path] = Field(
+        default=None,
+        description="Path to user-editable pricing configuration file override (defaults to packaged data)",
     )
 
 

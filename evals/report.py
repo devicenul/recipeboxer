@@ -125,26 +125,25 @@ PER_ITEM_FIELD_NAMES = {
 # ============================================================================
 
 def load_pricing(path: Optional[Union[Path, str]] = None) -> Dict[str, Any]:
-    """Loads model pricing table from config/pricing.toml.
+    """Loads model pricing table from recipeboxer/data/pricing.toml or custom path.
 
     Args:
-        path: Path to pricing.toml. Defaults to repo's config/pricing.toml.
+        path: Optional path to pricing.toml. Defaults to package data recipeboxer/data/pricing.toml.
 
     Returns:
         Dictionary mapping model IDs to pricing dictionaries and metadata.
     """
-    if path is None:
-        # Default to repo root config/pricing.toml
-        repo_root = Path(__file__).resolve().parent.parent
-        target_path = repo_root / "config" / "pricing.toml"
-    else:
+    if path is not None:
         target_path = Path(path)
+        if target_path.exists():
+            with open(target_path, "rb") as f:
+                return tomllib.load(f)
+        if not str(path).endswith("pricing.toml"):
+            raise FileNotFoundError(f"Pricing configuration file not found at {target_path}")
 
-    if not target_path.exists():
-        raise FileNotFoundError(f"Pricing configuration file not found at {target_path}")
-
-    with open(target_path, "rb") as f:
-        return tomllib.load(f)
+    import importlib.resources
+    traversable = importlib.resources.files("recipeboxer.data").joinpath("pricing.toml")
+    return tomllib.loads(traversable.read_text(encoding="utf-8"))
 
 
 # ============================================================================

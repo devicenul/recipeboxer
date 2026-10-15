@@ -55,7 +55,7 @@ RecipeBoxer provides three pre-configured **Quality Profiles** balancing speed, 
 | **Balanced**<br>*(Default)* | General collections, mixed handwriting, aged index cards | Flash across all stages | Adaptive (-1)<br>*(Engaged on cursive & damaged cards)* | Full grounding enabled | **~\$0.02 – \$0.05** |
 | **Best** | Difficult or faded cursive, damaged cards, multi-generational heirlooms | Flash fingerprinting; **Pro models** for set verification, transcription, structuring, and repair | Extended (2,048 tokens) | Full grounding + secondary self-consistency | **~\$0.10 – \$0.25** |
 
-*(Note: Costs above are approximate estimates calculated from Standard paid-tier token rates in `config/pricing.toml`. Actual cost depends on image resolution, card text density, and retry rounds).*
+*(Note: Costs above are approximate estimates calculated from Standard paid-tier token rates in `recipeboxer/data/pricing.toml`. Actual cost depends on image resolution, card text density, and retry rounds).*
 
 ### When to Use Which Profile
 - Choose **Economy** if you are processing clean, printed newspaper clippings or modern recipe cards and wish to minimize API costs.

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 import math
+import re
 import uuid
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
@@ -28,13 +29,30 @@ logger = logging.getLogger(__name__)
 def _is_title_bearing_start(node_id: str, node_costs: Dict[str, Dict[str, Any]]) -> bool:
     """Checks whether a card is flagged as a title-bearing recipe start."""
     priors = node_costs.get(node_id, {})
-    if priors.get("has_title") is True:
-        return True
-    if priors.get("is_start", 0.0) >= 0.70:
-        return True
-    if bool(priors.get("visible_title")):
-        return True
-    return False
+    has_title = priors.get("has_title") is True or bool(priors.get("visible_title"))
+    return bool(has_title)
+
+
+def _titles_conflict(u: str, v: str, node_costs: Dict[str, Dict[str, Any]]) -> bool:
+    """Checks whether two nodes bear genuinely conflicting (distinct) recipe titles."""
+    priors_u = node_costs.get(u, {})
+    priors_v = node_costs.get(v, {})
+    t_u = (priors_u.get("visible_title") or "").strip()
+    t_v = (priors_v.get("visible_title") or "").strip()
+    if not t_u or not t_v:
+        return False
+    norm_u = re.sub(r"[^a-z0-9]", "", t_u.lower())
+    norm_v = re.sub(r"[^a-z0-9]", "", t_v.lower())
+    if not norm_u or not norm_v:
+        return False
+    # If they match or one is substring of the other (e.g. continuation title), they do not conflict
+    if norm_u == norm_v or norm_u in norm_v or norm_v in norm_u:
+        return False
+    # Check continuation markers
+    tb_lower = t_v.lower()
+    if any(h in tb_lower for h in ("cont", "continued", "page 2", "card 2", "pt 2", "part 2")):
+        return False
+    return True
 
 
 def _solve_component_milp(
@@ -118,9 +136,9 @@ def _solve_component_milp(
         lhs_list.append(-np.inf)
         rhs_list.append(float(K - 1))
 
-    # 4. Title constraint: direct link between two title starts is forbidden
+    # 4. Title constraint: direct link between cards with conflicting titles is forbidden
     for idx, (u, v) in enumerate(cand_edges):
-        if _is_title_bearing_start(u, comp_node_costs) and _is_title_bearing_start(v, comp_node_costs):
+        if _titles_conflict(u, v, comp_node_costs):
             row = np.zeros(n_vars, dtype=float)
             row[idx] = 1.0
             row_list.append(row)
@@ -194,15 +212,15 @@ def path_cover(
         expects_cont = float(u_priors.get("expects_continuation", 0.5))
         is_comp = float(u_priors.get("is_complete", 0.5))
         # Having no successor is penalized if card expects continuation; discounted if complete
-        c_succ = base_stop_cost + 1.2 * (expects_cont - 0.5) - 1.2 * (is_comp - 0.5)
-        c_no_succ[u] = max(0.01, c_succ)
+        c_succ = base_stop_cost + 0.6 * (expects_cont - 0.5) - 0.3 * (is_comp - 0.5)
+        c_no_succ[u] = max(0.18, c_succ)
 
         is_st = float(u_priors.get("is_start", 0.5))
         if _is_title_bearing_start(u, node_costs):
             is_st = max(is_st, 0.90)
         # Having no predecessor is discounted if card is a start; penalized if continuation
-        c_pred = base_stop_cost - 1.2 * (is_st - 0.5)
-        c_no_pred[u] = max(0.01, c_pred)
+        c_pred = base_stop_cost - 0.6 * (is_st - 0.5)
+        c_no_pred[u] = max(0.18, c_pred)
 
     # Construct 2N x 2N assignment matrix
     # Block (1,1) [0..N, 0..N]: edge (u_i -> u_j)
@@ -360,34 +378,36 @@ def path_cover(
             chains.append([n])
             visited_nodes.add(n)
 
-    # 4. Repair title-bearing start constraint: <= 1 title-bearing start per chain
-    # Split chain at the weakest link between title-bearing nodes
+    # 4. Repair conflicting title constraint: split chains containing genuinely conflicting titles
+    # Split chain at the weakest link between cards with conflicting titles
     repaired_chains: List[List[str]] = []
     for chain in chains:
         pending_chains = [chain]
         while pending_chains:
             ch = pending_chains.pop(0)
-            title_indices = [idx for idx, nid in enumerate(ch) if _is_title_bearing_start(nid, node_costs)]
-            if len(title_indices) <= 1:
+            split_occurred = False
+            for i in range(len(ch)):
+                for j in range(i + 1, len(ch)):
+                    if _titles_conflict(ch[i], ch[j], node_costs):
+                        # Find the weakest link between ch[i] and ch[j]
+                        weakest_k = i
+                        weakest_p = float("inf")
+                        for k in range(i, j):
+                            edge = (ch[k], ch[k + 1])
+                            p_val = links.get(edge, 0.0)
+                            if p_val < weakest_p:
+                                weakest_p = p_val
+                                weakest_k = k
+                        left_ch = ch[:weakest_k + 1]
+                        right_ch = ch[weakest_k + 1:]
+                        pending_chains.append(left_ch)
+                        pending_chains.append(right_ch)
+                        split_occurred = True
+                        break
+                if split_occurred:
+                    break
+            if not split_occurred:
                 repaired_chains.append(ch)
-            else:
-                # Find the weakest link between the first two title-bearing starts
-                idx1 = title_indices[0]
-                idx2 = title_indices[1]
-                # Candidate split points between idx1 and idx2 (break edge between k and k+1)
-                weakest_k = idx1
-                weakest_p = float("inf")
-                for k in range(idx1, idx2):
-                    edge = (ch[k], ch[k + 1])
-                    p_val = links.get(edge, 0.0)
-                    if p_val < weakest_p:
-                        weakest_p = p_val
-                        weakest_k = k
-                # Split at weakest_k
-                left_ch = ch[:weakest_k + 1]
-                right_ch = ch[weakest_k + 1:]
-                pending_chains.append(left_ch)
-                pending_chains.append(right_ch)
 
     # Sort each chain's order is preserved; sort the list of chains deterministically
     return sorted(repaired_chains, key=lambda c: c[0])
