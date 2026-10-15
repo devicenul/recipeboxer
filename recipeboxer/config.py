@@ -7,43 +7,54 @@ from typing import Any, Dict, Optional, Sequence, Tuple
 from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-# Quality profiles mapping table (Section 7.1).
-# NOTE: model IDs are provisional. They must be validated against the live
-# models list (GenAIClient.list_available_models) during WP-B0/WP-B2 before
-# being relied on; "balanced" must match the project's default model.
-_DEFAULT_FLASH = "gemini-3.7-flash"
-_DEFAULT_PRO = "gemini-3.1-pro-preview"  # validated 2026-10-14 via models.list; not available on free tier (429)
+# Single source of truth model constants (validated and priced in config/pricing.toml)
+DEFAULT_FLASH_MODEL = "gemini-3.8-flash"
+DEFAULT_FLASH_LITE_MODEL = "gemini-3.5-flash-lite"
+DEFAULT_PRO_MODEL = "gemini-3.1-pro-preview"
+DEFAULT_CONSISTENCY_MODEL = "gemini-3.6-flash"
+DEFAULT_EMBEDDING_MODEL = "gemini-embedding-2"
 
+# Backward compatibility aliases
+_DEFAULT_FLASH = DEFAULT_FLASH_MODEL
+_DEFAULT_PRO = DEFAULT_PRO_MODEL
+
+# Quality profiles mapping table (Section 7.1).
+# Trade-off note for economy profile:
+# TRANSCRIBE and STRUCTURE require higher OCR fidelity and structured schema synthesis
+# where gemini-3.5-flash-lite demonstrates noticeable quality degradation. Routing those two
+# core extraction stages to gemini-3.8-flash maintains high recipe accuracy while keeping
+# lightweight stages (FINGERPRINT, SET_VERIFY, GROUNDING, REPAIR, JUDGE, MODALITY) on
+# ultra-low-cost gemini-3.5-flash-lite ($0.30/$2.50 per MTok).
 QUALITY_PROFILES: Dict[str, Dict[str, str]] = {
     "economy": {
-        "FINGERPRINT": _DEFAULT_FLASH,
-        "SET_VERIFY": _DEFAULT_FLASH,
-        "TRANSCRIBE": _DEFAULT_FLASH,
-        "STRUCTURE": _DEFAULT_FLASH,
-        "GROUNDING": _DEFAULT_FLASH,
-        "REPAIR": _DEFAULT_FLASH,
-        "JUDGE": _DEFAULT_FLASH,
-        "MODALITY": _DEFAULT_FLASH,
+        "FINGERPRINT": DEFAULT_FLASH_LITE_MODEL,
+        "SET_VERIFY": DEFAULT_FLASH_LITE_MODEL,
+        "TRANSCRIBE": DEFAULT_FLASH_MODEL,
+        "STRUCTURE": DEFAULT_FLASH_MODEL,
+        "GROUNDING": DEFAULT_FLASH_LITE_MODEL,
+        "REPAIR": DEFAULT_FLASH_LITE_MODEL,
+        "JUDGE": DEFAULT_FLASH_LITE_MODEL,
+        "MODALITY": DEFAULT_FLASH_LITE_MODEL,
     },
     "balanced": {
-        "FINGERPRINT": _DEFAULT_FLASH,
-        "SET_VERIFY": _DEFAULT_FLASH,
-        "TRANSCRIBE": _DEFAULT_FLASH,
-        "STRUCTURE": _DEFAULT_FLASH,
-        "GROUNDING": _DEFAULT_FLASH,
-        "REPAIR": _DEFAULT_FLASH,
-        "JUDGE": _DEFAULT_PRO,
-        "MODALITY": _DEFAULT_FLASH,
+        "FINGERPRINT": DEFAULT_FLASH_MODEL,
+        "SET_VERIFY": DEFAULT_FLASH_MODEL,
+        "TRANSCRIBE": DEFAULT_FLASH_MODEL,
+        "STRUCTURE": DEFAULT_FLASH_MODEL,
+        "GROUNDING": DEFAULT_FLASH_MODEL,
+        "REPAIR": DEFAULT_FLASH_MODEL,
+        "JUDGE": DEFAULT_PRO_MODEL,
+        "MODALITY": DEFAULT_FLASH_MODEL,
     },
     "best": {
-        "FINGERPRINT": _DEFAULT_FLASH,
-        "SET_VERIFY": _DEFAULT_PRO,
-        "TRANSCRIBE": _DEFAULT_PRO,
-        "STRUCTURE": _DEFAULT_PRO,
-        "GROUNDING": _DEFAULT_PRO,
-        "REPAIR": _DEFAULT_PRO,
-        "JUDGE": _DEFAULT_PRO,
-        "MODALITY": _DEFAULT_FLASH,
+        "FINGERPRINT": DEFAULT_FLASH_MODEL,
+        "SET_VERIFY": DEFAULT_PRO_MODEL,
+        "TRANSCRIBE": DEFAULT_PRO_MODEL,
+        "STRUCTURE": DEFAULT_PRO_MODEL,
+        "GROUNDING": DEFAULT_PRO_MODEL,
+        "REPAIR": DEFAULT_PRO_MODEL,
+        "JUDGE": DEFAULT_PRO_MODEL,
+        "MODALITY": DEFAULT_FLASH_MODEL,
     },
 }
 
@@ -59,12 +70,14 @@ PROFILE_PARAMS: Dict[str, Dict[str, Any]] = {
         "thinking_budget_transcribe": -1,
         "self_consistency": "flagged",
         "grounding": True,
+        "other_model": DEFAULT_CONSISTENCY_MODEL,
     },
     "best": {
         "image_long_edge": 2000,
         "thinking_budget_transcribe": 2048,
         "self_consistency": "flagged_other_model",
         "grounding": True,
+        "other_model": DEFAULT_FLASH_MODEL,
     },
 }
 
@@ -86,7 +99,7 @@ class Settings(BaseSettings):
 
     # --- Gemini Model Configuration ---
     default_model: str = Field(
-        default="gemini-3.7-flash",
+        default=DEFAULT_FLASH_MODEL,
         description="Default Gemini model identifier used across all pipeline stages",
     )
     fingerprint_model: Optional[str] = Field(
@@ -137,8 +150,8 @@ class Settings(BaseSettings):
         description="Feature flag controlling multimodal embedding generation",
     )
     embedding_model: str = Field(
-        default="gemini-embedding-001",  # validated 2026-10-14 via models.list
-        description="Provisional embedding model identifier; validated at startup against live API list",
+        default=DEFAULT_EMBEDDING_MODEL,
+        description="Embedding model identifier; validated against pricing table",
     )
     embedding_batch_size: int = Field(
         default=16,

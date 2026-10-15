@@ -35,7 +35,7 @@ from recipeboxer.agent.session import (
     SessionManager,
     get_session_manager,
 )
-from recipeboxer.config import Settings, get_settings, has_usable_gemini_key
+from recipeboxer.config import DEFAULT_FLASH_MODEL, Settings, get_settings, has_usable_gemini_key
 from recipeboxer.exporter.curation import (
     CuratedCookbook,
     CuratedSection,
@@ -447,7 +447,7 @@ async def upload_cards(
     max_concurrency: Optional[int] = Form(5),
     slow_batch_size: Optional[int] = Form(2),
     slow_batch_interval_seconds: Optional[float] = Form(2.0),
-    model: Optional[str] = Form("gemini-3.7-flash"),
+    model: Optional[str] = Form(DEFAULT_FLASH_MODEL),
     default_tags: Optional[str] = Form(None),
     baseline_archive: Optional[UploadFile] = File(None),
     baseline_project_path: Optional[str] = Form(None),
@@ -541,7 +541,7 @@ async def upload_cards(
             max_concurrency=max_concurrency or 5,
             slow_batch_size=slow_batch_size or 2,
             slow_batch_interval_seconds=slow_batch_interval_seconds or 2.0,
-            model=model or "gemini-3.7-flash",
+            model=model or DEFAULT_FLASH_MODEL,
             default_tags=parsed_default_tags,
         )
         session = manager.create_session(config=config, session_id=sid)

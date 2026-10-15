@@ -36,13 +36,14 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
             Gemini Multimodal Model
           </label>
           <select
-            value={config.model || 'gemini-3.7-flash'}
+            value={config.model || 'gemini-3.8-flash'}
             disabled={disabled}
             onChange={(e) => update({ model: e.target.value })}
             className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
           >
-            <option value="gemini-3.7-flash">gemini-3.7-flash (High Throughput, Recommended)</option>
+            <option value="gemini-3.8-flash">gemini-3.8-flash (High Throughput, Recommended)</option>
             <option value="gemini-3.1-pro">gemini-3.1-pro (Maximum Reasoning Accuracy)</option>
+            <option value="gemini-3.1-pro-preview">gemini-3.1-pro-preview</option>
           </select>
         </div>
 

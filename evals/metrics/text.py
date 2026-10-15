@@ -224,14 +224,15 @@ def cer(
     normalize: bool = True,
     case_sensitive: bool = False,
 ) -> float:
-    """Calculates normalized Character Error Rate (CER).
+    """Calculates normalized Character Error Rate (CER) capped at 1.0.
 
-    CER = LevenshteinDistance(ref, hyp) / max(len(ref), 1)
+    CER = min(1.0, LevenshteinDistance(ref, hyp) / max(len(ref), 1))
 
     Edge cases:
     - ref == "" and hyp == "": 0.0
     - ref == "" and hyp != "": 1.0
     - ref != "" and hyp == "": 1.0
+    - dist / len(ref) > 1.0: clamped to 1.0
 
     Args:
         reference: Ground-truth reference string.
@@ -240,7 +241,7 @@ def cer(
         case_sensitive: Whether to retain case during normalization.
 
     Returns:
-        Float error rate >= 0.0.
+        Float error rate in [0.0, 1.0].
     """
     ref_clean = normalize_text(reference, case_sensitive=case_sensitive) if normalize else (reference or "")
     hyp_clean = normalize_text(hypothesis, case_sensitive=case_sensitive) if normalize else (hypothesis or "")
@@ -255,7 +256,7 @@ def cer(
         return 1.0 if len_hyp > 0 else 0.0
 
     dist = levenshtein_distance(ref_clean, hyp_clean)
-    return float(dist / len_ref)
+    return min(1.0, float(dist / len_ref))
 
 
 def wer(
@@ -265,7 +266,10 @@ def wer(
     normalize: bool = True,
     case_sensitive: bool = False,
 ) -> float:
-    """Calculates Word Error Rate (WER) across whitespace-delimited tokens."""
+    """Calculates Word Error Rate (WER) across whitespace-delimited tokens capped at 1.0.
+
+    WER = min(1.0, LevenshteinDistance(ref_words, hyp_words) / max(len(ref_words), 1))
+    """
     ref_clean = normalize_text(reference, case_sensitive=case_sensitive) if normalize else (reference or "")
     hyp_clean = normalize_text(hypothesis, case_sensitive=case_sensitive) if normalize else (hypothesis or "")
 
@@ -282,7 +286,7 @@ def wer(
         return 1.0 if len_hyp > 0 else 0.0
 
     dist = levenshtein_distance(ref_words, hyp_words)
-    return float(dist / len_ref)
+    return min(1.0, float(dist / len_ref))
 
 
 def extract_fractions(text: Optional[str]) -> List[str]:

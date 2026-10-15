@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional, Union
 from pydantic import BaseModel, Field
 
+from recipeboxer.config import DEFAULT_FLASH_MODEL
 from recipeboxer.models.failures import StageFailure
 from recipeboxer.models.pipeline import PipelineState, ProgressMetrics, TokenUsage
 from recipeboxer.models.recipe import RecipeSchema
@@ -304,7 +305,7 @@ class IngestionConfig(BaseModel):
         description="Delay in seconds between batch chunks in slow-batch mode",
     )
     model: str = Field(
-        default="gemini-3.7-flash",
+        default=DEFAULT_FLASH_MODEL,
         description="Gemini model identifier to use across pipeline stages",
     )
     mode: str = Field(

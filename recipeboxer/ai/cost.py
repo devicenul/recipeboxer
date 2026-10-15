@@ -24,7 +24,7 @@ except ImportError:
     import tomli as tomllib  # type: ignore
 
 from recipeboxer.ai.client import LLMStage, UsageLedger, UsageRecord, UsageTokens
-from recipeboxer.config import QUALITY_PROFILES, get_settings
+from recipeboxer.config import DEFAULT_FLASH_MODEL, QUALITY_PROFILES, get_settings
 from recipeboxer.models.failures import BudgetExceeded, FailureReason, StageUnavailableError
 
 logger = logging.getLogger(__name__)
@@ -554,7 +554,7 @@ def estimate_run_cost(
             if n_calls <= 0:
                 continue
 
-            model = profile_models.get(stg, profile_models.get("STRUCTURE", "gemini-3.7-flash"))
+            model = profile_models.get(stg, profile_models.get("STRUCTURE", DEFAULT_FLASH_MODEL))
             tokens = stage_tokens.get(stg, {"input_tokens": 1000, "output_tokens": 500, "thinking_tokens": 0})
 
             cost_per_call = prices.cost_usd(

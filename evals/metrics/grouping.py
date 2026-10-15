@@ -232,7 +232,7 @@ def kendall_tau_order(
     pred: List[List[str]],
     gold: List[List[str]],
     matches: Optional[List[Tuple[Optional[int], Optional[int], float]]] = None,
-) -> float:
+) -> Optional[float]:
     """Computes mean Kendall tau rank correlation of card order within matched multi-card clusters.
 
     For each matched pair of clusters with >= 2 common cards:
@@ -244,7 +244,7 @@ def kendall_tau_order(
         matches: Optional precomputed list from `match_recipes`.
 
     Returns:
-        Mean tau in [-1.0, 1.0], or 1.0 if no multi-card matched clusters exist.
+        Mean tau in [-1.0, 1.0], or None if no multi-card matched clusters exist (undefined).
     """
     if matches is None:
         norm_pred = [[Path(str(c)).name for c in p] for p in pred]
@@ -297,10 +297,7 @@ def kendall_tau_order(
             tau_scores.append((concordant - discordant) / total)
 
     if not tau_scores:
-        has_gold_multicard = any(len(g) >= 2 for g in gold)
-        if has_gold_multicard and len(pred) > 0:
-            return 0.0
-        return 1.0
+        return None
 
     return float(sum(tau_scores) / len(tau_scores))
 
@@ -466,7 +463,7 @@ def score_grouping(pred: List[List[str]], gold: List[List[str]]) -> Dict[str, An
         "bcubed_f1": round(bf1, 4),
         "ari": round(ari, 4),
         "exact_cluster_acc": round(exact_acc, 4),
-        "order_kendall_tau": round(tau, 4),
+        "order_kendall_tau": round(tau, 4) if tau is not None else None,
         "standalone_acc": round(sa_acc, 4),
         "false_merge_rate": round(fm_rate, 4),
         "false_split_rate": round(fs_rate, 4),

@@ -35,9 +35,21 @@ RecipeBoxer transforms disorganized shoe boxes, albums, and binders of vintage h
 
 ---
 
-## Developer & Agent Context Hub
+## Documentation
 
-For in-depth architectural specifications, non-negotiable invariants, testing guidelines, and extension playbooks, refer to the **`_agents/`** documentation suite:
+Complete documentation for RecipeBoxer is organized under the [`docs/`](docs/) directory:
+
+- [**System Architecture** (`docs/ARCHITECTURE.md`)](docs/ARCHITECTURE.md): Complete pipeline design, LLM orchestration, `DeckBackground` likelihood ratios, path-cover optimization, failure models, Schema v2, and frontend UI contracts.
+- [**Evaluation Framework & Honesty Rules** (`docs/EVALS.md`)](docs/EVALS.md): Anti-cheat invariants, benchmark tiers T0–T4, black-box runner, encrypted ground-truth vault, scoring protocols, verified pricing, and certified baselines.
+- [**Test Infrastructure** (`docs/TEST_INFRA.md`)](docs/TEST_INFRA.md): Anti-cheat canaries, static AST invariant checks, hermetic API key isolation, `ScriptedLLMClient` test doubles, execution tiers, and test triage catalog.
+- [**User Guide & Settings** (`docs/USER_GUIDE.md`)](docs/USER_GUIDE.md): Getting a Gemini API key, free vs. paid tier recommendations (paid key recommended for family photo privacy), quality profiles, spend caps, legibility markers, and 9-format recipe exporting.
+- [**Strategic Roadmap** (`docs/ROADMAP.md`)](docs/ROADMAP.md): Milestone tracking, Gate B certification criteria, Tier T4 real photo intake plan, d04 homogeneous scaling gap closure, and CardForge split.
+- [**CI & Evaluation Security** (`docs/CI.md`)](docs/CI.md): Two-workflow GitHub Actions split isolating untrusted PR execution from trusted ground-truth decryption.
+
+> [!IMPORTANT]
+> **Evaluation Honesty Note**: Earlier benchmark results were produced by code and tests that could read answers instead of deriving them (manifest/hash lookups, filename heuristics, canned fallback recipes). An October 2026 audit removed these, added anti-cheat invariants (INV-AC1..INV-AC6) with tests, and moved evaluation to a black-box harness scored against encrypted ground truth. See [`docs/EVALS.md`](docs/EVALS.md) for the current honest baselines.
+
+### Developer & Agent Context Hub
 
 - [**`_agents/README.md`**](_agents/README.md): Fast-orientation index and onboarding guide for AI agents and human developers.
 - [**`_agents/ARCHITECTURE.md`**](_agents/ARCHITECTURE.md): Comprehensive breakdown of the Python backend (Google Antigravity SDK orchestrator, SQLite WAL persistence, two-stage correlation engine, FastAPI/SSE) and React 18+ SPA.
@@ -46,6 +58,7 @@ For in-depth architectural specifications, non-negotiable invariants, testing gu
 - [**`_agents/EXTENDING_RECIPEBOXER.md`**](_agents/EXTENDING_RECIPEBOXER.md): Step-by-step developer extension guides with code examples for adding source providers, custom prompt branches, and export format serializers.
 - [**`ROADMAP.md`**](ROADMAP.md): Canonical project roadmap tracking completed milestones M1–M16 and prioritized future backlog items (Phase 10).
 - [**`SCRIPTS.md`**](SCRIPTS.md): Comprehensive script usage and troubleshooting guide for all POSIX and Windows scripts.
+
 
 ---
 

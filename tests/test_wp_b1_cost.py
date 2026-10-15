@@ -244,14 +244,14 @@ def test_estimate_run_cost_formula_and_calibration():
     """Validates pre-run cost estimation per REMEDIATION_PLAN.md §7.1 and calibration overrides."""
     prices = PriceTable(
         prices={
-            "gemini-3.7-flash": ModelPrice(
-                model="gemini-3.7-flash",
+            "gemini-3.8-flash": ModelPrice(
+                model="gemini-3.8-flash",
                 input_per_mtok=0.50,
                 output_per_mtok=2.00,
                 thinking_per_mtok=2.00,
             ),
-            "gemini-3.7-pro": ModelPrice(
-                model="gemini-3.7-pro",
+            "gemini-3.1-pro-preview": ModelPrice(
+                model="gemini-3.1-pro-preview",
                 input_per_mtok=2.00,
                 output_per_mtok=8.00,
                 thinking_per_mtok=8.00,

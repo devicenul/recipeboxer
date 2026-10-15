@@ -6,6 +6,7 @@ from enum import Enum
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, ConfigDict, Field
 
+from recipeboxer.config import DEFAULT_FLASH_MODEL
 from recipeboxer.models.failures import StageFailure
 from recipeboxer.models.recipe import RecipeSchema
 
@@ -117,8 +118,8 @@ class PipelineStartRequest(BaseModel):
     slow_batch_size: Optional[int] = Field(default=None, ge=1, le=20, description="Override for slow batch chunk size")
     slow_batch_interval_seconds: Optional[float] = Field(default=None, ge=0.0, description="Override for interval between batches")
     model: Optional[str] = Field(
-        default="gemini-3.7-flash",
-        description="Gemini multimodal model identifier (e.g. gemini-3.7-flash, gemini-3.1-pro)",
+        default=DEFAULT_FLASH_MODEL,
+        description="Gemini multimodal model identifier (e.g. gemini-3.8-flash, gemini-3.1-pro-preview)",
     )
     fingerprint_model: Optional[str] = Field(default=None)
     correlation_model: Optional[str] = Field(default=None)

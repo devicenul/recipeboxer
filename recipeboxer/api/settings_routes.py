@@ -88,7 +88,7 @@ class SettingsUpdateRequest(BaseModel):
     )
     stage_models: Optional[Dict[str, str]] = Field(
         default=None,
-        description="Per-stage model overrides (e.g. {'FINGERPRINT': 'gemini-3.7-flash'})",
+        description="Per-stage model overrides (e.g. {'FINGERPRINT': 'gemini-3.8-flash'})",
     )
     spend_cap_usd: Optional[float] = Field(
         default=None,

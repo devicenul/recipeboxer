@@ -16,6 +16,11 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 from pydantic import BaseModel, Field
 
 from recipeboxer.ai.client import ImagePart, LLMClient, LLMRequest, LLMStage, TextPart
+from recipeboxer.config import (
+    DEFAULT_CONSISTENCY_MODEL,
+    DEFAULT_FLASH_MODEL,
+    DEFAULT_PRO_MODEL,
+)
 from recipeboxer.extraction.grounding import levenshtein_distance
 from recipeboxer.models.failures import BudgetExceeded, ExtractionUnavailable, FailureReason, StageUnavailableError
 from recipeboxer.models.recipe import IngredientLine, Recipe, RecipeWarning, Step
@@ -318,14 +323,20 @@ async def self_consistency(
 
     if sc_mode in ("flagged_other_model", "other_model"):
         # Select an alternative model
-        if "flash" in primary_model.lower():
+        prof = (getattr(settings, "quality_profile", "") or "").lower()
+        if prof == "balanced":
+            second_model = (
+                profile_params.get("other_model")
+                or DEFAULT_CONSISTENCY_MODEL
+            )
+        elif "flash" in primary_model.lower():
             second_model = (
                 getattr(settings, "judge_model", None)
                 or settings.get_stage_model("JUDGE")
-                or "gemini-3.7-pro"
+                or DEFAULT_PRO_MODEL
             )
         else:
-            second_model = "gemini-3.7-flash"
+            second_model = profile_params.get("other_model") or DEFAULT_FLASH_MODEL
     else:
         # Same model, higher/different temperature
         second_model = primary_model

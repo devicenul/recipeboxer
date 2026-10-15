@@ -17,7 +17,12 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from evals.metrics.calibration import ece
-from evals.metrics.extraction import aggregate as aggregate_extraction, score_recipe
+from evals.metrics.extraction import (
+    aggregate as aggregate_extraction,
+    match_recipes_by_content,
+    recipe_content_similarity,
+    score_recipe,
+)
 from evals.metrics.grouping import match_recipes, score_grouping
 from evals.metrics.ops import summarize_ledger
 
@@ -27,24 +32,34 @@ logger = logging.getLogger("evals.scoring.evaluator")
 def evaluate_deck(
     deck_output: Dict[str, Any],
     deck_gt: Dict[str, Any],
+    *,
+    min_overlap: float = 0.10,
 ) -> Dict[str, Any]:
-    """Scores a single deck's predicted recipes against ground truth."""
+    """Scores a single deck's predicted recipes against ground truth.
+
+    Protocol (WP-SV):
+    - Grouping metrics (B-Cubed, ARI, exact cluster, tau) evaluated on card clusters.
+    - Extraction matching performed on recipe content similarity (word-token Jaccard)
+      with Hungarian bipartite matching and minimum-overlap threshold (`min_overlap`).
+    - Matched pairs scored for extraction accuracy ('matched-only').
+    - Unmatched gold recipes scored as omissions (pred=None, metrics=0, CER=1.0)
+      and included in 'end-to-end' aggregates.
+    - Unmatched predicted recipes (fragments, hallucinations) counted as
+      `n_unmatched_pred` / `hallucinated_recipe_rate`, NOT averaged into per-field metrics.
+    """
     pred_recipes = deck_output.get("recipes", [])
     gold_recipes = deck_gt.get("recipes", [])
 
     pred_clusters = [r.get("image_ids", []) for r in pred_recipes]
     gold_clusters = [r.get("faces", []) for r in gold_recipes]
 
-    # 1. Grouping metrics
+    # 1. Grouping metrics on card clusters
     grouping_scores = score_grouping(pred_clusters, gold_clusters)
 
-    # 2. Hungarian matching on card-overlap IoU
-    matches = match_recipes(pred_clusters, gold_clusters)
-
-    # 3. Extraction metrics per matched recipe
-    recipe_rows: List[Dict[str, Any]] = []
-    confidences: List[float] = []
-    correct_list: List[bool] = []
+    # 2. Principled Hungarian recipe matching on content similarity
+    matched_pairs, unmatched_preds, unmatched_golds = match_recipes_by_content(
+        pred_recipes, gold_recipes, min_overlap=min_overlap
+    )
 
     deck_type = deck_gt.get("deck_type", "mixed")
     image_modality_map: Dict[str, str] = {}
@@ -56,28 +71,30 @@ def evaluate_deck(
             image_modality_map[Path(iid).name] = m
             image_modality_map[Path(iid).stem] = m
 
+    matched_rows: List[Dict[str, Any]] = []
+    omitted_rows: List[Dict[str, Any]] = []
+    confidences: List[float] = []
+    correct_list: List[bool] = []
     n_unscored_no_structured_gt = 0
 
-    for pred_idx, gold_idx, iou in matches:
-        gold_rec = gold_recipes[gold_idx] if gold_idx is not None else None
-        pred_rec_obj = pred_recipes[pred_idx] if pred_idx is not None else None
+    # 3. Score matched recipe pairs
+    for pred_idx, gold_idx, sim in matched_pairs:
+        gold_rec = gold_recipes[gold_idx]
+        pred_rec_obj = pred_recipes[pred_idx]
 
-        gold_struct = gold_rec.get("structured") if gold_rec else None
-        gold_verb = gold_rec.get("verbatim") if gold_rec else None
+        gold_struct = gold_rec.get("structured")
+        gold_verb = gold_rec.get("verbatim")
 
         has_structured = (
-            gold_rec is not None
-            and gold_struct is not None
+            gold_struct is not None
             and isinstance(gold_struct, dict)
             and len(gold_struct) > 0
             and gold_rec.get("structured_status") not in ("pending", "pending_text_only_draft")
         )
 
-        if gold_rec is not None and not has_structured:
+        if not has_structured:
             n_unscored_no_structured_gt += 1
             target_gold_struct = None
-        elif gold_rec is None:
-            target_gold_struct = {}
         else:
             target_gold_struct = gold_struct
 
@@ -91,7 +108,6 @@ def evaluate_deck(
                     from recipeboxer.models.recipe import Recipe
                     pred_struct = Recipe.model_validate(pred_struct).to_scoring_dict()
                 except Exception:
-                    # Malformed SUT output counts as an omission, and is flagged.
                     pred_struct = None
                     schema_invalid = True
 
@@ -102,46 +118,108 @@ def evaluate_deck(
         )
         row["schema_invalid"] = schema_invalid
         row["deck_type"] = deck_type
+        row["recipe_id"] = gold_rec.get("recipe_id", "")
+        row["content_similarity"] = sim
 
-        # Attach metadata for category aggregation
-        if gold_rec:
-            row["recipe_id"] = gold_rec.get("recipe_id", "")
-            faces = gold_rec.get("faces", [])
-            row["faces"] = str(len(faces))
-            row["faces_count"] = str(len(faces))
-            row["difficulty"] = gold_rec.get("difficulty", {}).get("legibility", "good")
-            mods = [
-                image_modality_map.get(f) or image_modality_map.get(Path(f).name) or image_modality_map.get(Path(f).stem)
-                for f in faces
-            ]
-            mods = [m for m in mods if m is not None]
-            if mods:
-                row["modality"] = mods[0] if all(m == mods[0] for m in mods) else "mixed"
-            else:
-                row["modality"] = "unknown"
+        # Attach metadata from GT (never SUT output)
+        faces = gold_rec.get("faces", [])
+        row["faces"] = str(len(faces))
+        row["faces_count"] = str(len(faces))
+        row["difficulty"] = gold_rec.get("difficulty", {}).get("legibility", "good")
+        mods = [
+            image_modality_map.get(f) or image_modality_map.get(Path(f).name) or image_modality_map.get(Path(f).stem)
+            for f in faces
+        ]
+        mods = [m for m in mods if m is not None]
+        if mods:
+            row["modality"] = mods[0] if all(m == mods[0] for m in mods) else "mixed"
         else:
-            row["faces"] = "unknown"
-            row["faces_count"] = "unknown"
             row["modality"] = "unknown"
-            row["difficulty"] = "unknown"
 
+        # Calibration tracking
         if pred_rec_obj:
             raw_conf = pred_rec_obj.get("confidence")
             if raw_conf is not None:
                 try:
                     conf = float(raw_conf)
                     confidences.append(conf)
-                    is_correct = (iou >= 0.5) and (row.get("ingredient_f1") is not None and row.get("ingredient_f1", 0.0) >= 0.7)
+                    is_correct = (sim >= 0.5) and (
+                        row.get("ingredient_f1") is not None and row.get("ingredient_f1", 0.0) >= 0.7
+                    )
                     correct_list.append(is_correct)
                 except (ValueError, TypeError):
                     pass
 
-        recipe_rows.append(row)
+        matched_rows.append(row)
 
-    # Aggregate extraction scores
-    extraction_summary = aggregate_extraction(recipe_rows)
-    extraction_summary["n_unscored_no_structured_gt"] = n_unscored_no_structured_gt
-    extraction_summary["n_stage_failures"] = len(deck_output.get("failures", []))
+    # 4. Score unmatched gold recipes (recipe-level omissions)
+    for gold_idx in unmatched_golds:
+        gold_rec = gold_recipes[gold_idx]
+        gold_struct = gold_rec.get("structured")
+        gold_verb = gold_rec.get("verbatim")
+
+        has_structured = (
+            gold_struct is not None
+            and isinstance(gold_struct, dict)
+            and len(gold_struct) > 0
+            and gold_rec.get("structured_status") not in ("pending", "pending_text_only_draft")
+        )
+
+        if not has_structured:
+            n_unscored_no_structured_gt += 1
+            target_gold_struct = None
+        else:
+            target_gold_struct = gold_struct
+
+        omitted_row = score_recipe(
+            pred=None,
+            gold_structured=target_gold_struct,
+            gold_verbatim=gold_verb,
+        )
+        omitted_row["schema_invalid"] = False
+        omitted_row["deck_type"] = deck_type
+        omitted_row["recipe_id"] = gold_rec.get("recipe_id", "")
+        omitted_row["content_similarity"] = 0.0
+
+        faces = gold_rec.get("faces", [])
+        omitted_row["faces"] = str(len(faces))
+        omitted_row["faces_count"] = str(len(faces))
+        omitted_row["difficulty"] = gold_rec.get("difficulty", {}).get("legibility", "good")
+        mods = [
+            image_modality_map.get(f) or image_modality_map.get(Path(f).name) or image_modality_map.get(Path(f).stem)
+            for f in faces
+        ]
+        mods = [m for m in mods if m is not None]
+        if mods:
+            omitted_row["modality"] = mods[0] if all(m == mods[0] for m in mods) else "mixed"
+        else:
+            omitted_row["modality"] = "unknown"
+
+        omitted_rows.append(omitted_row)
+
+    # 5. Extraction aggregates: matched-only vs end-to-end
+    matched_only_summary = aggregate_extraction(matched_rows)
+    end_to_end_summary = aggregate_extraction(matched_rows + omitted_rows)
+
+    n_pred_total = len(pred_recipes)
+    n_gold_total = len(gold_recipes)
+    n_unmatched_pred = len(unmatched_preds)
+    n_omitted_gold = len(unmatched_golds)
+
+    extraction_summary = {
+        "matched_only": matched_only_summary,
+        "end_to_end": end_to_end_summary,
+        "overall": matched_only_summary.get("overall", {}),
+        "breakdowns": matched_only_summary.get("breakdowns", {}),
+        "count": len(matched_rows),
+        "n_matched": len(matched_pairs),
+        "n_unmatched_pred": n_unmatched_pred,
+        "n_omitted_gold": n_omitted_gold,
+        "hallucinated_recipe_rate": round(n_unmatched_pred / n_pred_total, 4) if n_pred_total > 0 else 0.0,
+        "omitted_recipe_rate": round(n_omitted_gold / n_gold_total, 4) if n_gold_total > 0 else 0.0,
+        "n_unscored_no_structured_gt": n_unscored_no_structured_gt,
+        "n_stage_failures": len(deck_output.get("failures", [])),
+    }
 
     # Calibration ECE
     calibration_ece = None
@@ -156,8 +234,14 @@ def evaluate_deck(
         "grouping": grouping_scores,
         "extraction": extraction_summary,
         "calibration_ece": calibration_ece,
-        "recipe_rows": recipe_rows,
-        "matches": matches,
+        "recipe_rows": matched_rows,
+        "omitted_rows": omitted_rows,
+        "matched_pairs": matched_pairs,
+        "unmatched_preds": unmatched_preds,
+        "unmatched_golds": unmatched_golds,
+        "matches": [(p, g, s) for p, g, s in matched_pairs]
+        + [(p, None, 0.0) for p in unmatched_preds]
+        + [(None, g, 0.0) for g in unmatched_golds],
         "confidences": confidences,
         "correct_list": correct_list,
     }
@@ -205,7 +289,8 @@ def score_evaluation(
     out_decks = outputs_data.get("decks", [])
 
     deck_results: List[Dict[str, Any]] = []
-    all_recipe_rows: List[Dict[str, Any]] = []
+    all_matched_rows: List[Dict[str, Any]] = []
+    all_omitted_rows: List[Dict[str, Any]] = []
     all_confidences: List[float] = []
     all_correct: List[bool] = []
     all_grouping_scores: List[Dict[str, Any]] = []
@@ -222,7 +307,8 @@ def score_evaluation(
 
         res = evaluate_deck(out_d, gt_d)
         deck_results.append(res)
-        all_recipe_rows.extend(res.get("recipe_rows", []))
+        all_matched_rows.extend(res.get("recipe_rows", []))
+        all_omitted_rows.extend(res.get("omitted_rows", []))
         all_grouping_scores.append(res.get("grouping", {}))
         all_confidences.extend(res.get("confidences", []))
         all_correct.extend(res.get("correct_list", []))
@@ -230,13 +316,19 @@ def score_evaluation(
     # Overall grouping aggregate
     overall_grouping: Dict[str, Any] = {}
     if all_grouping_scores:
-        grouping_keys = all_grouping_scores[0].keys()
+        grouping_keys = list(all_grouping_scores[0].keys())
         for k in grouping_keys:
             vals = [s[k] for s in all_grouping_scores if s.get(k) is not None]
-            overall_grouping[k] = sum(vals) / len(vals) if vals else 0.0
+            if k == "order_kendall_tau":
+                overall_grouping[k] = round(sum(vals) / len(vals), 4) if vals else None
+                overall_grouping["order_kendall_tau_n"] = len(vals)
+            else:
+                overall_grouping[k] = round(sum(vals) / len(vals), 4) if vals else 0.0
 
-    # Overall extraction aggregate
-    overall_extraction = aggregate_extraction(all_recipe_rows)
+    # Overall extraction aggregates: matched-only vs end-to-end
+    overall_matched = aggregate_extraction(all_matched_rows)
+    overall_e2e = aggregate_extraction(all_matched_rows + all_omitted_rows)
+
     total_unscored_no_gt = sum(
         res.get("extraction", {}).get("n_unscored_no_structured_gt", 0)
         for res in deck_results
@@ -245,8 +337,38 @@ def score_evaluation(
         res.get("extraction", {}).get("n_stage_failures", 0)
         for res in deck_results
     )
-    overall_extraction["n_unscored_no_structured_gt"] = total_unscored_no_gt
-    overall_extraction["n_stage_failures"] = total_stage_failures
+    total_unmatched_pred = sum(
+        res.get("extraction", {}).get("n_unmatched_pred", 0)
+        for res in deck_results
+    )
+    total_omitted_gold = sum(
+        res.get("extraction", {}).get("n_omitted_gold", 0)
+        for res in deck_results
+    )
+    total_matched = sum(
+        res.get("extraction", {}).get("n_matched", 0)
+        for res in deck_results
+    )
+    total_pred = sum(len(d.get("recipes", [])) for d in out_decks)
+    total_gold = sum(
+        len(gt_decks.get(d.get("deck_id", ""), {}).get("recipes", []))
+        for d in out_decks
+    )
+
+    overall_extraction = {
+        "matched_only": overall_matched,
+        "end_to_end": overall_e2e,
+        "overall": overall_matched["overall"],
+        "breakdowns": overall_matched["breakdowns"],
+        "count": len(all_matched_rows),
+        "n_matched": total_matched,
+        "n_unmatched_pred": total_unmatched_pred,
+        "n_omitted_gold": total_omitted_gold,
+        "hallucinated_recipe_rate": round(total_unmatched_pred / total_pred, 4) if total_pred > 0 else 0.0,
+        "omitted_recipe_rate": round(total_omitted_gold / total_gold, 4) if total_gold > 0 else 0.0,
+        "n_unscored_no_structured_gt": total_unscored_no_gt,
+        "n_stage_failures": total_stage_failures,
+    }
 
     # Overall calibration ECE
     overall_ece = None
@@ -256,12 +378,12 @@ def score_evaluation(
         except Exception:
             pass
 
-    # Category aggregations
+    # Category aggregations strictly grounded in GT attributes
     category_metrics: Dict[str, Any] = {}
-    if all_recipe_rows:
-        # Group by faces_count
+    if all_matched_rows:
+        # Group by faces_count from GT
         by_faces: Dict[str, List[Dict[str, Any]]] = {}
-        for row in all_recipe_rows:
+        for row in all_matched_rows:
             fc = row.get("faces_count", "1")
             by_faces.setdefault(f"{fc}-card", []).append(row)
 
@@ -269,6 +391,38 @@ def score_evaluation(
             agg = aggregate_extraction(rows)
             cat_overall = agg.get("overall", {})
             category_metrics[cat_label] = {
+                "ingredient_f1": cat_overall.get("ingredient_f1", {}).get("mean"),
+                "title_cer": cat_overall.get("title_cer", {}).get("mean"),
+                "direction_f1": cat_overall.get("direction_f1", {}).get("mean"),
+                "bcubed_f1": None,
+            }
+
+        # Group by deck_type from GT
+        by_dt: Dict[str, List[Dict[str, Any]]] = {}
+        for row in all_matched_rows:
+            dt = row.get("deck_type", "unknown")
+            by_dt.setdefault(dt, []).append(row)
+
+        for dt_label, rows in by_dt.items():
+            agg = aggregate_extraction(rows)
+            cat_overall = agg.get("overall", {})
+            category_metrics[dt_label] = {
+                "ingredient_f1": cat_overall.get("ingredient_f1", {}).get("mean"),
+                "title_cer": cat_overall.get("title_cer", {}).get("mean"),
+                "direction_f1": cat_overall.get("direction_f1", {}).get("mean"),
+                "bcubed_f1": None,
+            }
+
+        # Group by modality from GT
+        by_mod: Dict[str, List[Dict[str, Any]]] = {}
+        for row in all_matched_rows:
+            m = row.get("modality", "unknown")
+            by_mod.setdefault(m, []).append(row)
+
+        for mod_label, rows in by_mod.items():
+            agg = aggregate_extraction(rows)
+            cat_overall = agg.get("overall", {})
+            category_metrics[mod_label] = {
                 "ingredient_f1": cat_overall.get("ingredient_f1", {}).get("mean"),
                 "title_cer": cat_overall.get("title_cer", {}).get("mean"),
                 "direction_f1": cat_overall.get("direction_f1", {}).get("mean"),

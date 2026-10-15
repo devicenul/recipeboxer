@@ -227,7 +227,7 @@ def test_category_breakdown_bcubed_footnote():
 
 
 def test_kendall_tau_order_normalization_and_unmatched():
-    """kendall_tau_order handles path strings and returns 0.0 when multi-card recipes fail to group."""
+    """kendall_tau_order handles path strings and returns None when multi-card recipes fail to match."""
     # 1. Path vs basename matching
     pred = [["/tmp/deck/c01.jpg", "/tmp/deck/c02.jpg"]]
     gold = [["c01.jpg", "c02.jpg"]]
@@ -239,7 +239,7 @@ def test_kendall_tau_order_normalization_and_unmatched():
 
     # 3. Gold has multi-card recipes, but model produced only single-card clusters (or failed to match multi-card)
     pred_split = [["c01.jpg"], ["c02.jpg"]]
-    assert kendall_tau_order(pred_split, gold) == 0.0
+    assert kendall_tau_order(pred_split, gold) is None
 
 
 def test_ops_spend_unknown_when_missing():

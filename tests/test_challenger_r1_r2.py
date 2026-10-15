@@ -74,12 +74,12 @@ class TestChallengerModelSelectionR1:
     """Stress tests for Gemini model configuration, propagation, and UI alignment (R1)."""
 
     def test_r1_settings_valid_models_supported(self):
-        """Verify Settings accepts gemini-3.7-flash and gemini-3.1-pro cleanly."""
-        s_flash = Settings(default_model="gemini-3.7-flash")
-        assert s_flash.default_model == "gemini-3.7-flash"
-        assert s_flash.get_fingerprint_model() == "gemini-3.7-flash"
-        assert s_flash.get_correlation_model() == "gemini-3.7-flash"
-        assert s_flash.get_extraction_model() == "gemini-3.7-flash"
+        """Verify Settings accepts gemini-3.8-flash and gemini-3.1-pro cleanly."""
+        s_flash = Settings(default_model="gemini-3.8-flash")
+        assert s_flash.default_model == "gemini-3.8-flash"
+        assert s_flash.get_fingerprint_model() == "gemini-3.8-flash"
+        assert s_flash.get_correlation_model() == "gemini-3.8-flash"
+        assert s_flash.get_extraction_model() == "gemini-3.8-flash"
 
         s_pro = Settings(
             default_model="gemini-3.1-pro",
@@ -93,9 +93,9 @@ class TestChallengerModelSelectionR1:
         assert s_pro.get_extraction_model() == "gemini-3.1-pro"
 
     def test_r1_pipeline_start_request_model_propagation(self):
-        """Verify PipelineStartRequest defaults to gemini-3.7-flash and accepts gemini-3.1-pro."""
+        """Verify PipelineStartRequest defaults to gemini-3.8-flash and accepts gemini-3.1-pro."""
         req_default = PipelineStartRequest(scans_dir="tests/fixtures/sample_cards")
-        assert req_default.model == "gemini-3.7-flash"
+        assert req_default.model == "gemini-3.8-flash"
 
         req_pro = PipelineStartRequest(
             scans_dir="tests/fixtures/sample_cards",
@@ -113,17 +113,17 @@ class TestChallengerModelSelectionR1:
         assert config_panel_path.exists(), "ConfigPanel.tsx missing"
         content = config_panel_path.read_text(encoding="utf-8")
 
-        assert "gemini-3.7-flash" in content
+        assert "gemini-3.8-flash" in content
         assert "gemini-3.1-pro" in content
         assert "gemini-3.7-pro" not in content, "Invalid model 'gemini-3.7-pro' found in ConfigPanel.tsx"
 
     def test_r1_frontend_session_launcher_default_model(self):
-        """Verify SessionLauncher defaults to gemini-3.7-flash and does not reference gemini-3.7-pro."""
+        """Verify SessionLauncher defaults to gemini-3.8-flash and does not reference gemini-3.7-pro."""
         launcher_path = Path("frontend/src/components/ingestion/SessionLauncher.tsx")
         assert launcher_path.exists(), "SessionLauncher.tsx missing"
         content = launcher_path.read_text(encoding="utf-8")
 
-        assert "gemini-3.7-flash" in content
+        assert "gemini-3.8-flash" in content
         assert "gemini-3.7-pro" not in content, "Invalid model 'gemini-3.7-pro' found in SessionLauncher.tsx"
 
     @pytest.mark.asyncio

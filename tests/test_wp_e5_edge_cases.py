@@ -53,7 +53,7 @@ class TestGroupingEdgeCases:
         assert res["bcubed_f1"] == 1.0
         assert res["ari"] == 1.0
         assert res["exact_cluster_acc"] == 1.0
-        assert res["order_kendall_tau"] == 1.0
+        assert res["order_kendall_tau"] is None
         assert res["standalone_acc"] == 1.0
         assert res["false_merge_rate"] == 0.0
         assert res["false_split_rate"] == 0.0
@@ -168,11 +168,11 @@ class TestGroupingEdgeCases:
         res_partial = score_grouping(pred_partial, gold)
         assert pytest.approx(res_partial["order_kendall_tau"], 0.001) == 1.0 / 3.0
 
-        # Cluster of size 1 (no face order to check) -> tau = 1.0
+        # Cluster of size 1 (no face order to check) -> tau = None (undefined)
         gold_single = [["c1"]]
         pred_single = [["c1"]]
         res_single = score_grouping(pred_single, gold_single)
-        assert res_single["order_kendall_tau"] == 1.0
+        assert res_single["order_kendall_tau"] is None
 
     def test_standalone_accuracy_boundary_cases(self):
         # Decks with only multi-card recipes
@@ -273,7 +273,7 @@ class TestExtractionEdgeCases:
         assert res["ingredient_f1"] == 1.0
         assert res["qty_unit_exact"] == 1.0
         assert res["direction_f1"] == 1.0
-        assert res["direction_tau"] == 1.0
+        assert res["direction_tau"] is None
         assert res["hallucination_rate"] == 0.0
         assert res["omission_rate"] == 0.0
         assert res["illegible_precision"] is None

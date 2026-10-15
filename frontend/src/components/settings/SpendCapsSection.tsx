@@ -19,12 +19,12 @@ export interface SpendCapsSectionProps {
 }
 
 const STAGE_KEYS = [
-  { key: 'FINGERPRINT', label: 'Card Fingerprinting (Stage 2)', placeholder: 'e.g. gemini-3.7-flash' },
-  { key: 'VERIFY', label: 'Set-Level Verification (Stage 3)', placeholder: 'e.g. gemini-3.7-flash or gemini-3.1-pro' },
-  { key: 'TRANSCRIBE', label: 'Verbatim Transcription (Stage 5)', placeholder: 'e.g. gemini-3.7-flash' },
-  { key: 'STRUCTURE', label: 'Recipe Structuring (Stage 5)', placeholder: 'e.g. gemini-3.7-flash' },
-  { key: 'GROUNDING', label: 'Grounding Verification (Stage 5)', placeholder: 'e.g. gemini-3.7-flash' },
-  { key: 'SELF_CONSISTENCY', label: 'Self-Consistency (Stage 5)', placeholder: 'e.g. gemini-3.1-pro' },
+  { key: 'FINGERPRINT', label: 'Card Fingerprinting (Stage 2)', placeholder: 'e.g. gemini-3.8-flash' },
+  { key: 'VERIFY', label: 'Set-Level Verification (Stage 3)', placeholder: 'e.g. gemini-3.8-flash or gemini-3.1-pro-preview' },
+  { key: 'TRANSCRIBE', label: 'Verbatim Transcription (Stage 5)', placeholder: 'e.g. gemini-3.8-flash' },
+  { key: 'STRUCTURE', label: 'Recipe Structuring (Stage 5)', placeholder: 'e.g. gemini-3.8-flash' },
+  { key: 'GROUNDING', label: 'Grounding Verification (Stage 5)', placeholder: 'e.g. gemini-3.8-flash' },
+  { key: 'SELF_CONSISTENCY', label: 'Self-Consistency (Stage 5)', placeholder: 'e.g. gemini-3.6-flash' },
 ];
 
 export const SpendCapsSection: React.FC<SpendCapsSectionProps> = ({

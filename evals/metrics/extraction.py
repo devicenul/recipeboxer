@@ -289,7 +289,7 @@ def score_recipe(
 
     if n_gold_dir == 0 and n_pred_dir == 0:
         dir_f1 = 1.0
-        dir_tau: Optional[float] = 1.0
+        dir_tau: Optional[float] = None
     elif n_gold_dir == 0:
         dir_f1 = 0.0
         dir_tau = None
@@ -301,7 +301,7 @@ def score_recipe(
         d_r = dir_tp / n_gold_dir
         dir_f1 = (2 * d_p * d_r / (d_p + d_r)) if (d_p + d_r) > 0 else 0.0
 
-        # Kendall tau on matched direction steps
+        # Kendall tau on matched direction steps (defined only when >= 2 steps matched)
         matched_dir_pairs.sort(key=lambda x: x[0])
         gold_order = [p[1] for p in matched_dir_pairs]
 
@@ -316,8 +316,6 @@ def score_recipe(
                         discordant += 1
             tot = concordant + discordant
             dir_tau = (concordant - discordant) / tot if tot > 0 else 1.0
-        elif len(gold_dir_raw) <= 1:
-            dir_tau = 1.0
         else:
             dir_tau = None
 
@@ -492,13 +490,171 @@ def aggregate(
 
         breakdowns[group_key] = {}
         for g_val, sub_rows in groups.items():
-            breakdowns[group_key][g_val] = {
-                "metrics": _aggregate_subset(sub_rows),
-                "count": len(sub_rows),
-            }
+            sub_agg = _aggregate_subset(sub_rows)
+            entry = dict(sub_agg)
+            entry["metrics"] = sub_agg
+            entry["count"] = len(sub_rows)
+            breakdowns[group_key][g_val] = entry
 
     return {
         "overall": overall,
         "breakdowns": breakdowns,
         "count": len(rows),
     }
+
+
+def _extract_recipe_text(
+    rec: Optional[Dict[str, Any]],
+    verbatim: Optional[List[str]] = None,
+) -> str:
+    """Extracts raw concatenated textual representation of recipe components."""
+    if not rec and not verbatim:
+        return ""
+    parts: List[str] = []
+    if rec and isinstance(rec, dict):
+        if rec.get("title"):
+            parts.append(str(rec["title"]))
+        for ing in rec.get("ingredients", []) or []:
+            if isinstance(ing, dict):
+                parts.append(str(ing.get("raw") or ing.get("item") or ""))
+            else:
+                parts.append(str(ing))
+        for d in rec.get("directions", []) or []:
+            parts.append(str(d))
+        for n in rec.get("notes", []) or []:
+            parts.append(str(n))
+        if rec.get("yield"):
+            parts.append(str(rec["yield"]))
+    if not parts and verbatim:
+        parts.extend(str(v) for v in verbatim if str(v).strip())
+    return " ".join(parts)
+
+
+def recipe_content_similarity(
+    pred: Optional[Dict[str, Any]],
+    gold_structured: Optional[Dict[str, Any]],
+    gold_verbatim: Optional[List[str]] = None,
+) -> float:
+    """Computes normalized content similarity between predicted and gold recipes in [0.0, 1.0].
+
+    Extracts word tokens from title, ingredients, directions, and notes.
+    Computes Jaccard similarity between the sets of normalized word tokens.
+    If structured gold is missing, falls back to verbatim card transcription.
+
+    Args:
+        pred: Predicted recipe dictionary or Recipe model.
+        gold_structured: Ground-truth structured recipe dictionary.
+        gold_verbatim: Optional verbatim transcription lines from card faces.
+
+    Returns:
+        Float similarity in [0.0, 1.0].
+    """
+    if pred is not None and hasattr(pred, "to_scoring_dict"):
+        pred = pred.to_scoring_dict()
+
+    p_text = _extract_recipe_text(pred)
+    g_text = _extract_recipe_text(gold_structured, verbatim=gold_verbatim)
+
+    if not p_text and not g_text:
+        return 1.0
+    if not p_text or not g_text:
+        return 0.0
+
+    p_norm = normalize_text(p_text)
+    g_norm = normalize_text(g_text)
+
+    p_tokens = set(re.findall(r"\b\w+\b", p_norm))
+    g_tokens = set(re.findall(r"\b\w+\b", g_norm))
+
+    if not p_tokens and not g_tokens:
+        return 1.0
+    if not p_tokens or not g_tokens:
+        return 0.0
+
+    inter = len(p_tokens & g_tokens)
+    union = len(p_tokens | g_tokens)
+    return float(inter / union) if union > 0 else 0.0
+
+
+def match_recipes_by_content(
+    pred_recipes: Sequence[Dict[str, Any]],
+    gold_recipes: Sequence[Dict[str, Any]],
+    *,
+    min_overlap: float = 0.10,
+) -> Tuple[List[Tuple[int, int, float]], List[int], List[int]]:
+    """Principled extraction evaluation matching protocol using content similarity.
+
+    Matches predicted recipes to ground-truth recipes using Hungarian bipartite
+    matching on content similarity (word-token Jaccard overlap), enforcing a
+    minimum-overlap threshold (`min_overlap`).
+
+    Rationale & Protocol Design (WP-SV):
+    -----------------------------------
+    1. Grouping and extraction separation:
+       Grouping errors (e.g. splitting a multi-card recipe into two predicted clusters)
+       must not be double-penalized as extraction errors. When a card cluster is split,
+       one cluster typically holds the main recipe content while the other is a
+       fragment. Content similarity pairs the true recipe with ground truth and flags
+       the fragment as an unmatched prediction (`n_unmatched_pred`).
+    2. Minimum-overlap threshold (`min_overlap`, default 0.10):
+       Unrelated recipes or failed extractions (e.g. timeout stubs, bookplates, or
+       hallucinations) that share trivial or zero vocabulary are rejected from matching.
+    3. Unmatched gold recipes:
+       Gold recipes not assigned to any prediction with similarity >= min_overlap are
+       classified as omitted recipes (`n_omitted_gold`). They are excluded from
+       'matched-only' metrics and included as 0-score omissions (F1=0.0, CER=1.0)
+       in 'end-to-end' aggregates.
+    4. Unmatched predicted recipes:
+       Predictions not assigned to any gold recipe >= min_overlap are counted as
+       `n_unmatched_pred` (contributing to `hallucinated_recipe_rate`), but are NOT
+       averaged into per-field extraction metrics (title CER, ingredient F1, etc.),
+       preventing fragments from distorting extraction accuracy.
+
+    Args:
+        pred_recipes: Sequence of predicted recipe dicts (or dicts containing 'recipe').
+        gold_recipes: Sequence of gold recipe dicts (with 'structured' and optional 'verbatim').
+        min_overlap: Minimum content similarity required to establish a valid match (default 0.10).
+
+    Returns:
+        Tuple of:
+        - matched: List of (pred_idx, gold_idx, similarity) sorted deterministically
+        - unmatched_pred_indices: Indices of predicted recipes with no match >= min_overlap
+        - unmatched_gold_indices: Indices of gold recipes with no match >= min_overlap
+    """
+    n_pred = len(pred_recipes)
+    n_gold = len(gold_recipes)
+
+    if n_pred == 0 and n_gold == 0:
+        return [], [], []
+    if n_pred == 0:
+        return [], [], list(range(n_gold))
+    if n_gold == 0:
+        return [], list(range(n_pred)), []
+
+    sim_matrix = np.zeros((n_pred, n_gold), dtype=np.float64)
+    for i, pr in enumerate(pred_recipes):
+        p_struct = pr.get("recipe", pr) if isinstance(pr, dict) else pr
+        for j, gr in enumerate(gold_recipes):
+            g_struct = gr.get("structured", gr) if isinstance(gr, dict) else gr
+            g_verb = gr.get("verbatim") if isinstance(gr, dict) else None
+            sim_matrix[i, j] = recipe_content_similarity(p_struct, g_struct, g_verb)
+
+    row_ind, col_ind = linear_sum_assignment(-sim_matrix)
+
+    matched: List[Tuple[int, int, float]] = []
+    assigned_pred: Set[int] = set()
+    assigned_gold: Set[int] = set()
+
+    for r, c in zip(row_ind, col_ind):
+        sim = float(sim_matrix[r, c])
+        if sim >= min_overlap:
+            matched.append((int(r), int(c), sim))
+            assigned_pred.add(int(r))
+            assigned_gold.add(int(c))
+
+    unmatched_pred = [i for i in range(n_pred) if i not in assigned_pred]
+    unmatched_gold = [j for j in range(n_gold) if j not in assigned_gold]
+
+    matched.sort(key=lambda m: (m[0], m[1]))
+    return matched, unmatched_pred, unmatched_gold
+

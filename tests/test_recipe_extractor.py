@@ -15,7 +15,7 @@ import httpx
 import pytest
 from PIL import Image
 
-from recipeboxer.config import Settings
+from recipeboxer.config import DEFAULT_FLASH_MODEL, Settings
 from recipeboxer.extraction.extractor import (
     RECIPE_EXTRACTION_SYSTEM_INSTRUCTION,
     GeminiRecipeExtractor,
@@ -41,7 +41,7 @@ TINY_JPEG = b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x01\x00`\x00`\x00\x00\xff
 async def test_extractor_initialization_defaults():
     """Validates default model name, settings integration, and API key loading."""
     extractor = GeminiRecipeExtractor()
-    assert extractor.model_name == "gemini-3.7-flash"
+    assert extractor.model_name == DEFAULT_FLASH_MODEL
     assert extractor.thinking_mode is False
     assert extractor.thinking_budget_tokens is None
     assert extractor.client is None

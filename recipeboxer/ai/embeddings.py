@@ -32,15 +32,14 @@ from recipeboxer.ai.client import (
     UsageTokens,
     _extract_retry_after,
 )
-from recipeboxer.config import get_settings, has_usable_gemini_key
+from recipeboxer.config import DEFAULT_EMBEDDING_MODEL, get_settings, has_usable_gemini_key
 from recipeboxer.models.failures import (
     FailureReason,
     PipelineStage,
     StageUnavailableError,
 )
 
-# Documented provisional model identifier for Gemini text embeddings
-DEFAULT_EMBEDDING_MODEL = "gemini-embedding-001"
+# Documented model identifier for Gemini embeddings (priced in config/pricing.toml)
 
 
 @runtime_checkable

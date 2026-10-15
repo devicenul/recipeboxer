@@ -19,7 +19,7 @@ export interface StatusBarProps {
 }
 
 export const StatusBar: React.FC<StatusBarProps> = ({
-  model = 'gemini-3.7-flash',
+  model = 'gemini-3.8-flash',
   mode = 'parallel',
   elapsedSeconds = 0,
   tokenUsage = { prompt_tokens: 0, candidates_tokens: 0, thinking_tokens: 0, total_tokens: 0 },

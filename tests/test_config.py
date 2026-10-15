@@ -5,13 +5,19 @@ from pathlib import Path
 from unittest.mock import patch
 import pytest
 
-from recipeboxer.config import Settings, get_settings
+from recipeboxer.config import (
+    DEFAULT_EMBEDDING_MODEL,
+    DEFAULT_FLASH_MODEL,
+    Settings,
+    get_settings,
+)
 
 
 def test_default_settings():
     """Verify default settings configuration."""
     settings = Settings()
-    assert settings.default_model == "gemini-3.7-flash"
+    assert settings.default_model == DEFAULT_FLASH_MODEL
+    assert settings.embedding_model == DEFAULT_EMBEDDING_MODEL
     assert settings.fingerprint_model is None
     assert settings.correlation_model is None
     assert settings.extraction_model is None
@@ -34,12 +40,12 @@ def test_default_settings():
 def test_model_override_helpers():
     """Verify get_*_model() helpers fallback to default_model or return overrides."""
     settings = Settings(
-        default_model="gemini-3.7-flash",
+        default_model=DEFAULT_FLASH_MODEL,
         fingerprint_model=None,
         correlation_model="gemini-2.5-pro",
         extraction_model="gemini-3.7-thinking",
     )
-    assert settings.get_fingerprint_model() == "gemini-3.7-flash"
+    assert settings.get_fingerprint_model() == DEFAULT_FLASH_MODEL
     assert settings.get_correlation_model() == "gemini-2.5-pro"
     assert settings.get_extraction_model() == "gemini-3.7-thinking"
 

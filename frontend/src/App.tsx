@@ -428,7 +428,7 @@ export const AppContent: React.FC = () => {
 
       {/* Status Bar with live Spend Meter */}
       <StatusBar
-        model="gemini-3.7-flash"
+        model="gemini-3.8-flash"
         mode={currentStatus.mode || 'parallel'}
         elapsedSeconds={currentStatus.elapsed_seconds}
         tokenUsage={currentStatus.token_usage}

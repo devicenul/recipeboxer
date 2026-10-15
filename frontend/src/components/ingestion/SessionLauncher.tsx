@@ -38,7 +38,7 @@ export const SessionLauncher: React.FC<SessionLauncherProps> = ({
     max_concurrency: 5,
     slow_batch_size: 4,
     slow_batch_interval_seconds: 2.0,
-    model: 'gemini-3.7-flash',
+    model: 'gemini-3.8-flash',
     thinking_mode: false,
     thinking_budget_tokens: 1024,
   });
@@ -105,7 +105,7 @@ export const SessionLauncher: React.FC<SessionLauncherProps> = ({
           formData.append('max_concurrency', String(config.max_concurrency ?? 5));
           formData.append('slow_batch_size', String(config.slow_batch_size ?? 4));
           formData.append('slow_batch_interval_seconds', String(config.slow_batch_interval_seconds ?? 2.0));
-          formData.append('model', config.model || 'gemini-3.7-flash');
+          formData.append('model', config.model || 'gemini-3.8-flash');
           if (config.default_tags && config.default_tags.length > 0) {
             formData.append('default_tags', JSON.stringify(config.default_tags));
           }
