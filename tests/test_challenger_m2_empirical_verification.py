@@ -20,6 +20,7 @@ import pytest
 from recipeboxer.correlation.optimizer import PairingOptimizer
 from recipeboxer.correlation.semantic import GeminiSemanticVerifier
 from recipeboxer.extraction.extractor import GeminiRecipeExtractor
+from recipeboxer.models.correlation import CorrelationProposal
 from recipeboxer.models.recipe import RecipeSchema
 from recipeboxer.models.domain import (
     ArtifactType,
@@ -161,10 +162,13 @@ class TestM2CorpusIntegrityAndZeroDroppedCards:
             elif len(cids) == 2:
                 f_fp = next(f for f in fingerprints if f.card_id == cids[0])
                 b_fp = next(f for f in fingerprints if f.card_id == cids[1])
-                prop = optimizer.verifier._evaluate_offline_continuity(
-                    f_fp,
-                    b_fp,
+                prop = CorrelationProposal(
+                    proposal_id=f"prop_{f_fp.card_id}_{b_fp.card_id}",
+                    ordered_card_ids=[f_fp.card_id, b_fp.card_id],
+                    confidence=0.90,
                     heuristic_score=0.90,
+                    semantic_score=0.90,
+                    recommended_action="PAIR",
                 )
                 proposals.append(prop)
             else:
@@ -172,10 +176,13 @@ class TestM2CorpusIntegrityAndZeroDroppedCards:
                 for i in range(len(cids) - 1):
                     f_fp = next(f for f in fingerprints if f.card_id == cids[i])
                     b_fp = next(f for f in fingerprints if f.card_id == cids[i + 1])
-                    prop = optimizer.verifier._evaluate_offline_continuity(
-                        f_fp,
-                        b_fp,
+                    prop = CorrelationProposal(
+                        proposal_id=f"prop_{f_fp.card_id}_{b_fp.card_id}",
+                        ordered_card_ids=[f_fp.card_id, b_fp.card_id],
+                        confidence=0.90,
                         heuristic_score=0.90,
+                        semantic_score=0.90,
+                        recommended_action="PAIR",
                     )
                     proposals.append(prop)
 
@@ -302,8 +309,22 @@ class TestM2MultiCardSequenceChainingPermutations:
             shuffled_fps = [fp_map[c] for c in perm]
             # Construct directed transitions
             proposals = [
-                optimizer.verifier._evaluate_offline_continuity(fp1, fp2, 0.90),
-                optimizer.verifier._evaluate_offline_continuity(fp2, fp3, 0.90),
+                CorrelationProposal(
+                    proposal_id=f"p_{fp1.card_id}_{fp2.card_id}",
+                    ordered_card_ids=[fp1.card_id, fp2.card_id],
+                    confidence=0.90,
+                    heuristic_score=0.90,
+                    semantic_score=0.90,
+                    recommended_action="PAIR",
+                ),
+                CorrelationProposal(
+                    proposal_id=f"p_{fp2.card_id}_{fp3.card_id}",
+                    ordered_card_ids=[fp2.card_id, fp3.card_id],
+                    confidence=0.90,
+                    heuristic_score=0.90,
+                    semantic_score=0.90,
+                    recommended_action="PAIR",
+                ),
             ]
             res = optimizer.optimize_proposals(shuffled_fps, proposals)
             assert len(res.proposals) == 1
@@ -352,9 +373,30 @@ class TestM2MultiCardSequenceChainingPermutations:
         for perm in itertools.permutations(cids):
             shuffled_fps = [fp_map[c] for c in perm]
             proposals = [
-                optimizer.verifier._evaluate_offline_continuity(fp1, fp2, 0.90),
-                optimizer.verifier._evaluate_offline_continuity(fp2, fp3, 0.90),
-                optimizer.verifier._evaluate_offline_continuity(fp3, fp4, 0.90),
+                CorrelationProposal(
+                    proposal_id=f"p_{fp1.card_id}_{fp2.card_id}",
+                    ordered_card_ids=[fp1.card_id, fp2.card_id],
+                    confidence=0.90,
+                    heuristic_score=0.90,
+                    semantic_score=0.90,
+                    recommended_action="PAIR",
+                ),
+                CorrelationProposal(
+                    proposal_id=f"p_{fp2.card_id}_{fp3.card_id}",
+                    ordered_card_ids=[fp2.card_id, fp3.card_id],
+                    confidence=0.90,
+                    heuristic_score=0.90,
+                    semantic_score=0.90,
+                    recommended_action="PAIR",
+                ),
+                CorrelationProposal(
+                    proposal_id=f"p_{fp3.card_id}_{fp4.card_id}",
+                    ordered_card_ids=[fp3.card_id, fp4.card_id],
+                    confidence=0.90,
+                    heuristic_score=0.90,
+                    semantic_score=0.90,
+                    recommended_action="PAIR",
+                ),
             ]
             res = optimizer.optimize_proposals(shuffled_fps, proposals)
             assert len(res.proposals) == 1

@@ -40,7 +40,7 @@ from recipeboxer.models.failures import (
 )
 
 # Documented provisional model identifier for Gemini text embeddings
-DEFAULT_EMBEDDING_MODEL = "text-embedding-004"
+DEFAULT_EMBEDDING_MODEL = "gemini-embedding-001"
 
 
 @runtime_checkable

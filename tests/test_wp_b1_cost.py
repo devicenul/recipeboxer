@@ -39,13 +39,16 @@ def test_price_table_load_default_and_schema():
     """Validates that PriceTable loads config/pricing.toml with final schema fields."""
     table = PriceTable.load()
     assert isinstance(table, PriceTable)
-    assert table.meta.get("table_version") == "1.0.0"
-    assert "gemini-3.7-flash" in table.prices
-    assert "gemini-3.7-pro" in table.prices
+    assert table.meta.get("verified_on") not in (None, "", "UNVERIFIED")
+    assert "gemini-3.8-flash" in table.prices
+    assert "gemini-3.1-pro-preview" in table.prices
+    # Models without a published price must stay unpriced, never "free".
+    assert "gemini-3.7-pro" not in table.prices
 
-    flash = table.prices["gemini-3.7-flash"]
+    flash = table.prices["gemini-3.8-flash"]
     assert isinstance(flash, ModelPrice)
-    assert flash.model == "gemini-3.7-flash"
+    assert flash.model == "gemini-3.8-flash"
+    assert flash.input_per_mtok > 0 and flash.output_per_mtok > 0
     assert hasattr(flash, "input_per_mtok")
     assert hasattr(flash, "output_per_mtok")
     assert hasattr(flash, "thinking_per_mtok")

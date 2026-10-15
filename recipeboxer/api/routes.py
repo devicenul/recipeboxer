@@ -35,7 +35,7 @@ from recipeboxer.agent.session import (
     SessionManager,
     get_session_manager,
 )
-from recipeboxer.config import Settings, get_settings
+from recipeboxer.config import Settings, get_settings, has_usable_gemini_key
 from recipeboxer.exporter.curation import (
     CuratedCookbook,
     CuratedSection,
@@ -58,7 +58,7 @@ from recipeboxer.exporter.pdf_export import PdfExporter, export_recipes_to_pdf
 from recipeboxer.exporter.plan_to_eat import PlanToEatExporter, export_recipes_to_plan_to_eat_csv
 from recipeboxer.ingestion.scanner import VALID_IMAGE_EXTENSIONS, ScannedCard, get_image_mime_type, validate_and_load_card
 from recipeboxer.models.domain import VisualFingerprint
-from recipeboxer.models.failures import StageFailure
+from recipeboxer.models.failures import FailureReason, StageFailure
 from recipeboxer.models.hitl import (
     ApprovalPayload,
     CandidateListResponse,
@@ -636,12 +636,54 @@ async def get_pipeline_status(
 
     session = manager.get_session(target_sid)
     if session is not None:
-        return session.get_status()
+        status_obj = session.get_status()
+        # Determine if analysis/extraction is blocked due to missing API key
+        is_no_key = False
+        all_failures = getattr(session, "failures", []) + getattr(status_obj, "failures", [])
+        for f in all_failures:
+            reason = getattr(f, "reason", None)
+            if reason in (FailureReason.NO_API_KEY, "NO_API_KEY"):
+                is_no_key = True
+                break
+
+        if not is_no_key:
+            has_injected = (
+                getattr(session, "extractor", None) is not None
+                or getattr(session, "mock_client", None) is not None
+            )
+            has_key = has_usable_gemini_key(getattr(session, "settings", None))
+            if not has_injected and not has_key:
+                if status_obj.status in (
+                    PipelineState.FAILED,
+                    PipelineState.IDLE,
+                    PipelineState.SCANNING,
+                    PipelineState.INGESTING,
+                ):
+                    is_no_key = True
+
+        if is_no_key:
+            status_obj.analysis_blocked_reason = "NO_API_KEY"
+            status_obj.onboarding_hint = (
+                "No Gemini API key configured. Analysis and extraction are blocked. "
+                "Configure your API key at /api/settings/api-key to proceed."
+            )
+        return status_obj
 
     # Fallback to SQLite persistence
     if target_sid:
         detail = store.get_session_detail(target_sid)
         if detail:
+            is_no_key = False
+            for f in (detail.failures or []):
+                reason = getattr(f, "reason", None) or (f.get("reason") if isinstance(f, dict) else None)
+                if reason in (FailureReason.NO_API_KEY, "NO_API_KEY"):
+                    is_no_key = True
+                    break
+            blocked_reason = "NO_API_KEY" if is_no_key else getattr(detail, "analysis_blocked_reason", None)
+            hint = (
+                "No Gemini API key configured. Analysis and extraction are blocked. "
+                "Configure your API key at /api/settings/api-key to proceed."
+            ) if is_no_key else getattr(detail, "onboarding_hint", None)
             return PipelineStatus(
                 session_id=detail.session_id,
                 status=_normalize_pipeline_state(detail.status),
@@ -656,12 +698,20 @@ async def get_pipeline_status(
                 degraded_fingerprints_count=detail.degraded_fingerprints_count,
                 unverified_proposals_count=detail.unverified_proposals_count,
                 failed_extractions_count=detail.failed_extractions_count,
+                analysis_blocked_reason=blocked_reason,
+                onboarding_hint=hint,
             )
 
+    no_key = not has_usable_gemini_key()
     return PipelineStatus(
         session_id="none",
         status=PipelineState.IDLE,
         error=None,
+        analysis_blocked_reason="NO_API_KEY" if no_key else None,
+        onboarding_hint=(
+            "No Gemini API key configured. Analysis and extraction are blocked. "
+            "Configure your API key at /api/settings/api-key to proceed."
+        ) if no_key else None,
     )
 
 
@@ -690,6 +740,7 @@ async def stream_events(
         last_state: Optional[str] = None
         last_extracted_count: int = 0
         last_percent: float = -1.0
+        last_spend: Optional[float] = None
         ticks = 0
 
         # Initial keep-alive connection handshake comment
@@ -718,6 +769,15 @@ async def stream_events(
                             current_state = status_obj.status.value
                             yield f"event: state_change\ndata: {status_obj.model_dump_json()}\n\n"
                             yield f"event: progress\ndata: {status_obj.model_dump_json()}\n\n"
+                            detail_spend = getattr(detail, "spend_usd", 0.0)
+                            if detail_spend > 0.0:
+                                spend_payload = {
+                                    "session_id": detail.session_id,
+                                    "spend_usd": detail_spend,
+                                }
+                                if getattr(detail, "spend_breakdown", None):
+                                    spend_payload["snapshot"] = detail.spend_breakdown
+                                yield f"event: spend\ndata: {json.dumps(spend_payload)}\n\n"
                             if detail.recipes:
                                 for r in detail.recipes:
                                     r_json = r.model_dump_json() if hasattr(r, "model_dump_json") else json.dumps(r)
@@ -733,6 +793,46 @@ async def stream_events(
 
                 status_obj = session.get_status()
                 current_state = status_obj.status.value
+
+                # Real-time Spend Event (WP-XC / WP-B2 / CostLedger snapshot)
+                curr_spend: Optional[float] = None
+                spend_snapshot: Optional[Dict[str, Any]] = None
+
+                ledger = getattr(session, "ledger", None)
+                if ledger is not None and hasattr(ledger, "snapshot"):
+                    spend_snapshot = ledger.snapshot()
+                    curr_spend = float(spend_snapshot.get("total_usd", 0.0) or 0.0)
+                elif hasattr(session, "spend_usd"):
+                    curr_spend = float(getattr(session, "spend_usd", 0.0) or 0.0)
+
+                if curr_spend is not None:
+                    if last_spend is None:
+                        if curr_spend > 0.0:
+                            last_spend = curr_spend
+                            spend_payload = {
+                                "session_id": session.session_id,
+                                "spend_usd": curr_spend,
+                            }
+                            if spend_snapshot:
+                                spend_payload["snapshot"] = spend_snapshot
+                                for k, v in spend_snapshot.items():
+                                    if k not in spend_payload:
+                                        spend_payload[k] = v
+                            yield f"event: spend\ndata: {json.dumps(spend_payload)}\n\n"
+                        else:
+                            last_spend = 0.0
+                    elif curr_spend != last_spend:
+                        last_spend = curr_spend
+                        spend_payload = {
+                            "session_id": session.session_id,
+                            "spend_usd": curr_spend,
+                        }
+                        if spend_snapshot:
+                            spend_payload["snapshot"] = spend_snapshot
+                            for k, v in spend_snapshot.items():
+                                if k not in spend_payload:
+                                    spend_payload[k] = v
+                        yield f"event: spend\ndata: {json.dumps(spend_payload)}\n\n"
 
                 # State change event
                 if current_state != last_state:
@@ -1005,6 +1105,45 @@ async def get_session_detail(
         detail.failed_extractions_count = sum(
             1 for r in sess.recipes if getattr(r, "status", None) in ("FAILED", "NEEDS_ATTENTION")
         )
+        is_no_key = False
+        for f in sess.failures:
+            reason = getattr(f, "reason", None)
+            if reason in (FailureReason.NO_API_KEY, "NO_API_KEY"):
+                is_no_key = True
+                break
+        if not is_no_key:
+            has_injected = (
+                getattr(sess, "extractor", None) is not None
+                or getattr(sess, "mock_client", None) is not None
+            )
+            has_key = has_usable_gemini_key(getattr(sess, "settings", None))
+            if not has_injected and not has_key and sess.state in (
+                PipelineState.FAILED,
+                PipelineState.IDLE,
+                PipelineState.SCANNING,
+                PipelineState.INGESTING,
+            ):
+                is_no_key = True
+
+        if is_no_key:
+            detail.analysis_blocked_reason = "NO_API_KEY"
+            detail.onboarding_hint = (
+                "No Gemini API key configured. Analysis and extraction are blocked. "
+                "Configure your API key at /api/settings/api-key to proceed."
+            )
+    else:
+        is_no_key = False
+        for f in (detail.failures or []):
+            reason = getattr(f, "reason", None) or (f.get("reason") if isinstance(f, dict) else None)
+            if reason in (FailureReason.NO_API_KEY, "NO_API_KEY"):
+                is_no_key = True
+                break
+        if is_no_key:
+            detail.analysis_blocked_reason = "NO_API_KEY"
+            detail.onboarding_hint = (
+                "No Gemini API key configured. Analysis and extraction are blocked. "
+                "Configure your API key at /api/settings/api-key to proceed."
+            )
     return detail
 
 

@@ -41,11 +41,13 @@ import pytest
 from PIL import Image
 from pydantic import BaseModel
 
+from recipeboxer.ai.replay import ScriptedLLMClient
 from recipeboxer.config import Settings, get_settings
 from recipeboxer.correlation.optimizer import PairingOptimizer
 from recipeboxer.correlation.semantic import GeminiSemanticVerifier
 from recipeboxer.ingestion.scanner import ScannedCard
-from recipeboxer.models.correlation import CorrelationProposal, CorrelationResult
+from recipeboxer.models.correlation import CorrelationProposal, CorrelationResult, SetVerification
+from recipeboxer.models.failures import FailureReason, SemanticVerificationUnavailable
 from recipeboxer.models.domain import (
     ArtifactType,
     BoundaryText,
@@ -559,21 +561,17 @@ class TestSemanticVerifierMockAndFallback:
 
     @pytest.mark.asyncio
     async def test_offline_fallback_strong_continuity_cues(self, sample_front_back_fps):
-        """Offline fallback detects strong token overlap, continuation symbols, and header cues."""
+        """Offline fallback does not synthesize continuity scores; strictly raises SemanticVerificationUnavailable (INV-AC4/AC6)."""
         front, back = sample_front_back_fps
         verifier = GeminiSemanticVerifier(api_key=None)
 
-        proposal = await verifier.verify_pair(front, back, heuristic_score=0.90)
-
-        assert proposal.front_card_id == front.card_id
-        assert proposal.back_card_id == back.card_id
-        assert proposal.semantic_score == 0.85
-        assert proposal.confidence == 0.80
-        assert proposal.recommended_action == "PAIR"
+        with pytest.raises(SemanticVerificationUnavailable) as exc_info:
+            await verifier.verify_pair(front, back, heuristic_score=0.90)
+        assert exc_info.value.reason == FailureReason.NO_API_KEY
 
     @pytest.mark.asyncio
     async def test_offline_fallback_completely_unrelated_cards(self):
-        """Offline fallback assigns neutral semantic score (0.50) and UNCERTAIN to unrelated cards without cues."""
+        """Offline fallback without LLM client strictly raises SemanticVerificationUnavailable (INV-AC4/AC6)."""
         front = VisualFingerprint(
             card_id="beef_stew_front.jpg",
             image_path="/scans/beef_stew_front.jpg",
@@ -590,16 +588,13 @@ class TestSemanticVerifierMockAndFallback:
         )
 
         verifier = GeminiSemanticVerifier(api_key=None)
-        # Force low heuristic score
-        proposal = await verifier.verify_pair(front, back, heuristic_score=0.20)
-
-        assert proposal.semantic_score == 0.50
-        assert proposal.confidence == 0.20
-        assert proposal.recommended_action == "UNCERTAIN"
+        with pytest.raises(SemanticVerificationUnavailable) as exc_info:
+            await verifier.verify_pair(front, back, heuristic_score=0.20)
+        assert exc_info.value.reason == FailureReason.NO_API_KEY
 
     @pytest.mark.asyncio
     async def test_offline_fallback_moderate_heuristic_uncertain_action(self):
-        """Offline fallback flags moderate visual continuity without clear text overlap as UNCERTAIN."""
+        """Offline fallback without LLM client strictly raises SemanticVerificationUnavailable (INV-AC4/AC6)."""
         front = VisualFingerprint(
             card_id="card_alpha_front.jpg",
             image_path="/scans/card_alpha_front.jpg",
@@ -616,12 +611,9 @@ class TestSemanticVerifierMockAndFallback:
         )
 
         verifier = GeminiSemanticVerifier(api_key=None)
-        # Moderate heuristic score >= 0.60
-        proposal = await verifier.verify_pair(front, back, heuristic_score=0.65)
-
-        assert proposal.semantic_score == 0.50
-        assert proposal.confidence == 0.65
-        assert proposal.recommended_action == "UNCERTAIN"
+        with pytest.raises(SemanticVerificationUnavailable) as exc_info:
+            await verifier.verify_pair(front, back, heuristic_score=0.65)
+        assert exc_info.value.reason == FailureReason.NO_API_KEY
 
     @pytest.mark.asyncio
     async def test_none_or_empty_boundary_text_graceful_handling(self):
@@ -641,7 +633,27 @@ class TestSemanticVerifierMockAndFallback:
             boundary_text=BoundaryText(first_line="", last_line=""),
         )
 
-        verifier = GeminiSemanticVerifier(api_key=None)
+        client = ScriptedLLMClient([
+            SetVerification(
+                anchor=front.card_id,
+                continuations=[back.card_id],
+                rejected=[],
+                confidence=0.50,
+                model="test-model",
+                prompt_id="test",
+                prompt_version="1",
+            ),
+            SetVerification(
+                anchor=front.card_id,
+                continuations=[back.card_id],
+                rejected=[],
+                confidence=0.50,
+                model="test-model",
+                prompt_id="test",
+                prompt_version="1",
+            ),
+        ])
+        verifier = GeminiSemanticVerifier(llm_client=client)
         proposal = await verifier.verify_pair(front, back, heuristic_score=0.50)
         assert isinstance(proposal, CorrelationProposal)
         assert 0.0 <= proposal.confidence <= 1.0
@@ -713,29 +725,25 @@ class TestCompositeScoringMathVerification:
             boundary_text=BoundaryText(first_line="(Directions cont.)", last_line="Serve."),
         )
 
+        client = ScriptedLLMClient([
+            SetVerification(
+                anchor=front.card_id,
+                continuations=[back.card_id],
+                rejected=[],
+                confidence=s_s,
+                model="test-model",
+                prompt_id="test",
+                prompt_version="1",
+            )
+        ])
         verifier = GeminiSemanticVerifier(
-            api_key=None,
+            llm_client=client,
             heuristic_weight=w_h,
             semantic_weight=w_s,
         )
 
-        # Mock offline evaluation to return fixed s_s
-        with patch.object(verifier, "_evaluate_offline_continuity") as mock_eval:
-            comp = round(w_h * s_h + w_s * s_s, 4)
-            mock_eval.return_value = CorrelationProposal(
-                proposal_id="prop_test",
-                front_card_id=front.card_id,
-                back_card_id=back.card_id,
-                heuristic_score=s_h,
-                semantic_score=s_s,
-                confidence=comp,
-                is_standalone=False,
-                continuity_explanation="Custom weights verified",
-                recommended_action="PAIR" if comp >= 0.80 else ("UNCERTAIN" if comp >= 0.50 else "REJECT"),
-            )
-
-            res = await verifier.verify_pair(front, back, heuristic_score=s_h)
-            assert res.confidence == pytest.approx(expected_composite, abs=1e-4)
+        res = await verifier.verify_pair(front, back, heuristic_score=s_h)
+        assert res.confidence == pytest.approx(expected_composite, abs=1e-4)
 
 
 # ============================================================================

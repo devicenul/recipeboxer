@@ -1,5 +1,6 @@
 import { RecipeSchema } from '../types/recipe';
 import { CuratedCookbook } from '../types/export';
+import { formatTimeValue } from './formatters';
 
 /**
  * Serializes a single recipe into Obsidian Markdown with YAML frontmatter.
@@ -18,13 +19,13 @@ export function recipeToMarkdown(recipe: RecipeSchema, useWikilinks = true): str
     }
   }
   if (recipe.prep_time) {
-    frontmatter.push(`prep_time: ${JSON.stringify(recipe.prep_time)}`);
+    frontmatter.push(`prep_time: ${JSON.stringify(formatTimeValue(recipe.prep_time))}`);
   }
   if (recipe.cook_time) {
-    frontmatter.push(`cook_time: ${JSON.stringify(recipe.cook_time)}`);
+    frontmatter.push(`cook_time: ${JSON.stringify(formatTimeValue(recipe.cook_time))}`);
   }
   if (recipe.total_time) {
-    frontmatter.push(`total_time: ${JSON.stringify(recipe.total_time)}`);
+    frontmatter.push(`total_time: ${JSON.stringify(formatTimeValue(recipe.total_time))}`);
   }
   if (recipe.yield_servings) {
     frontmatter.push(`yield: ${JSON.stringify(recipe.yield_servings)}`);
@@ -54,9 +55,9 @@ export function recipeToMarkdown(recipe: RecipeSchema, useWikilinks = true): str
 
   const metaParts: string[] = [];
   if (recipe.yield_servings) metaParts.push(`**Yield:** ${recipe.yield_servings}`);
-  if (recipe.prep_time) metaParts.push(`**Prep Time:** ${recipe.prep_time}`);
-  if (recipe.cook_time) metaParts.push(`**Cook Time:** ${recipe.cook_time}`);
-  if (recipe.total_time) metaParts.push(`**Total Time:** ${recipe.total_time}`);
+  if (recipe.prep_time) metaParts.push(`**Prep Time:** ${formatTimeValue(recipe.prep_time)}`);
+  if (recipe.cook_time) metaParts.push(`**Cook Time:** ${formatTimeValue(recipe.cook_time)}`);
+  if (recipe.total_time) metaParts.push(`**Total Time:** ${formatTimeValue(recipe.total_time)}`);
   if (metaParts.length > 0) {
     body.push(metaParts.join(' | '));
     body.push('');

@@ -61,7 +61,7 @@ from recipeboxer.vision.heuristics import (
 
 def _create_test_fingerprint(
     card_id: str,
-    role: CardRole = CardRole.SEQUENCE_START,
+    role: CardRole = CardRole.UNKNOWN,
     role_confidence: float = 0.95,
     first_line: str = "",
     last_line: str = "",

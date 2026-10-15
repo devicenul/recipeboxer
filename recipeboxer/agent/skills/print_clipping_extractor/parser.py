@@ -28,7 +28,10 @@ PROMOTIONAL_LINE_PATTERNS: List[re.Pattern] = [
     re.compile(r"\blimit\s+one\s+(?:coupon\s+)?per\s+(?:customer|family|purchase)\b", re.IGNORECASE),
     re.compile(r"\bcash\s+value\s+1/\d+\b", re.IGNORECASE),
     re.compile(r"\b(?:store|manufacturer['’]?s|valuable)\s+coupon\b", re.IGNORECASE),
-    re.compile(r"\bsatisfaction\s+guaranteed\s+or\s+(?:your\s+)?money\s+back\b", re.IGNORECASE),
+    (re.compile(r"\bsatisfaction\s+guaranteed\s+or\s+(?:your\s+)?money\s+back\b", re.IGNORECASE)),
+    (re.compile(r"\bsee\s+page\s+\d+\b", re.IGNORECASE)),
+    (re.compile(r"\badvertisement\b|\bsponsored\s+content\b", re.IGNORECASE)),
+    (re.compile(r"\bfor\s+(?:a\s+)?limited\s+time\s+only\b", re.IGNORECASE)),
 ]
 
 

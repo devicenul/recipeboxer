@@ -92,94 +92,118 @@ class TestExtractorAdaptiveThinkingIntegration:
 
     @pytest.mark.asyncio
     async def test_extractor_api_payload_includes_adaptive_budget(self):
-        ext = GeminiRecipeExtractor(
-            api_key="valid-test-key-12345",
-            adaptive_thinking=True,
+        from PIL import Image
+        from recipeboxer.ai.client import LLMResponse, UsageTokens
+        from recipeboxer.extraction.image_prep import PreparedFace
+        from recipeboxer.extraction.transcribe import (
+            FaceTranscript,
+            FaceTranscriptList,
+            transcribe,
         )
 
-        mock_recipe = RecipeSchema(
-            recipe_id="rec_test_123",
-            title="Test Adaptive Recipe",
-            ingredients=["1 cup sugar"],
-            directions=["1. Stir and bake."],
-        )
-
-        fake_resp_json = {
-            "candidates": [
-                {
-                    "content": {
-                        "parts": [
-                            {"text": mock_recipe.model_dump_json()}
-                        ]
-                    }
-                }
+        settings = Settings(model_profile="balanced")
+        fake_transcript = FaceTranscriptList(
+            faces=[
+                FaceTranscript(
+                    face_index=0,
+                    text="1 cup sugar\n1. Stir and bake.",
+                )
             ]
-        }
+        )
+        fake_resp = LLMResponse(
+            model="gemini-test",
+            text="{}",
+            parsed=fake_transcript,
+            usage=UsageTokens(input_tokens=100, output_tokens=50),
+        )
 
-        mock_post_resp = MagicMock()
-        mock_post_resp.json.return_value = fake_resp_json
-        mock_post_resp.raise_for_status = MagicMock()
+        class RecordingClient:
+            def __init__(self, response):
+                self.response = response
+                self.requests = []
 
-        with patch("httpx.AsyncClient.post", new=AsyncMock(return_value=mock_post_resp)) as mock_post:
-            # Call extraction on cursive sample
-            sample_bytes = b"\xff\xd8\xff\xe0" + b"\x00" * 100 # Minimal jpeg header
-            recipe = await ext._call_gemini_extraction_api(
-                front_bytes=sample_bytes,
-                front_id="rec_vhc_apple_crisp_1948_front.jpg",
-            )
+            async def generate(self, request):
+                self.requests.append(request)
+                return self.response
 
-            assert recipe.title == "Test Adaptive Recipe"
-            assert mock_post.called
+        client = RecordingClient(fake_resp)
+        face = PreparedFace(
+            face_index=0,
+            n_faces=1,
+            data=b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00\xff\xd9",
+            mime_type="image/jpeg",
+            variant="standard",
+            long_edge_px=100,
+            label="Face 1 of 1",
+        )
 
-            # Check that generationConfig received thinking_config
-            call_kwargs = mock_post.call_args.kwargs
-            payload = call_kwargs.get("json", {})
-            gen_cfg = payload.get("generationConfig", {})
-            assert "thinking_config" in gen_cfg
-            assert "thinking_budget" in gen_cfg["thinking_config"]
-            assert gen_cfg["thinking_config"]["thinking_budget"] > 0
+        await transcribe(
+            faces=[face],
+            llm_client=client,
+            settings=settings,
+            modality_hint="HANDWRITTEN_CURSIVE",
+        )
+        assert len(client.requests) == 1
+        req = client.requests[0]
+        assert req.thinking_budget is not None
+        assert req.thinking_budget > 0
 
     @pytest.mark.asyncio
     async def test_explicit_thinking_budget_takes_precedence(self):
-        ext = GeminiRecipeExtractor(
-            api_key="valid-test-key-12345",
+        from PIL import Image
+        from recipeboxer.ai.client import LLMResponse, UsageTokens
+        from recipeboxer.extraction.image_prep import PreparedFace
+        from recipeboxer.extraction.transcribe import (
+            FaceTranscript,
+            FaceTranscriptList,
+            transcribe,
+        )
+
+        settings = Settings(
             thinking_mode=True,
             thinking_budget_tokens=8192,
-            adaptive_thinking=True,
         )
-
-        mock_recipe = RecipeSchema(
-            recipe_id="rec_test_456",
-            title="Explicit Budget Recipe",
-            ingredients=["2 cups flour"],
-            directions=["1. Mix well."],
-        )
-
-        fake_resp_json = {
-            "candidates": [
-                {
-                    "content": {
-                        "parts": [
-                            {"text": mock_recipe.model_dump_json()}
-                        ]
-                    }
-                }
+        fake_transcript = FaceTranscriptList(
+            faces=[
+                FaceTranscript(
+                    face_index=0,
+                    text="2 cups flour\n1. Mix well.",
+                )
             ]
-        }
+        )
+        fake_resp = LLMResponse(
+            model="gemini-test",
+            text="{}",
+            parsed=fake_transcript,
+            usage=UsageTokens(input_tokens=100, output_tokens=50),
+        )
 
-        mock_post_resp = MagicMock()
-        mock_post_resp.json.return_value = fake_resp_json
-        mock_post_resp.raise_for_status = MagicMock()
+        class RecordingClient:
+            def __init__(self, response):
+                self.response = response
+                self.requests = []
 
-        with patch("httpx.AsyncClient.post", new=AsyncMock(return_value=mock_post_resp)) as mock_post:
-            sample_bytes = b"\xff\xd8\xff\xe0" + b"\x00" * 100
-            recipe = await ext._call_gemini_extraction_api(
-                front_bytes=sample_bytes,
-                front_id="rec_typ_beef_stroganoff_1956_front.jpg",
-            )
+            async def generate(self, request):
+                self.requests.append(request)
+                return self.response
 
-            assert recipe.title == "Explicit Budget Recipe"
-            call_kwargs = mock_post.call_args.kwargs
-            payload = call_kwargs.get("json", {})
-            gen_cfg = payload.get("generationConfig", {})
-            assert gen_cfg["thinking_config"]["thinking_budget"] == 8192
+        client = RecordingClient(fake_resp)
+        face = PreparedFace(
+            face_index=0,
+            n_faces=1,
+            data=b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00\xff\xd9",
+            mime_type="image/jpeg",
+            variant="standard",
+            long_edge_px=100,
+            label="Face 1 of 1",
+        )
+
+        await transcribe(
+            faces=[face],
+            llm_client=client,
+            settings=settings,
+            modality_hint="TYPEWRITTEN",
+        )
+        assert len(client.requests) == 1
+        req = client.requests[0]
+        assert req.thinking_budget == 8192

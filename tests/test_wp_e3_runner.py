@@ -78,6 +78,9 @@ class TestHeadlessExecution:
         c1 = input_dir / "front.jpg"
         Image.new("RGB", (50, 50), color=(100, 100, 100)).save(c1)
 
+        from recipeboxer.extraction.transcribe import FaceTranscript, FaceTranscriptList
+        from recipeboxer.models.recipe import IngredientLine, Recipe, RecipeSection, Step
+
         client = ScriptedLLMClient([
             VisualFingerprint(
                 card_id="front.jpg",
@@ -85,11 +88,18 @@ class TestHeadlessExecution:
                 sha256_hash="0" * 64,
                 role=CardRole.STANDALONE,
             ),
-            RecipeSchema(
-                recipe_id="rec_standalone",
+            FaceTranscriptList(
+                faces=[FaceTranscript(face_index=0, text="Single Card Recipe\nSugar\nButter\nMix and bake.")]
+            ),
+            Recipe(
                 title="Single Card Recipe",
-                ingredients=["Sugar", "Butter"],
-                directions=["Mix and bake."],
+                sections=[
+                    RecipeSection(
+                        name=None,
+                        ingredients=[IngredientLine(original_text="Sugar", item="Sugar"), IngredientLine(original_text="Butter", item="Butter")],
+                        steps=[Step(original_text="Mix and bake.")],
+                    )
+                ],
             ),
         ])
 

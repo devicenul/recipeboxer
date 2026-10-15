@@ -39,6 +39,7 @@ from recipeboxer.ai.client import (
     UsageTokens,
 )
 from recipeboxer.config import Settings, get_settings, has_usable_gemini_key, is_usable_gemini_key
+from recipeboxer.correlation.engine import GroupingEngine
 from recipeboxer.correlation.optimizer import PairingOptimizer
 from recipeboxer.correlation.semantic import GeminiSemanticVerifier
 from recipeboxer.extraction.extractor import RecipeExtractor
@@ -338,12 +339,15 @@ async def run_headless_analysis(
                 settings=eff_settings,
             )
             pairing_opt = PairingOptimizer(verifier=sem_verifier)
+            grouping_engine = GroupingEngine()
             session.mock_client = recording_client
+            session.grouping_engine = grouping_engine
             session.extractor = vis_extractor
             session.recipe_extractor_fn = rec_extractor.extract
             agent_kwargs["visual_extractor"] = vis_extractor
             agent_kwargs["semantic_verifier"] = sem_verifier
             agent_kwargs["pairing_optimizer"] = pairing_opt
+            agent_kwargs["grouping_engine"] = grouping_engine
             agent_kwargs["recipe_extractor"] = rec_extractor
         else:
             session.mock_client = injected_client
@@ -367,11 +371,14 @@ async def run_headless_analysis(
             settings=eff_settings,
         )
         pairing_opt = PairingOptimizer(verifier=sem_verifier)
+        grouping_engine = GroupingEngine()
         session.extractor = vis_extractor
+        session.grouping_engine = grouping_engine
         session.recipe_extractor_fn = rec_extractor.extract
         agent_kwargs["visual_extractor"] = vis_extractor
         agent_kwargs["semantic_verifier"] = sem_verifier
         agent_kwargs["pairing_optimizer"] = pairing_opt
+        agent_kwargs["grouping_engine"] = grouping_engine
         agent_kwargs["recipe_extractor"] = rec_extractor
 
     # Configure oracle grouping if image sets provided AND we have a usable key/client

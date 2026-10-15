@@ -60,7 +60,7 @@ export function useRecipeForm({ initialRecipe, sessionId, onSaved }: UseRecipeFo
   // Ingredients operations
   const setIngredient = useCallback((index: number, text: string) => {
     setRecipe((prev) => {
-      const list = [...prev.ingredients];
+      const list = [...(prev.ingredients || [])];
       list[index] = text;
       return { ...prev, ingredients: list };
     });
@@ -70,7 +70,7 @@ export function useRecipeForm({ initialRecipe, sessionId, onSaved }: UseRecipeFo
 
   const addIngredient = useCallback((afterIndex?: number) => {
     setRecipe((prev) => {
-      const list = [...prev.ingredients];
+      const list = [...(prev.ingredients || [])];
       if (afterIndex !== undefined && afterIndex >= 0) {
         list.splice(afterIndex + 1, 0, '');
       } else {
@@ -83,7 +83,7 @@ export function useRecipeForm({ initialRecipe, sessionId, onSaved }: UseRecipeFo
 
   const removeIngredient = useCallback((index: number) => {
     setRecipe((prev) => {
-      const list = prev.ingredients.filter((_, i) => i !== index);
+      const list = (prev.ingredients || []).filter((_, i) => i !== index);
       return { ...prev, ingredients: list.length > 0 ? list : [''] };
     });
     setIsDirty(true);
@@ -91,8 +91,9 @@ export function useRecipeForm({ initialRecipe, sessionId, onSaved }: UseRecipeFo
 
   const moveIngredient = useCallback((fromIndex: number, toIndex: number) => {
     setRecipe((prev) => {
-      if (toIndex < 0 || toIndex >= prev.ingredients.length) return prev;
-      const list = [...prev.ingredients];
+      const currentList = prev.ingredients || [];
+      if (toIndex < 0 || toIndex >= currentList.length) return prev;
+      const list = [...currentList];
       const [item] = list.splice(fromIndex, 1);
       list.splice(toIndex, 0, item);
       return { ...prev, ingredients: list };
@@ -103,7 +104,7 @@ export function useRecipeForm({ initialRecipe, sessionId, onSaved }: UseRecipeFo
   // Directions operations
   const setDirection = useCallback((index: number, text: string) => {
     setRecipe((prev) => {
-      const list = [...prev.directions];
+      const list = [...(prev.directions || [])];
       list[index] = text;
       return { ...prev, directions: list };
     });
@@ -113,7 +114,7 @@ export function useRecipeForm({ initialRecipe, sessionId, onSaved }: UseRecipeFo
 
   const addDirection = useCallback((afterIndex?: number) => {
     setRecipe((prev) => {
-      const list = [...prev.directions];
+      const list = [...(prev.directions || [])];
       if (afterIndex !== undefined && afterIndex >= 0) {
         list.splice(afterIndex + 1, 0, '');
       } else {
@@ -126,7 +127,7 @@ export function useRecipeForm({ initialRecipe, sessionId, onSaved }: UseRecipeFo
 
   const removeDirection = useCallback((index: number) => {
     setRecipe((prev) => {
-      const list = prev.directions.filter((_, i) => i !== index);
+      const list = (prev.directions || []).filter((_, i) => i !== index);
       return { ...prev, directions: list.length > 0 ? list : [''] };
     });
     setIsDirty(true);
@@ -134,8 +135,9 @@ export function useRecipeForm({ initialRecipe, sessionId, onSaved }: UseRecipeFo
 
   const moveDirection = useCallback((fromIndex: number, toIndex: number) => {
     setRecipe((prev) => {
-      if (toIndex < 0 || toIndex >= prev.directions.length) return prev;
-      const list = [...prev.directions];
+      const currentList = prev.directions || [];
+      if (toIndex < 0 || toIndex >= currentList.length) return prev;
+      const list = [...currentList];
       const [item] = list.splice(fromIndex, 1);
       list.splice(toIndex, 0, item);
       return { ...prev, directions: list };
@@ -228,11 +230,11 @@ export function useRecipeForm({ initialRecipe, sessionId, onSaved }: UseRecipeFo
     setIsSaving(true);
     try {
       // Normalize ingredients and directions
-      const cleanedIngredients = recipe.ingredients
+      const cleanedIngredients = (recipe.ingredients || [])
         .map((i) => i.trim())
         .filter(Boolean);
 
-      const cleanedDirections = recipe.directions
+      const cleanedDirections = (recipe.directions || [])
         .map((d, idx) => {
           const raw = d.trim().replace(/^\d+[\.\)\-:]\s*/, '').replace(/^Step\s*\d+[\.\)\-:]\s*/i, '');
           return `${idx + 1}. ${raw}`;

@@ -9,6 +9,7 @@ export enum PipelineState {
   COMPLETED = "COMPLETED",
   FAILED = "FAILED",
   CANCELLED = "CANCELLED",
+  BUDGET_EXCEEDED = "BUDGET_EXCEEDED",
 }
 
 export enum IngestionMode {
@@ -40,13 +41,20 @@ export interface TokenUsage {
 
 export interface PipelineStatus {
   session_id: string;
-  status: PipelineState;
+  status: PipelineState | string;
   mode?: IngestionMode;
   progress: ProgressMetrics;
   token_usage: TokenUsage;
   elapsed_seconds: number;
   csv_output_path?: string | null;
   error?: string | null;
+  analysis_blocked_reason?: string | null;
+  onboarding_hint?: string | null;
+  spend_usd?: number;
+  estimated_cost_usd?: number | null;
+  failures?: any[];
+  failures_count?: number;
+  [key: string]: any;
 }
 
 export interface PipelineStartRequest {
@@ -89,6 +97,11 @@ export interface SessionSummary {
   baseline_project_path?: string | null;
   baseline_session_id?: string | null;
   csv_output_path?: string | null;
+  spend_usd?: number;
+  estimated_cost_usd?: number | null;
+  analysis_blocked_reason?: string | null;
+  onboarding_hint?: string | null;
+  [key: string]: any;
 }
 
 export interface SessionDetail {
@@ -113,4 +126,86 @@ export interface SessionDetail {
   recipes: any[];
   csv_output_path?: string | null;
   error?: string | null;
+  spend_usd?: number;
+  estimated_cost_usd?: number | null;
+  spend_breakdown?: Record<string, any>;
+  analysis_blocked_reason?: string | null;
+  onboarding_hint?: string | null;
+  failures?: any[];
+  [key: string]: any;
+}
+
+// ---------------------------------------------------------------------------
+// Settings & Telemetry Schemas
+// ---------------------------------------------------------------------------
+
+export interface SettingsResponse {
+  quality_profile: 'economy' | 'balanced' | 'best' | string;
+  stage_models: Record<string, string>;
+  spend_cap_usd: number | null;
+  monthly_cap_usd: number | null;
+  rpm_limit: number;
+  extra_effort: boolean;
+  embeddings_enabled: boolean;
+  has_api_key: boolean;
+  key_source: string;
+}
+
+export interface SettingsUpdateRequest {
+  quality_profile?: string;
+  stage_models?: Record<string, string>;
+  spend_cap_usd?: number | null;
+  monthly_cap_usd?: number | null;
+  rpm_limit?: number;
+  extra_effort?: boolean;
+  embeddings_enabled?: boolean;
+}
+
+export interface ApiKeyRequest {
+  api_key: string;
+}
+
+export interface ApiKeyResponse {
+  success: boolean;
+  has_api_key: boolean;
+  key_source: string;
+  message: string;
+}
+
+export interface ApiKeyDeleteResponse {
+  success: boolean;
+  has_api_key: boolean;
+  key_source: string;
+  message: string;
+}
+
+export interface CostEstimateResponse {
+  low: number | null;
+  expected: number | null;
+  high: number | null;
+  assumptions: Record<string, any>;
+}
+
+export interface PrivacyNoticeResponse {
+  notice: string;
+  terms_url: string;
+  privacy_policy_url: string;
+  paid_vs_free_summary: string;
+}
+
+export interface SpendEventPayload {
+  session_id: string;
+  spend_usd: number;
+  snapshot?: {
+    total_usd?: number;
+    total_calls?: number;
+    prompt_tokens?: number;
+    candidates_tokens?: number;
+    thoughts_tokens?: number;
+    stages?: Record<string, any>;
+    [key: string]: any;
+  };
+  total_calls?: number;
+  total_tokens?: number;
+  [key: string]: any;
 }

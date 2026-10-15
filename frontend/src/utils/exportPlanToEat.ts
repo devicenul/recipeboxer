@@ -1,4 +1,5 @@
 import { RecipeSchema } from '../types/recipe';
+import { formatTimeValue } from './formatters';
 
 /**
  * Escapes a CSV field according to RFC 4180 rules.
@@ -57,9 +58,9 @@ export function generatePlanToEatCsv(recipes: RecipeSchema[]): string {
       escapeCsvField(recipe.title || ""),
       escapeCsvField(recipe.description || ""),
       escapeCsvField(ingredientsJoined),
-      escapeCsvField(directionsJoined),
-      escapeCsvField(recipe.prep_time || ""),
-      escapeCsvField(recipe.total_time || ""),
+      escapeCsvField(formatDirectionsForCsv(recipe.directions || [])),
+      escapeCsvField(formatTimeValue(recipe.prep_time) || ""),
+      escapeCsvField(formatTimeValue(recipe.total_time) || ""),
       escapeCsvField(recipe.yield_servings || ""),
       escapeCsvField(tagsJoined),
       escapeCsvField(recipe.source_notes || "RecipeBoxer OCR"),

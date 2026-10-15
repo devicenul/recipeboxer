@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { CheckCircle2, AlertCircle, Loader2, ArrowRight, RefreshCw, Layers } from 'lucide-react';
-import { CorrelationProposal, HitlApproval, CardPairApproval, CorrelationCandidate } from '../../types/hitl';
+import { CheckCircle2, AlertCircle, AlertTriangle, Loader2, ArrowRight, RefreshCw, Layers } from 'lucide-react';
+import { CorrelationProposal, HitlApproval, CardPairApproval, CorrelationCandidate, HitlItem } from '../../types/hitl';
 import { RapidQueueCard } from './RapidQueueCard';
 import { CandidateDrawer } from './CandidateDrawer';
 import { MultiCardInspectionModal } from './MultiCardInspectionModal';
@@ -11,12 +11,15 @@ import { api } from '../../utils/api';
 export interface HitlWorkspaceProps {
   sessionId: string;
   onApprovalsCompleted: () => void;
+  initialBudgetItem?: HitlItem | null;
 }
 
 export const HitlWorkspace: React.FC<HitlWorkspaceProps> = ({
   sessionId,
   onApprovalsCompleted,
+  initialBudgetItem,
 }) => {
+  const [budgetItem, setBudgetItem] = useState<HitlItem | null>(() => initialBudgetItem || null);
   const [proposals, setProposals] = useState<CorrelationProposal[]>([]);
   const [currentIndex, setCurrentIndex] = useState<number>(0);
   const [approvals, setApprovals] = useState<HitlApproval[]>([]);
@@ -39,6 +42,11 @@ export const HitlWorkspace: React.FC<HitlWorkspaceProps> = ({
     try {
       const res = await api.getHitlPending(sessionId);
       const rawProposals = res.proposals || res.proposed_pairs || [];
+      const rawItems: HitlItem[] = (res as any).items || [];
+      const foundBudgetItem = rawItems.find((it) => it.kind === 'budget' || it.item_type === 'BUDGET');
+      if (foundBudgetItem) {
+        setBudgetItem(foundBudgetItem);
+      }
       const normalizedProposals: CorrelationProposal[] = rawProposals.map((p) => {
         let orderedIds: string[] = [];
         if (p.ordered_card_ids && p.ordered_card_ids.length > 0) {
@@ -341,6 +349,53 @@ export const HitlWorkspace: React.FC<HitlWorkspaceProps> = ({
 
   return (
     <div className="flex flex-col gap-6" data-tour="rapid-queue">
+      {/* Budget Cap HITL Item Banner */}
+      {budgetItem && (
+        <div
+          role="alert"
+          aria-label="Budget cap reached"
+          className="p-5 bg-amber-50 dark:bg-amber-950/60 border border-amber-300 dark:border-amber-700 rounded-xl flex flex-col gap-3 shadow-xs"
+        >
+          <div className="flex items-center gap-2 text-amber-900 dark:text-amber-100 font-bold text-sm">
+            <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+            <span>Budget Cap Reached &mdash; Pipeline Paused</span>
+          </div>
+          <p className="text-xs text-amber-800 dark:text-amber-200 leading-relaxed">
+            {budgetItem.message ||
+              'The pipeline has paused execution because the spending budget cap was reached. You can raise the cap to resume processing or stop the run.'}
+          </p>
+          <div className="flex flex-wrap items-center gap-3 pt-1">
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={async () => {
+                try {
+                  await api.resumeSession(sessionId);
+                  setBudgetItem(null);
+                  fetchProposals();
+                } catch (e: any) {
+                  setError(e.message || 'Failed to resume session');
+                }
+              }}
+              aria-label="Raise budget cap and resume processing"
+            >
+              Raise Cap &amp; Resume
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                setBudgetItem(null);
+                onApprovalsCompleted();
+              }}
+              aria-label="Stop processing"
+            >
+              Stop Pipeline
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Workspace View */}
       {!isQueueComplete && currentProposal ? (
         <RapidQueueCard

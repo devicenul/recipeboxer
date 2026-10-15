@@ -38,13 +38,13 @@ ARCHAIC_UNIT_PATTERNS: List[Tuple[re.Pattern, str]] = [
     (re.compile(r"\bsaleratus\b", re.IGNORECASE), "baking soda (saleratus)"),
     (re.compile(r"\bsweet\s+milk\b", re.IGNORECASE), "whole milk (sweet milk)"),
     (re.compile(r"\bsour\s+milk\b", re.IGNORECASE), "buttermilk (sour milk)"),
-    (re.compile(r"\b(a|an|one|\d+(?:/\d+)?|\d+\s+\d+/\d+)\s+(gills?)\b", re.IGNORECASE), r"\1 \2 (1/2 cup)"),
-    (re.compile(r"\b(a|an|one|\d+(?:/\d+)?|\d+\s+\d+/\d+)\s+(pecks?)\b", re.IGNORECASE), r"\1 \2 (2 gal)"),
-    (re.compile(r"\b(a|an|one|\d+(?:/\d+)?|\d+\s+\d+/\d+)\s+(teacups?)\b", re.IGNORECASE), r"\1 \2 (3/4 cup)"),
-    (re.compile(r"\b(a|an|one|\d+(?:/\d+)?|\d+\s+\d+/\d+)\s+(wineglass(?:es)?)\b", re.IGNORECASE), r"\1 \2 (1/4 cup)"),
-    (re.compile(r"\b(a|an|one|\d+(?:/\d+)?|\d+\s+\d+/\d+)\s+(tumblers?)\b", re.IGNORECASE), r"\1 \2 (1 cup)"),
-    (re.compile(r"\b(a|an|one|\d+(?:/\d+)?|\d+\s+\d+/\d+)\s+(drams?|drachms?)\b", re.IGNORECASE), r"\1 \2 (1/8 oz)"),
-    (re.compile(r"\b(a|an|one|\d+(?:/\d+)?|\d+\s+\d+/\d+)\s+(scruples?)\b", re.IGNORECASE), r"\1 \2 (1/24 oz)"),
+    (re.compile(r"\b(?:(a|an|one|\d+(?:/\d+)?|\d+\s+\d+/\d+)\s+)?(gills?)\b(?!\s*\([^)]*cup\))", re.IGNORECASE), lambda m: f"{m.group(1)} {m.group(2)} (1/2 cup)" if m.group(1) else f"{m.group(2)} (1/2 cup)"),
+    (re.compile(r"\b(?:(a|an|one|\d+(?:/\d+)?|\d+\s+\d+/\d+)\s+)?(pecks?)\b(?!\s*\([^)]*gal\))", re.IGNORECASE), lambda m: f"{m.group(1)} {m.group(2)} (2 gal)" if m.group(1) else f"{m.group(2)} (2 gal)"),
+    (re.compile(r"\b(?:(a|an|one|\d+(?:/\d+)?|\d+\s+\d+/\d+)\s+)?(teacups?)\b(?!\s*\([^)]*cup\))", re.IGNORECASE), lambda m: f"{m.group(1)} {m.group(2)} (3/4 cup)" if m.group(1) else f"{m.group(2)} (3/4 cup)"),
+    (re.compile(r"\b(?:(a|an|one|\d+(?:/\d+)?|\d+\s+\d+/\d+)\s+)?(wineglass(?:es)?)\b(?!\s*\([^)]*cup\))", re.IGNORECASE), lambda m: f"{m.group(1)} {m.group(2)} (1/4 cup)" if m.group(1) else f"{m.group(2)} (1/4 cup)"),
+    (re.compile(r"\b(?:(a|an|one|\d+(?:/\d+)?|\d+\s+\d+/\d+)\s+)?(tumblers?)\b(?!\s*\([^)]*cup\))", re.IGNORECASE), lambda m: f"{m.group(1)} {m.group(2)} (1 cup)" if m.group(1) else f"{m.group(2)} (1 cup)"),
+    (re.compile(r"\b(?:(a|an|one|\d+(?:/\d+)?|\d+\s+\d+/\d+)\s+)?(drams?|drachms?)\b(?!\s*\([^)]*oz\))", re.IGNORECASE), lambda m: f"{m.group(1)} {m.group(2)} (1/8 oz)" if m.group(1) else f"{m.group(2)} (1/8 oz)"),
+    (re.compile(r"\b(?:(a|an|one|\d+(?:/\d+)?|\d+\s+\d+/\d+)\s+)?(scruples?)\b(?!\s*\([^)]*oz\))", re.IGNORECASE), lambda m: f"{m.group(1)} {m.group(2)} (1/24 oz)" if m.group(1) else f"{m.group(2)} (1/24 oz)"),
 ]
 
 # Shorthand abbreviation replacements

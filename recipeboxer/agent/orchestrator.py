@@ -12,6 +12,13 @@ from typing import Any, Callable, Dict, List, Optional, Union
 
 from recipeboxer.agent.session import PipelineSession
 from recipeboxer.config import Settings, get_settings, has_usable_gemini_key, is_usable_gemini_key
+from recipeboxer.ai.client import LLMClient, LLMStage
+from recipeboxer.correlation.engine import (
+    FileImageProvider,
+    GroupingEngine,
+    GroupingResult,
+    ImageProvider,
+)
 from recipeboxer.correlation.optimizer import PairingOptimizer
 from recipeboxer.correlation.semantic import GeminiSemanticVerifier
 from recipeboxer.exporter.plan_to_eat import PlanToEatExporter
@@ -62,6 +69,7 @@ class RecipeBoxerAgent:
         pairing_optimizer: Optional[PairingOptimizer] = None,
         recipe_extractor: Optional[Any] = None,
         csv_exporter: Optional[PlanToEatExporter] = None,
+        grouping_engine: Optional[GroupingEngine] = None,
     ) -> None:
         """Initialize the agent orchestrator with required sub-stage components."""
         self.settings = settings or get_settings()
@@ -69,8 +77,14 @@ class RecipeBoxerAgent:
         self.visual_extractor = visual_extractor or GeminiVisualExtractor()
         self.semantic_verifier = semantic_verifier or GeminiSemanticVerifier()
         self.pairing_optimizer = pairing_optimizer or PairingOptimizer(verifier=self.semantic_verifier)
+        self.grouping_engine = grouping_engine or GroupingEngine()
         self.recipe_extractor = recipe_extractor or RecipeExtractor()
         self.csv_exporter = csv_exporter or PlanToEatExporter()
+        try:
+            from recipeboxer.ai.embeddings import create_embedder
+            self.embedder = create_embedder(self.settings)
+        except Exception:
+            self.embedder = None
 
     def run_in_background(self, session: PipelineSession) -> asyncio.Task:
         """Launches the complete digitization pipeline in a background asyncio task.
@@ -369,7 +383,11 @@ class RecipeBoxerAgent:
             # -------------------------------------------------------------
             # Stage 2: Visual Fingerprinting (Processed ONLY for new cards)
             # -------------------------------------------------------------
-            if new_cards:
+            cards_to_fingerprint = [
+                c for c in new_cards
+                if c.card_id not in session.fingerprints
+            ]
+            if cards_to_fingerprint:
                 session.state = PipelineState.FINGERPRINTING
                 ingestion_config = self._resolve_ingestion_config(session.config)
                 extractor_fn = self._resolve_extractor_callable(session)
@@ -385,7 +403,7 @@ class RecipeBoxerAgent:
 
                 try:
                     ingestion_result = await runner.run(
-                        cards=new_cards,
+                        cards=cards_to_fingerprint,
                         progress_callback=_fingerprint_progress,
                         cancellation_token=session.cancellation_token,
                     )
@@ -495,21 +513,65 @@ class RecipeBoxerAgent:
             # -------------------------------------------------------------
             # Stage 3: Two-Stage Correlation & Pairing Optimization
             # -------------------------------------------------------------
-            if new_cards:
+            if new_cards and not session.proposals:
                 session.state = PipelineState.CORRELATING
                 new_fps = [session.fingerprints[c.card_id] for c in new_cards if c.card_id in session.fingerprints]
 
-                optimizer = session.optimizer or self.pairing_optimizer
-                if session.verifier is not None:
-                    optimizer = PairingOptimizer(verifier=session.verifier)
+                # 1. Build ImageProvider from session.cards and fingerprints
+                path_map: Dict[str, Any] = {}
+                for c in session.cards:
+                    if getattr(c, "card_id", None) and getattr(c, "path", None):
+                        path_map[c.card_id] = c.path
+                        path_map[Path(c.path).name] = c.path
+                for fp in new_fps:
+                    if fp.card_id and getattr(fp, "image_path", None):
+                        path_map[fp.card_id] = fp.image_path
+                image_provider = FileImageProvider(path_map)
+
+                # 2. Determine execution strategy: custom optimizer / mock adapter vs GroupingEngine
+                use_custom_optimizer = False
+                custom_optimizer = None
+
+                if session.optimizer is not None and not isinstance(session.optimizer, PairingOptimizer):
+                    use_custom_optimizer = True
+                    custom_optimizer = session.optimizer
                 elif session.mock_client is not None and hasattr(session.mock_client, "verify_correlation"):
-                    optimizer = self._build_mock_optimizer(session, new_fps)
+                    use_custom_optimizer = True
+                    custom_optimizer = self._build_mock_optimizer(session, new_fps)
+                elif session.optimizer is not None and isinstance(session.optimizer, PairingOptimizer):
+                    use_custom_optimizer = True
+                    custom_optimizer = session.optimizer
 
                 try:
-                    if isinstance(optimizer, PairingOptimizer):
-                        correlation_result = await optimizer.optimize(new_fps)
+                    if use_custom_optimizer and custom_optimizer is not None:
+                        if isinstance(custom_optimizer, PairingOptimizer):
+                            correlation_result = await custom_optimizer.optimize(new_fps)
+                        else:
+                            correlation_result = await self._run_custom_optimizer(custom_optimizer, new_fps)
                     else:
-                        correlation_result = await self._run_custom_optimizer(optimizer, new_fps)
+                        engine = session.grouping_engine or self.grouping_engine
+                        eff_llm_client = session.mock_client
+                        if eff_llm_client is None:
+                            if hasattr(self.visual_extractor, "llm_client") and self.visual_extractor.llm_client:
+                                eff_llm_client = self.visual_extractor.llm_client
+                            elif hasattr(self, "llm_client") and getattr(self, "llm_client", None):
+                                eff_llm_client = self.llm_client
+                            elif has_usable_gemini_key(session.settings):
+                                from recipeboxer.ai.client import create_llm_client
+                                eff_llm_client = create_llm_client(settings=session.settings)
+
+                        grouping_result = await engine.group(
+                            fps=new_fps,
+                            images=image_provider,
+                            llm_client=eff_llm_client,
+                            settings=session.settings,
+                            embedder=getattr(self, "embedder", None),
+                        )
+                        session.grouping_result = grouping_result
+                        correlation_result = CorrelationResult(
+                            proposals=grouping_result.proposals,
+                            unmatched_card_ids=[],
+                        )
                 except BudgetExceeded as be:
                     logger.warning(f"[{session.session_id}] Budget exceeded during correlation: {be}")
                     fail = be.to_failure()
@@ -530,10 +592,24 @@ class RecipeBoxerAgent:
                         session.state = PipelineState.CANCELLED
                         session.end_time = time.monotonic()
                         return
-                    if isinstance(optimizer, PairingOptimizer):
-                        correlation_result = await optimizer.optimize(new_fps)
+                    if use_custom_optimizer and custom_optimizer is not None:
+                        if isinstance(custom_optimizer, PairingOptimizer):
+                            correlation_result = await custom_optimizer.optimize(new_fps)
+                        else:
+                            correlation_result = await self._run_custom_optimizer(custom_optimizer, new_fps)
                     else:
-                        correlation_result = await self._run_custom_optimizer(optimizer, new_fps)
+                        grouping_result = await engine.group(
+                            fps=new_fps,
+                            images=image_provider,
+                            llm_client=eff_llm_client,
+                            settings=session.settings,
+                            embedder=getattr(self, "embedder", None),
+                        )
+                        session.grouping_result = grouping_result
+                        correlation_result = CorrelationResult(
+                            proposals=grouping_result.proposals,
+                            unmatched_card_ids=[],
+                        )
                 except StageUnavailableError as sue:
                     fail = sue.to_failure()
                     session.add_failure(fail)
@@ -591,8 +667,17 @@ class RecipeBoxerAgent:
                     for cid in correlation_result.unmatched_card_ids
                     if cid in session.fingerprints
                 ]
+            elif not session.proposals:
+                session.proposals = []
+                session.unmatched_card_ids = []
+                session.unassigned_cards = []
+                session.progress_metrics.proposals = 0
+                logger.info(
+                    f"[{session.session_id}] Stage 3 Correlation bypassed: 0 new cards to correlate."
+                )
 
-                # Surface degraded fingerprints and unverified proposals (INV-AC4)
+            # Surface degraded fingerprints and unverified proposals (INV-AC4)
+            if session.proposals:
                 unverified_count = 0
                 for p in session.proposals:
                     is_unverified = getattr(p, "semantic_verified", None) is False or (
@@ -653,14 +738,6 @@ class RecipeBoxerAgent:
                         message=p.continuity_explanation or "Correlation proposal awaiting review",
                     )
                     session.enqueue_hitl_item(item)
-            else:
-                session.proposals = []
-                session.unmatched_card_ids = []
-                session.unassigned_cards = []
-                session.progress_metrics.proposals = 0
-                logger.info(
-                    f"[{session.session_id}] Stage 3 Correlation bypassed: 0 new cards to correlate."
-                )
 
             # -------------------------------------------------------------
             # Stage 4: Human-in-the-Loop (HITL) Pause Boundary
@@ -1142,22 +1219,46 @@ class RecipeBoxerAgent:
                 res = session.recipe_extractor_fn(ordered_fps)
             recipe = await res if asyncio.iscoroutine(res) else res
         else:
-            ext = getattr(session, "extractor", None) or session.mock_client or self.recipe_extractor
-            if ext and hasattr(ext, "extract_cards"):
-                recipe = await ext.extract_cards(ordered_fps)
-            elif ext and hasattr(ext, "extract"):
-                recipe = await ext.extract(ordered_fps)
-            elif ext and hasattr(ext, "extract_recipe"):
-                try:
-                    recipe = await ext.extract_recipe(primary_front, primary_back)
-                except Exception:
-                    recipe = await ext.extract_recipe(ordered_fps)
-            elif callable(ext):
+            ext = getattr(session, "extractor", None)
+            if ext and not isinstance(ext, LLMClient) and (hasattr(ext, "extract_cards") or hasattr(ext, "extract") or hasattr(ext, "extract_recipe")):
+                if hasattr(ext, "extract_cards"):
+                    recipe = await ext.extract_cards(ordered_fps)
+                elif hasattr(ext, "extract"):
+                    recipe = await ext.extract(ordered_fps)
+                elif hasattr(ext, "extract_recipe"):
+                    try:
+                        recipe = await ext.extract_recipe(primary_front, primary_back)
+                    except Exception:
+                        recipe = await ext.extract_recipe(ordered_fps)
+            elif ext and callable(ext) and not isinstance(ext, LLMClient):
                 try:
                     res = ext(ordered_fps)
                 except TypeError:
                     res = ext(primary_front, primary_back)
                 recipe = await res if asyncio.iscoroutine(res) else res
+            else:
+                eff_client = session.mock_client
+                if eff_client is None and isinstance(ext, LLMClient):
+                    eff_client = ext
+                if eff_client is None and hasattr(self, "llm_client"):
+                    eff_client = self.llm_client
+
+                extractor = self.recipe_extractor
+                if eff_client is not None and getattr(extractor, "client", None) is None and getattr(extractor, "llm_client", None) is None:
+                    extractor = RecipeExtractor(
+                        llm_client=eff_client,
+                        model_name=session.settings.get_stage_model(LLMStage.STRUCTURE),
+                        settings=session.settings,
+                    )
+                if hasattr(extractor, "extract_cards"):
+                    recipe = await extractor.extract_cards(ordered_fps)
+                elif hasattr(extractor, "extract"):
+                    recipe = await extractor.extract(ordered_fps)
+                elif hasattr(extractor, "extract_recipe"):
+                    try:
+                        recipe = await extractor.extract_recipe(primary_front, primary_back)
+                    except Exception:
+                        recipe = await extractor.extract_recipe(ordered_fps)
 
         if recipe is not None and not isinstance(recipe, RecipeSchema) and hasattr(recipe, "model_dump"):
             return RecipeSchema.model_validate(recipe.model_dump())

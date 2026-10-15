@@ -1,4 +1,5 @@
 import { RecipeSchema } from '../types/recipe';
+import { formatTimeValue } from './formatters';
 
 /**
  * Parses ingredient into Cooklang notation @name{qty%unit} or @name{qty} or @name{}.
@@ -33,9 +34,9 @@ export function recipeToCooklang(recipe: RecipeSchema): string {
 
   lines.push(`>> title: ${recipe.title || 'Untitled Recipe'}`);
   if (recipe.description) lines.push(`>> description: ${recipe.description}`);
-  if (recipe.prep_time) lines.push(`>> prep time: ${recipe.prep_time}`);
-  if (recipe.cook_time) lines.push(`>> cook time: ${recipe.cook_time}`);
-  if (recipe.total_time) lines.push(`>> total time: ${recipe.total_time}`);
+  if (recipe.prep_time) lines.push(`>> prep time: ${formatTimeValue(recipe.prep_time)}`);
+  if (recipe.cook_time) lines.push(`>> cook time: ${formatTimeValue(recipe.cook_time)}`);
+  if (recipe.total_time) lines.push(`>> total time: ${formatTimeValue(recipe.total_time)}`);
   if (recipe.yield_servings) lines.push(`>> servings: ${recipe.yield_servings}`);
   if (recipe.tags && recipe.tags.length > 0) lines.push(`>> tags: ${recipe.tags.join(', ')}`);
   if (recipe.source_notes) lines.push(`>> source: ${recipe.source_notes}`);

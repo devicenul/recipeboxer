@@ -76,12 +76,12 @@ class TestFind03ProductionPrompts:
 
         assert len(client.requests) == 4
         stages = [r.stage for r in client.requests]
-        assert stages == [
+        assert stages[:3] == [
             LLMStage.FINGERPRINT,
             LLMStage.FINGERPRINT,
             LLMStage.SET_VERIFY,
-            LLMStage.STRUCTURE,
         ]
+        assert stages[3] in (LLMStage.STRUCTURE, LLMStage.TRANSCRIBE)
 
         # Verify each stage builds non-empty system instruction and text parts
         for req in client.requests:

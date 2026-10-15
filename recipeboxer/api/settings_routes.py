@@ -297,43 +297,19 @@ async def estimate_cost_endpoint(
             detail=f"Invalid quality profile '{active_profile}'. Must be one of: {', '.join(SUPPORTED_PROFILES)}",
         )
 
-    # 1. Attempt to use WP-B1 cost engine if available
-    try:
-        from recipeboxer.ai.cost import PriceTable, estimate_run_cost  # type: ignore
+    from recipeboxer.ai.cost import PriceTable, estimate_run_cost
 
-        prices = PriceTable.load()
-        est = estimate_run_cost(n_cards=n_cards, profile=active_profile, prices=prices)
-        return CostEstimateResponse(
-            low=float(est.get("low", 0.0)),
-            expected=float(est.get("expected", 0.0)),
-            high=float(est.get("high", 0.0)),
-            assumptions=dict(est.get("assumptions", {})),
-        )
-    except (ImportError, AttributeError):
-        pass
+    def _usd(value: Any) -> Optional[float]:
+        # None means "unpriced model in the profile" - surface it, never coerce to 0.
+        return None if value is None else float(value)
 
-    # 2. Fallback estimation based on provisional pricing table (WAVE4 §1.1 contract)
-    profile_multipliers = {
-        "economy": (0.0005, 0.0010, 0.0020),
-        "balanced": (0.0010, 0.0025, 0.0050),
-        "best": (0.0030, 0.0080, 0.0150),
-    }
-    low_per_card, exp_per_card, high_per_card = profile_multipliers[active_profile]
-
-    low = round(n_cards * low_per_card, 4)
-    expected = round(n_cards * exp_per_card, 4)
-    high = round(n_cards * high_per_card, 4)
-
+    prices = PriceTable.load()
+    est = estimate_run_cost(n_cards=n_cards, profile=active_profile, prices=prices)
     return CostEstimateResponse(
-        low=low,
-        expected=expected,
-        high=high,
-        assumptions={
-            "n_cards": n_cards,
-            "profile": active_profile,
-            "note": "Provisional estimate based on baseline token calibration; verified table pending.",
-            "pricing_source": "config/pricing.toml (provisional)",
-        },
+        low=_usd(est.get("low")),
+        expected=_usd(est.get("expected")),
+        high=_usd(est.get("high")),
+        assumptions=dict(est.get("assumptions", {})),
     )
 
 

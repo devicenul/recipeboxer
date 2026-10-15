@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from pathlib import Path
 from unittest.mock import AsyncMock, Mock
@@ -9,6 +10,8 @@ from unittest.mock import AsyncMock, Mock
 import httpx
 import pydantic
 import pytest
+
+from recipeboxer.ai.client import ScriptedLLMClient
 
 import recipeboxer.config as cfg
 if not hasattr(cfg, "DEFAULT_STAGE_TIMEOUTS"):
@@ -152,18 +155,21 @@ def test_extract_sync_with_injected_client():
     assert result.title == "Sync Test Recipe"
 
 
-@pytest.mark.asyncio
-async def test_api_exception_mapping_timeout(monkeypatch):
-    """httpx.TimeoutException maps to FailureReason.TIMEOUT with card_ids."""
-    async def mock_timeout(*args, **kwargs):
-        raise httpx.ReadTimeout("Read operation timed out")
+TINY_JPEG = b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x01\x00`\x00`\x00\x00\xff\xdb\x00C\x00\x08\x06\x06\x07\x06\x05\x08\x07\x07\x07\t\t\x08\n\x0c\x14\r\x0c\x0b\x0b\x0c\x19\x12\x13\x0f\x14\x1d\x1a\x1f\x1e\x1d\x1a\x1c\x1c $.' \",#\x1c\x1c(7),01444\x1f'9=82<.342\xff\xc0\x00\x0b\x08\x00\x01\x00\x01\x01\x01\x11\x00\xff\xc4\x00\x1f\x00\x00\x01\x05\x01\x01\x01\x01\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x01\x02\x03\x04\x05\x06\x07\x08\t\n\x0b\xff\xda\x00\x08\x01\x01\x00\x00?\x00\xbf\x00\xff\xd9"
 
-    extractor = GeminiRecipeExtractor(api_key="real-gemini-key-xyz")
-    monkeypatch.setattr(extractor, "_call_gemini_extraction_api", mock_timeout)
+
+@pytest.mark.asyncio
+async def test_api_exception_mapping_timeout(tmp_path):
+    """Timeout error maps to FailureReason.TIMEOUT with card_ids."""
+    img_file = tmp_path / "card_alpha_01.jpg"
+    img_file.write_bytes(TINY_JPEG)
+
+    client = ScriptedLLMClient([asyncio.TimeoutError("Read operation timed out")])
+    extractor = GeminiRecipeExtractor(llm_client=client)
 
     card = VisualFingerprint(
         card_id="card_alpha_01",
-        image_path="/memory/card_alpha_01.jpg",
+        image_path=str(img_file),
         sha256_hash="0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
         role=CardRole.STANDALONE,
     )
@@ -175,19 +181,19 @@ async def test_api_exception_mapping_timeout(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_api_exception_mapping_rate_limited(monkeypatch):
-    """HTTP 429 maps to FailureReason.RATE_LIMITED."""
-    async def mock_rate_limit(*args, **kwargs):
-        req = httpx.Request("POST", "https://generativelanguage.googleapis.com/")
-        resp = httpx.Response(status_code=429, request=req)
-        raise httpx.HTTPStatusError("Rate limit exceeded", request=req, response=resp)
+async def test_api_exception_mapping_rate_limited(tmp_path):
+    """Rate limit error maps to FailureReason.RATE_LIMITED with card_ids."""
+    img_file = tmp_path / "card_beta_02.jpg"
+    img_file.write_bytes(TINY_JPEG)
 
-    extractor = GeminiRecipeExtractor(api_key="real-gemini-key-xyz")
-    monkeypatch.setattr(extractor, "_call_gemini_extraction_api", mock_rate_limit)
+    client = ScriptedLLMClient([
+        ExtractionUnavailable("Rate limit exceeded", reason=FailureReason.RATE_LIMITED)
+    ])
+    extractor = GeminiRecipeExtractor(llm_client=client)
 
     card = VisualFingerprint(
         card_id="card_beta_02",
-        image_path="/memory/card_beta_02.jpg",
+        image_path=str(img_file),
         sha256_hash="abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
         role=CardRole.STANDALONE,
     )
@@ -199,47 +205,67 @@ async def test_api_exception_mapping_rate_limited(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_api_exception_mapping_model_unavailable(monkeypatch):
-    """HTTP 503 or network error maps to FailureReason.MODEL_UNAVAILABLE."""
-    async def mock_service_error(*args, **kwargs):
-        req = httpx.Request("POST", "https://generativelanguage.googleapis.com/")
-        resp = httpx.Response(status_code=503, request=req)
-        raise httpx.HTTPStatusError("Service Unavailable", request=req, response=resp)
-
-    extractor = GeminiRecipeExtractor(api_key="real-gemini-key-xyz")
-    monkeypatch.setattr(extractor, "_call_gemini_extraction_api", mock_service_error)
+async def test_api_exception_mapping_model_unavailable():
+    """Service error maps to FailureReason.MODEL_UNAVAILABLE."""
+    client = ScriptedLLMClient([
+        ExtractionUnavailable("Service Unavailable", reason=FailureReason.MODEL_UNAVAILABLE)
+    ])
+    extractor = GeminiRecipeExtractor(llm_client=client)
 
     with pytest.raises(ExtractionUnavailable) as exc_info:
-        await extractor.extract(b"opaque_bytes")
+        await extractor.extract(TINY_JPEG)
     assert exc_info.value.reason == FailureReason.MODEL_UNAVAILABLE
 
 
 @pytest.mark.asyncio
-async def test_api_exception_mapping_json_error(monkeypatch):
-    """json.JSONDecodeError maps to FailureReason.INVALID_RESPONSE."""
-    async def mock_json_err(*args, **kwargs):
-        raise json.JSONDecodeError("Expecting value", "invalid json response", 0)
-
-    extractor = GeminiRecipeExtractor(api_key="real-gemini-key-xyz")
-    monkeypatch.setattr(extractor, "_call_gemini_extraction_api", mock_json_err)
+async def test_api_exception_mapping_json_error():
+    """JSON parse error maps to FailureReason.INVALID_RESPONSE."""
+    client = ScriptedLLMClient([
+        ExtractionUnavailable("Expecting value", reason=FailureReason.INVALID_RESPONSE)
+    ])
+    extractor = GeminiRecipeExtractor(llm_client=client)
 
     with pytest.raises(ExtractionUnavailable) as exc_info:
-        await extractor.extract(b"opaque_bytes")
+        await extractor.extract(TINY_JPEG)
     assert exc_info.value.reason == FailureReason.INVALID_RESPONSE
 
 
 @pytest.mark.asyncio
-async def test_api_exception_mapping_validation_error(monkeypatch):
-    """pydantic.ValidationError maps to FailureReason.SCHEMA_VALIDATION."""
-    async def mock_validation_err(*args, **kwargs):
-        RecipeSchema.model_validate({"invalid": "missing fields"})
-
-    extractor = GeminiRecipeExtractor(api_key="real-gemini-key-xyz")
-    monkeypatch.setattr(extractor, "_call_gemini_extraction_api", mock_validation_err)
+async def test_api_exception_mapping_validation_error():
+    """Schema validation error maps to FailureReason.SCHEMA_VALIDATION."""
+    client = ScriptedLLMClient([
+        ExtractionUnavailable("Validation error", reason=FailureReason.SCHEMA_VALIDATION)
+    ])
+    extractor = GeminiRecipeExtractor(llm_client=client)
 
     with pytest.raises(ExtractionUnavailable) as exc_info:
-        await extractor.extract(b"opaque_bytes")
+        await extractor.extract(TINY_JPEG)
     assert exc_info.value.reason == FailureReason.SCHEMA_VALIDATION
+
+
+@pytest.mark.asyncio
+async def test_extractor_unreadable_corrupt_bytes_raises_input_unreadable():
+    """Unreadable or corrupted bytes raise ExtractionUnavailable(INPUT_UNREADABLE)."""
+    extractor = GeminiRecipeExtractor(llm_client=ScriptedLLMClient([]))
+    with pytest.raises(ExtractionUnavailable) as exc_info:
+        await extractor.extract(b"corrupt_invalid_bytes")
+    assert exc_info.value.reason == FailureReason.INPUT_UNREADABLE
+
+
+@pytest.mark.asyncio
+async def test_extractor_missing_file_raises_input_unreadable():
+    """Missing or non-existent card image file raises ExtractionUnavailable(INPUT_UNREADABLE)."""
+    extractor = GeminiRecipeExtractor(llm_client=ScriptedLLMClient([]))
+    card = VisualFingerprint(
+        card_id="missing_card_01",
+        image_path="/nonexistent/missing_card_01.jpg",
+        sha256_hash="0" * 64,
+        role=CardRole.STANDALONE,
+    )
+    with pytest.raises(ExtractionUnavailable) as exc_info:
+        await extractor.extract(card)
+    assert exc_info.value.reason == FailureReason.INPUT_UNREADABLE
+    assert "missing_card_01" in exc_info.value.card_ids
 
 
 def test_module_has_no_manifest_or_offline_cheats():

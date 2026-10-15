@@ -1,7 +1,7 @@
 import React from 'react';
-import { Layers, GitMerge, BookOpen, Download } from 'lucide-react';
+import { Layers, GitMerge, BookOpen, Download, Settings } from 'lucide-react';
 
-export type NavTab = 'ingest' | 'hitl' | 'recipes' | 'export';
+export type NavTab = 'ingest' | 'hitl' | 'recipes' | 'export' | 'settings';
 
 export interface NavigationProps {
   activeTab: NavTab;
@@ -31,6 +31,7 @@ export const Navigation: React.FC<NavigationProps> = ({
       badge: extractedRecipeCount > 0 ? extractedRecipeCount : undefined,
     },
     { id: 'export', label: '4. Export', icon: <Download className="w-4 h-4" /> },
+    { id: 'settings', label: '5. Settings', icon: <Settings className="w-4 h-4" /> },
   ];
 
   return (

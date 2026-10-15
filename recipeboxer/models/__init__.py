@@ -3,6 +3,9 @@
 from recipeboxer.models.correlation import (
     CorrelationProposal,
     CorrelationResult,
+    FeatureEvidence,
+    PairEvidence,
+    SetVerification,
 )
 from recipeboxer.models.domain import (
     ArtifactType,
@@ -77,6 +80,9 @@ __all__ = [
     # Correlation
     "CorrelationProposal",
     "CorrelationResult",
+    "FeatureEvidence",
+    "PairEvidence",
+    "SetVerification",
     # HITL
     "HITLDecision",
     "CardPairApproval",

@@ -328,7 +328,7 @@ def create_recipeboxer_archive(
             part_count=getattr(p, "part_count", len(ordered_ids)) if hasattr(p, "part_count") else (p.get("part_count", len(ordered_ids)) if isinstance(p, dict) else len(ordered_ids)),
             transition_scores=getattr(p, "transition_scores", []) if hasattr(p, "transition_scores") else (p.get("transition_scores", []) if isinstance(p, dict) else []),
             heuristic_score=getattr(p, "heuristic_score", 0.0) if hasattr(p, "heuristic_score") else (p.get("heuristic_score", 0.0) if isinstance(p, dict) else 0.0),
-            semantic_score=getattr(p, "semantic_score", 0.0) if hasattr(p, "semantic_score") else (p.get("semantic_score", 0.0) if isinstance(p, dict) else 0.0),
+            semantic_score=getattr(p, "semantic_score", None) if hasattr(p, "semantic_score") else (p.get("semantic_score", None) if isinstance(p, dict) else None),
             confidence=getattr(p, "confidence", 0.0) if hasattr(p, "confidence") else (p.get("confidence", 0.0) if isinstance(p, dict) else 0.0),
             is_standalone=getattr(p, "is_standalone", False) if hasattr(p, "is_standalone") else (p.get("is_standalone", False) if isinstance(p, dict) else False),
             continuity_explanation=getattr(p, "continuity_explanation", "") if hasattr(p, "continuity_explanation") else (p.get("continuity_explanation", "") if isinstance(p, dict) else ""),

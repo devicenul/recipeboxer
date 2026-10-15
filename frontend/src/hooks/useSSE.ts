@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { PipelineStatus, PipelineState } from '../types/pipeline';
+import { PipelineStatus, PipelineState, SpendEventPayload } from '../types/pipeline';
 import { RecipeSchema } from '../types/recipe';
 
 export interface SSEEventMap {
@@ -10,6 +10,7 @@ export interface SSEEventMap {
   completed?: PipelineStatus;
   failed?: PipelineStatus;
   cancelled?: PipelineStatus;
+  spend?: SpendEventPayload;
 }
 
 export interface UseSSEOptions {
@@ -23,6 +24,7 @@ export interface UseSSEOptions {
   onHitlReady?: (data: { session_id: string; proposals_count: number }) => void;
   onRecipeExtracted?: (recipe: RecipeSchema) => void;
   onCompleted?: (status: PipelineStatus) => void;
+  onSpend?: (data: SpendEventPayload) => void;
   onError?: (err: any) => void;
   onSessionInvalid?: (sessionId: string) => void;
 }
@@ -38,6 +40,7 @@ export function useSSE({
   onHitlReady,
   onRecipeExtracted,
   onCompleted,
+  onSpend,
   onError,
   onSessionInvalid,
 }: UseSSEOptions) {
@@ -60,6 +63,7 @@ export function useSSE({
     onHitlReady,
     onRecipeExtracted,
     onCompleted,
+    onSpend,
     onError,
     onSessionInvalid,
   });
@@ -72,6 +76,7 @@ export function useSSE({
       onHitlReady,
       onRecipeExtracted,
       onCompleted,
+      onSpend,
       onError,
       onSessionInvalid,
     };
@@ -215,6 +220,9 @@ export function useSSE({
             case 'cancelled':
               callbacks.onStateChange?.(data);
               break;
+            case 'spend':
+              callbacks.onSpend?.(data);
+              break;
           }
         } catch {
           // Non-JSON ping or custom data
@@ -229,6 +237,7 @@ export function useSSE({
       es.addEventListener('completed', (e: MessageEvent) => handleEvent('completed', e.data));
       es.addEventListener('failed', (e: MessageEvent) => handleEvent('failed', e.data));
       es.addEventListener('cancelled', (e: MessageEvent) => handleEvent('cancelled', e.data));
+      es.addEventListener('spend', (e: MessageEvent) => handleEvent('spend', e.data));
       es.onmessage = (e: MessageEvent) => handleEvent('status', e.data);
 
       es.onerror = (err) => {

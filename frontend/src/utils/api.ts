@@ -4,6 +4,12 @@ import {
   PipelineStatus,
   SessionSummary,
   SessionDetail,
+  SettingsResponse,
+  SettingsUpdateRequest,
+  ApiKeyResponse,
+  ApiKeyDeleteResponse,
+  CostEstimateResponse,
+  PrivacyNoticeResponse,
 } from '../types/pipeline';
 import {
   HitlPendingResponse,
@@ -323,6 +329,41 @@ export const api = {
     }
 
     return response.blob();
+  },
+
+  // 12. Settings & Credentials
+  async getSettings(): Promise<SettingsResponse> {
+    return fetchJson<SettingsResponse>('/api/settings');
+  },
+
+  async updateSettings(payload: SettingsUpdateRequest): Promise<SettingsResponse> {
+    return fetchJson<SettingsResponse>('/api/settings', {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async setApiKey(apiKey: string): Promise<ApiKeyResponse> {
+    return fetchJson<ApiKeyResponse>('/api/settings/api-key', {
+      method: 'POST',
+      body: JSON.stringify({ api_key: apiKey }),
+    });
+  },
+
+  async deleteApiKey(): Promise<ApiKeyDeleteResponse> {
+    return fetchJson<ApiKeyDeleteResponse>('/api/settings/api-key', {
+      method: 'DELETE',
+    });
+  },
+
+  async getCostEstimate(nCards: number, profile?: string): Promise<CostEstimateResponse> {
+    const params = new URLSearchParams({ n_cards: String(nCards) });
+    if (profile) params.set('profile', profile);
+    return fetchJson<CostEstimateResponse>(`/api/settings/estimate?${params.toString()}`);
+  },
+
+  async getPrivacyNotice(): Promise<PrivacyNoticeResponse> {
+    return fetchJson<PrivacyNoticeResponse>('/api/settings/privacy-notice');
   },
 };
 

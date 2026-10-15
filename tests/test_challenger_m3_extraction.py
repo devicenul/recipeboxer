@@ -177,8 +177,6 @@ class TestGeminiApiExtractionStoryAndGuessHandling:
 
     @pytest.mark.asyncio
     async def test_gemini_api_extraction_correctly_isolates_stories_and_flags_guess(self):
-        extractor = GeminiRecipeExtractor(api_key="real-gemini-api-key-test")
-
         llm_response = {
             "recipe_id": "rec_adv_001",
             "title": "Rustic Autumn Apple Cobbler [GUESS]",
@@ -205,31 +203,36 @@ class TestGeminiApiExtractionStoryAndGuessHandling:
             "source_notes": "Great-Aunt Clara (1948 Handwritten Card, Ohio Church Box)",
         }
 
-        mock_resp = MagicMock()
-        mock_resp.json.return_value = {
-            "candidates": [{"content": {"parts": [{"text": json.dumps(llm_response)}]}}]
-        }
-        mock_resp.raise_for_status = MagicMock()
+        mock_client = AsyncMock()
+        mock_client.extract_recipe = AsyncMock(return_value=RecipeSchema(**llm_response))
+        extractor = GeminiRecipeExtractor(client=mock_client)
 
-        with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
-            mock_post.return_value = mock_resp
-            recipe = await extractor.extract(b"mock_bytes")
+        valid_jpeg = (
+            b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00"
+            b"\xff\xdb\x00C\x00\x08\x06\x06\x07\x06\x05\x08\x07\x07\x07\t\t\x08\n\x0c"
+            b"\x14\r\x0c\x0b\x0b\x0c\x19\x12\x13\x0f\x14\x1d\x1a\x1f\x1e\x1d\x1a\x1c"
+            b"\x1c $.' \",#\x1c\x1c(7),01444\x1f'9=82<.342\xff\xc0\x00\x0b\x08\x00\x01"
+            b"\x00\x01\x01\x01\x11\x00\xff\xc4\x00\x1f\x00\x00\x01\x05\x01\x01\x01"
+            b"\x01\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x01\x02\x03\x04\x05\x06"
+            b"\x07\x08\t\n\x0b\xff\xda\x00\x08\x01\x01\x00\x00?\x00\xbf\x00\xff\xd9"
+        )
+        recipe = await extractor.extract(valid_jpeg)
 
-            assert isinstance(recipe, RecipeSchema)
-            assert recipe.title.endswith(" [GUESS]")
-            assert "Great-Aunt Clara" in recipe.description
-            assert "1948" in recipe.description
-            assert "Ohio Church Box" in recipe.source_notes
+        assert isinstance(recipe, RecipeSchema)
+        assert recipe.title.endswith(" [GUESS]")
+        assert "Great-Aunt Clara" in recipe.description
+        assert "1948" in recipe.description
+        assert "Ohio Church Box" in recipe.source_notes
 
-            # Verify ingredients and directions do NOT contain family stories or years
-            for ing in recipe.ingredients:
-                assert "Great-Aunt" not in ing
-                assert "1948" not in ing
-                assert "Sunday" not in ing
+        # Verify ingredients and directions do NOT contain family stories or years
+        for ing in recipe.ingredients:
+            assert "Great-Aunt" not in ing
+            assert "1948" not in ing
+            assert "Sunday" not in ing
 
-            for d in recipe.directions:
-                assert "Great-Aunt" not in d
-                assert "harvest" not in d
+        for d in recipe.directions:
+            assert "Great-Aunt" not in d
+            assert "harvest" not in d
 
     @pytest.mark.asyncio
     async def test_recipe_schema_serialization_round_trip(self):

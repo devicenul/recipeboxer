@@ -1,5 +1,6 @@
 import { RecipeSchema } from '../types/recipe';
 import { CuratedCookbook } from '../types/export';
+import { formatTimeValue } from './formatters';
 
 function escapeHtml(str: string | undefined | null): string {
   if (!str) return '';
@@ -20,9 +21,9 @@ function renderRecipeCard(recipe: RecipeSchema, htmlParts: string[]): void {
 
   htmlParts.push('<table class="meta-table"><tr>');
   htmlParts.push(`<td><strong>Yield:</strong> ${escapeHtml(recipe.yield_servings || '—')}</td>`);
-  htmlParts.push(`<td><strong>Prep:</strong> ${escapeHtml(recipe.prep_time || '—')}</td>`);
-  htmlParts.push(`<td><strong>Cook:</strong> ${escapeHtml(recipe.cook_time || '—')}</td>`);
-  htmlParts.push(`<td><strong>Total:</strong> ${escapeHtml(recipe.total_time || '—')}</td>`);
+  htmlParts.push(`<td><strong>Prep:</strong> ${escapeHtml(formatTimeValue(recipe.prep_time) || '—')}</td>`);
+  htmlParts.push(`<td><strong>Cook:</strong> ${escapeHtml(formatTimeValue(recipe.cook_time) || '—')}</td>`);
+  htmlParts.push(`<td><strong>Total:</strong> ${escapeHtml(formatTimeValue(recipe.total_time) || '—')}</td>`);
   htmlParts.push('</tr></table>');
 
   if (recipe.ingredients && recipe.ingredients.length > 0) {

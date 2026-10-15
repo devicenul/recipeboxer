@@ -67,6 +67,14 @@ class IngredientLine(BaseModel):
         default=None,
         description="Normalized representation with standardized fractions and archaic units",
     )
+    normalized_quantity: Optional[float] = Field(
+        default=None,
+        description="Normalized numeric quantity (where unambiguous)",
+    )
+    normalized_unit: Optional[str] = Field(
+        default=None,
+        description="Normalized standard measurement unit",
+    )
     confidence: float = Field(default=1.0, ge=0.0, le=1.0, description="Extraction confidence 0.0 to 1.0")
     source_face: int = Field(default=0, ge=0, description="0-indexed card face index")
     legibility: Legibility = Field(default=Legibility.CLEAR, description="Legibility status")
@@ -171,6 +179,17 @@ class TimeValue(BaseModel):
     original_text: str = Field(default="", description="Verbatim time string (e.g. '20 mins')")
     normalized_iso: Optional[str] = Field(default=None, description="ISO 8601 duration (e.g. 'PT20M')")
     minutes: Optional[int] = Field(default=None, description="Total minutes duration")
+    normalized_minutes: Optional[int] = Field(default=None, description="Total minutes duration (alias)")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _sync_minutes(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            if "minutes" in data and "normalized_minutes" not in data:
+                data["normalized_minutes"] = data["minutes"]
+            elif "normalized_minutes" in data and "minutes" not in data:
+                data["minutes"] = data["normalized_minutes"]
+        return data
 
     @property
     def display_text(self) -> str:
@@ -243,6 +262,7 @@ class Provenance(BaseModel):
     prompt_versions: Dict[str, str] = Field(default_factory=dict, description="Prompt IDs and hashes")
     profile: Optional[str] = Field(default=None, description="Execution profile (economy, balanced, best)")
     cost: Optional[float] = Field(default=None, description="Total USD cost incurred")
+    skipped_passes: List[str] = Field(default_factory=list, description="Passes that encountered errors and were skipped")
 
 
 class RecipeWarning(BaseModel):
@@ -564,7 +584,7 @@ class Recipe(BaseModel):
 
     def needs_review(self) -> bool:
         """True if recipe contains warnings, flagged spans, or low confidence."""
-        return self.flagged_count() > 0 or self.confidence < 0.8
+        return self.flagged_count() > 0 or (self.confidence is not None and self.confidence < 0.8)
 
     def to_scoring_dict(self) -> Dict[str, Any]:
         """Produces the structured dictionary shape expected by evals/scoring.

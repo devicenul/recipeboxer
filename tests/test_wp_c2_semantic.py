@@ -15,9 +15,12 @@ from unittest.mock import AsyncMock, patch
 import httpx
 import pytest
 
-from recipeboxer.correlation.semantic import GeminiSemanticVerifier
+from recipeboxer.ai.client import TextPart
+from recipeboxer.ai.replay import ScriptedLLMClient
+from recipeboxer.correlation.semantic import GeminiSemanticVerifier, SetVerificationResponse
 from recipeboxer.models.correlation import CorrelationProposal
 from recipeboxer.models.domain import BoundaryText, CardRole, VisualFingerprint
+from recipeboxer.models.failures import FailureReason, SemanticVerificationUnavailable
 
 
 @pytest.fixture
@@ -68,107 +71,70 @@ def boundary_cue_fingerprints():
 
 @pytest.mark.asyncio
 async def test_no_key_degraded_proposal(opaque_fingerprints):
-    """When no API key is provided and no client injected, proposal is unverified and UNCERTAIN."""
+    """When no API key is provided and no client injected, raises SemanticVerificationUnavailable(NO_API_KEY)."""
     fp_a, fp_b = opaque_fingerprints
     verifier = GeminiSemanticVerifier(api_key=None, client=None)
 
-    proposal = await verifier.verify_pair(fp_a, fp_b, heuristic_score=0.62)
+    with pytest.raises(SemanticVerificationUnavailable) as exc_info:
+        await verifier.verify_pair(fp_a, fp_b, heuristic_score=0.62)
 
-    assert isinstance(proposal, CorrelationProposal)
-    assert proposal.semantic_verified is False
-    assert proposal.degraded_reason == "NO_MODEL"
-    assert proposal.recommended_action == "UNCERTAIN"
-    assert proposal.semantic_score != 0.95
-    assert proposal.semantic_score == 0.5
-    # Confidence reflects heuristic score only when no model and no text cues
-    assert proposal.confidence == 0.62
-    assert "95%" not in proposal.continuity_explanation
-    assert "Strong semantic continuity" not in proposal.continuity_explanation
+    assert exc_info.value.reason == FailureReason.NO_API_KEY
+    assert fp_a.card_id in exc_info.value.card_ids
 
 
 @pytest.mark.asyncio
 async def test_boundary_cue_fingerprints_higher_but_capped_scores(opaque_fingerprints, boundary_cue_fingerprints):
-    """Explicit boundary cues yield higher scores than no-cue fingerprints, but confidence is capped."""
-    fp_no_cue_a, fp_no_cue_b = opaque_fingerprints
+    """Without a model client, offline heuristics do not fabricate numbers (INV-AC4/AC6)."""
     fp_cue_a, fp_cue_b = boundary_cue_fingerprints
-
     verifier = GeminiSemanticVerifier(api_key=None, client=None)
 
-    h_score = 0.55
-    prop_no_cue = await verifier.verify_pair(fp_no_cue_a, fp_no_cue_b, heuristic_score=h_score)
-    prop_with_cue = await verifier.verify_pair(fp_cue_a, fp_cue_b, heuristic_score=h_score)
+    with pytest.raises(SemanticVerificationUnavailable) as exc_info:
+        await verifier.verify_pair(fp_cue_a, fp_cue_b, heuristic_score=0.55)
 
-    assert prop_no_cue.semantic_verified is False
-    assert prop_with_cue.semantic_verified is False
-    assert prop_with_cue.degraded_reason == "NO_MODEL"
-
-    # Higher semantic score and confidence from real boundary evidence
-    assert prop_with_cue.semantic_score > prop_no_cue.semantic_score
-    assert prop_with_cue.confidence > prop_no_cue.confidence
-
-    # Confidence must be capped below 1.0 (specifically <= 0.80 in offline unverified mode)
-    assert prop_with_cue.confidence <= 0.80
-    assert prop_with_cue.semantic_score != 0.95
+    assert exc_info.value.reason == FailureReason.NO_API_KEY
 
 
 @pytest.mark.asyncio
 async def test_live_api_exception_handled_as_degraded_with_reason(opaque_fingerprints):
-    """Live API errors are logged and returned as degraded proposals rather than raising."""
+    """Live API errors raise SemanticVerificationUnavailable with typed failure reason."""
     fp_a, fp_b = opaque_fingerprints
-    verifier = GeminiSemanticVerifier(api_key="valid-dummy-key", client=None)
+    client = ScriptedLLMClient([httpx.ConnectError("Connection refused")])
+    verifier = GeminiSemanticVerifier(llm_client=client)
 
-    with patch.object(verifier, "_call_gemini_semantic_api", side_effect=httpx.ConnectError("Connection refused")):
-        proposal = await verifier.verify_pair(fp_a, fp_b, heuristic_score=0.45)
+    with pytest.raises(SemanticVerificationUnavailable) as exc_info:
+        await verifier.verify_pair(fp_a, fp_b, heuristic_score=0.45)
 
-    assert isinstance(proposal, CorrelationProposal)
-    assert proposal.semantic_verified is False
-    assert proposal.degraded_reason == "API_ERROR: ConnectError"
-    assert proposal.recommended_action == "UNCERTAIN"
-    assert proposal.confidence == 0.45
+    assert exc_info.value.reason in (FailureReason.MODEL_UNAVAILABLE, FailureReason.UNKNOWN)
 
 
 @pytest.mark.asyncio
 async def test_opaque_labels_sent_to_gemini(opaque_fingerprints):
-    """Dual image call strictly passes 'Card A' / 'Card B' opaque labels."""
+    """Multimodal call strictly passes neutral labels and zero card IDs."""
     fp_a, fp_b = opaque_fingerprints
-    verifier = GeminiSemanticVerifier(api_key="valid-dummy-key", client=None)
+    client = ScriptedLLMClient([
+        SetVerificationResponse(
+            continuations=["Candidate 1"],
+            rejected=[],
+            evidence_quotes=[],
+            confidence=0.88,
+        )
+    ])
+    verifier = GeminiSemanticVerifier(llm_client=client)
 
-    intercepted_payload = None
+    proposal = await verifier.verify_pair(fp_a, fp_b, heuristic_score=0.80)
 
-    async def fake_post(url, json=None, **kwargs):
-        nonlocal intercepted_payload
-        intercepted_payload = json
-        from unittest.mock import MagicMock
-        mock_resp = MagicMock()
-        mock_resp.raise_for_status = lambda: None
-        mock_resp.json.return_value = {
-            "candidates": [
-                {
-                    "content": {
-                        "parts": [
-                            {
-                                "text": '{"semantic_score": 0.88, "recommended_action": "PAIR", "explanation": "Matching handwriting."}'
-                            }
-                        ]
-                    }
-                }
-            ]
-        }
-        return mock_resp
+    assert len(client.requests) == 1
+    req = client.requests[0]
 
-    with patch("httpx.AsyncClient.post", side_effect=fake_post):
-        proposal = await verifier._call_gemini_semantic_api(fp_a, fp_b, heuristic_score=0.80)
-
-    assert intercepted_payload is not None
-    prompt_text = intercepted_payload["contents"][0]["parts"][0]["text"]
-
-    assert "Front Card: Card A" in prompt_text
-    assert "Back Card: Card B" in prompt_text
-    assert fp_a.card_id not in prompt_text
-    assert fp_b.card_id not in prompt_text
+    # Verify neutral labels
+    text_parts = [p.text for p in req.parts if isinstance(p, TextPart)]
+    combined = "\n".join(text_parts)
+    assert "Anchor:" in combined
+    assert "Candidate 1:" in combined
+    assert fp_a.card_id not in combined
+    assert fp_b.card_id not in combined
 
     assert proposal.semantic_verified is True
-    assert proposal.degraded_reason is None
     assert proposal.semantic_score == 0.88
     assert proposal.recommended_action == "PAIR"
 

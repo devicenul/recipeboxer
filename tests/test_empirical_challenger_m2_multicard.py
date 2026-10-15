@@ -161,69 +161,75 @@ class TestMultiCardExtractionOrdering:
 
     @pytest.mark.asyncio
     async def test_gemini_api_payload_6_cards_sequential_labels_and_instructions(self):
-        """Gemini API payload structure contains exact sequential labels for 6 cards."""
-        extractor = GeminiRecipeExtractor(
-            api_key="real-gemini-api-key-test",
-            model_name="gemini-3.7-flash",
+        """Gemini API payload structure contains neutral sequential labels for 6 cards."""
+        from recipeboxer.ai.client import LLMResponse, UsageTokens
+        from recipeboxer.config import get_settings
+        from recipeboxer.extraction.image_prep import PreparedFace
+        from recipeboxer.extraction.transcribe import (
+            FaceTranscript,
+            FaceTranscriptList,
+            transcribe,
         )
 
-        mock_resp = MagicMock()
-        mock_resp.json.return_value = {
-            "candidates": [
-                {
-                    "content": {
-                        "parts": [
-                            {
-                                "text": json.dumps({
-                                    "title": "Grandma's 6-Card Masterpiece",
-                                    "ingredients": ["10 cups flour", "4 cups sugar", "2 lbs butter"],
-                                    "directions": [
-                                        "Step 1: Prep starter dough.",
-                                        "Step 2: Ferment overnight.",
-                                        "Step 3: Knead and shape.",
-                                        "Step 4: Second rise.",
-                                        "Step 5: Bake in hearth.",
-                                        "Step 6: Cool and glaze.",
-                                    ],
-                                    "tags": ["Baking", "Masterpiece"],
-                                })
-                            }
-                        ]
-                    }
-                }
-            ]
-        }
-        mock_resp.raise_for_status = MagicMock()
-
         card_ids = [f"deck_card_{i}.jpg" for i in range(1, 7)]
-        resolved_cards = [(f"bytes_{cid}".encode("utf-8"), f"/tmp/{cid}", cid) for cid in card_ids]
+        valid_jpeg = b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00\xff\xd9"
+        faces = [
+            PreparedFace(
+                face_index=i,
+                n_faces=6,
+                data=valid_jpeg,
+                mime_type="image/jpeg",
+                variant="standard",
+                long_edge_px=100,
+                label=f"Face {i+1} of 6",
+            )
+            for i in range(6)
+        ]
 
-        with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
-            mock_post.return_value = mock_resp
-            recipe = await extractor._call_gemini_extraction_api(resolved_cards=resolved_cards)
+        fake_transcripts = FaceTranscriptList(
+            faces=[
+                FaceTranscript(face_index=i, text=f"Step {i+1} text")
+                for i in range(6)
+            ]
+        )
+        fake_resp = LLMResponse(
+            model="gemini-test",
+            text="{}",
+            parsed=fake_transcripts,
+            usage=UsageTokens(input_tokens=100, output_tokens=50),
+        )
 
-            assert mock_post.called
-            call_kwargs = mock_post.call_args.kwargs
-            contents = call_kwargs["json"]["contents"][0]["parts"]
+        class RecordingClient:
+            def __init__(self, resp):
+                self.resp = resp
+                self.requests = []
 
-            # Prompt instruction checks
-            instruction_parts = [p["text"] for p in contents if "text" in p and "spanning 6 card faces" in p["text"]]
-            assert len(instruction_parts) == 1
-            assert "exact sequential order" in instruction_parts[0]
+            async def generate(self, req):
+                self.requests.append(req)
+                return self.resp
 
-            # Label parts checks
-            label_parts = [p["text"] for p in contents if "text" in p and p["text"].startswith("Image ")]
-            assert len(label_parts) == 6
-            assert label_parts[0] == "Image 1: Front (Page 1): deck_card_1.jpg"
-            assert label_parts[1] == "Image 2: Continuation 1 (Page 2): deck_card_2.jpg"
-            assert label_parts[2] == "Image 3: Continuation 2 (Page 3): deck_card_3.jpg"
-            assert label_parts[3] == "Image 4: Continuation 3 (Page 4): deck_card_4.jpg"
-            assert label_parts[4] == "Image 5: Continuation 4 (Page 5): deck_card_5.jpg"
-            assert label_parts[5] == "Image 6: Continuation 5 (Page 6): deck_card_6.jpg"
+        client = RecordingClient(fake_resp)
+        settings = get_settings()
 
-            assert recipe.title == "Grandma's 6-Card Masterpiece"
-            assert recipe.card_ids == card_ids
-            assert len(recipe.image_urls) == 6
+        transcript = await transcribe(faces=faces, llm_client=client, settings=settings)
+
+        assert len(client.requests) == 1
+        req = client.requests[0]
+
+        # Verify neutral prompt instructions
+        text_parts = [p.text for p in req.parts if hasattr(p, "text") and p.text]
+        assert any("each of the 6 recipe card faces" in t for t in text_parts)
+        assert any("verbatim in order" in t for t in text_parts)
+
+        # Verify neutral face labels (INV-AC2: zero filename leakage)
+        image_parts = [p for p in req.parts if hasattr(p, "label") and p.label]
+        assert len(image_parts) == 6
+        for idx, p in enumerate(image_parts):
+            assert p.label == f"Face {idx + 1} of 6"
+            for cid in card_ids:
+                assert cid not in p.label
+
+        assert len(transcript.faces) == 6
 
 
 class LocalPipelineMockClient:

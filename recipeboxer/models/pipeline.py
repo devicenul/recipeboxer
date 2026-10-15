@@ -80,6 +80,16 @@ class PipelineStatus(BaseModel):
     degraded_fingerprints_count: int = Field(default=0, ge=0, description="Number of cards with degraded fingerprints")
     unverified_proposals_count: int = Field(default=0, ge=0, description="Number of proposals not semantically verified")
     failed_extractions_count: int = Field(default=0, ge=0, description="Number of recipe extractions that failed")
+    analysis_blocked_reason: Optional[str] = Field(
+        default=None,
+        description="Reason analysis/extraction is blocked (e.g. 'NO_API_KEY')",
+    )
+    onboarding_hint: Optional[str] = Field(
+        default=None,
+        description="Onboarding guidance / endpoint to configure required credentials (e.g. /api/settings/api-key)",
+    )
+
+    model_config = ConfigDict(extra="allow")
 
 
 class PipelineStartRequest(BaseModel):
@@ -115,6 +125,7 @@ class PipelineStartRequest(BaseModel):
     extraction_model: Optional[str] = Field(default=None)
     thinking_mode: Optional[bool] = Field(default=None)
     thinking_budget_tokens: Optional[int] = Field(default=None)
+    auto_approve: bool = Field(default=False, description="Auto-approve correlation proposals for headless/test runs")
 
     def model_post_init(self, __context: Any) -> None:
         is_remote_provider = self.source_provider and self.source_provider.lower() not in ("local", "")

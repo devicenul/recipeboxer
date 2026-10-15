@@ -746,8 +746,8 @@ def create_llm_client(settings: Optional[Settings] = None, **kwargs: Any) -> Opt
     unconfigured onboarding state without crashing (INV-AC6, D5).
     """
     s = settings or get_settings()
-    key = s.gemini_api_key
-    if not key or not key.strip():
+    key = kwargs.pop("api_key", None) or s.gemini_api_key
+    if not key or not str(key).strip():
         return None
 
     return GenAIClient(api_key=key, settings=s, **kwargs)

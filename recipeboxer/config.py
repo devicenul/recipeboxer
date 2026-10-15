@@ -12,7 +12,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 # models list (GenAIClient.list_available_models) during WP-B0/WP-B2 before
 # being relied on; "balanced" must match the project's default model.
 _DEFAULT_FLASH = "gemini-3.7-flash"
-_DEFAULT_PRO = "gemini-3.7-pro"
+_DEFAULT_PRO = "gemini-3.1-pro-preview"  # validated 2026-10-14 via models.list; not available on free tier (429)
 
 QUALITY_PROFILES: Dict[str, Dict[str, str]] = {
     "economy": {
@@ -137,7 +137,7 @@ class Settings(BaseSettings):
         description="Feature flag controlling multimodal embedding generation",
     )
     embedding_model: str = Field(
-        default="text-embedding-004",
+        default="gemini-embedding-001",  # validated 2026-10-14 via models.list
         description="Provisional embedding model identifier; validated at startup against live API list",
     )
     embedding_batch_size: int = Field(

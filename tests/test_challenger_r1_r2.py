@@ -171,6 +171,38 @@ class MockSequenceVerifierClient:
             )
 
 
+class MockPairVerifierClient:
+    """Mock semantic verifier client verifying matching front/back card pairs."""
+
+    def verify_pair(self, front_fp: VisualFingerprint, back_fp: VisualFingerprint, heuristic_score: float) -> CorrelationProposal:
+        is_valid = (
+            front_fp.role in (CardRole.SEQUENCE_START, CardRole.FRONT_ONLY)
+            and back_fp.role in (CardRole.SEQUENCE_CONTINUATION, CardRole.BACK_ONLY)
+        )
+        if is_valid:
+            return CorrelationProposal(
+                proposal_id=f"mock_{front_fp.card_id}_{back_fp.card_id}",
+                ordered_card_ids=[front_fp.card_id, back_fp.card_id],
+                part_count=2,
+                heuristic_score=heuristic_score,
+                semantic_score=0.95,
+                confidence=round(0.30 * heuristic_score + 0.70 * 0.95, 4),
+                recommended_action="PAIR",
+                semantic_verified=True,
+            )
+        else:
+            return CorrelationProposal(
+                proposal_id=f"mock_rej_{front_fp.card_id}_{back_fp.card_id}",
+                ordered_card_ids=[front_fp.card_id, back_fp.card_id],
+                part_count=2,
+                heuristic_score=heuristic_score,
+                semantic_score=0.10,
+                confidence=round(0.30 * heuristic_score + 0.70 * 0.10, 4),
+                recommended_action="REJECT",
+                semantic_verified=True,
+            )
+
+
 class TestChallengerFruitcake4CardCorrelationR2:
     """Adversarial stress testing of 4-card sequence correlation for Wedding Fruitcake (1942)."""
 
@@ -463,7 +495,7 @@ class TestChallenger2CardPairsCorrelationR2:
             ),
         )
 
-        optimizer = PairingOptimizer()
+        optimizer = PairingOptimizer(verifier=GeminiSemanticVerifier(client=MockPairVerifierClient()))
 
         # Forward order [front, back]
         res_fwd = await optimizer.optimize([fp_f, fp_b])
@@ -567,7 +599,7 @@ class TestChallengerCardRetention100PercentR2:
         random.seed(42)
         random.shuffle(fps)
 
-        optimizer = PairingOptimizer()
+        optimizer = PairingOptimizer(verifier=GeminiSemanticVerifier(client=MockPairVerifierClient()))
         res = await optimizer.optimize(fps)
 
         # Stage 3 packaging

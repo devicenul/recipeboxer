@@ -3,16 +3,20 @@ import { HitlWorkspace } from '../components/hitl/HitlWorkspace';
 import { GitMerge, Layers } from 'lucide-react';
 import { Button } from '../components/common/Button';
 
+import { HitlItem } from '../types/hitl';
+
 export interface HitlReviewPageProps {
   sessionId?: string | null;
   onApprovalsCompleted: () => void;
   onNavigateToIngest: () => void;
+  initialBudgetItem?: HitlItem | null;
 }
 
 export const HitlReviewPage: React.FC<HitlReviewPageProps> = ({
   sessionId,
   onApprovalsCompleted,
   onNavigateToIngest,
+  initialBudgetItem,
 }) => {
   if (!sessionId) {
     return (
@@ -38,6 +42,7 @@ export const HitlReviewPage: React.FC<HitlReviewPageProps> = ({
       <HitlWorkspace
         sessionId={sessionId}
         onApprovalsCompleted={onApprovalsCompleted}
+        initialBudgetItem={initialBudgetItem}
       />
     </div>
   );

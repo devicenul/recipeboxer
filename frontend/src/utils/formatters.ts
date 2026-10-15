@@ -36,10 +36,40 @@ export function formatScorePercent(score?: number): string {
   return `${Math.round(score * 100)}%`;
 }
 
+import { TimeValue } from '../types/recipe';
+
 /**
- * Converts a human-readable duration string into ISO 8601 format (e.g. "45 mins" -> "PT45M", "1 hr 15 mins" -> "PT1H15M").
+ * Extracts a human-readable display string from a TimeValue or string.
  */
-export function toISO8601Duration(text?: string): string {
+export function formatTimeValue(time?: TimeValue | string | null): string {
+  if (!time) return "";
+  if (typeof time === "string") return time;
+  return time.display_text || time.original_text || (time.normalized_minutes !== undefined ? `${time.normalized_minutes} mins` : "");
+}
+
+/**
+ * Extracts display text from an object or string.
+ */
+export function displayText(val?: { display_text?: string; original_text?: string } | string | null): string {
+  if (!val) return "";
+  if (typeof val === "string") return val;
+  return val.display_text || val.original_text || "";
+}
+
+/**
+ * Converts a human-readable duration string or TimeValue into ISO 8601 format (e.g. "45 mins" -> "PT45M", "1 hr 15 mins" -> "PT1H15M").
+ */
+export function toISO8601Duration(val?: TimeValue | string | null): string {
+  if (!val) return "PT0M";
+  if (typeof val === "object" && val !== null && "normalized_minutes" in val && val.normalized_minutes !== undefined) {
+    const mins = val.normalized_minutes;
+    const hours = Math.floor(mins / 60);
+    const remMins = mins % 60;
+    if (hours > 0 && remMins > 0) return `PT${hours}H${remMins}M`;
+    if (hours > 0) return `PT${hours}H`;
+    return `PT${remMins}M`;
+  }
+  const text = typeof val === "string" ? val : (val.display_text || val.original_text || "");
   if (!text || !text.trim()) return "PT0M";
   const t = text.trim();
 

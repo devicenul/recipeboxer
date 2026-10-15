@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { ChefHat, ChevronLeft, ChevronRight, Image as ImageIcon, ArrowRight } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { ChefHat, ChevronLeft, ChevronRight, Image as ImageIcon, ArrowRight, Filter, AlertTriangle } from 'lucide-react';
 import { RecipeSchema } from '../../types/recipe';
 import { RecipeForm } from './RecipeForm';
 import { CardViewerCanvas } from '../viewer/CardViewerCanvas';
@@ -22,11 +22,42 @@ export const RecipeEditorView: React.FC<RecipeEditorViewProps> = ({
   onRecipeUpdated,
   onNavigateToExport,
 }) => {
+  const [filterNeedsReview, setFilterNeedsReview] = useState<boolean>(false);
   const [selectedRecipeIndex, setSelectedRecipeIndex] = useState<number>(0);
   const [selectedCardIndex, setSelectedCardIndex] = useState<number>(0);
   const [isExportConfirmModalOpen, setIsExportConfirmModalOpen] = useState<boolean>(false);
 
   const viewer = useImageViewer();
+
+  // Helper to determine if recipe needs review
+  const checkNeedsReview = (r: RecipeSchema): boolean => {
+    if (r.needs_review) return true;
+    if (r.warnings && r.warnings.length > 0) return true;
+    if (r.title_is_inferred) return true;
+    if (r.confidence !== undefined && r.confidence !== null && r.confidence < 0.8) return true;
+    if (r.sections && r.sections.length > 0) {
+      for (const s of r.sections) {
+        if (s.ingredients?.some((ing) => ing.legibility === 'UNCERTAIN' || ing.legibility === 'ILLEGIBLE' || (ing.illegible_spans && ing.illegible_spans.length > 0))) {
+          return true;
+        }
+        if (s.steps?.some((st) => st.legibility === 'UNCERTAIN' || st.legibility === 'ILLEGIBLE' || (st.illegible_spans && st.illegible_spans.length > 0))) {
+          return true;
+        }
+      }
+    }
+    return false;
+  };
+
+  const totalNeedingReview = useMemo(() => {
+    return (recipes || []).filter(checkNeedsReview).length;
+  }, [recipes]);
+
+  const displayedRecipes = useMemo(() => {
+    if (!recipes) return [];
+    if (!filterNeedsReview) return recipes;
+    const filtered = recipes.filter(checkNeedsReview);
+    return filtered.length > 0 ? filtered : recipes;
+  }, [recipes, filterNeedsReview]);
 
   if (!recipes || recipes.length === 0) {
     return (
@@ -42,7 +73,8 @@ export const RecipeEditorView: React.FC<RecipeEditorViewProps> = ({
     );
   }
 
-  const currentRecipe = recipes[selectedRecipeIndex] || recipes[0];
+  const effectiveIndex = Math.min(selectedRecipeIndex, displayedRecipes.length - 1);
+  const currentRecipe = displayedRecipes[effectiveIndex] || displayedRecipes[0] || recipes[0];
   const cardIds = currentRecipe.card_ids || [];
   const imageUrls = currentRecipe.image_urls || [];
   const activeCardId = cardIds[selectedCardIndex] || cardIds[0] || null;
@@ -54,33 +86,35 @@ export const RecipeEditorView: React.FC<RecipeEditorViewProps> = ({
     <div className="flex flex-col gap-4" data-tour="recipe-editor">
       {/* Recipe Navigation Bar */}
       <div className="flex flex-wrap items-center justify-between gap-3 p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs">
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <button
             type="button"
             onClick={() => {
               setSelectedRecipeIndex((prev) => Math.max(0, prev - 1));
               setSelectedCardIndex(0);
             }}
-            disabled={selectedRecipeIndex === 0}
+            disabled={effectiveIndex === 0}
             className="p-1.5 rounded-lg border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 cursor-pointer"
             title="Previous Recipe"
+            aria-label="Previous Recipe"
           >
             <ChevronLeft className="w-4 h-4" />
           </button>
 
           <div className="flex items-center gap-2">
             <span className="text-xs font-bold text-blue-600 dark:text-blue-400 font-mono">
-              Recipe {selectedRecipeIndex + 1} of {recipes.length}:
+              Recipe {effectiveIndex + 1} of {displayedRecipes.length}:
             </span>
             <select
-              value={selectedRecipeIndex}
+              value={effectiveIndex}
               onChange={(e) => {
                 setSelectedRecipeIndex(parseInt(e.target.value, 10));
                 setSelectedCardIndex(0);
               }}
+              aria-label="Select Recipe"
               className="text-xs font-semibold bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 max-w-[240px] truncate"
             >
-              {recipes.map((r, i) => (
+              {displayedRecipes.map((r, i) => (
                 <option key={r.recipe_id || i} value={i}>
                   {r.title || `Recipe #${i + 1}`}
                 </option>
@@ -91,17 +125,39 @@ export const RecipeEditorView: React.FC<RecipeEditorViewProps> = ({
           <button
             type="button"
             onClick={() => {
-              if (selectedRecipeIndex === recipes.length - 1) {
+              if (effectiveIndex === displayedRecipes.length - 1) {
                 setIsExportConfirmModalOpen(true);
               } else {
-                setSelectedRecipeIndex((prev) => Math.min(recipes.length - 1, prev + 1));
+                setSelectedRecipeIndex((prev) => Math.min(displayedRecipes.length - 1, prev + 1));
                 setSelectedCardIndex(0);
               }
             }}
             className="p-1.5 rounded-lg border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
-            title={selectedRecipeIndex === recipes.length - 1 ? 'Finish Review & Go to Export' : 'Next Recipe'}
+            title={effectiveIndex === displayedRecipes.length - 1 ? 'Finish Review & Go to Export' : 'Next Recipe'}
+            aria-label={effectiveIndex === displayedRecipes.length - 1 ? 'Finish Review & Go to Export' : 'Next Recipe'}
           >
             <ChevronRight className="w-4 h-4" />
+          </button>
+
+          {/* Filter: Show only recipes needing review */}
+          <button
+            type="button"
+            role="switch"
+            aria-checked={filterNeedsReview}
+            onClick={() => {
+              setFilterNeedsReview(!filterNeedsReview);
+              setSelectedRecipeIndex(0);
+              setSelectedCardIndex(0);
+            }}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
+              filterNeedsReview
+                ? 'bg-amber-100 text-amber-900 border-amber-300 dark:bg-amber-950 dark:text-amber-200 dark:border-amber-700 shadow-xs'
+                : 'bg-slate-100 text-slate-700 border-slate-300 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700'
+            }`}
+            title="Filter list to show only recipes containing warnings or illegible segments"
+          >
+            <Filter className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+            <span>Needing Review ({totalNeedingReview})</span>
           </button>
         </div>
 
@@ -141,6 +197,7 @@ export const RecipeEditorView: React.FC<RecipeEditorViewProps> = ({
                       ? 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-xs'
                       : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
                   }`}
+                  aria-label={`View Part ${idx + 1} of ${cardIds.length}`}
                 >
                   <ImageIcon className="w-3.5 h-3.5" />
                   <span>Part {idx + 1} of {cardIds.length}</span>
@@ -163,9 +220,9 @@ export const RecipeEditorView: React.FC<RecipeEditorViewProps> = ({
               filters={viewer.filtersFront}
               onPan={(dx, dy) => viewer.pan(dx, dy, 'front')}
               onWheelZoom={(delta) => (delta > 0 ? viewer.zoomIn('front') : viewer.zoomOut('front'))}
+              highlighted={true}
             />
           </div>
-
         </div>
 
         {/* Right Pane: Rich Structured Recipe Form */}
@@ -175,6 +232,12 @@ export const RecipeEditorView: React.FC<RecipeEditorViewProps> = ({
             initialRecipe={currentRecipe}
             sessionId={sessionId}
             onSaved={onRecipeUpdated}
+            onSelectFace={(faceIndex) => {
+              if (cardIds.length > faceIndex && faceIndex >= 0) {
+                setSelectedCardIndex(faceIndex);
+              }
+            }}
+            selectedFaceIndex={selectedCardIndex}
           />
         </div>
       </div>

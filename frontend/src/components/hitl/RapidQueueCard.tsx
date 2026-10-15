@@ -142,12 +142,18 @@ export const RapidQueueCard: React.FC<RapidQueueCardProps> = ({
         />
       )}
 
-      {/* Confidence & Continuity Breakdown */}
+      {/* Confidence & Continuity Breakdown with Calibrated Evidence */}
       <ConfidenceMeter
         confidence={proposal.confidence}
+        pLink={proposal.p_link}
         heuristicScore={proposal.heuristic_score}
         semanticScore={proposal.semantic_score}
         reasoningSnippet={proposal.continuity_explanation}
+        semanticVerified={proposal.semantic_verified}
+        degradedReason={proposal.degraded_reason}
+        evidenceQuotes={proposal.evidence_quotes || proposal.set_verification?.evidence_quotes || []}
+        flags={proposal.flags || proposal.set_verification?.flags || []}
+        isLowConfidence={proposal.is_low_confidence}
       />
 
       {/* Action Buttons with Keyboard Hotkeys */}

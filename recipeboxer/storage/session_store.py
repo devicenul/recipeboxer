@@ -641,7 +641,14 @@ class SessionStore:
     def save_recipe(self, session_id: str, recipe: RecipeSchema) -> None:
         """Persists or updates a single RecipeSchema model in the session."""
         now_str = _utc_now_iso()
-        recipe_dict = recipe.model_dump()
+        if hasattr(recipe, "model_dump"):
+            try:
+                recipe_dict = recipe.model_dump(mode="json")
+            except Exception:
+                recipe_dict = recipe.model_dump()
+        else:
+            recipe_dict = recipe.dict()
+
         if not recipe_dict.get("created_at"):
             recipe_dict["created_at"] = now_str
         recipe_dict["updated_at"] = now_str
@@ -650,7 +657,7 @@ class SessionStore:
         recipe.created_at = recipe_dict["created_at"]
         recipe.updated_at = recipe_dict["updated_at"]
 
-        json_data = json.dumps(recipe_dict)
+        json_data = json.dumps(recipe_dict, default=str)
         with self._lock:
             cur = self._conn.cursor()
             try:

@@ -6,12 +6,15 @@ import { IngestionPage } from './pages/IngestionPage';
 import { HitlReviewPage } from './pages/HitlReviewPage';
 import { RecipeReviewPage } from './pages/RecipeReviewPage';
 import { ExportPage } from './pages/ExportPage';
+import { SettingsPage } from './pages/SettingsPage';
+import { OnboardingBanner } from './components/layout/OnboardingBanner';
 import { TutorialOverlay, TUTORIAL_STEPS, TUTORIAL_STORAGE_KEY } from './components/tutorial';
 import { PipelineStatus, PipelineState, IngestionMode } from './types/pipeline';
 import { RecipeSchema } from './types/recipe';
 import { useSSE } from './hooks/useSSE';
 import { api } from './utils/api';
 import { ThemeProvider } from './context/ThemeContext';
+import { SettingsProvider, useSettings } from './context/SettingsContext';
 
 // Module-level fallback for environments where localStorage is blocked (e.g., sandbox iframes)
 let inMemoryTutorialCompleted = false;
@@ -21,7 +24,19 @@ export function resetTutorialSessionState(): void {
 }
 
 export const AppContent: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<NavTab>('ingest');
+  const { settings } = useSettings();
+  const [activeTab, setActiveTab] = useState<NavTab>(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const tabParam = params.get('tab');
+      if (tabParam === 'settings' || tabParam === 'ingest' || tabParam === 'hitl' || tabParam === 'recipes' || tabParam === 'export') {
+        return tabParam as NavTab;
+      }
+    }
+    return 'ingest';
+  });
+  const [liveSpendUsd, setLiveSpendUsd] = useState<number>(0);
+  const [liveCallsCount, setLiveCallsCount] = useState<number>(0);
   const [sessionId, setSessionId] = useState<string | null>(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
@@ -150,6 +165,9 @@ export const AppContent: React.FC = () => {
         return;
       }
       setCurrentStatus(st);
+      if (st.spend_usd !== undefined && st.spend_usd !== null) {
+        setLiveSpendUsd(st.spend_usd);
+      }
       if (st.status === PipelineState.HITL_PENDING) {
         setPendingHitlCount(st.progress.proposals_generated || 1);
       }
@@ -221,6 +239,9 @@ export const AppContent: React.FC = () => {
     },
     onStateChange: (status) => {
       setCurrentStatus(status);
+      if (status.spend_usd !== undefined && status.spend_usd !== null) {
+        setLiveSpendUsd(status.spend_usd);
+      }
       if (status.session_id && status.session_id !== 'none' && !sessionId) {
         setSessionId(status.session_id);
       }
@@ -238,6 +259,9 @@ export const AppContent: React.FC = () => {
     },
     onProgress: (status) => {
       setCurrentStatus(status);
+      if (status.spend_usd !== undefined && status.spend_usd !== null) {
+        setLiveSpendUsd(status.spend_usd);
+      }
       if (status.session_id && status.session_id !== 'none' && !sessionId) {
         setSessionId(status.session_id);
       }
@@ -266,8 +290,21 @@ export const AppContent: React.FC = () => {
         return [...prev, newRecipe];
       });
     },
+    onSpend: (data) => {
+      if (data.spend_usd !== undefined && data.spend_usd !== null) {
+        setLiveSpendUsd(data.spend_usd);
+      }
+      if (data.total_calls !== undefined) {
+        setLiveCallsCount(data.total_calls);
+      } else if (data.snapshot?.total_calls !== undefined) {
+        setLiveCallsCount(data.snapshot.total_calls);
+      }
+    },
     onCompleted: (status) => {
       setCurrentStatus(status);
+      if (status.spend_usd !== undefined && status.spend_usd !== null) {
+        setLiveSpendUsd(status.spend_usd);
+      }
       if (status.session_id && status.session_id !== 'none' && !sessionId) {
         setSessionId(status.session_id);
       }
@@ -317,6 +354,14 @@ export const AppContent: React.FC = () => {
     }
   };
 
+  const isBudgetExceeded =
+    currentStatus.status === PipelineState.BUDGET_EXCEEDED ||
+    currentStatus.status === 'budget_exceeded' ||
+    (Array.isArray(currentStatus.failures) &&
+      currentStatus.failures.some(
+        (f) => f?.reason === 'BUDGET_EXCEEDED' || f?.stage === 'BUDGET'
+      ));
+
   return (
     <div className="flex flex-col min-h-screen bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-50 transition-colors duration-150">
       {/* Header */}
@@ -333,6 +378,13 @@ export const AppContent: React.FC = () => {
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {/* Onboarding Notice when API Key is missing and blocks analysis */}
+        <OnboardingBanner
+          analysisBlockedReason={currentStatus.analysis_blocked_reason}
+          onboardingHint={currentStatus.onboarding_hint}
+          onNavigateToSettings={() => setActiveTab('settings')}
+        />
+
         {activeTab === 'ingest' && (
           <IngestionPage
             currentStatus={currentStatus}
@@ -368,15 +420,24 @@ export const AppContent: React.FC = () => {
         {activeTab === 'export' && (
           <ExportPage recipes={recipes} sessionId={sessionId} />
         )}
+
+        {activeTab === 'settings' && (
+          <SettingsPage />
+        )}
       </main>
 
-      {/* Status Bar */}
+      {/* Status Bar with live Spend Meter */}
       <StatusBar
         model="gemini-3.7-flash"
         mode={currentStatus.mode || 'parallel'}
         elapsedSeconds={currentStatus.elapsed_seconds}
         tokenUsage={currentStatus.token_usage}
         showHotkeys={activeTab === 'hitl'}
+        spendUsd={liveSpendUsd}
+        spendCapUsd={settings?.spend_cap_usd}
+        totalCalls={liveCallsCount}
+        isBudgetExceeded={isBudgetExceeded}
+        onNavigateToSettings={() => setActiveTab('settings')}
       />
 
       {/* Interactive Guided UI Tutorial Overlay */}
@@ -393,7 +454,9 @@ export const AppContent: React.FC = () => {
 export default function App() {
   return (
     <ThemeProvider>
-      <AppContent />
+      <SettingsProvider>
+        <AppContent />
+      </SettingsProvider>
     </ThemeProvider>
   );
 }

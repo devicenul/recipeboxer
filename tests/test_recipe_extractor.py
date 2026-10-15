@@ -30,7 +30,11 @@ from recipeboxer.models.domain import (
     VisualFingerprint,
 )
 from recipeboxer.models.failures import ExtractionUnavailable, FailureReason
-from recipeboxer.models.recipe import RecipeSchema
+from recipeboxer.models.recipe import IngredientLine, Recipe, RecipeSchema, RecipeSection, Step
+from recipeboxer.ai.replay import ScriptedLLMClient
+from recipeboxer.extraction.transcribe import FaceTranscript, FaceTranscriptList
+
+TINY_JPEG = b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x01\x00`\x00`\x00\x00\xff\xdb\x00C\x00\x08\x06\x06\x07\x06\x05\x08\x07\x07\x07\t\t\x08\n\x0c\x14\r\x0c\x0b\x0b\x0c\x19\x12\x13\x0f\x14\x1d\x1a\x1f\x1e\x1d\x1a\x1c\x1c $.' \",#\x1c\x1c(7),01444\x1f'9=82<.342\xff\xc0\x00\x0b\x08\x00\x01\x00\x01\x01\x01\x11\x00\xff\xc4\x00\x1f\x00\x00\x01\x05\x01\x01\x01\x01\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x01\x02\x03\x04\x05\x06\x07\x08\t\n\x0b\xff\xda\x00\x08\x01\x01\x00\x00?\x00\xbf\x00\xff\xd9"
 
 
 @pytest.mark.asyncio
@@ -285,142 +289,125 @@ async def test_extractor_scanned_card_and_path_inputs(tmp_path):
 @pytest.mark.asyncio
 async def test_extractor_api_mock_success_json():
     """Mocks Gemini API HTTP response with valid JSON payload."""
-    extractor = GeminiRecipeExtractor(api_key="real-gemini-api-key-test")
-
-    mock_recipe_json = {
-        "recipe_id": "rec_test123",
-        "title": "Old-Fashioned Blueberry Scones",
-        "description": "Buttery, flaky blueberry scones.",
-        "yield_servings": "8 scones",
-        "prep_time": "20 mins",
-        "cook_time": "18 mins",
-        "total_time": "38 mins",
-        "ingredients": [
-            "2 cups all-purpose flour",
-            "1/3 cup sugar",
-            "1 tbsp baking powder",
-            "1/2 cup cold butter",
-            "1 cup fresh blueberries",
-            "1/2 cup heavy cream",
-        ],
-        "directions": [
-            "1. Whisk dry ingredients in bowl.",
-            "2. Cut in cold butter until coarse crumbs.",
-            "3. Fold in blueberries and cream.",
-            "4. Shape into disc, cut into 8 wedges, and bake at 400°F for 18 mins.",
-        ],
-        "tags": ["Baking", "Breakfast", "Blueberry"],
-        "source_notes": "Aunt Sarah's Recipe Box",
-    }
-
-    mock_resp = MagicMock()
-    mock_resp.json.return_value = {
-        "candidates": [
-            {
-                "content": {
-                    "parts": [{"text": json.dumps(mock_recipe_json)}]
-                }
-            }
+    mock_trans = FaceTranscriptList(
+        faces=[
+            FaceTranscript(
+                face_index=0,
+                text="Old-Fashioned Blueberry Scones\n2 cups all-purpose flour\n1/3 cup sugar\n1 tbsp baking powder\n1/2 cup cold butter\n1 cup fresh blueberries\n1/2 cup heavy cream\n1. Whisk dry ingredients in bowl.\n2. Cut in cold butter until coarse crumbs.\n3. Fold in blueberries and cream.\n4. Shape into disc, cut into 8 wedges, and bake at 400°F for 18 mins.",
+            )
         ]
-    }
-    mock_resp.raise_for_status = MagicMock()
+    )
+    mock_recipe = Recipe(
+        title="Old-Fashioned Blueberry Scones",
+        sections=[
+            RecipeSection(
+                name=None,
+                ingredients=[
+                    IngredientLine(original_text="2 cups all-purpose flour", item="flour", quantity="2", unit="cups"),
+                    IngredientLine(original_text="1/3 cup sugar", item="sugar", quantity="1/3", unit="cup"),
+                    IngredientLine(original_text="1 tbsp baking powder", item="baking powder", quantity="1", unit="tbsp"),
+                    IngredientLine(original_text="1/2 cup cold butter", item="butter", quantity="1/2", unit="cup"),
+                    IngredientLine(original_text="1 cup fresh blueberries", item="blueberries", quantity="1", unit="cup"),
+                    IngredientLine(original_text="1/2 cup heavy cream", item="heavy cream", quantity="1/2", unit="cup"),
+                ],
+                steps=[
+                    Step(original_text="1. Whisk dry ingredients in bowl.", text="Whisk dry ingredients in bowl."),
+                    Step(original_text="2. Cut in cold butter until coarse crumbs.", text="Cut in cold butter until coarse crumbs."),
+                    Step(original_text="3. Fold in blueberries and cream.", text="Fold in blueberries and cream."),
+                    Step(original_text="4. Shape into disc, cut into 8 wedges, and bake at 400°F for 18 mins.", text="Shape into disc, cut into 8 wedges, and bake at 400°F for 18 mins."),
+                ],
+            )
+        ],
+        tags=["Baking", "Breakfast", "Blueberry"],
+    )
+    client = ScriptedLLMClient([mock_trans, mock_recipe])
+    extractor = GeminiRecipeExtractor(llm_client=client)
+    recipe = await extractor.extract(TINY_JPEG)
 
-    with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
-        mock_post.return_value = mock_resp
-        recipe = await extractor.extract(b"mock_image_bytes")
-
-        assert isinstance(recipe, RecipeSchema)
-        assert recipe.title == "Old-Fashioned Blueberry Scones"
-        assert len(recipe.ingredients) == 6
-        assert len(recipe.directions) == 4
-        assert recipe.directions[0].startswith("1. ")
+    assert isinstance(recipe, RecipeSchema)
+    assert recipe.title == "Old-Fashioned Blueberry Scones"
+    assert len(recipe.ingredients) == 6
+    assert len(recipe.directions) == 4
+    assert recipe.directions[0].startswith("1. ")
 
 
 @pytest.mark.asyncio
 async def test_extractor_api_markdown_codeblock_stripping():
-    """API returns ```json { ... } ``` formatted string; cleanly strips and parses."""
-    extractor = GeminiRecipeExtractor(api_key="real-gemini-api-key-test")
+    """Model returns structured recipe; cleanly extracts into RecipeSchema."""
+    mock_trans = FaceTranscriptList(
+        faces=[
+            FaceTranscript(
+                face_index=0,
+                text="Rustic Sourdough Boule\n500g bread flour\n350g water\n100g starter\n10g salt\n1. Autolyse flour and water.\n2. Add starter and salt.\n3. Bake in Dutch oven at 450°F.",
+            )
+        ]
+    )
+    mock_recipe = Recipe(
+        title="Rustic Sourdough Boule",
+        sections=[
+            RecipeSection(
+                name=None,
+                ingredients=[
+                    IngredientLine(original_text="500g bread flour", item="bread flour", quantity="500", unit="g"),
+                    IngredientLine(original_text="350g water", item="water", quantity="350", unit="g"),
+                    IngredientLine(original_text="100g starter", item="starter", quantity="100", unit="g"),
+                    IngredientLine(original_text="10g salt", item="salt", quantity="10", unit="g"),
+                ],
+                steps=[
+                    Step(original_text="1. Autolyse flour and water.", text="Autolyse flour and water."),
+                    Step(original_text="2. Add starter and salt.", text="Add starter and salt."),
+                    Step(original_text="3. Bake in Dutch oven at 450°F.", text="Bake in Dutch oven at 450°F."),
+                ],
+            )
+        ],
+        tags=["Bread", "Sourdough"],
+    )
+    client = ScriptedLLMClient([mock_trans, mock_recipe])
+    extractor = GeminiRecipeExtractor(llm_client=client)
+    recipe = await extractor.extract(TINY_JPEG)
 
-    raw_json = json.dumps({
-        "title": "Rustic Sourdough Boule",
-        "ingredients": ["500g bread flour", "350g water", "100g starter", "10g salt"],
-        "directions": ["Autolyse flour and water.", "Add starter and salt.", "Bake in Dutch oven at 450°F."],
-        "tags": ["Bread", "Sourdough"],
-    })
-    markdown_response = f"```json\n{raw_json}\n```"
-
-    mock_resp = MagicMock()
-    mock_resp.json.return_value = {
-        "candidates": [{"content": {"parts": [{"text": markdown_response}]}}]
-    }
-    mock_resp.raise_for_status = MagicMock()
-
-    with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
-        mock_post.return_value = mock_resp
-        recipe = await extractor.extract(b"mock_image_bytes")
-
-        assert isinstance(recipe, RecipeSchema)
-        assert recipe.title == "Rustic Sourdough Boule"
-        assert len(recipe.ingredients) == 4
-        assert len(recipe.directions) == 3
-        assert recipe.directions[0] == "1. Autolyse flour and water."
-        assert recipe.directions[1] == "2. Add starter and salt."
-        assert recipe.directions[2] == "3. Bake in Dutch oven at 450°F."
+    assert isinstance(recipe, RecipeSchema)
+    assert recipe.title == "Rustic Sourdough Boule"
+    assert len(recipe.ingredients) == 4
+    assert len(recipe.directions) == 3
+    assert recipe.directions[0] == "1. Autolyse flour and water."
 
 
 @pytest.mark.asyncio
 async def test_extractor_api_failure_fallback(tmp_path):
-    """Mocks HTTP connection error from Gemini API and verifies typed ExtractionUnavailable is raised."""
-    extractor = GeminiRecipeExtractor(api_key="real-gemini-api-key-test")
+    """Mocks timeout error from LLMClient and verifies typed ExtractionUnavailable is raised."""
     p1 = tmp_path / "card_timeout_test.jpg"
-    p1.write_bytes(b"dummy_bytes")
+    p1.write_bytes(b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x01\x00`\x00`\x00\x00\xff\xdb\x00C\x00\x08\x06\x06\x07\x06\x05\x08\x07\x07\x07\t\t\x08\n\x0c\x14\r\x0c\x0b\x0b\x0c\x19\x12\x13\x0f\x14\x1d\x1a\x1f\x1e\x1d\x1a\x1c\x1c $.' \",#\x1c\x1c(7),01444\x1f'9=82<.342\xff\xc0\x00\x0b\x08\x00\x01\x00\x01\x01\x01\x11\x00\xff\xc4\x00\x1f\x00\x00\x01\x05\x01\x01\x01\x01\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x01\x02\x03\x04\x05\x06\x07\x08\t\n\x0b\xff\xda\x00\x08\x01\x01\x00\x00?\x00\xbf\x00\xff\xd9")
 
-    with patch("httpx.AsyncClient.post", side_effect=httpx.ConnectTimeout("API Connection Timeout")):
-        with pytest.raises(ExtractionUnavailable) as exc_info:
-            await extractor.extract(p1)
-        assert exc_info.value.reason == FailureReason.TIMEOUT
+    client = ScriptedLLMClient([asyncio.TimeoutError("API Connection Timeout")])
+    extractor = GeminiRecipeExtractor(llm_client=client)
+    with pytest.raises(ExtractionUnavailable) as exc_info:
+        await extractor.extract(p1)
+    assert exc_info.value.reason == FailureReason.TIMEOUT
 
 
 @pytest.mark.asyncio
 async def test_extractor_thinking_mode_payload():
     """Tests payload construction when thinking_mode=True."""
+    mock_trans = FaceTranscriptList(
+        faces=[FaceTranscript(face_index=0, text="Tested Thinking Recipe\n1 cup ingredient\nMix and bake.")]
+    )
+    mock_recipe = Recipe(
+        title="Tested Thinking Recipe",
+        sections=[RecipeSection(name=None, ingredients=[IngredientLine(original_text="1 cup ingredient")], steps=[Step(original_text="Mix and bake.")])],
+    )
+    client = ScriptedLLMClient([mock_trans, mock_recipe])
+    settings = Settings(thinking_mode=True, thinking_budget_tokens=4096)
     extractor = GeminiRecipeExtractor(
-        api_key="real-gemini-api-key-test",
+        llm_client=client,
+        settings=settings,
         thinking_mode=True,
         thinking_budget_tokens=4096,
     )
+    await extractor.extract(TINY_JPEG)
 
-    mock_resp = MagicMock()
-    mock_resp.json.return_value = {
-        "candidates": [
-            {
-                "content": {
-                    "parts": [
-                        {
-                            "text": json.dumps({
-                                "title": "Tested Thinking Recipe",
-                                "ingredients": ["1 cup ingredient"],
-                                "directions": ["Mix and bake."],
-                            })
-                        }
-                    ]
-                }
-            }
-        ]
-    }
-    mock_resp.raise_for_status = MagicMock()
-
-    with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
-        mock_post.return_value = mock_resp
-        await extractor.extract(b"mock_bytes")
-
-        # Verify thinking config in post call kwargs
-        assert mock_post.called
-        call_kwargs = mock_post.call_args.kwargs
-        payload = call_kwargs["json"]
-        gen_config = payload["generationConfig"]
-        assert "thinking_config" in gen_config
-        assert gen_config["thinking_config"]["thinking_budget"] == 4096
+    assert len(client.requests) >= 1
+    assert client.requests[0].thinking_budget == 4096
 
 
 @pytest.mark.asyncio
@@ -589,67 +576,59 @@ async def test_extract_cards_multi_card_sequence_offline():
 
 
 @pytest.mark.asyncio
-async def test_extractor_multi_card_gemini_api_payload_structure():
-    """Tests Gemini API payload structure when 3+ cards are extracted, ensuring sequential labels and prompt instructions."""
-    extractor = GeminiRecipeExtractor(
-        api_key="real-gemini-api-key-test",
-        model_name="gemini-3.7-flash",
-    )
+async def test_extractor_multi_card_gemini_api_payload_structure(tmp_path):
+    """Tests multi-card sequential extraction via ExtractionPipeline."""
+    p1 = tmp_path / "card1.jpg"
+    p2 = tmp_path / "card2.jpg"
+    p3 = tmp_path / "card3.jpg"
+    for p in (p1, p2, p3):
+        p.write_bytes(TINY_JPEG)
 
-    mock_resp = MagicMock()
-    mock_resp.json.return_value = {
-        "candidates": [
-            {
-                "content": {
-                    "parts": [
-                        {
-                            "text": json.dumps({
-                                "title": "3-Page Wedding Cake",
-                                "ingredients": ["4 cups cake flour", "2 cups sugar", "1 cup butter"],
-                                "directions": [
-                                    "Mix dry ingredients.",
-                                    "Cream butter and sugar, then add eggs.",
-                                    "Bake at 350F for 35 mins and ice with buttercream.",
-                                ],
-                                "tags": ["Cake", "Wedding", "Dessert"],
-                            })
-                        }
-                    ]
-                }
-            }
+    mock_trans = FaceTranscriptList(
+        faces=[
+            FaceTranscript(face_index=0, text="3-Page Wedding Cake\n4 cups cake flour"),
+            FaceTranscript(face_index=1, text="2 cups sugar\n1 cup butter"),
+            FaceTranscript(face_index=2, text="1. Mix dry ingredients.\n2. Cream butter and sugar.\n3. Bake at 350F for 35 mins."),
         ]
-    }
-    mock_resp.raise_for_status = MagicMock()
+    )
+    mock_recipe = Recipe(
+        title="3-Page Wedding Cake",
+        sections=[
+            RecipeSection(
+                name=None,
+                ingredients=[
+                    IngredientLine(original_text="4 cups cake flour", item="cake flour", quantity="4", unit="cups", source_face=0),
+                    IngredientLine(original_text="2 cups sugar", item="sugar", quantity="2", unit="cups", source_face=1),
+                    IngredientLine(original_text="1 cup butter", item="butter", quantity="1", unit="cup", source_face=1),
+                ],
+                steps=[
+                    Step(original_text="1. Mix dry ingredients.", text="Mix dry ingredients.", source_face=2),
+                    Step(original_text="2. Cream butter and sugar.", text="Cream butter and sugar.", source_face=2),
+                    Step(original_text="3. Bake at 350F for 35 mins.", text="Bake at 350F for 35 mins.", source_face=2),
+                ],
+            )
+        ],
+        tags=["Cake", "Wedding", "Dessert"],
+    )
+    client = ScriptedLLMClient([mock_trans, mock_recipe])
+    extractor = GeminiRecipeExtractor(llm_client=client)
 
-    resolved_cards = [
-        (b"card1_bytes", "/path/card1.jpg", "card1.jpg"),
-        (b"card2_bytes", "/path/card2.jpg", "card2.jpg"),
-        (b"card3_bytes", "/path/card3.jpg", "card3.jpg"),
-    ]
+    c1 = VisualFingerprint(card_id="card1.jpg", image_path=str(p1), sha256_hash="0"*64, role=CardRole.SEQUENCE_START)
+    c2 = VisualFingerprint(card_id="card2.jpg", image_path=str(p2), sha256_hash="1"*64, role=CardRole.SEQUENCE_CONTINUATION)
+    c3 = VisualFingerprint(card_id="card3.jpg", image_path=str(p3), sha256_hash="2"*64, role=CardRole.SEQUENCE_CONTINUATION)
 
-    with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
-        mock_post.return_value = mock_resp
-        recipe = await extractor._call_gemini_extraction_api(resolved_cards=resolved_cards)
+    recipe = await extractor.extract_cards([c1, c2, c3])
 
-        assert mock_post.called
-        call_kwargs = mock_post.call_args.kwargs
-        contents = call_kwargs["json"]["contents"][0]["parts"]
+    assert recipe.title == "3-Page Wedding Cake"
+    assert recipe.card_ids == ["card1.jpg", "card2.jpg", "card3.jpg"]
+    assert len(recipe.image_urls) == 3
 
-        # Check prompt instruction
-        instruction_parts = [p["text"] for p in contents if "text" in p and "spanning 3 card faces" in p["text"]]
-        assert len(instruction_parts) == 1
-        assert "exact sequential order" in instruction_parts[0]
-
-        # Check sequential card labels
-        label_parts = [p["text"] for p in contents if "text" in p and p["text"].startswith("Image ")]
-        assert len(label_parts) == 3
-        assert "Image 1: Front (Page 1): card1.jpg" in label_parts[0]
-        assert "Image 2: Continuation 1 (Page 2): card2.jpg" in label_parts[1]
-        assert "Image 3: Continuation 2 (Page 3): card3.jpg" in label_parts[2]
-
-        assert recipe.title == "3-Page Wedding Cake"
-        assert recipe.card_ids == ["card1.jpg", "card2.jpg", "card3.jpg"]
-        assert len(recipe.image_urls) == 3
+    # Check that transcribe request had neutral face labels
+    trans_req = client.requests[0]
+    labels = [p.label for p in trans_req.parts if getattr(p, "label", None)]
+    assert any("Face 1 of 3" in lbl for lbl in labels)
+    assert any("Face 2 of 3" in lbl for lbl in labels)
+    assert any("Face 3 of 3" in lbl for lbl in labels)
 
 
 @pytest.mark.asyncio

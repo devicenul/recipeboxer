@@ -86,6 +86,14 @@ class SessionSummary(BaseModel):
         ge=0.0,
         description="Pre-run estimated cost in USD",
     )
+    analysis_blocked_reason: Optional[str] = Field(
+        default=None,
+        description="Reason analysis/extraction is blocked (e.g. 'NO_API_KEY')",
+    )
+    onboarding_hint: Optional[str] = Field(
+        default=None,
+        description="Onboarding guidance / endpoint to configure required credentials (e.g. /api/settings/api-key)",
+    )
 
 
 class SessionDetail(BaseModel):
@@ -211,6 +219,14 @@ class SessionDetail(BaseModel):
     spend_breakdown: Dict[str, Any] = Field(
         default_factory=dict,
         description="Detailed spend breakdown by pipeline stage and model",
+    )
+    analysis_blocked_reason: Optional[str] = Field(
+        default=None,
+        description="Reason analysis/extraction is blocked (e.g. 'NO_API_KEY')",
+    )
+    onboarding_hint: Optional[str] = Field(
+        default=None,
+        description="Onboarding guidance / endpoint to configure required credentials (e.g. /api/settings/api-key)",
     )
 
     @property

@@ -3,6 +3,7 @@ import { Cpu, Clock, Coins, Sparkles } from 'lucide-react';
 import { TokenUsage } from '../../types/pipeline';
 import { formatDuration } from '../../utils/formatters';
 import { HotkeyBadge } from '../common/HotkeyBadge';
+import { SpendMeter } from './SpendMeter';
 
 export interface StatusBarProps {
   model?: string;
@@ -10,6 +11,11 @@ export interface StatusBarProps {
   elapsedSeconds?: number;
   tokenUsage?: TokenUsage;
   showHotkeys?: boolean;
+  spendUsd?: number;
+  spendCapUsd?: number | null;
+  totalCalls?: number;
+  isBudgetExceeded?: boolean;
+  onNavigateToSettings?: () => void;
 }
 
 export const StatusBar: React.FC<StatusBarProps> = ({
@@ -18,17 +24,30 @@ export const StatusBar: React.FC<StatusBarProps> = ({
   elapsedSeconds = 0,
   tokenUsage = { prompt_tokens: 0, candidates_tokens: 0, thinking_tokens: 0, total_tokens: 0 },
   showHotkeys = true,
+  spendUsd = 0,
+  spendCapUsd = null,
+  totalCalls = 0,
+  isBudgetExceeded = false,
+  onNavigateToSettings,
 }) => {
   return (
     <footer className="bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 text-xs text-slate-500 dark:text-slate-400 py-2.5 px-4 transition-colors">
       <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
-        {/* Left: Active Engine Telemetry */}
+        {/* Left: Active Engine Telemetry & Live Spend */}
         <div className="flex items-center gap-4 flex-wrap">
           <div className="flex items-center gap-1.5" title="Active Model & Ingestion Mode">
             <Cpu className="w-3.5 h-3.5 text-blue-500" />
             <span className="font-medium text-slate-700 dark:text-slate-300">{model}</span>
             <span className="text-slate-400 font-mono">({mode})</span>
           </div>
+
+          <SpendMeter
+            spendUsd={spendUsd}
+            spendCapUsd={spendCapUsd}
+            totalCalls={totalCalls}
+            isBudgetExceeded={isBudgetExceeded}
+            onNavigateToSettings={onNavigateToSettings}
+          />
 
           <div className="flex items-center gap-1.5" title="Total Tokens Used">
             <Coins className="w-3.5 h-3.5 text-amber-500" />

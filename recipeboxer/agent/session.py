@@ -45,6 +45,7 @@ class PipelineSession:
         optimizer: Optional[Any] = None,
         recipe_extractor_fn: Optional[Callable[..., Any]] = None,
         mock_client: Optional[Any] = None,
+        grouping_engine: Optional[Any] = None,
     ) -> None:
         """Initialize a new PipelineSession.
 
@@ -120,6 +121,7 @@ class PipelineSession:
         self.extractor: Optional[Any] = extractor or mock_client
         self.verifier: Optional[Any] = verifier
         self.optimizer: Optional[Any] = optimizer
+        self.grouping_engine: Optional[Any] = grouping_engine
         self.recipe_extractor_fn: Optional[Callable[..., Any]] = recipe_extractor_fn
         self.mock_client: Optional[Any] = mock_client
 
@@ -127,6 +129,7 @@ class PipelineSession:
         self.cards: List[ScannedCard] = []
         self.scanned_paths: List[Path] = []
         self.fingerprints: Dict[str, VisualFingerprint] = {}
+        self.grouping_result: Optional[Any] = None
         self.proposals: List[CorrelationProposal] = []
         self.unassigned_cards: List[Union[VisualFingerprint, str]] = []
         self.unmatched_card_ids: List[str] = []

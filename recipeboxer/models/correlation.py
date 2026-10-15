@@ -112,3 +112,39 @@ class CorrelationResult(BaseModel):
         default_factory=list,
         description="List of card IDs that could not be confidently correlated",
     )
+
+
+class FeatureEvidence(BaseModel):
+    """Raw and collection-relative likelihood ratio evidence for a single feature between two cards."""
+    name: str                 # e.g. "paper_lab", "ruling", "ink_hue", "capture_gap", "sort_adjacency",
+                              # "show_through", "mirrored_wear", "outline", "header_score",
+                              # "content_xref", "sentence_continuity", "step_continuity", "title_position",
+                              # "embedding_sim", "ocr_cue"
+    raw: Optional[float] = None         # raw similarity / measurement (None = not computable)
+    log_lr: Optional[float] = None      # log likelihood ratio vs this deck's background (G10); None if not computable
+    weight: float = 1.0
+    note: Optional[str] = None
+
+
+class PairEvidence(BaseModel):
+    """Directed pairwise correlation evidence between card A and card B (hypothesis: A precedes B)."""
+    a: str                    # ordered: a precedes b (directed successor hypothesis)
+    b: str
+    features: List[FeatureEvidence] = Field(default_factory=list)
+    total_log_lr: float = 0.0 # sum(weight*log_lr) over computable features
+    p_link: Optional[float] = None      # calibrated probability (G8) or None before calibration
+    content_evidence_used: bool = False
+
+
+class SetVerification(BaseModel):
+    """Output of multimodal LLM set-level verification for an anchor card and candidate pool (G6)."""
+    anchor: str
+    continuations: List[str] = Field(default_factory=list)   # ordered successors chosen from candidates (may be empty)
+    rejected: List[str] = Field(default_factory=list)
+    evidence_quotes: List[str] = Field(default_factory=list) # verbatim visible text cited by the model
+    confidence: Optional[float] = None
+    flags: List[str] = Field(default_factory=list)
+    model: str
+    prompt_id: str
+    prompt_version: str
+

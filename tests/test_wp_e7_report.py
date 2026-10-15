@@ -281,16 +281,15 @@ def test_cli_render_outputs(tmp_path: Path):
 # ============================================================================
 
 def test_pricing_toml_loading():
-    """config/pricing.toml loads cleanly and all model prices are UNVERIFIED placeholders."""
+    """config/pricing.toml loads cleanly with verified, non-zero model prices."""
     pricing = load_pricing()
     assert "meta" in pricing
-    assert pricing["meta"]["verified_on"] == "UNVERIFIED"
+    assert pricing["meta"]["verified_on"] not in ("", "UNVERIFIED")
 
-    for model in ("gemini-2.5-flash", "gemini-2.5-pro", "gemini-3.7-flash", "gemini-3.7-pro"):
+    for model in ("gemini-3.8-flash", "gemini-3.5-flash-lite", "gemini-3.1-pro-preview"):
         assert model in pricing
         m_data = pricing[model]
-        assert "input_per_mtok" in m_data
-        assert "output_per_mtok" in m_data
+        assert m_data["input_per_mtok"] > 0.0
+        assert m_data["output_per_mtok"] > 0.0
         assert "thinking_per_mtok" in m_data
-        assert m_data["verified_on"] == "UNVERIFIED"
-        assert m_data["input_per_mtok"] == 0.0
+        assert m_data["verified_on"] not in ("", "UNVERIFIED")

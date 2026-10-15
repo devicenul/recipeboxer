@@ -8,6 +8,7 @@ from recipeboxer.correlation.optimizer import PairingOptimizer
 from recipeboxer.correlation.semantic import GeminiSemanticVerifier
 from recipeboxer.ingestion.scanner import ScannedCard
 from recipeboxer.models.correlation import CorrelationProposal, CorrelationResult
+from recipeboxer.models.failures import FailureReason, SemanticVerificationUnavailable
 from recipeboxer.models.domain import (
     ArtifactType,
     BoundaryText,
@@ -167,7 +168,13 @@ class TestGeminiSemanticVerifier:
 
     @pytest.mark.asyncio
     async def test_semantic_verifier_custom_weights(self):
-        verifier = GeminiSemanticVerifier(api_key=None, heuristic_weight=0.50, semantic_weight=0.50)
+        from recipeboxer.ai.replay import ScriptedLLMClient
+        from recipeboxer.correlation.semantic import SetVerificationResponse
+
+        client = ScriptedLLMClient([
+            SetVerificationResponse(continuations=["Candidate 1"], evidence_quotes=["Lemon Bars"], confidence=0.85)
+        ])
+        verifier = GeminiSemanticVerifier(llm_client=client, heuristic_weight=0.50, semantic_weight=0.50)
 
         fp_f = VisualFingerprint(
             card_id="03_lemon_bars_front.jpg",
@@ -193,11 +200,12 @@ class TestGeminiSemanticVerifier:
 
         proposal = await verifier.verify_pair(fp_f, fp_b, heuristic_score=0.80)
         assert proposal.semantic_score == 0.85
-        assert proposal.confidence == 0.80
+        assert proposal.confidence == 0.825
         assert proposal.recommended_action in ("PAIR", "SEQUENCE")
 
     @pytest.mark.asyncio
     async def test_semantic_verifier_offline_continuity_cues(self):
+        """Without a client, offline heuristic scoring is removed and raises NO_API_KEY (INV-AC4/AC6)."""
         verifier = GeminiSemanticVerifier(api_key=None)
 
         fp_f = VisualFingerprint(
@@ -223,10 +231,10 @@ class TestGeminiSemanticVerifier:
             ),
         )
 
-        proposal = await verifier.verify_pair(fp_f, fp_b, heuristic_score=0.85)
-        assert proposal.recommended_action in ("PAIR", "SEQUENCE")
-        assert proposal.semantic_score == 0.85
-        assert proposal.confidence == 0.80
+        with pytest.raises(SemanticVerificationUnavailable) as exc_info:
+            await verifier.verify_pair(fp_f, fp_b, heuristic_score=0.85)
+
+        assert exc_info.value.reason == FailureReason.NO_API_KEY
 
     @pytest.mark.asyncio
     async def test_semantic_verifier_mismatched_pair_rejected(self):

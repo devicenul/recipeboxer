@@ -52,6 +52,32 @@ def pytest_configure(config):
     config.addinivalue_line("markers", "score: mark test as requiring an age identity key for evals scoring")
 
 
+_KEY_ENV_VARS = ("GEMINI_API_KEY", "RECIPEBOXER_GEMINI_API_KEY", "GOOGLE_API_KEY")
+
+
+@pytest.fixture(autouse=True)
+def _hermetic_api_key(request, monkeypatch):
+    """Keep offline tests hermetic: never pick up a developer's real API key.
+
+    Settings reads `.env` from the CWD (repo root), so without this a maintainer's
+    key would turn offline tests into live, quota-burning API calls. Tests marked
+    `live` keep the real environment. Tests that need a key set it explicitly.
+    """
+    if request.node.get_closest_marker("live"):
+        yield
+        return
+    from recipeboxer import config as rb_config
+
+    monkeypatch.setitem(rb_config.Settings.model_config, "env_file", None)
+    for var in _KEY_ENV_VARS:
+        monkeypatch.delenv(var, raising=False)
+    if hasattr(rb_config.get_settings, "cache_clear"):
+        rb_config.get_settings.cache_clear()
+    yield
+    if hasattr(rb_config.get_settings, "cache_clear"):
+        rb_config.get_settings.cache_clear()
+
+
 def pytest_runtest_setup(item):
     if item.get_closest_marker("live"):
         has_gemini_key = bool(
