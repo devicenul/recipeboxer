@@ -13,6 +13,7 @@ Computes:
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from evals.metrics.calibration import ece
@@ -45,12 +46,41 @@ def evaluate_deck(
     confidences: List[float] = []
     correct_list: List[bool] = []
 
+    deck_type = deck_gt.get("deck_type", "mixed")
+    image_modality_map: Dict[str, str] = {}
+    for img in deck_gt.get("images", []):
+        iid = img.get("image_id", "")
+        m = img.get("modality", "unknown")
+        if iid:
+            image_modality_map[iid] = m
+            image_modality_map[Path(iid).name] = m
+            image_modality_map[Path(iid).stem] = m
+
+    n_unscored_no_structured_gt = 0
+
     for pred_idx, gold_idx, iou in matches:
         gold_rec = gold_recipes[gold_idx] if gold_idx is not None else None
         pred_rec_obj = pred_recipes[pred_idx] if pred_idx is not None else None
 
-        gold_struct = gold_rec.get("structured", {}) if gold_rec else {}
-        gold_verb = gold_rec.get("verbatim", []) if gold_rec else None
+        gold_struct = gold_rec.get("structured") if gold_rec else None
+        gold_verb = gold_rec.get("verbatim") if gold_rec else None
+
+        has_structured = (
+            gold_rec is not None
+            and gold_struct is not None
+            and isinstance(gold_struct, dict)
+            and len(gold_struct) > 0
+            and gold_rec.get("structured_status") not in ("pending", "pending_text_only_draft")
+        )
+
+        if gold_rec is not None and not has_structured:
+            n_unscored_no_structured_gt += 1
+            target_gold_struct = None
+        elif gold_rec is None:
+            target_gold_struct = {}
+        else:
+            target_gold_struct = gold_struct
+
         pred_struct = pred_rec_obj.get("recipe", {}) if pred_rec_obj else None
         schema_invalid = False
         if pred_struct is not None:
@@ -67,17 +97,33 @@ def evaluate_deck(
 
         row = score_recipe(
             pred=pred_struct,
-            gold_structured=gold_struct,
+            gold_structured=target_gold_struct,
             gold_verbatim=gold_verb,
         )
         row["schema_invalid"] = schema_invalid
+        row["deck_type"] = deck_type
 
         # Attach metadata for category aggregation
         if gold_rec:
             row["recipe_id"] = gold_rec.get("recipe_id", "")
             faces = gold_rec.get("faces", [])
+            row["faces"] = str(len(faces))
             row["faces_count"] = str(len(faces))
             row["difficulty"] = gold_rec.get("difficulty", {}).get("legibility", "good")
+            mods = [
+                image_modality_map.get(f) or image_modality_map.get(Path(f).name) or image_modality_map.get(Path(f).stem)
+                for f in faces
+            ]
+            mods = [m for m in mods if m is not None]
+            if mods:
+                row["modality"] = mods[0] if all(m == mods[0] for m in mods) else "mixed"
+            else:
+                row["modality"] = "unknown"
+        else:
+            row["faces"] = "unknown"
+            row["faces_count"] = "unknown"
+            row["modality"] = "unknown"
+            row["difficulty"] = "unknown"
 
         if pred_rec_obj:
             raw_conf = pred_rec_obj.get("confidence")
@@ -85,7 +131,7 @@ def evaluate_deck(
                 try:
                     conf = float(raw_conf)
                     confidences.append(conf)
-                    is_correct = (iou >= 0.5) and (row.get("ingredient_f1", 0.0) >= 0.7)
+                    is_correct = (iou >= 0.5) and (row.get("ingredient_f1") is not None and row.get("ingredient_f1", 0.0) >= 0.7)
                     correct_list.append(is_correct)
                 except (ValueError, TypeError):
                     pass
@@ -94,6 +140,8 @@ def evaluate_deck(
 
     # Aggregate extraction scores
     extraction_summary = aggregate_extraction(recipe_rows)
+    extraction_summary["n_unscored_no_structured_gt"] = n_unscored_no_structured_gt
+    extraction_summary["n_stage_failures"] = len(deck_output.get("failures", []))
 
     # Calibration ECE
     calibration_ece = None
@@ -189,6 +237,16 @@ def score_evaluation(
 
     # Overall extraction aggregate
     overall_extraction = aggregate_extraction(all_recipe_rows)
+    total_unscored_no_gt = sum(
+        res.get("extraction", {}).get("n_unscored_no_structured_gt", 0)
+        for res in deck_results
+    )
+    total_stage_failures = sum(
+        res.get("extraction", {}).get("n_stage_failures", 0)
+        for res in deck_results
+    )
+    overall_extraction["n_unscored_no_structured_gt"] = total_unscored_no_gt
+    overall_extraction["n_stage_failures"] = total_stage_failures
 
     # Overall calibration ECE
     overall_ece = None
@@ -209,11 +267,12 @@ def score_evaluation(
 
         for cat_label, rows in by_faces.items():
             agg = aggregate_extraction(rows)
+            cat_overall = agg.get("overall", {})
             category_metrics[cat_label] = {
-                "ingredient_f1": agg.get("ingredient_f1"),
-                "title_cer": agg.get("title_cer"),
-                "direction_f1": agg.get("direction_f1"),
-                "bcubed_f1": overall_grouping.get("bcubed_f1"),
+                "ingredient_f1": cat_overall.get("ingredient_f1", {}).get("mean"),
+                "title_cer": cat_overall.get("title_cer", {}).get("mean"),
+                "direction_f1": cat_overall.get("direction_f1", {}).get("mean"),
+                "bcubed_f1": None,
             }
 
     # Ops ledger summary

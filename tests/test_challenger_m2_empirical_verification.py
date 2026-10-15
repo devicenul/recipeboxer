@@ -17,6 +17,7 @@ from typing import Any, Dict, List
 
 import pytest
 
+from recipeboxer.ai import ScriptedLLMClient
 from recipeboxer.correlation.optimizer import PairingOptimizer
 from recipeboxer.correlation.semantic import GeminiSemanticVerifier
 from recipeboxer.extraction.extractor import GeminiRecipeExtractor
@@ -404,17 +405,15 @@ class TestM2MultiCardSequenceChainingPermutations:
             assert res.proposals[0].part_count == 4
 
 
-class CallOrderMockClient:
-    """Mock client keyed strictly by call order."""
-
-    def __init__(self, responses: List[RecipeSchema]):
-        self._responses = list(responses)
-        self._index = 0
-
-    def __call__(self, *args, **kwargs) -> RecipeSchema:
-        resp = self._responses[self._index]
-        self._index += 1
-        return resp
+TINY_JPEG = (
+    b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00"
+    b"\xff\xdb\x00C\x00\x08\x06\x06\x07\x06\x05\x08\x07\x07\x07\t\t\x08\n\x0c"
+    b"\x14\r\x0c\x0b\x0b\x0c\x19\x12\x13\x0f\x14\x1d\x1a\x1f\x1e\x1d\x1a\x1c"
+    b"\x1c $.' \",#\x1c\x1c(7),01444\x1f'9=82<.342\xff\xc0\x00\x0b\x08\x00\x01"
+    b"\x00\x01\x01\x01\x11\x00\xff\xc4\x00\x1f\x00\x00\x01\x05\x01\x01\x01"
+    b"\x01\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x01\x02\x03\x04\x05\x06"
+    b"\x07\x08\t\n\x0b\xff\xda\x00\x08\x01\x01\x00\x00?\x00\xbf\x00\xff\xd9"
+)
 
 
 class TestM2StrictRecipeContentIsolation:
@@ -432,11 +431,11 @@ class TestM2StrictRecipeContentIsolation:
             ingredients=["4 cups chopped fresh rhubarb", "1 1/3 cups sugar", "1/3 cup flour", "pastry for 9-inch double crust pie"],
             directions=["Line pie pan with bottom crust.", "Mix rhubarb, sugar, and flour; fill crust.", "Cover with top crust and bake at 400F."],
         )
-        client = CallOrderMockClient([jam_recipe, pie_recipe])
-        extractor = GeminiRecipeExtractor(client=client)
+        client = ScriptedLLMClient([jam_recipe, pie_recipe])
+        extractor = GeminiRecipeExtractor(llm_client=client)
 
-        jam = await extractor.extract(front_input=["card_01.jpg", "card_02.jpg"])
-        pie = await extractor.extract(front_input=["card_03.jpg", "card_04.jpg"])
+        jam = await extractor.extract(front_input=[TINY_JPEG, TINY_JPEG])
+        pie = await extractor.extract(front_input=[TINY_JPEG, TINY_JPEG])
 
         # Jam must not contain pie crust / flour / pastry ingredients
         jam_text = " ".join(jam.ingredients + jam.directions).lower()
@@ -462,11 +461,11 @@ class TestM2StrictRecipeContentIsolation:
             ingredients=["1.5 lbs beef top sirloin cut into strips", "8 oz sliced mushrooms", "1 cup sour cream", "12 oz egg noodles"],
             directions=["Sear sirloin strips in butter.", "Cook mushrooms and stir in sour cream.", "Serve hot over egg noodles."],
         )
-        client = CallOrderMockClient([meatballs_recipe, stroganoff_recipe])
-        extractor = GeminiRecipeExtractor(client=client)
+        client = ScriptedLLMClient([meatballs_recipe, stroganoff_recipe])
+        extractor = GeminiRecipeExtractor(llm_client=client)
 
-        meatballs = await extractor.extract(front_input=["card_05.jpg", "card_06.jpg"])
-        stroganoff = await extractor.extract(front_input=["card_07.jpg", "card_08.jpg"])
+        meatballs = await extractor.extract(front_input=[TINY_JPEG, TINY_JPEG])
+        stroganoff = await extractor.extract(front_input=[TINY_JPEG, TINY_JPEG])
 
         mb_text = " ".join(meatballs.ingredients + meatballs.directions).lower()
         strog_text = " ".join(stroganoff.ingredients + stroganoff.directions).lower()

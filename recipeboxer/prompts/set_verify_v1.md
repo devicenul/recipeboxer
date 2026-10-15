@@ -15,6 +15,7 @@ CRITICAL INSTRUCTIONS:
    - Candidates belonging to different recipes, unrelated dishes, or duplicate/competing recipes must be rejected.
 3. EVIDENCE QUOTES (MANDATORY):
    - You MUST provide verbatim quotes of visible text from the cards as supporting evidence for your decision.
+   - Prefer quoting boundary regions (such as the last lines of the Anchor card and the first lines of candidate cards, titles, and continuation markers) which explicitly establish cross-card transition.
    - Cite text that proves continuity (e.g. sentence continuation across card boundaries, step numbering "4. ...", explicit continuation markers like "cont'd", "(over)", or ingredient cross-references in directions).
    - If rejecting candidates, cite visible text showing thematic or structural incompatibility (e.g. a different recipe title, unrelated culinary domain).
    - NEVER invent, paraphrase, or hallucinate text. Every quote MUST be an exact verbatim substring visible on the cards.

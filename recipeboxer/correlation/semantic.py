@@ -38,6 +38,7 @@ from recipeboxer.models.failures import (
     SemanticVerificationUnavailable,
     StageUnavailableError,
 )
+from recipeboxer.extraction.grounding import levenshtein_distance
 from recipeboxer.prompts import PromptRecord, get_prompt
 from recipeboxer.vision.heuristics import calculate_heuristic_distance
 
@@ -60,15 +61,17 @@ class DefaultImageProvider:
     def __init__(self, card_paths: Optional[Dict[str, Union[str, Path]]] = None) -> None:
         self.card_paths: Dict[str, Union[str, Path]] = dict(card_paths or {})
 
-    def get(self, card_id: str) -> bytes:
+    def get(self, card_id: str) -> Optional[bytes]:
         if card_id in self.card_paths:
             path = Path(self.card_paths[card_id])
             if path.exists() and path.is_file():
                 try:
                     return path.read_bytes()
-                except Exception:
-                    pass
-        return b""
+                except Exception as exc:
+                    logger.warning("Failed to read image bytes for card %s: %s", card_id, exc)
+                    return None
+        return None
+
 
 
 def compute_set_verify_cache_key(
@@ -145,10 +148,16 @@ def _format_fingerprint_text(label: str, fp: VisualFingerprint) -> str:
     return "\n".join(lines)
 
 
-def _extract_all_fingerprint_text(fps: Sequence[VisualFingerprint]) -> str:
-    """Extracts all known visible text from a sequence of fingerprints for quote verification."""
+def _extract_all_fingerprint_text(fps: Sequence[VisualFingerprint]) -> Tuple[str, bool]:
+    """Extracts all known visible text from a sequence of fingerprints for quote verification.
+
+    Returns:
+        (combined_text, has_full_text)
+    """
     texts: List[str] = []
+    has_full_text = True
     for fp in fps:
+        fp_has_full = False
         if fp.visible_title:
             texts.append(fp.visible_title)
         if fp.first_lines:
@@ -165,24 +174,65 @@ def _extract_all_fingerprint_text(fps: Sequence[VisualFingerprint]) -> str:
         ocr_lines = getattr(fp, "ocr_lines", None)
         if ocr_lines and isinstance(ocr_lines, list):
             texts.extend(str(l) for l in ocr_lines)
-    return " ".join(texts)
+            fp_has_full = True
+        body_text = getattr(fp, "body_text", None) or getattr(fp, "text", None)
+        if body_text:
+            texts.append(str(body_text))
+            fp_has_full = True
+        body_lines = getattr(fp, "body_lines", None)
+        if body_lines and isinstance(body_lines, list):
+            texts.extend(str(l) for l in body_lines)
+            fp_has_full = True
+        if not fp_has_full:
+            has_full_text = False
+    return " ".join(texts), has_full_text
+
+
+def _is_phrase_match(clean_q: str, clean_corpus: str) -> bool:
+    """Checks if a normalized clean quote appears as a contiguous or near-contiguous phrase in clean corpus."""
+    if not clean_q or not clean_corpus:
+        return False
+    # Check 1: direct substring in clean corpus
+    if clean_q in clean_corpus:
+        return True
+
+    # Check 2: direct substring without whitespace (handles line wrapping, hyphenation, compound words)
+    q_nospace = clean_q.replace(" ", "")
+    c_nospace = clean_corpus.replace(" ", "")
+    if len(q_nospace) >= 5 and q_nospace in c_nospace:
+        return True
+
+    # Check 3: contiguous sliding window phrase match with CER <= 0.20
+    q_words = clean_q.split()
+    if len(q_words) >= 2:
+        c_words = clean_corpus.split()
+        k = len(q_words)
+        for i in range(max(0, len(c_words) - k + 1)):
+            window = c_words[i : i + k]
+            window_str = " ".join(window)
+            cer = levenshtein_distance(clean_q, window_str) / max(len(clean_q), 1)
+            if cer <= 0.20:
+                return True
+
+    return False
 
 
 def _validate_evidence_quotes(
     quotes: Sequence[str],
     all_fps: Sequence[VisualFingerprint],
-) -> Tuple[List[str], List[str]]:
+) -> Tuple[List[str], List[str], List[str]]:
     """Validates cited quotes against provided fingerprint text/OCR.
 
     Returns:
-        (verified_quotes, unverified_quotes)
+        (verified_quotes, unverified_quotes, unchecked_quotes)
     """
-    corpus = _extract_all_fingerprint_text(all_fps)
+    corpus, has_full_text = _extract_all_fingerprint_text(all_fps)
     normalized_corpus = re.sub(r"\s+", " ", corpus.lower().strip())
     clean_corpus = re.sub(r"[^\w\s]", "", normalized_corpus)
 
     verified: List[str] = []
     unverified: List[str] = []
+    unchecked: List[str] = []
 
     for raw_quote in quotes:
         quote = raw_quote.strip()
@@ -194,20 +244,20 @@ def _validate_evidence_quotes(
         if not clean_q:
             continue
 
-        # Check 1: direct substring in normalized corpus
-        if norm_q in normalized_corpus or clean_q in clean_corpus:
+        if norm_q in normalized_corpus or _is_phrase_match(clean_q, clean_corpus):
             verified.append(quote)
             continue
 
-        # Check 2: word-level match (if multi-word quote has words all appearing in corpus)
-        words = clean_q.split()
-        if len(words) >= 2 and all(w in clean_corpus for w in words):
-            verified.append(quote)
-            continue
+        # Quote not matched in available text.
+        # If full text (OCR / body) was available for all cards, mark UNVERIFIED (hallucination).
+        # If full text was not available, mark UNCHECKED (neutral, no penalty).
+        if has_full_text:
+            unverified.append(quote)
+        else:
+            unchecked.append(quote)
 
-        unverified.append(quote)
+    return verified, unverified, unchecked
 
-    return verified, unverified
 
 
 def _fetch_image_bytes(images: Any, card: VisualFingerprint) -> bytes:
@@ -467,7 +517,7 @@ class SetVerifier:
         # Quote validation against provided fingerprint text / OCR
         all_fps = [anchor] + candidates
         quotes_in = list(parsed.evidence_quotes)
-        verified_quotes, unverified_quotes = _validate_evidence_quotes(quotes_in, all_fps)
+        verified_quotes, unverified_quotes, unchecked_quotes = _validate_evidence_quotes(quotes_in, all_fps)
 
         flags: List[str] = []
         eff_confidence = parsed.confidence
@@ -475,12 +525,18 @@ class SetVerifier:
         if unverified_quotes:
             for uq in unverified_quotes:
                 flags.append(f"UNVERIFIED_QUOTE: {uq}")
-                logger.warning("SetVerifier: cited quote %r not found in provided card text/OCR", uq)
-            # Lower confidence when hallucinated or unverified quotes are cited
+                logger.warning("SetVerifier: cited quote %r conflicts with available card text/OCR", uq)
+            # Lower confidence by 50% when hallucinated quotes conflict with available text
             if eff_confidence is not None:
                 eff_confidence = round(max(0.0, eff_confidence * 0.5), 4)
             else:
                 eff_confidence = 0.35
+
+        if unchecked_quotes:
+            for uq in unchecked_quotes:
+                flags.append(f"UNCHECKED_QUOTE: {uq}")
+                logger.info("SetVerifier: cited quote %r is unchecked due to partial fingerprint text", uq)
+            # UNCHECKED quotes are recorded neutrally without confidence penalty
 
         result = SetVerification(
             anchor=anchor.card_id,
@@ -489,6 +545,9 @@ class SetVerifier:
             evidence_quotes=quotes_in,
             confidence=eff_confidence,
             flags=flags,
+            verified_quotes=verified_quotes,
+            unverified_quotes=unverified_quotes,
+            unchecked_quotes=unchecked_quotes,
             model=self.model_name,
             prompt_id=self.prompt_record.id,
             prompt_version=self.prompt_record.version,
@@ -504,7 +563,7 @@ _DEFAULT_SENTINEL = object()
 class GeminiSemanticVerifier:
     """Deprecated compatibility shim for existing callers of the pairwise API.
 
-    Delegates to SetVerifier with k=1.
+    Delegates to SetVerifier with k=1. Single path: LLMClient.
     """
 
     def __init__(
@@ -529,7 +588,13 @@ class GeminiSemanticVerifier:
 
         self.model_name = model_name or self.settings.get_correlation_model()
         self.client = client
-        self.llm_client = llm_client
+        if llm_client is not None:
+            self.llm_client = llm_client
+        elif client is not None and isinstance(client, LLMClient):
+            self.llm_client = client
+        else:
+            self.llm_client = None
+
         self.heuristic_weight = (
             heuristic_weight if heuristic_weight is not None else self.settings.heuristic_weight
         )
@@ -537,12 +602,7 @@ class GeminiSemanticVerifier:
             semantic_weight if semantic_weight is not None else self.settings.semantic_weight
         )
 
-        # Wire client to llm_client if it conforms to LLMClient (and is not an untyped Mock)
-        if self.llm_client is None and self.client is not None:
-            if isinstance(self.client, LLMClient) and not type(self.client).__name__.endswith("Mock"):
-                self.llm_client = self.client
-
-        if self.llm_client is None and self.api_key and not str(self.api_key).startswith("mock"):
+        if self.llm_client is None and self.api_key:
             from recipeboxer.ai.client import GenAIClient
             from recipeboxer.config import is_usable_gemini_key
 
@@ -562,43 +622,8 @@ class GeminiSemanticVerifier:
     ) -> CorrelationProposal:
         """Verifies semantic continuity between candidate front and back card fingerprints.
 
-        Delegates to SetVerifier with k=1.
+        Delegates to SetVerifier with k=1. Single path: LLMClient.
         """
-        import inspect
-
-        # Duck-typing compatibility for legacy test mocks
-        if self.client is not None:
-            res = None
-            for method_name in ("verify_pair", "verify_correlation"):
-                if hasattr(self.client, method_name):
-                    method = getattr(self.client, method_name)
-                    try:
-                        potential_res = method(front_fp, back_fp, heuristic_score)
-                        if inspect.isawaitable(potential_res):
-                            potential_res = await potential_res
-                        if potential_res is not None and not type(potential_res).__name__.endswith("Mock"):
-                            res = potential_res
-                            break
-                    except TypeError:
-                        pass
-            if (res is None or type(res).__name__.endswith("Mock")) and callable(self.client):
-                try:
-                    potential_res = self.client(front_fp, back_fp, heuristic_score)
-                    if inspect.isawaitable(potential_res):
-                        potential_res = await potential_res
-                    if potential_res is not None and not type(potential_res).__name__.endswith("Mock"):
-                        res = potential_res
-                except TypeError:
-                    pass
-
-            if res is not None:
-                if isinstance(res, CorrelationProposal):
-                    return res
-                if hasattr(res, "model_dump") and callable(getattr(res, "model_dump")) and not type(res).__name__.endswith("Mock"):
-                    return CorrelationProposal.model_validate(res.model_dump())
-                if isinstance(res, dict):
-                    return CorrelationProposal.model_validate(res)
-
         # Without an LLM client, raise SemanticVerificationUnavailable(NO_API_KEY) (INV-AC4/AC6)
         if self.llm_client is None:
             raise SemanticVerificationUnavailable(
@@ -606,6 +631,7 @@ class GeminiSemanticVerifier:
                 reason=FailureReason.NO_API_KEY,
                 card_ids=[front_fp.card_id, back_fp.card_id],
             )
+
 
         if heuristic_score is None:
             heuristic_score = calculate_heuristic_distance(front_fp, back_fp)

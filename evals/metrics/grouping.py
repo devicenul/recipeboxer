@@ -7,6 +7,7 @@ Uses scipy.optimize.linear_sum_assignment for Hungarian bipartite matching.
 from __future__ import annotations
 
 import itertools
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 import numpy as np
 from scipy.optimize import linear_sum_assignment
@@ -42,8 +43,8 @@ def match_recipes(
 
     # Compute IoU matrix
     iou_matrix = np.zeros((n_pred, n_gold), dtype=np.float64)
-    pred_sets = [set(p) for p in pred]
-    gold_sets = [set(g) for g in gold]
+    pred_sets = [{Path(str(c)).name for c in p} for p in pred]
+    gold_sets = [{Path(str(c)).name for c in g} for g in gold]
 
     for i, p_set in enumerate(pred_sets):
         for j, g_set in enumerate(gold_sets):
@@ -246,7 +247,9 @@ def kendall_tau_order(
         Mean tau in [-1.0, 1.0], or 1.0 if no multi-card matched clusters exist.
     """
     if matches is None:
-        matches = match_recipes(pred, gold)
+        norm_pred = [[Path(str(c)).name for c in p] for p in pred]
+        norm_gold = [[Path(str(c)).name for c in g] for g in gold]
+        matches = match_recipes(norm_pred, norm_gold)
 
     tau_scores: List[float] = []
 
@@ -257,8 +260,21 @@ def kendall_tau_order(
         p_cards = pred[p_idx]
         g_cards = gold[g_idx]
 
-        g_order = {c: idx for idx, c in enumerate(g_cards)}
-        common_pred = [c for c in p_cards if c in g_order]
+        g_order: Dict[str, int] = {}
+        for idx, c in enumerate(g_cards):
+            c_str = str(c)
+            g_order[c_str] = idx
+            g_order[Path(c_str).name] = idx
+
+        common_pred: List[str] = []
+        seen: Set[str] = set()
+        for c in p_cards:
+            c_str = str(c)
+            c_name = Path(c_str).name
+            matched_key = c_name if c_name in g_order else (c_str if c_str in g_order else None)
+            if matched_key and matched_key not in seen:
+                common_pred.append(matched_key)
+                seen.add(matched_key)
 
         if len(common_pred) < 2:
             continue
@@ -273,7 +289,7 @@ def kendall_tau_order(
                 card_j = common_pred[j]
                 if g_order[card_i] < g_order[card_j]:
                     concordant += 1
-                else:
+                elif g_order[card_i] > g_order[card_j]:
                     discordant += 1
 
         total = concordant + discordant
@@ -281,6 +297,9 @@ def kendall_tau_order(
             tau_scores.append((concordant - discordant) / total)
 
     if not tau_scores:
+        has_gold_multicard = any(len(g) >= 2 for g in gold)
+        if has_gold_multicard and len(pred) > 0:
+            return 0.0
         return 1.0
 
     return float(sum(tau_scores) / len(tau_scores))

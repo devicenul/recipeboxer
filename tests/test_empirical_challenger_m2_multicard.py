@@ -23,6 +23,7 @@ import pytest
 from PIL import Image
 
 from recipeboxer.agent.orchestrator import AgentOrchestrator, PipelineSession
+from recipeboxer.ai import ScriptedLLMClient
 from recipeboxer.correlation.optimizer import PairingOptimizer
 from recipeboxer.extraction.extractor import GeminiRecipeExtractor
 from recipeboxer.ingestion.scanner import ScannedCard
@@ -34,81 +35,60 @@ from recipeboxer.models.recipe import RecipeSchema
 from recipeboxer.storage.cache import FingerprintCache
 
 
-def _make_dummy_fingerprint(card_id: str, role: CardRole = CardRole.STANDALONE) -> VisualFingerprint:
+TINY_JPEG = (
+    b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00"
+    b"\xff\xdb\x00C\x00\x08\x06\x06\x07\x06\x05\x08\x07\x07\x07\t\t\x08\n\x0c"
+    b"\x14\r\x0c\x0b\x0b\x0c\x19\x12\x13\x0f\x14\x1d\x1a\x1f\x1e\x1d\x1a\x1c"
+    b"\x1c $.' \",#\x1c\x1c(7),01444\x1f'9=82<.342\xff\xc0\x00\x0b\x08\x00\x01"
+    b"\x00\x01\x01\x01\x11\x00\xff\xc4\x00\x1f\x00\x00\x01\x05\x01\x01\x01"
+    b"\x01\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x01\x02\x03\x04\x05\x06"
+    b"\x07\x08\t\n\x0b\xff\xda\x00\x08\x01\x01\x00\x00?\x00\xbf\x00\xff\xd9"
+)
+
+
+def _make_dummy_fingerprint(card_id: str, tmp_path: Optional[Path] = None, role: CardRole = CardRole.STANDALONE) -> VisualFingerprint:
+    if tmp_path is not None:
+        p = tmp_path / card_id
+        p.write_bytes(TINY_JPEG)
+        img_path = str(p)
+    else:
+        img_path = f"/tmp/scans/{card_id}"
     return VisualFingerprint(
         card_id=card_id,
-        image_path=f"/tmp/scans/{card_id}",
+        image_path=img_path,
         sha256_hash=hashlib.sha256(card_id.encode("utf-8")).hexdigest(),
         role=role,
     )
 
 
-class MultiCardExtractorClient:
-    """Mock client returning deterministic recipes matching explicit card ordering."""
-
-    async def extract_cards(self, cards: List[Any]) -> RecipeSchema:
-        cids = []
-        for c in cards:
-            if isinstance(c, VisualFingerprint):
-                cids.append(c.card_id)
-            elif isinstance(c, ScannedCard) or hasattr(c, "card_id"):
-                cids.append(getattr(c, "card_id", "card"))
-            elif isinstance(c, (Path, str)):
-                cids.append(Path(c).name)
-            elif isinstance(c, bytes):
-                h = hashlib.sha256(c).hexdigest()[:8]
-                cids.append(f"card_{h}.jpg")
-            elif isinstance(c, Image.Image):
-                buf = io.BytesIO()
-                c.save(buf, format="JPEG")
-                h = hashlib.sha256(buf.getvalue()).hexdigest()[:8]
-                cids.append(f"card_{h}.jpg")
-            else:
-                cids.append(f"card_{len(cids)+1}")
-
-        directions = [
-            f"1. Front preparation and mixing ({cids[0]})",
-            *(f"{i+2}. Subsequent directions for card {cid}" for i, cid in enumerate(cids[1:]))
-        ]
-        return RecipeSchema(
-            recipe_id="rec_multicard",
-            title="Multi-Card Recipe",
-            ingredients=["ingredient 1", "ingredient 2"],
-            directions=directions,
-            card_ids=cids,
-            image_urls=[f"/api/cards/{cid}/image" for cid in cids],
-        )
-
-    async def extract_recipe(self, front: Any, back: Optional[Any] = None) -> RecipeSchema:
-        cards = [front]
-        if back is not None:
-            cards.append(back)
-        return await self.extract_cards(cards)
-
-    async def extract(self, cards: Any) -> RecipeSchema:
-        if isinstance(cards, list):
-            return await self.extract_cards(cards)
-        return await self.extract_cards([cards])
-
-
 class TestMultiCardExtractionOrdering:
     """Stress tests for GeminiRecipeExtractor with 3, 4, 5, 6, 8 card sequences."""
 
-    @pytest.fixture
-    def extractor(self):
-        return GeminiRecipeExtractor(client=MultiCardExtractorClient())
-
     @pytest.mark.asyncio
-    async def test_extract_empty_list_raises_value_error(self, extractor):
+    async def test_extract_empty_list_raises_value_error(self):
         """Empty input list raises ValueError."""
+        extractor = GeminiRecipeExtractor(llm_client=ScriptedLLMClient([]))
         with pytest.raises(ValueError, match="No card inputs provided"):
             await extractor.extract([])
 
     @pytest.mark.asyncio
-    async def test_extract_cards_5_card_custom_permutation_preserves_order(self, extractor):
+    async def test_extract_cards_5_card_custom_permutation_preserves_order(self, tmp_path):
         """5-card custom permutation is preserved in recipe.card_ids, image_urls, and sequential directions."""
         card_ids = ["page_5.jpg", "page_2.jpg", "page_4.jpg", "page_1.jpg", "page_3.jpg"]
-        fps = [_make_dummy_fingerprint(cid) for cid in card_ids]
+        fps = [_make_dummy_fingerprint(cid, tmp_path=tmp_path) for cid in card_ids]
+        recipe_resp = RecipeSchema(
+            recipe_id="rec_multicard",
+            title="Multi-Card Recipe",
+            ingredients=["ingredient 1", "ingredient 2"],
+            directions=[
+                f"1. Front preparation and mixing ({card_ids[0]})",
+                *(f"{i+2}. Subsequent directions for card {cid}" for i, cid in enumerate(card_ids[1:]))
+            ],
+            card_ids=card_ids,
+            image_urls=[f"/api/cards/{cid}/image" for cid in card_ids],
+        )
+        client = ScriptedLLMClient([recipe_resp])
+        extractor = GeminiRecipeExtractor(llm_client=client)
 
         recipe = await extractor.extract_cards(fps)
         assert isinstance(recipe, RecipeSchema)
@@ -126,10 +106,20 @@ class TestMultiCardExtractionOrdering:
         assert "card page_3.jpg" in recipe.directions[4]
 
     @pytest.mark.asyncio
-    async def test_extract_cards_8_card_large_recipe_sequence(self, extractor):
+    async def test_extract_cards_8_card_large_recipe_sequence(self, tmp_path):
         """8-card large multi-card recipe sequence extraction preserves all 8 cards without truncation."""
         card_ids = [f"card_part_{i:02d}.jpg" for i in range(1, 9)]
-        fps = [_make_dummy_fingerprint(cid) for cid in card_ids]
+        fps = [_make_dummy_fingerprint(cid, tmp_path=tmp_path) for cid in card_ids]
+        recipe_resp = RecipeSchema(
+            recipe_id="rec_multicard_8",
+            title="8-Card Recipe",
+            ingredients=["ingredient 1"],
+            directions=[f"{i}. Step {i}" for i in range(1, 9)],
+            card_ids=card_ids,
+            image_urls=[f"/api/cards/{cid}/image" for cid in card_ids],
+        )
+        client = ScriptedLLMClient([recipe_resp])
+        extractor = GeminiRecipeExtractor(llm_client=client)
 
         recipe = await extractor.extract(fps)
         assert recipe.card_ids == card_ids
@@ -139,18 +129,26 @@ class TestMultiCardExtractionOrdering:
             assert recipe.directions[i - 1].startswith(f"{i}. ")
 
     @pytest.mark.asyncio
-    async def test_extract_heterogeneous_input_sequence_types(self, extractor, tmp_path):
+    async def test_extract_heterogeneous_input_sequence_types(self, tmp_path):
         """extract() supports heterogeneous sequence types: VisualFingerprint, Path, ScannedCard, bytes, PIL.Image."""
         p1 = tmp_path / "card_01.jpg"
-        p1.write_bytes(b"image_bytes_1")
+        p1.write_bytes(TINY_JPEG)
 
-        fp = _make_dummy_fingerprint("card_02.jpg")
+        fp = _make_dummy_fingerprint("card_02.jpg", tmp_path=tmp_path)
         sc = ScannedCard(card_id="card_03.jpg", file_path=p1, sha256_hash="hash1", file_size_bytes=100)
 
         img = Image.new("RGB", (100, 100), color="white")
-        raw_b = b"dummy_jpeg_bytes_4"
+        raw_b = TINY_JPEG
 
         heterogeneous_cards = [fp, p1, sc, img, raw_b]
+        recipe_resp = RecipeSchema(
+            recipe_id="rec_hetero",
+            title="Heterogeneous Recipe",
+            ingredients=["ingredient 1"],
+            directions=[f"{i}. Step {i}" for i in range(1, 6)],
+        )
+        client = ScriptedLLMClient([recipe_resp])
+        extractor = GeminiRecipeExtractor(llm_client=client)
         recipe = await extractor.extract(heterogeneous_cards)
 
         assert isinstance(recipe, RecipeSchema)

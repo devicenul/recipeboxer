@@ -11,7 +11,7 @@ export interface StatusBarProps {
   elapsedSeconds?: number;
   tokenUsage?: TokenUsage;
   showHotkeys?: boolean;
-  spendUsd?: number;
+  spendUsd?: number | null;
   spendCapUsd?: number | null;
   totalCalls?: number;
   isBudgetExceeded?: boolean;
@@ -24,7 +24,7 @@ export const StatusBar: React.FC<StatusBarProps> = ({
   elapsedSeconds = 0,
   tokenUsage = { prompt_tokens: 0, candidates_tokens: 0, thinking_tokens: 0, total_tokens: 0 },
   showHotkeys = true,
-  spendUsd = 0,
+  spendUsd = null,
   spendCapUsd = null,
   totalCalls = 0,
   isBudgetExceeded = false,

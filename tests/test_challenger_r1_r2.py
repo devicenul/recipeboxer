@@ -14,6 +14,7 @@ from __future__ import annotations
 import itertools
 import json
 import random
+import re
 from pathlib import Path
 from typing import Any, Dict, List, Set, Tuple
 
@@ -22,9 +23,10 @@ from PIL import Image
 
 from recipeboxer.agent.orchestrator import RecipeBoxerAgent
 from recipeboxer.agent.session import PipelineSession, SessionManager
+from recipeboxer.ai import LLMClient, LLMRequest, LLMResponse
 from recipeboxer.config import Settings, get_settings
 from recipeboxer.correlation.optimizer import PairingOptimizer
-from recipeboxer.correlation.semantic import GeminiSemanticVerifier
+from recipeboxer.correlation.semantic import GeminiSemanticVerifier, SetVerificationResponse
 from recipeboxer.models.correlation import CorrelationProposal, CorrelationResult
 from recipeboxer.models.domain import (
     ArtifactType,
@@ -142,65 +144,82 @@ class TestChallengerModelSelectionR1:
 # 2. R2: 4-CARD SEQUENCE CORRELATION & PERMUTATION INVARIANCE
 # ============================================================================
 
-class MockSequenceVerifierClient:
+class MockSequenceVerifierClient(LLMClient):
     """Mock semantic verifier client verifying sequential narrative continuity."""
 
-    def verify_pair(self, front_fp: VisualFingerprint, back_fp: VisualFingerprint, heuristic_score: float) -> CorrelationProposal:
-        hdr_score = calculate_sequential_header_score(front_fp, back_fp)
-        if hdr_score >= 0.90:
-            return CorrelationProposal(
-                proposal_id="mock_verified_seq",
-                ordered_card_ids=[front_fp.card_id, back_fp.card_id],
-                part_count=2,
-                heuristic_score=heuristic_score,
-                semantic_score=0.98,
-                confidence=round(0.30 * heuristic_score + 0.70 * 0.98, 4),
-                recommended_action="PAIR",
-                semantic_verified=True,
-            )
+    async def generate(self, request: LLMRequest) -> LLMResponse[Any]:
+        text_parts = [p.text for p in request.parts if hasattr(p, "text")]
+        prompt_text = "\n".join(text_parts).lower()
+
+        anchor_section = ""
+        candidate_section = ""
+        if "candidate 1:" in prompt_text:
+            parts = prompt_text.split("candidate 1:", 1)
+            anchor_section = parts[0]
+            candidate_section = parts[1]
         else:
-            return CorrelationProposal(
-                proposal_id="mock_rejected_pair",
-                ordered_card_ids=[front_fp.card_id, back_fp.card_id],
-                part_count=2,
-                heuristic_score=heuristic_score,
-                semantic_score=0.10,
-                confidence=round(0.30 * heuristic_score + 0.70 * 0.10, 4),
-                recommended_action="REJECT",
-                semantic_verified=True,
-            )
+            anchor_section = prompt_text
+
+        is_seq = False
+        if ("part 1" in anchor_section or "card1_front" in anchor_section) and ("part 2" in candidate_section or "card1_back" in candidate_section):
+            is_seq = True
+        elif ("part 2" in anchor_section or "card1_back" in anchor_section) and ("part 3" in candidate_section or "card2_front" in candidate_section):
+            is_seq = True
+        elif ("part 3" in anchor_section or "card2_front" in anchor_section) and ("part 4" in candidate_section or "card2_back" in candidate_section):
+            is_seq = True
+        elif ("see back" in anchor_section or "continued on back" in anchor_section) and ("cont" in candidate_section or "part 2" in candidate_section):
+            is_seq = True
+
+        if is_seq:
+            resp = SetVerificationResponse(continuations=["Candidate 1"], confidence=0.98)
+        else:
+            resp = SetVerificationResponse(continuations=[], rejected=["Candidate 1"], confidence=0.10)
+
+        return LLMResponse(
+            model="mock-seq-verifier",
+            parsed=resp,
+        )
 
 
-class MockPairVerifierClient:
+class MockPairVerifierClient(LLMClient):
     """Mock semantic verifier client verifying matching front/back card pairs."""
 
-    def verify_pair(self, front_fp: VisualFingerprint, back_fp: VisualFingerprint, heuristic_score: float) -> CorrelationProposal:
-        is_valid = (
-            front_fp.role in (CardRole.SEQUENCE_START, CardRole.FRONT_ONLY)
-            and back_fp.role in (CardRole.SEQUENCE_CONTINUATION, CardRole.BACK_ONLY)
-        )
-        if is_valid:
-            return CorrelationProposal(
-                proposal_id=f"mock_{front_fp.card_id}_{back_fp.card_id}",
-                ordered_card_ids=[front_fp.card_id, back_fp.card_id],
-                part_count=2,
-                heuristic_score=heuristic_score,
-                semantic_score=0.95,
-                confidence=round(0.30 * heuristic_score + 0.70 * 0.95, 4),
-                recommended_action="PAIR",
-                semantic_verified=True,
-            )
+    async def generate(self, request: LLMRequest) -> LLMResponse[Any]:
+        text_parts = [p.text for p in request.parts if hasattr(p, "text")]
+        prompt_text = "\n".join(text_parts).lower()
+
+        anchor_section = ""
+        candidate_section = ""
+        if "candidate 1:" in prompt_text:
+            parts = prompt_text.split("candidate 1:", 1)
+            anchor_section = parts[0]
+            candidate_section = parts[1]
         else:
-            return CorrelationProposal(
-                proposal_id=f"mock_rej_{front_fp.card_id}_{back_fp.card_id}",
-                ordered_card_ids=[front_fp.card_id, back_fp.card_id],
-                part_count=2,
-                heuristic_score=heuristic_score,
-                semantic_score=0.10,
-                confidence=round(0.30 * heuristic_score + 0.70 * 0.10, 4),
-                recommended_action="REJECT",
-                semantic_verified=True,
-            )
+            anchor_section = prompt_text
+
+        is_pair = False
+        if ("see back" in anchor_section or "recipe title" in anchor_section) and ("cont" in candidate_section or "directions" in candidate_section):
+            is_pair = True
+        elif "front" in anchor_section and "back" in candidate_section and not ("noise" in anchor_section or "noise" in candidate_section):
+            is_pair = True
+
+        match_a = re.search(r"card_(\d+)", anchor_section)
+        match_c = re.search(r"card_(\d+)", candidate_section)
+        if match_a and match_c:
+            num_a = int(match_a.group(1))
+            num_c = int(match_c.group(1))
+            if num_a % 2 == 0 and num_c == num_a + 1:
+                is_pair = True
+
+        if is_pair:
+            resp = SetVerificationResponse(continuations=["Candidate 1"], confidence=0.95)
+        else:
+            resp = SetVerificationResponse(continuations=[], rejected=["Candidate 1"], confidence=0.10)
+
+        return LLMResponse(
+            model="mock-pair-verifier",
+            parsed=resp,
+        )
 
 
 class TestChallengerFruitcake4CardCorrelationR2:

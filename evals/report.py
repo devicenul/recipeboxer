@@ -226,6 +226,23 @@ def render(report: dict, feedback: str = "aggregate") -> tuple[str, str]:
     return json_text, md_text
 
 
+def _get_metric_val(container: Any, key: str) -> Any:
+    """Extracts a scalar metric value from flat dict, nested dict, or {'mean': ...} container."""
+    if not isinstance(container, dict):
+        return None
+    val = container.get(key)
+    if val is None and "overall" in container and isinstance(container["overall"], dict):
+        val = container["overall"].get(key)
+    if isinstance(val, dict):
+        if "mean" in val:
+            return val["mean"]
+        if "score" in val:
+            return val["score"]
+        if "value" in val:
+            return val["value"]
+    return val
+
+
 def _render_markdown(report: dict, tier: str, feedback: str) -> str:
     """Builds formatted Markdown text for the evaluation report."""
     run_id = report.get("run_id", "N/A")
@@ -285,6 +302,33 @@ def _render_markdown(report: dict, tier: str, feedback: str) -> str:
             "> answer keys, or fixture paths during pipeline execution.",
             "",
         ])
+    elif status == "budget_exceeded":
+        lines.extend([
+            "> [!WARNING]",
+            "> **BUDGET EXCEEDED**",
+            ">",
+            "> The evaluation run reached the configured spend cap.",
+            "> Pipeline execution halted; partial outputs are reported below.",
+            "",
+        ])
+    elif status == "failed":
+        lines.extend([
+            "> [!CAUTION]",
+            "> **EVALUATION FAILED**",
+            ">",
+            "> Zero valid recipes were produced across the evaluation run.",
+            "> All cards are counted as extraction omissions.",
+            "",
+        ])
+    elif status == "partial":
+        lines.extend([
+            "> [!WARNING]",
+            "> **PARTIAL EVALUATION**",
+            ">",
+            "> One or more recipe cards or stages encountered failures during execution.",
+            "> Unresolved cards are reported as omissions.",
+            "",
+        ])
 
     # Extract metrics for standard rendering
     metrics = report.get("metrics", {})
@@ -307,26 +351,40 @@ def _render_markdown(report: dict, tier: str, feedback: str) -> str:
         "",
         "| Metric | Score | Direction | Description |",
         "|:---|:---:|:---:|:---|",
-        f"| **B-Cubed F1** | `{_fmt_metric(grouping.get('bcubed_f1'))}` | Higher | Precision-recall harmonic mean across image clusters |",
-        f"| **B-Cubed Precision** | `{_fmt_metric(grouping.get('bcubed_p'))}` | Higher | Proportion of correctly clustered image pairs |",
-        f"| **B-Cubed Recall** | `{_fmt_metric(grouping.get('bcubed_r'))}` | Higher | Completeness of clustered recipe card sets |",
-        f"| **Adjusted Rand Index (ARI)** | `{_fmt_metric(grouping.get('ari'))}` | Higher | Chance-adjusted cluster partition agreement |",
-        f"| **Exact Cluster Accuracy** | `{_fmt_metric(grouping.get('exact_cluster_acc'))}` | Higher | Proportion of clusters matching GT exactly |",
-        f"| **False Merge Rate** | `{_fmt_metric(grouping.get('false_merge_rate'))}` | Lower | Rate of distinct recipes merged into one |",
-        f"| **False Split Rate** | `{_fmt_metric(grouping.get('false_split_rate'))}` | Lower | Rate of single recipes split into fragments |",
+        f"| **B-Cubed F1** | `{_fmt_metric(_get_metric_val(grouping, 'bcubed_f1'))}` | Higher | Precision-recall harmonic mean across image clusters |",
+        f"| **B-Cubed Precision** | `{_fmt_metric(_get_metric_val(grouping, 'bcubed_p'))}` | Higher | Proportion of correctly clustered image pairs |",
+        f"| **B-Cubed Recall** | `{_fmt_metric(_get_metric_val(grouping, 'bcubed_r'))}` | Higher | Completeness of clustered recipe card sets |",
+        f"| **Adjusted Rand Index (ARI)** | `{_fmt_metric(_get_metric_val(grouping, 'ari'))}` | Higher | Chance-adjusted cluster partition agreement |",
+        f"| **Exact Cluster Accuracy** | `{_fmt_metric(_get_metric_val(grouping, 'exact_cluster_acc'))}` | Higher | Proportion of clusters matching GT exactly |",
+        f"| **Card Order (Kendall Tau)** | `{_fmt_metric(_get_metric_val(grouping, 'order_kendall_tau'))}` | Higher | Face order correlation within multi-card recipes |",
+        f"| **False Merge Rate** | `{_fmt_metric(_get_metric_val(grouping, 'false_merge_rate'))}` | Lower | Rate of distinct recipes merged into one |",
+        f"| **False Split Rate** | `{_fmt_metric(_get_metric_val(grouping, 'false_split_rate'))}` | Lower | Rate of single recipes split into fragments |",
         "",
         "### Recipe Extraction Quality",
         "",
         "| Metric | Score | Direction | Description |",
         "|:---|:---:|:---:|:---|",
-        f"| **Title CER** | `{_fmt_metric(extraction.get('title_cer'))}` | Lower | Character error rate for recipe titles |",
-        f"| **Ingredient F1** | `{_fmt_metric(extraction.get('ingredient_f1'))}` | Higher | Hungarian line-level ingredient F1 (CER ≤ 0.1) |",
-        f"| **Quantity / Unit Match** | `{_fmt_metric(extraction.get('qty_unit_exact'))}` | Higher | Exact matches on ingredient quantity and unit |",
-        f"| **Direction F1** | `{_fmt_metric(extraction.get('direction_f1'))}` | Higher | Instruction step sequence F1 score |",
-        f"| **Hallucination Rate** | `{_fmt_metric(extraction.get('hallucination_rate'))}` | Lower | Rate of fabricated ingredients or steps |",
-        f"| **Omission Rate** | `{_fmt_metric(extraction.get('omission_rate'))}` | Lower | Rate of GT items completely missing |",
-        "",
+        f"| **Title CER** | `{_fmt_metric(_get_metric_val(extraction, 'title_cer'))}` | Lower | Character error rate for recipe titles |",
+        f"| **Ingredient F1** | `{_fmt_metric(_get_metric_val(extraction, 'ingredient_f1'))}` | Higher | Hungarian line-level ingredient F1 (CER ≤ 0.1) |",
+        f"| **Quantity / Unit Match** | `{_fmt_metric(_get_metric_val(extraction, 'qty_unit_exact'))}` | Higher | Exact matches on ingredient quantity and unit |",
+        f"| **Direction F1** | `{_fmt_metric(_get_metric_val(extraction, 'direction_f1'))}` | Higher | Instruction step sequence F1 score |",
+        f"| **Hallucination Rate** | `{_fmt_metric(_get_metric_val(extraction, 'hallucination_rate'))}` | Lower | Rate of fabricated ingredients or steps |",
+        f"| **Omission Rate** | `{_fmt_metric(_get_metric_val(extraction, 'omission_rate'))}` | Lower | Rate of GT items completely missing |",
     ])
+
+    verb_cer = _get_metric_val(extraction, "verbatim_cer")
+    if verb_cer is not None:
+        lines.append(f"| **Verbatim CER** | `{_fmt_metric(verb_cer)}` | Lower | Character error rate against raw card transcription |")
+
+    unscored_no_gt = _get_metric_val(extraction, "n_unscored_no_structured_gt")
+    if unscored_no_gt is not None and unscored_no_gt > 0:
+        lines.append(f"| **Unscored (No Structured GT)** | `{unscored_no_gt}` | N/A | Recipes skipped due to pending structured GT |")
+
+    n_failures = _get_metric_val(extraction, "n_stage_failures")
+    if n_failures is not None and n_failures > 0:
+        lines.append(f"| **Stage Failures** | `{n_failures}` | Lower | Pipeline stage failures reported during run |")
+
+    lines.append("")
 
     # LLM Judge Section
     judge_score = judge.get("score") or judge.get("aggregate_score") or report.get("judge_score")
@@ -341,11 +399,18 @@ def _render_markdown(report: dict, tier: str, feedback: str) -> str:
     lines.append("")
 
     # Ops & Cost Summary
-    total_cost = ops.get("total_cost_usd") or ops.get("cost_usd")
+    total_cost = ops.get("total_cost_usd")
+    if total_cost is None:
+        total_cost = ops.get("total_usd")
+    if total_cost is None:
+        total_cost = ops.get("cost_usd")
+
+    cost_str = f"${_fmt_metric(total_cost, is_currency=True)}" if total_cost is not None else "unknown"
+
     lines.extend([
         "### Operations & Budget",
         "",
-        f"- **Total Spend (USD):** `${_fmt_metric(total_cost, is_currency=True)}`",
+        f"- **Total Spend (USD):** `{cost_str}`",
         f"- **Total Calls:** `{ops.get('calls', ops.get('total_calls', 'N/A'))}`",
         f"- **Input Tokens:** `{ops.get('input_tokens', 'N/A')}`",
         f"- **Output Tokens:** `{ops.get('output_tokens', 'N/A')}`",
@@ -363,12 +428,20 @@ def _render_markdown(report: dict, tier: str, feedback: str) -> str:
             "|:---|:---:|:---:|:---:|:---:|",
         ])
         for cat_name, cat_data in categories.items():
+            g_f1 = cat_data.get("bcubed_f1")
+            g_f1_str = f"`{_fmt_metric(g_f1)}`" if g_f1 is not None else "`N/A*`"
             lines.append(
-                f"| `{cat_name}` | `{_fmt_metric(cat_data.get('bcubed_f1'))}` | "
-                f"`{_fmt_metric(cat_data.get('title_cer'))}` | "
-                f"`{_fmt_metric(cat_data.get('ingredient_f1'))}` | "
-                f"`{_fmt_metric(cat_data.get('direction_f1'))}` |"
+                f"| `{cat_name}` | {g_f1_str} | "
+                f"`{_fmt_metric(_get_metric_val(cat_data, 'title_cer'))}` | "
+                f"`{_fmt_metric(_get_metric_val(cat_data, 'ingredient_f1'))}` | "
+                f"`{_fmt_metric(_get_metric_val(cat_data, 'direction_f1'))}` |"
             )
+        lines.append("")
+        lines.append(
+            "> [!NOTE]\n"
+            "> `*` Grouping F1 (B-Cubed) is an aggregate deck-partition metric; "
+            "card-count categories break down recipe extraction quality."
+        )
         lines.append("")
 
     # If T0 with per-item feedback, render details
@@ -419,6 +492,12 @@ def _extract_metric_values(d: Any, prefix: str = "") -> Dict[str, float]:
         key_str = f"{prefix}.{k}" if prefix else k
         if isinstance(v, (int, float)) and not isinstance(v, bool):
             results[key_str] = float(v)
+            if k == "mean" and prefix:
+                results[prefix] = float(v)
+                if ".overall." in prefix:
+                    results[prefix.replace(".overall.", ".")] = float(v)
+                if prefix.startswith("overall."):
+                    results[prefix[len("overall."):]] = float(v)
         elif isinstance(v, dict):
             results.update(_extract_metric_values(v, prefix=key_str))
     return results

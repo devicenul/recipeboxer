@@ -39,7 +39,12 @@ from recipeboxer.models.domain import (
     PhysicalArtifact,
     VisualFingerprint,
 )
-from recipeboxer.models.failures import FailureReason, FingerprintUnavailable, StageUnavailableError
+from recipeboxer.models.failures import (
+    BudgetExceeded,
+    FailureReason,
+    FingerprintUnavailable,
+    StageUnavailableError,
+)
 from recipeboxer.prompts import get_prompt
 from recipeboxer.storage.cache import FingerprintCache
 from recipeboxer.vision.heuristics import hex_to_lab, rgb_to_lab
@@ -300,8 +305,9 @@ class GeminiVisualExtractor:
         self.settings = get_settings()
         self.api_key = api_key or self.settings.gemini_api_key
         self.model_name = model_name or self.settings.get_stage_model(LLMStage.FINGERPRINT)
-        self.client = client
         self.llm_client = llm_client
+        if self.llm_client is None and isinstance(client, LLMClient):
+            self.llm_client = client
         self.cache = cache
 
     def compute_cache_key(self, image_sha256: str) -> str:
@@ -366,109 +372,24 @@ class GeminiVisualExtractor:
                 cached_fp.sha256_hash = resolved_hash
                 return cached_fp
 
-        # 1. Real LLMClient if injected (FIND-03)
-        if self.llm_client is not None:
-            fp = await self._call_llm_client_fingerprint(
-                image_bytes, resolved_id, image_path_str, resolved_hash, client=self.llm_client
-            )
-            if self.cache is not None and not fp.degraded:
-                self.put_cached_fingerprint(fp)
-            return fp
-
-        # 2. Custom or injected client (e.g. MockGeminiClient in tests)
-        if self.client is not None:
-            res = None
-            for method_name in ("extract", "analyze_fingerprint"):
-                if hasattr(self.client, method_name):
-                    method = getattr(self.client, method_name)
-                    try:
-                        if method_name == "analyze_fingerprint":
-                            potential_res = method(Path(image_path_str), resolved_hash)
-                        else:
-                            potential_res = method(card_input)
-                        if inspect.isawaitable(potential_res):
-                            potential_res = await potential_res
-                        if potential_res is not None and not type(potential_res).__name__.endswith("Mock"):
-                            res = potential_res
-                            break
-                        elif potential_res is not None and res is None:
-                            res = potential_res
-                    except TypeError:
-                        pass
-
-            if (res is None or type(res).__name__.endswith("Mock")) and callable(self.client):
-                try:
-                    potential_res = self.client(card_input)
-                    if inspect.isawaitable(potential_res):
-                        potential_res = await potential_res
-                    if potential_res is not None and not type(potential_res).__name__.endswith("Mock"):
-                        res = potential_res
-                except TypeError:
-                    pass
-
-            if res is not None:
-                if isinstance(res, VisualFingerprint):
-                    return res
-                if hasattr(res, "model_dump") and not type(res).__name__.endswith("Mock"):
-                    return VisualFingerprint.model_validate(res.model_dump())
-                if isinstance(res, dict):
-                    return VisualFingerprint.model_validate(res)
-                return res
-
-        # 3. Check if _call_gemini_api has been explicitly mocked/patched
-        if hasattr(self._call_gemini_api, "mock") or type(self._call_gemini_api).__name__.endswith("Mock"):
-            try:
-                fp = await self._call_gemini_api(image_bytes, resolved_id, image_path_str, resolved_hash)
-                if self.cache is not None and not fp.degraded:
-                    self.put_cached_fingerprint(fp)
-                return fp
-            except Exception as exc:
-                logger.warning(f"Gemini API fingerprint call failed: {exc}. Falling back to visual analysis.")
-                return self._extract_offline_fingerprint(
-                    image_bytes,
-                    resolved_id,
-                    image_path_str,
-                    resolved_hash,
-                    degraded=True,
-                    degraded_reason=f"Gemini API fingerprint call failed: {exc}",
-                )
-
-        # 4. Route through create_llm_client when available
-        llm = create_llm_client(self.settings)
-        if llm is None and self.api_key and not self.api_key.startswith("mock"):
+        # 1. Single path: injected llm_client or create_llm_client(self.settings)
+        active_llm = self.llm_client or create_llm_client(self.settings)
+        if active_llm is None and self.api_key and not self.api_key.startswith("mock"):
             try:
                 from recipeboxer.ai.client import GenAIClient
-                llm = GenAIClient(api_key=self.api_key, settings=self.settings)
+                active_llm = GenAIClient(api_key=self.api_key, settings=self.settings)
             except Exception:
-                llm = None
+                active_llm = None
 
-        if llm is not None:
+        if active_llm is not None:
             fp = await self._call_llm_client_fingerprint(
-                image_bytes, resolved_id, image_path_str, resolved_hash, client=llm
+                image_bytes, resolved_id, image_path_str, resolved_hash, client=active_llm
             )
             if self.cache is not None and not fp.degraded:
                 self.put_cached_fingerprint(fp)
             return fp
 
-        # 5. Legacy live httpx path if api_key is configured
-        if self.api_key and not self.api_key.startswith("mock"):
-            try:
-                fp = await self._call_gemini_api(image_bytes, resolved_id, image_path_str, resolved_hash)
-                if self.cache is not None and not fp.degraded:
-                    self.put_cached_fingerprint(fp)
-                return fp
-            except Exception as exc:
-                logger.warning(f"Gemini API fingerprint call failed: {exc}. Falling back to visual analysis.")
-                return self._extract_offline_fingerprint(
-                    image_bytes,
-                    resolved_id,
-                    image_path_str,
-                    resolved_hash,
-                    degraded=True,
-                    degraded_reason=f"Gemini API fingerprint call failed: {exc}",
-                )
-
-        # 6. Deterministic offline visual analysis fallback
+        # 2. Offline degraded fallback per WP-G1 contract (no client available)
         return self._extract_offline_fingerprint(
             image_bytes,
             resolved_id,
@@ -572,6 +493,8 @@ class GeminiVisualExtractor:
             resp = await active_client.generate(req)
         except FingerprintUnavailable:
             raise
+        except BudgetExceeded:
+            raise
         except StageUnavailableError as exc:
             raise FingerprintUnavailable(
                 str(exc),
@@ -623,55 +546,6 @@ class GeminiVisualExtractor:
         return fp
 
 
-    async def _call_gemini_api(
-        self,
-        image_bytes: bytes,
-        card_id: str,
-        image_path: str,
-        sha256_hash: str,
-    ) -> VisualFingerprint:
-        """Invokes Gemini Multimodal API via httpx."""
-        import httpx
-
-        b64_image = base64.b64encode(image_bytes).decode("utf-8")
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model_name}:generateContent?key={self.api_key}"
-
-        payload = {
-            "contents": [
-                {
-                    "parts": [
-                        {"text": FINGERPRINT_SYSTEM_INSTRUCTION},
-                        {
-                            "inline_data": {
-                                "mime_type": "image/jpeg",
-                                "data": b64_image,
-                            }
-                        },
-                    ]
-                }
-            ],
-            "generationConfig": {
-                "response_mime_type": "application/json",
-                "temperature": 0.1,
-            },
-        }
-
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.post(url, json=payload)
-            resp.raise_for_status()
-            data = resp.json()
-            raw_text = data["candidates"][0]["content"]["parts"][0]["text"]
-            parsed_json = json.loads(raw_text)
-
-            # Ensure identifiers and metadata are set
-            parsed_json["card_id"] = card_id
-            parsed_json["image_path"] = image_path
-            parsed_json["sha256_hash"] = sha256_hash
-            parsed_json.setdefault("extracted_at", datetime.now(timezone.utc).isoformat())
-            parsed_json.setdefault("degraded", False)
-            parsed_json.setdefault("degraded_reason", None)
-
-            return VisualFingerprint.model_validate(parsed_json)
 
     def _extract_offline_fingerprint(
         self,

@@ -13,7 +13,7 @@ CRITICAL TRANSCRIPTION RULES:
    - If text has strike-through lines or is crossed out, record it as `[crossed out: <original text>]` (e.g., "Bake at [crossed out: 350] 375 degrees").
    - Add the crossed-out text to the `crossed_out` list.
 4. MARGINALIA & ANNOTATIONS:
-   - Separate any margin notes, family stories, dates, author signatures, or comments (e.g. "Good for church suppers", "Aunt Clara's recipe 1928") into `margin_notes`.
+   - Separate any margin notes, family stories, dates, author signatures, or comments (e.g. "Good for church suppers", "Grandmother's recipe 1928") into `margin_notes`.
 5. MULTI-FACE ORDERING:
    - Return a `FaceTranscript` object for each input card face in the exact order presented (matching Face 1 of N, Face 2 of N, etc.).
    - Assign `face_index` starting at 0 for Face 1 of N.

@@ -256,17 +256,17 @@ async def test_offline_extractor_sets_degraded_status(sample_cream_ruled_card: P
 
 @pytest.mark.asyncio
 async def test_live_gemini_failure_fallback_sets_degraded(sample_cream_ruled_card: Path):
-    """Verifies that Gemini API failure logs warning and falls back to degraded pixel fingerprint."""
-    extractor = GeminiVisualExtractor(api_key="valid_looking_key_for_test")
+    """Verifies that LLMClient failure raises typed FingerprintUnavailable per WP-G1 contract."""
+    from recipeboxer.ai.replay import ScriptedLLMClient
+    from recipeboxer.models.failures import FingerprintUnavailable
 
-    with patch.object(extractor, "_call_gemini_api", side_effect=RuntimeError("503 Service Unavailable")):
-        fp = await extractor.extract(sample_cream_ruled_card)
+    client = ScriptedLLMClient([RuntimeError("503 Service Unavailable")])
+    extractor = GeminiVisualExtractor(llm_client=client)
 
-    assert fp.degraded is True
-    assert fp.degraded_reason is not None
-    assert "Gemini API fingerprint call failed" in fp.degraded_reason
-    assert "503 Service Unavailable" in fp.degraded_reason
-    assert fp.role == CardRole.UNKNOWN
+    with pytest.raises(FingerprintUnavailable) as exc_info:
+        await extractor.extract(sample_cream_ruled_card)
+
+    assert "503 Service Unavailable" in str(exc_info.value)
 
 
 def test_ruling_detection_projection_profile(tmp_path: Path):

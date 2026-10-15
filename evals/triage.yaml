@@ -1942,3 +1942,93 @@
   source: wave5
   outcome: fixed_fixture
   resolved_wave: 5
+- nodeid: tests/test_challenger_m3_extraction.py
+  category: B
+  action: rewrite_mock
+  reason: Rewrote tests asserting removed [GUESS] string suffix and duck-typed AsyncMock clients to use ScriptedLLMClient and title_is_inferred schema contract.
+  owner_wp: WP-RT2b
+  status: done
+  source: redteam-2
+  outcome: rewritten
+  resolved_wave: 6
+- nodeid: tests/test_challenger_m2.py::TestSemanticVerifierMockAndFallback
+  category: B
+  action: rewrite_mock
+  reason: Replaced legacy duck-typed clients (CustomMockClient, DictMockClient, DumpableMockClient, MagicMock, callable) with ScriptedLLMClient returning SetVerificationResponse.
+  owner_wp: WP-RT2b
+  status: done
+  source: redteam-2
+  outcome: rewritten
+  resolved_wave: 6
+- nodeid: tests/test_challenger_m2_empirical_verification.py::TestM2StrictRecipeContentIsolation
+  category: B
+  action: rewrite_mock
+  reason: Rewrote duck-typed CallOrderMockClient tests to use ScriptedLLMClient and valid image bytes.
+  owner_wp: WP-RT2b
+  status: done
+  source: redteam-2
+  outcome: rewritten
+  resolved_wave: 6
+- nodeid: tests/test_challenger_m3_m4.py::TestRecipeExtractionEdgeCases
+  category: B
+  action: rewrite_mock
+  reason: Rewrote extraction tests with duck-typed lambda mocks to use ScriptedLLMClient and valid image bytes.
+  owner_wp: WP-RT2b
+  status: done
+  source: redteam-2
+  outcome: rewritten
+  resolved_wave: 6
+- nodeid: tests/test_challenger_2_sequence_exporters.py
+  category: B
+  action: rewrite_mock
+  reason: Rewrote sequence extraction and HITL orchestrator tests using duck-typed mocks to use ScriptedLLMClient and temporary images.
+  owner_wp: WP-RT2b
+  status: done
+  source: redteam-2
+  outcome: rewritten
+  resolved_wave: 6
+- nodeid: tests/test_empirical_challenger_m2_multicard.py::TestMultiCardExtractionOrdering
+  category: B
+  action: rewrite_mock
+  reason: Rewrote multi-card sequence extraction tests using duck-typed MultiCardExtractorClient to use ScriptedLLMClient and temporary images.
+  owner_wp: WP-RT2b
+  status: done
+  source: redteam-2
+  outcome: rewritten
+  resolved_wave: 6
+- nodeid: tests/test_challenger_2_r3_r4_stress.py::TestMultiPartSequenceAssembly
+  category: B
+  action: rewrite_mock
+  reason: Rewrote multi-part assembly tests using duck-typed MockClient to use ScriptedLLMClient and temporary images.
+  owner_wp: WP-RT2b
+  status: done
+  source: redteam-2
+  outcome: rewritten
+  resolved_wave: 6
+- nodeid: tests/test_challenger_2_r3_r4_stress.py::TestInputRepresentationAndFallback
+  category: B
+  action: rewrite_mock
+  reason: Rewrote PIL Image extraction and mystery [GUESS] tag tests to use ScriptedLLMClient and honest title_is_inferred contract.
+  owner_wp: WP-RT2b
+  status: done
+  source: redteam-2
+  outcome: rewritten
+  resolved_wave: 6
+- nodeid: tests/test_challenger_r1_r2.py
+  category: B
+  action: rewrite_mock
+  reason: Rewrote MockSequenceVerifierClient and MockPairVerifierClient duck-typed clients to inherit from LLMClient generating SetVerificationResponse.
+  owner_wp: WP-RT2b
+  status: done
+  source: redteam-2
+  outcome: rewritten
+  resolved_wave: 6
+- nodeid: tests/test_wp_gc_semantic.py
+  category: B
+  action: rewrite_mock
+  reason: Provided ocr_lines in mock visual fingerprints so full text is available for evidence quote validation.
+  owner_wp: WP-RT2b
+  status: done
+  source: redteam-2
+  outcome: rewritten
+  resolved_wave: 6

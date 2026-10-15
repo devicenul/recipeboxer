@@ -590,7 +590,7 @@ class RemoteAssetCache:
                 )
 
         now_iso = datetime.now(timezone.utc).isoformat()
-        meta_json = json.dumps(metadata or {})
+        meta_json = json.dumps(metadata or {}, default=str)
         size_bytes = len(data)
 
         # Enforce cache capacity and LRU eviction before inserting

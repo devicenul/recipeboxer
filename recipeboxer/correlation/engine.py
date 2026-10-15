@@ -37,11 +37,18 @@ from recipeboxer.models.failures import BudgetExceeded
 logger = logging.getLogger(__name__)
 
 
+class ImageNotFoundError(FileNotFoundError, KeyError):
+    """Raised when an image cannot be located or read by an ImageProvider."""
+
+    def __str__(self) -> str:
+        return str(self.args[0]) if self.args else "Image not found"
+
+
 @runtime_checkable
 class ImageProvider(Protocol):
     """Protocol for supplying raw card image bytes by card ID."""
 
-    def get(self, card_id: str) -> bytes:
+    def get(self, card_id: str) -> Optional[bytes]:
         ...
 
 
@@ -51,21 +58,47 @@ class FileImageProvider:
     def __init__(self, path_map: Optional[Dict[str, Union[Path, str]]] = None) -> None:
         self._map: Dict[str, Path] = {k: Path(v) for k, v in (path_map or {}).items()}
 
-    def get(self, card_id: str) -> bytes:
+    def get(self, card_id: str) -> Optional[bytes]:
         p = self._map.get(card_id)
         if p and p.is_file():
             try:
                 return p.read_bytes()
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.warning("Failed to read image bytes for card %s: %s", card_id, exc)
+                return None
         # Fallback to card_id as a direct path
         p_direct = Path(card_id)
         if p_direct.is_file():
             try:
                 return p_direct.read_bytes()
-            except Exception:
-                pass
-        return b""
+            except Exception as exc:
+                logger.warning("Failed to read image bytes for card %s: %s", card_id, exc)
+                return None
+        return None
+
+
+class TempDirImageProvider:
+    """Directory-backed implementation of ImageProvider for temporary or corpus directories."""
+
+    def __init__(self, base_dir: Union[Path, str]) -> None:
+        self.base_dir = Path(base_dir)
+
+    def get(self, card_id: str) -> Optional[bytes]:
+        candidates = [
+            self.base_dir / card_id,
+            self.base_dir / f"{card_id}.jpg",
+            self.base_dir / f"{card_id}.png",
+            self.base_dir / f"{card_id}.jpeg",
+        ]
+        for c in candidates:
+            if c.is_file():
+                try:
+                    return c.read_bytes()
+                except Exception as exc:
+                    logger.warning("Failed to read image %s: %s", c, exc)
+                    return None
+        return None
+
 
 
 class FeatureToggles(BaseModel):
@@ -213,8 +246,6 @@ class GroupingEngine:
         # Handle single card collection
         if len(fps) == 1:
             fp = fps[0]
-            prior = completeness_prior(fp)
-            is_comp = prior.get("is_complete", 0.90) or 0.90
             is_sem_verified = bool(llm_client is not None and eff_toggles.set_verify)
             is_deg = bool(getattr(fp, "degraded", False))
             action = "STANDALONE" if is_sem_verified else "UNCERTAIN"
@@ -222,6 +253,8 @@ class GroupingEngine:
 
             needs_rev = [fp.card_id] if (is_deg or not is_sem_verified) else []
 
+            # INVARIANT (INV-AC4 / FIND-04): Standalone proposals carry no link transitions.
+            # Confidence must be None (never a hardcoded prior like 0.90).
             prop = CorrelationProposal(
                 proposal_id=f"prop_{uuid.uuid4().hex[:8]}",
                 ordered_card_ids=[fp.card_id],
@@ -229,9 +262,9 @@ class GroupingEngine:
                 transition_scores=[],
                 heuristic_score=0.0,
                 semantic_score=1.0 if is_sem_verified else None,
-                confidence=round(is_comp, 4),
+                confidence=None,
                 is_standalone=True,
-                continuity_explanation="Single-card collection classified as standalone recipe.",
+                continuity_explanation="Single-card collection classified as standalone recipe." if is_sem_verified else "Unverified card proposal awaiting review.",
                 recommended_action=action,
                 semantic_verified=is_sem_verified,
                 degraded_reason=deg_reason,
@@ -244,6 +277,7 @@ class GroupingEngine:
                 needs_review=needs_rev,
                 stats={"card_count": 1, "chains_count": 1},
             )
+
 
         # 1. DeckBackground fitting
         pair_fn = (lambda a, b: compute_raw_features(a, b, images=images)) if images else None
@@ -361,8 +395,6 @@ class GroupingEngine:
             if len(chain) == 1:
                 cid = chain[0]
                 fp = fp_by_id.get(cid)
-                prior = node_costs.get(cid, {})
-                is_comp = prior.get("is_complete", 0.90)
                 is_deg = bool(getattr(fp, "degraded", False))
 
                 if not can_verify:
@@ -377,6 +409,8 @@ class GroupingEngine:
                     if is_deg:
                         needs_review_cards.add(cid)
 
+                # INVARIANT (INV-AC4 / FIND-04): Standalones carry no evidence-based link probability;
+                # confidence must be None (never a prior like 0.90).
                 prop = CorrelationProposal(
                     proposal_id=f"prop_{uuid.uuid4().hex[:8]}",
                     ordered_card_ids=[cid],
@@ -384,7 +418,7 @@ class GroupingEngine:
                     transition_scores=[],
                     heuristic_score=0.0,
                     semantic_score=1.0 if can_verify else None,
-                    confidence=round(is_comp, 4),
+                    confidence=None,
                     is_standalone=True,
                     continuity_explanation="Single-sided card classified as standalone recipe." if can_verify else "Unverified card proposal awaiting review.",
                     recommended_action=action,
@@ -431,8 +465,9 @@ class GroupingEngine:
                     else:
                         all_transitions_verified = False
 
-                chain_conf = min(s_scores) if s_scores else (min(t_scores) if t_scores else 0.50)
-                has_low_confidence = bool(chain_conf < review_threshold)
+                # Reported chain confidence = minimum calibrated transition probability along the chain
+                chain_conf = min(s_scores) if s_scores else (min(t_scores) if t_scores else None)
+                has_low_confidence = bool(chain_conf is not None and chain_conf < review_threshold)
                 avg_h = sum(t_scores) / len(t_scores) if t_scores else 0.50
                 avg_s = sum(s_scores) / len(s_scores) if s_scores else (1.0 if all_transitions_verified else 0.0)
 
@@ -458,8 +493,9 @@ class GroupingEngine:
                         needs_review_cards.add(cid)
                         action = "NEEDS_REVIEW"
 
+                conf_str = f"Calibrated p={chain_conf:.3f}." if chain_conf is not None else "Uncalibrated."
                 expl_parts = [
-                    f"Linked {len(chain)}-card sequence ({' -> '.join(chain)}). Calibrated p={chain_conf:.3f}."
+                    f"Linked {len(chain)}-card sequence ({' -> '.join(chain)}). {conf_str}"
                 ]
                 if collected_quotes:
                     expl_parts.append("Quotes: " + "; ".join(f'"{q}"' for q in collected_quotes[:3]))
@@ -474,7 +510,7 @@ class GroupingEngine:
                     transition_scores=t_scores,
                     heuristic_score=round(avg_h, 4),
                     semantic_score=round(avg_s, 4) if can_verify else None,
-                    confidence=round(chain_conf, 4),
+                    confidence=round(chain_conf, 4) if chain_conf is not None else None,
                     is_standalone=False,
                     continuity_explanation=explanation,
                     recommended_action=action,
@@ -482,6 +518,7 @@ class GroupingEngine:
                     degraded_reason=deg_reason,
                 )
                 proposals.append(prop)
+
 
         # Deterministic needs_review sorting
         sorted_needs_review = sorted(list(needs_review_cards))

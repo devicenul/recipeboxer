@@ -44,20 +44,7 @@ class LocalMockVisualClient:
         )
 
 
-class LocalMockSemanticClient:
-    def verify_pair(
-        self, front_fp: VisualFingerprint, back_fp: VisualFingerprint, heuristic_score: float
-    ) -> CorrelationProposal:
-        return CorrelationProposal(
-            proposal_id="prop_mock_pair",
-            ordered_card_ids=[front_fp.card_id, back_fp.card_id],
-            part_count=2,
-            heuristic_score=heuristic_score,
-            semantic_score=0.96,
-            confidence=round(0.30 * heuristic_score + 0.70 * 0.96, 4),
-            recommended_action="PAIR",
-            semantic_verified=True,
-        )
+
 
 
 class TestGeminiVisualExtractor:
@@ -65,18 +52,25 @@ class TestGeminiVisualExtractor:
 
     @pytest.mark.asyncio
     async def test_extractor_with_mock_client(self, tmp_path: Path):
+        from recipeboxer.ai.replay import ScriptedLLMClient
+        from recipeboxer.vision.fingerprint import FingerprintV2Response
         img_path = tmp_path / "test_front.jpg"
         img = Image.new("RGB", (600, 400), color=(246, 236, 205))
         img.save(img_path)
 
-        mock_client = LocalMockVisualClient(role=CardRole.SEQUENCE_START)
-        extractor = GeminiVisualExtractor(client=mock_client)
+        mock_resp = FingerprintV2Response(
+            role=CardRole.SEQUENCE_START,
+            paper_tone_name="Aged",
+            paper_hex="#F6ECD1",
+        )
+        llm_client = ScriptedLLMClient([mock_resp])
+        extractor = GeminiVisualExtractor(llm_client=llm_client)
 
         fp = await extractor.extract(img_path)
         assert isinstance(fp, VisualFingerprint)
         assert fp.card_id == "test_front.jpg"
         assert fp.role == CardRole.SEQUENCE_START
-        assert mock_client.call_count == 1
+        assert llm_client.call_count == 1
 
     @pytest.mark.asyncio
     async def test_extractor_offline_pixel_analysis(self, tmp_path: Path):
@@ -143,20 +137,27 @@ class TestGeminiSemanticVerifier:
 
     @pytest.mark.asyncio
     async def test_semantic_verifier_with_mock_client(self):
-        mock_client = LocalMockSemanticClient()
-        verifier = GeminiSemanticVerifier(client=mock_client)
+        from recipeboxer.ai.replay import ScriptedLLMClient
+        from recipeboxer.correlation.semantic import SetVerificationResponse
+
+        client = ScriptedLLMClient([
+            SetVerificationResponse(continuations=["Candidate 1"], evidence_quotes=["Cinnamon Rolls"], confidence=0.96)
+        ])
+        verifier = GeminiSemanticVerifier(llm_client=client)
 
         fp_f = VisualFingerprint(
             card_id="01_cinnamon_rolls_front.jpg",
             image_path="/dummy/01.jpg",
             sha256_hash="111",
             role=CardRole.SEQUENCE_START,
+            boundary_text=BoundaryText(first_line="Cinnamon Rolls", last_line="turn over ->"),
         )
         fp_b = VisualFingerprint(
             card_id="02_cinnamon_rolls_back.jpg",
             image_path="/dummy/02.jpg",
             sha256_hash="222",
             role=CardRole.SEQUENCE_CONTINUATION,
+            boundary_text=BoundaryText(first_line="Cinnamon Rolls Cont.", last_line="Bake 20 min."),
         )
 
         proposal = await verifier.verify_pair(fp_f, fp_b, heuristic_score=0.90)
@@ -238,20 +239,13 @@ class TestGeminiSemanticVerifier:
 
     @pytest.mark.asyncio
     async def test_semantic_verifier_mismatched_pair_rejected(self):
-        class RejectMockClient:
-            def verify_pair(self, front_fp, back_fp, heuristic_score):
-                return CorrelationProposal(
-                    proposal_id="prop_reject",
-                    ordered_card_ids=[front_fp.card_id, back_fp.card_id],
-                    part_count=2,
-                    heuristic_score=heuristic_score,
-                    semantic_score=0.10,
-                    confidence=0.15,
-                    recommended_action="REJECT",
-                    semantic_verified=True,
-                )
+        from recipeboxer.ai.replay import ScriptedLLMClient
+        from recipeboxer.correlation.semantic import SetVerificationResponse
 
-        verifier = GeminiSemanticVerifier(client=RejectMockClient())
+        client = ScriptedLLMClient([
+            SetVerificationResponse(continuations=[], evidence_quotes=[], confidence=0.10)
+        ])
+        verifier = GeminiSemanticVerifier(llm_client=client)
 
         fp_f = VisualFingerprint(
             card_id="chocolate_cake_front.jpg",
@@ -348,8 +342,14 @@ class TestPairingOptimizer:
     @pytest.mark.asyncio
     async def test_end_to_end_synthetic_deck_correlation(self):
         """Runs full two-stage correlation and optimization across synthetic test fingerprints."""
-        class DeckVerifierClient:
-            def verify_pair(self, front_fp, back_fp, heuristic_score):
+        class DeckVerifierAdapter:
+            async def verify_candidate_proposals(self, candidate_pairs):
+                res = []
+                for front, back, h in candidate_pairs:
+                    res.append(await self.verify_pair(front, back, h))
+                return res
+
+            async def verify_pair(self, front_fp, back_fp, heuristic_score=0.5):
                 # Verify if front and back belong to the same recipe pair
                 f_name = front_fp.card_id.split("_")[1]
                 b_name = back_fp.card_id.split("_")[1]
@@ -375,8 +375,7 @@ class TestPairingOptimizer:
                     semantic_verified=True,
                 )
 
-        verifier = GeminiSemanticVerifier(client=DeckVerifierClient())
-        optimizer = PairingOptimizer(verifier=verifier)
+        optimizer = PairingOptimizer(verifier=DeckVerifierAdapter())
 
         aged_paper = PaperColorInfo(tone_name="Aged", hex_approx="#F6ECD1", lab_l=93.5, lab_a=-1.2, lab_b=15.4)
         white_paper = PaperColorInfo(tone_name="White", hex_approx="#FFFFFF", lab_l=100.0, lab_a=0.0, lab_b=0.0)

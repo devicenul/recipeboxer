@@ -47,6 +47,7 @@ def _create_mock_fingerprint(
     last_lines: Optional[List[str]] = None,
     printed_markers: Optional[List[str]] = None,
     boundary_text: Optional[BoundaryText] = None,
+    ocr_lines: Optional[List[str]] = None,
 ) -> VisualFingerprint:
     """Helper to construct a valid VisualFingerprint with custom textual metadata."""
     return VisualFingerprint(
@@ -59,6 +60,7 @@ def _create_mock_fingerprint(
         last_lines=last_lines or [],
         printed_markers=printed_markers or [],
         boundary_text=boundary_text or BoundaryText(),
+        ocr_lines=ocr_lines or [],
     )
 
 
@@ -304,11 +306,13 @@ async def test_quote_validation_hallucinated_quotes_lower_confidence():
         sha256="aa" * 32,
         title="Sugar Cookies",
         first_lines=["1 cup butter"],
+        ocr_lines=["Sugar Cookies", "1 cup butter"],
     )
     cand = _create_mock_fingerprint(
         "cand_card",
         sha256="bb" * 32,
         first_lines=["Bake at 350F"],
+        ocr_lines=["Bake at 350F"],
     )
 
     client = ScriptedLLMClient([
@@ -336,11 +340,13 @@ async def test_quote_validation_mixed_quotes_flags_unverified_and_lowers_confide
         sha256="aa" * 32,
         title="Chocolate Brownies",
         first_lines=["1/2 cup butter, melted"],
+        ocr_lines=["Chocolate Brownies", "1/2 cup butter, melted"],
     )
     cand = _create_mock_fingerprint(
         "cand_card",
         sha256="bb" * 32,
         first_lines=["Bake at 325F for 30 minutes"],
+        ocr_lines=["Bake at 325F for 30 minutes"],
     )
 
     client = ScriptedLLMClient([

@@ -498,6 +498,26 @@ describe('WP-F2: Settings UI, Usage Limits, Cost Estimator & Spend Meter', () =>
       fireEvent.click(adjustBtn);
       expect(onAdjust).toHaveBeenCalled();
     });
+
+    it('renders "unknown" when spendUsd is null or undefined without throwing', () => {
+      const { unmount } = render(
+        <SpendMeter
+          spendUsd={null}
+          spendCapUsd={2.5}
+        />
+      );
+      expect(screen.getByText('unknown')).toBeInTheDocument();
+      expect(screen.queryByText('$0.0000')).not.toBeInTheDocument();
+      unmount();
+
+      render(
+        <SpendMeter
+          spendUsd={undefined}
+        />
+      );
+      expect(screen.getByText('unknown')).toBeInTheDocument();
+      expect(screen.queryByText('$0.0000')).not.toBeInTheDocument();
+    });
   });
 
   // ---------------------------------------------------------------------------

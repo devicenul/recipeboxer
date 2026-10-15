@@ -375,7 +375,13 @@ async def self_consistency(
         raise
     except Exception as exc:
         logger.warning("Self-consistency second read failed: %s", exc)
-        return recipe, []
+        return recipe, [
+            RecipeWarning(
+                code="VERIFICATION_SKIPPED",
+                message=f"Self-consistency second read failed: {exc}",
+                field_path="consistency",
+            )
+        ]
 
     second_recipe: Optional[Recipe] = None
     if response.parsed and isinstance(response.parsed, Recipe):
@@ -393,7 +399,14 @@ async def self_consistency(
 
     if second_recipe is None:
         logger.warning("Could not parse valid second recipe for self-consistency")
-        return recipe, []
+        return recipe, [
+            RecipeWarning(
+                code="VERIFICATION_SKIPPED",
+                message="Could not parse valid second recipe for self-consistency",
+                field_path="consistency",
+            )
+        ]
+
 
     # Compute field-level diff
     disagreements = diff_recipes(recipe, second_recipe)

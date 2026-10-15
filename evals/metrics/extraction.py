@@ -171,6 +171,41 @@ def score_recipe(
     is_omitted = pred is None or not isinstance(pred, dict)
     pred_dict: Dict[str, Any] = pred if not is_omitted else {}
 
+    # If structured ground truth is missing (e.g. pending T3 GT), compute verbatim-only CER if available
+    if gold_structured is None:
+        verb_cer = None
+        if gold_verbatim:
+            gold_text = "\n".join([str(v).strip() for v in gold_verbatim if str(v).strip()])
+            pred_lines = []
+            if pred_dict:
+                if pred_dict.get("title"):
+                    pred_lines.append(str(pred_dict.get("title")).strip())
+                for ing in pred_dict.get("ingredients", []):
+                    if isinstance(ing, dict):
+                        pred_lines.append(str(ing.get("raw") or ing.get("item") or "").strip())
+                    else:
+                        pred_lines.append(str(ing).strip())
+                for d in pred_dict.get("directions", []):
+                    pred_lines.append(str(d).strip())
+            pred_text = "\n".join([p for p in pred_lines if p])
+            if gold_text:
+                verb_cer = round(cer(gold_text, pred_text, normalize=True, case_sensitive=False), 4)
+
+        return {
+            "title_cer": None,
+            "ingredient_p": None,
+            "ingredient_r": None,
+            "ingredient_f1": None,
+            "qty_unit_exact": None,
+            "direction_f1": None,
+            "direction_tau": None,
+            "field_cer": {},
+            "hallucination_rate": None,
+            "omission_rate": None,
+            "illegible_precision": None,
+            "verbatim_cer": verb_cer,
+        }
+
     # 1. Title CER
     gold_title = str(gold_structured.get("title", "") or "")
     pred_title = str(pred_dict.get("title", "") or "") if not is_omitted else ""
@@ -342,6 +377,14 @@ def score_recipe(
         all_pred_lines, all_gold_lines, gold_verbatim=gold_verbatim
     )
 
+    verb_cer = None
+    if gold_verbatim:
+        gold_text = "\n".join([str(v).strip() for v in gold_verbatim if str(v).strip()])
+        pred_lines = [pred_title] + [p[0] for p in pred_ings] + pred_dir_raw
+        pred_text = "\n".join([p for p in pred_lines if p.strip()])
+        if gold_text:
+            verb_cer = round(cer(gold_text, pred_text, normalize=True, case_sensitive=False), 4)
+
     return {
         "title_cer": round(title_cer_score, 4),
         "ingredient_p": round(ing_p, 4),
@@ -354,6 +397,7 @@ def score_recipe(
         "hallucination_rate": round(hallucination_rate, 4),
         "omission_rate": round(omission_rate, 4),
         "illegible_precision": illegible_prec,
+        "verbatim_cer": verb_cer,
     }
 
 

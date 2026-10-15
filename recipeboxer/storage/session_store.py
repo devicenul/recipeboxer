@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import json
 import logging
 import os
@@ -170,7 +171,7 @@ class SessionStore:
         elif hasattr(config, "model_dump_json"):
             config_json = config.model_dump_json()
         elif isinstance(config, dict):
-            config_json = json.dumps(config)
+            config_json = json.dumps(config, default=str)
         else:
             config_json = str(config)
 
@@ -186,7 +187,7 @@ class SessionStore:
         elif hasattr(progress, "model_dump_json"):
             metrics_json = progress.model_dump_json()
         elif isinstance(progress, dict):
-            metrics_json = json.dumps(progress)
+            metrics_json = json.dumps(progress, default=str)
         else:
             metrics_json = str(progress)
 
@@ -196,7 +197,7 @@ class SessionStore:
         elif hasattr(token_usage, "model_dump_json"):
             token_json = token_usage.model_dump_json()
         elif isinstance(token_usage, dict):
-            token_json = json.dumps(token_usage)
+            token_json = json.dumps(token_usage, default=str)
         else:
             token_json = str(token_usage)
 
@@ -473,7 +474,7 @@ class SessionStore:
         json_data: Optional[Dict[str, Any]] = None,
     ) -> None:
         """Saves a scanned card entry for a session."""
-        j_str = json.dumps(json_data) if json_data else "{}"
+        j_str = json.dumps(json_data, default=str) if json_data else "{}"
         with self._lock:
             cur = self._conn.cursor()
             try:
@@ -514,10 +515,15 @@ class SessionStore:
                     if hasattr(c, "model_dump_json"):
                         j_str = c.model_dump_json()
                     elif isinstance(c, dict):
-                        j_str = json.dumps(c)
+                        j_str = json.dumps(c, default=str)
+                    elif dataclasses.is_dataclass(c):
+                        try:
+                            j_str = json.dumps(dataclasses.asdict(c), default=str)
+                        except Exception:
+                            j_str = "{}"
                     elif hasattr(c, "__dict__"):
                         try:
-                            j_str = json.dumps({k: str(v) for k, v in c.__dict__.items()})
+                            j_str = json.dumps({k: str(v) for k, v in c.__dict__.items()}, default=str)
                         except Exception:
                             j_str = "{}"
 
@@ -598,12 +604,16 @@ class SessionStore:
                                 raw_cards.append(p["back_card_id"])
                     if raw_cards is None:
                         raw_cards = []
-                    cards_str = json.dumps(list(raw_cards)) if isinstance(raw_cards, (list, tuple)) else str(raw_cards)
+                    cards_str = json.dumps(list(raw_cards), default=str) if isinstance(raw_cards, (list, tuple)) else str(raw_cards)
 
                     if hasattr(p, "model_dump_json"):
                         j_str = p.model_dump_json()
                     elif isinstance(p, dict):
-                        j_str = json.dumps(p)
+                        j_str = json.dumps(p, default=str)
+                    elif dataclasses.is_dataclass(p):
+                        j_str = json.dumps(dataclasses.asdict(p), default=str)
+                    elif hasattr(p, "__dict__"):
+                        j_str = json.dumps({k: str(v) for k, v in p.__dict__.items()}, default=str)
                     else:
                         j_str = "{}"
 

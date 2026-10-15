@@ -38,11 +38,11 @@ class CorrelationProposal(BaseModel):
         le=1.0,
         description="Stage 2 Gemini semantic continuity score (0.0 to 1.0)",
     )
-    confidence: float = Field(
-        default=0.0,
+    confidence: Optional[float] = Field(
+        default=None,
         ge=0.0,
         le=1.0,
-        description="Overall sequence confidence score",
+        description="Overall sequence confidence score (None for standalones/unverified when no evidence-based probability exists)",
     )
     is_standalone: bool = Field(
         default=False,
@@ -144,6 +144,9 @@ class SetVerification(BaseModel):
     evidence_quotes: List[str] = Field(default_factory=list) # verbatim visible text cited by the model
     confidence: Optional[float] = None
     flags: List[str] = Field(default_factory=list)
+    verified_quotes: List[str] = Field(default_factory=list)
+    unverified_quotes: List[str] = Field(default_factory=list)
+    unchecked_quotes: List[str] = Field(default_factory=list)
     model: str
     prompt_id: str
     prompt_version: str

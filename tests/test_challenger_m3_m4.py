@@ -18,11 +18,22 @@ from fastapi.testclient import TestClient
 
 from recipeboxer.agent.orchestrator import RecipeBoxerAgent
 from recipeboxer.agent.session import PipelineSession, SessionManager
+from recipeboxer.ai import ScriptedLLMClient
 from recipeboxer.api.app import create_app
 from recipeboxer.exporter.plan_to_eat import (
     PLAN_TO_EAT_COLUMNS,
     PlanToEatExporter,
     export_recipes_to_plan_to_eat_csv,
+)
+
+TINY_JPEG = (
+    b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00"
+    b"\xff\xdb\x00C\x00\x08\x06\x06\x07\x06\x05\x08\x07\x07\x07\t\t\x08\n\x0c"
+    b"\x14\r\x0c\x0b\x0b\x0c\x19\x12\x13\x0f\x14\x1d\x1a\x1f\x1e\x1d\x1a\x1c"
+    b"\x1c $.' \",#\x1c\x1c(7),01444\x1f'9=82<.342\xff\xc0\x00\x0b\x08\x00\x01"
+    b"\x00\x01\x01\x01\x11\x00\xff\xc4\x00\x1f\x00\x00\x01\x05\x01\x01\x01"
+    b"\x01\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x01\x02\x03\x04\x05\x06"
+    b"\x07\x08\t\n\x0b\xff\xda\x00\x08\x01\x01\x00\x00?\x00\xbf\x00\xff\xd9"
 )
 from recipeboxer.extraction.extractor import GeminiRecipeExtractor
 from recipeboxer.models.domain import (
@@ -129,15 +140,18 @@ class TestRecipeExtractionEdgeCases:
     @pytest.mark.asyncio
     async def test_extractor_offline_boundary_text_fallback_handling(self, tmp_path):
         """Tests boundary text title sanitization with injected mock client."""
-        mock_client = lambda *args, **kwargs: RecipeSchema(
+        recipe_data = RecipeSchema(
             title="Grandma's Famous Molasses Ginger Cookies (1942)",
             ingredients=["1/2 cup molasses", "2 cups flour"],
             directions=["Mix and bake."],
         )
-        extractor = GeminiRecipeExtractor(client=mock_client)
+        client = ScriptedLLMClient([recipe_data])
+        extractor = GeminiRecipeExtractor(llm_client=client)
+        img_p = tmp_path / "noisy_boundary_card.jpg"
+        img_p.write_bytes(TINY_JPEG)
         fp = VisualFingerprint(
             card_id="noisy_boundary_card.jpg",
-            image_path=str(tmp_path / "noisy_boundary_card.jpg"),
+            image_path=str(img_p),
             sha256_hash="abcdef0123456789",
             role=CardRole.STANDALONE,
             boundary_text=BoundaryText(
@@ -156,7 +170,7 @@ class TestRecipeExtractionEdgeCases:
         cards = []
         for i in range(6):
             p = tmp_path / f"card_{i:02d}.jpg"
-            p.write_bytes(b"dummy_image_data")
+            p.write_bytes(TINY_JPEG)
             cards.append(p)
 
         # Construct 20 extraction tasks
@@ -167,12 +181,13 @@ class TestRecipeExtractionEdgeCases:
             (cards[5], None),
         ] * 5
 
-        mock_client = lambda *args, **kwargs: RecipeSchema(
+        batch_recipe = RecipeSchema(
             title="Batch Recipe",
             ingredients=["1 cup sugar", "2 cups flour"],
             directions=["Mix and bake at 350F."],
         )
-        extractor = GeminiRecipeExtractor(client=mock_client)
+        client = ScriptedLLMClient([batch_recipe] * 20)
+        extractor = GeminiRecipeExtractor(llm_client=client)
 
         recipes = await extractor.extract_batch(pairs, concurrency=8)
         assert len(recipes) == 20
@@ -601,17 +616,22 @@ class TestMilestone3Milestone4Integration:
         settings.export_dir = export_dir
         settings.ensure_directories = MagicMock()
 
+        fudge_img = tmp_path / "card_fudge.jpg"
+        pecan_img = tmp_path / "card_pecan.jpg"
+        fudge_img.write_bytes(TINY_JPEG)
+        pecan_img.write_bytes(TINY_JPEG)
+
         session = PipelineSession(session_id="sess_test_m3_m4")
         session.fingerprints = {
             "card_fudge.jpg": VisualFingerprint(
                 card_id="card_fudge.jpg",
-                image_path=str(tmp_path / "card_fudge.jpg"),
+                image_path=str(fudge_img),
                 sha256_hash="hash1",
                 role=CardRole.STANDALONE,
             ),
             "card_pecan.jpg": VisualFingerprint(
                 card_id="card_pecan.jpg",
-                image_path=str(tmp_path / "card_pecan.jpg"),
+                image_path=str(pecan_img),
                 sha256_hash="hash2",
                 role=CardRole.STANDALONE,
             ),
@@ -643,8 +663,8 @@ class TestMilestone3Milestone4Integration:
             ingredients=["1 cup pecans", "1 cup corn syrup"],
             directions=["Bake in pie shell."],
         )
-        mock_client = CallOrderMockClient([recipe_fudge, recipe_pecan])
-        extractor = GeminiRecipeExtractor(client=mock_client)
+        client = ScriptedLLMClient([recipe_fudge, recipe_pecan])
+        extractor = GeminiRecipeExtractor(llm_client=client)
         exporter = PlanToEatExporter()
 
         # Extract recipes

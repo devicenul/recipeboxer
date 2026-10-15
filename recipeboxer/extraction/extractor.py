@@ -47,7 +47,7 @@ You are transcribing physical recipe cards (which may include front side, revers
 
 TITLE INFERENCE & GUESSING:
 - If the card has a clearly stated title, extract it cleanly without modification.
-- If the recipe has NO explicitly stated title, or if the title is missing, torn, illegible, or inferred/guessed from ingredients or context: infer the most descriptive title (e.g. 'Rustic Peach Cobbler') and ALWAYS append the suffix ' [GUESS]' (e.g. 'Rustic Peach Cobbler [GUESS]') to clearly flag it for user verification.
+- If the recipe has NO explicitly stated title, or if the title is missing, torn, illegible, or inferred/guessed from ingredients or context: infer the most descriptive title (e.g. '<title as printed or inferred>') and set title_is_inferred to true. Do NOT append '[GUESS]' to the title text.
 
 ANECDOTE, STORY & METADATA PRESERVATION:
 - Extract family stories, handwritten marginalia (e.g., 'Cousin Maeve\\'s birthday gathering 1931', 'Great for parish picnics'), vintage dates, occasion notes, and personal memories into the 'description' field.
@@ -55,7 +55,8 @@ ANECDOTE, STORY & METADATA PRESERVATION:
 - STRICT ISOLATION: NEVER place family stories, personal anecdotes, handwritten marginalia, or attribution notes into the 'ingredients' list or 'directions' steps — keep ingredients and directions strictly confined to culinary measurements, ingredients, and sequential preparation/cooking steps.
 
 Carefully extract and format the following fields:
-1. Title: The clean, primary recipe title. Strip decorative quotation marks, card numbering, or trailing punctuation. Append ' [GUESS]' if inferred or untitled.
+1. Title: The clean, primary recipe title. Strip decorative quotation marks, card numbering, or trailing punctuation. Do NOT append '[GUESS]'.
+
 2. Description: Headnotes, background story, family anecdotes, marginalia, or general preparation notes (e.g. pan sizing, preheating).
 3. Yield/Servings: Quantity or batch size (e.g. '24 cookies', '6 servings', '1 9-inch pie').
 4. Prep Time: Active prep duration string (e.g. '15 mins', '30 minutes').
@@ -155,7 +156,12 @@ class GeminiRecipeExtractor:
         self.api_key = self.settings.gemini_api_key if api_key is _UNSET else api_key
         self.model_name = model_name or self.settings.get_extraction_model()
         self.client = client
-        self.llm_client = llm_client
+        if llm_client is not None:
+            self.llm_client = llm_client
+        elif client is not None and isinstance(client, LLMClient):
+            self.llm_client = client
+        else:
+            self.llm_client = None
         self.thinking_mode = (
             thinking_mode if thinking_mode is not None else self.settings.thinking_mode
         )
@@ -235,8 +241,8 @@ class GeminiRecipeExtractor:
             resolved_cards[1] if len(resolved_cards) > 1 else (None, None, None)
         )
 
-        # 0. Early check: if neither client nor llm_client is provided, an active API key is mandatory
-        if self.llm_client is None and self.client is None:
+        effective_client = self.llm_client
+        if effective_client is None:
             from recipeboxer.config import is_usable_gemini_key
             if not is_usable_gemini_key(self.api_key):
                 raise ExtractionUnavailable(
@@ -245,175 +251,23 @@ class GeminiRecipeExtractor:
                     card_ids=ordered_card_ids,
                     retryable=False,
                 )
-
-        # 1. Real LLMClient if injected (FIND-03)
-        if self.llm_client is not None:
-            return await self._delegate_to_pipeline(
-                cards_list=cards_list,
-                resolved_cards=resolved_cards,
-                ordered_card_ids=ordered_card_ids,
-                effective_client=self.llm_client,
-            )
-
-        # 2. Custom or injected client (e.g. MockGeminiClient in test suite)
-        if self.client is not None:
-            res = None
-            try:
-                # Check for extract_cards if multi-card
-                if len(cards_list) > 2 and hasattr(self.client, "extract_cards"):
-                    try:
-                        potential_res = self.client.extract_cards(cards_list)
-                        if inspect.isawaitable(potential_res):
-                            potential_res = await potential_res
-                        if potential_res is not None and not type(potential_res).__name__.endswith("Mock"):
-                            res = potential_res
-                    except (TypeError, AttributeError):
-                        pass
-
-                if res is None:
-                    for method_name in ("extract_recipe", "extract", "transcribe_recipe"):
-                        if hasattr(self.client, method_name):
-                            method = getattr(self.client, method_name)
-                            # Try calling with original inputs first
-                            try:
-                                if len(cards_list) > 2:
-                                    try:
-                                        potential_res = method(cards_list)
-                                    except TypeError:
-                                        potential_res = method(primary_front, primary_back)
-                                else:
-                                    potential_res = method(primary_front, primary_back)
-
-                                if inspect.isawaitable(potential_res):
-                                    potential_res = await potential_res
-                                if potential_res is not None and not type(potential_res).__name__.endswith("Mock"):
-                                    res = potential_res
-                                    break
-                                elif potential_res is not None and res is None:
-                                    res = potential_res
-                            except (TypeError, AttributeError):
-                                pass
-
-                            # If not resolved and front_input isn't VisualFingerprint, adapt to mock fingerprint
-                            if res is None and not isinstance(primary_front, VisualFingerprint):
-                                try:
-                                    adapted_front = VisualFingerprint(
-                                        card_id=front_id or "card_front",
-                                        image_path=front_path or "/memory/card_front.jpg",
-                                        sha256_hash=hashlib.sha256(front_bytes or b"").hexdigest(),
-                                        role=CardRole.SEQUENCE_START if len(cards_list) > 1 else CardRole.STANDALONE,
-                                    )
-                                    adapted_back = (
-                                        VisualFingerprint(
-                                            card_id=back_id or "card_back",
-                                            image_path=back_path or "/memory/card_back.jpg",
-                                            sha256_hash=hashlib.sha256(back_bytes or b"").hexdigest(),
-                                            role=CardRole.SEQUENCE_CONTINUATION,
-                                        )
-                                        if len(cards_list) > 1
-                                        else None
-                                    )
-                                    potential_res = method(adapted_front, adapted_back)
-                                    if inspect.isawaitable(potential_res):
-                                        potential_res = await potential_res
-                                    if potential_res is not None and not type(potential_res).__name__.endswith("Mock"):
-                                        res = potential_res
-                                        break
-                                    elif potential_res is not None and res is None:
-                                        res = potential_res
-                                except (TypeError, AttributeError):
-                                    pass
-
-                if (res is None or type(res).__name__.endswith("Mock")) and callable(self.client):
-                    try:
-                        potential_res = (
-                            self.client(cards_list)
-                            if len(cards_list) > 2
-                            else self.client(primary_front, primary_back)
-                        )
-                        if inspect.isawaitable(potential_res):
-                            potential_res = await potential_res
-                        if potential_res is not None and not type(potential_res).__name__.endswith("Mock"):
-                            res = potential_res
-                    except TypeError:
-                        try:
-                            potential_res = self.client(primary_front, primary_back)
-                            if inspect.isawaitable(potential_res):
-                                potential_res = await potential_res
-                            if potential_res is not None and not type(potential_res).__name__.endswith("Mock"):
-                                res = potential_res
-                        except TypeError:
-                            try:
-                                potential_res = self.client(primary_front)
-                                if inspect.isawaitable(potential_res):
-                                    potential_res = await potential_res
-                                if potential_res is not None and not type(potential_res).__name__.endswith("Mock"):
-                                    res = potential_res
-                            except TypeError:
-                                pass
-            except ExtractionUnavailable:
-                raise
-            except Exception as exc:
+            from recipeboxer.ai.client import create_llm_client
+            effective_client = create_llm_client(self.settings, api_key=self.api_key)
+            if effective_client is None:
                 raise ExtractionUnavailable(
-                    f"Injected client call failed: {exc}",
-                    reason=FailureReason.INVALID_RESPONSE,
+                    "No Gemini API key configured for recipe extraction",
+                    reason=FailureReason.NO_API_KEY,
                     card_ids=ordered_card_ids,
-                ) from exc
-
-            if res is not None and not type(res).__name__.endswith("Mock"):
-                final_recipe: Optional[RecipeSchema] = None
-                if isinstance(res, RecipeSchema):
-                    final_recipe = res
-                elif hasattr(res, "model_dump"):
-                    try:
-                        final_recipe = RecipeSchema.model_validate(res.model_dump())
-                    except Exception as exc:
-                        raise ExtractionUnavailable(
-                            f"Injected client model validation failed: {exc}",
-                            reason=FailureReason.SCHEMA_VALIDATION,
-                            card_ids=ordered_card_ids,
-                        ) from exc
-                elif isinstance(res, dict):
-                    try:
-                        final_recipe = RecipeSchema.model_validate(res)
-                    except Exception as exc:
-                        raise ExtractionUnavailable(
-                            f"Injected client dict validation failed: {exc}",
-                            reason=FailureReason.SCHEMA_VALIDATION,
-                            card_ids=ordered_card_ids,
-                        ) from exc
-
-                if final_recipe is not None:
-                    if ordered_card_ids and not final_recipe.card_ids:
-                        final_recipe.card_ids = ordered_card_ids
-                    if final_recipe.card_ids and not final_recipe.image_urls:
-                        final_recipe.image_urls = [f"/api/cards/{cid}/image" for cid in final_recipe.card_ids]
-                    return final_recipe
-
-            # Injected client yielded nothing usable
-            raise ExtractionUnavailable(
-                "Injected client yielded no usable recipe",
-                reason=FailureReason.INVALID_RESPONSE,
-                card_ids=ordered_card_ids,
-            )
-
-        # 3. Live path: construct production LLMClient and delegate to pipeline
-        from recipeboxer.ai.client import create_llm_client
-        live_client = create_llm_client(self.settings, api_key=self.api_key)
-        if live_client is None:
-            raise ExtractionUnavailable(
-                "No Gemini API key configured for recipe extraction",
-                reason=FailureReason.NO_API_KEY,
-                card_ids=ordered_card_ids,
-                retryable=False,
-            )
+                    retryable=False,
+                )
 
         return await self._delegate_to_pipeline(
             cards_list=cards_list,
             resolved_cards=resolved_cards,
             ordered_card_ids=ordered_card_ids,
-            effective_client=live_client,
+            effective_client=effective_client,
         )
+
 
     # Alias for method name compatibility
     extract_recipe = extract

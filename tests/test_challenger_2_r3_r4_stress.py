@@ -22,6 +22,7 @@ from PIL import Image
 
 from recipeboxer.agent.orchestrator import RecipeBoxerAgent
 from recipeboxer.agent.session import PipelineSession, SessionManager
+from recipeboxer.ai import ScriptedLLMClient
 from recipeboxer.api.app import create_app
 from recipeboxer.api.routes import get_manager
 from recipeboxer.config import Settings
@@ -37,6 +38,16 @@ from recipeboxer.models.hitl import CardSequenceApproval, HITLDecision
 from recipeboxer.models.pipeline import PipelineStartRequest, PipelineState, PipelineStatus
 from recipeboxer.models.recipe import RecipeSchema
 
+TINY_JPEG = (
+    b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00"
+    b"\xff\xdb\x00C\x00\x08\x06\x06\x07\x06\x05\x08\x07\x07\x07\t\t\x08\n\x0c"
+    b"\x14\r\x0c\x0b\x0b\x0c\x19\x12\x13\x0f\x14\x1d\x1a\x1f\x1e\x1d\x1a\x1c"
+    b"\x1c $.' \",#\x1c\x1c(7),01444\x1f'9=82<.342\xff\xc0\x00\x0b\x08\x00\x01"
+    b"\x00\x01\x01\x01\x11\x00\xff\xc4\x00\x1f\x00\x00\x01\x05\x01\x01\x01"
+    b"\x01\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x01\x02\x03\x04\x05\x06"
+    b"\x07\x08\t\n\x0b\xff\xda\x00\x08\x01\x01\x00\x00?\x00\xbf\x00\xff\xd9"
+)
+
 
 # ============================================================================
 # 1. Multi-Part Sequence Assembly Stress Tests (N >= 3) (R4)
@@ -50,7 +61,7 @@ class TestMultiPartSequenceAssembly:
         """Tests 4-part Wedding Fruitcake sequence ordering, card_ids, and image_urls with injected client."""
         cards = [tmp_path / f"fruitcake_card_{i}.jpg" for i in range(1, 5)]
         for c in cards:
-            c.write_bytes(b"dummy_bytes")
+            c.write_bytes(TINY_JPEG)
 
         expected_card_ids = [c.name for c in cards]
         mock_recipe = RecipeSchema(
@@ -62,13 +73,11 @@ class TestMultiPartSequenceAssembly:
                 "3. Add brandy.",
                 "4. Bake slowly.",
             ],
+            card_ids=expected_card_ids,
         )
 
-        class MockClient:
-            async def extract_cards(self, card_inputs):
-                return mock_recipe
-
-        extractor = GeminiRecipeExtractor(client=MockClient())
+        client = ScriptedLLMClient([mock_recipe])
+        extractor = GeminiRecipeExtractor(llm_client=client)
         recipe = await extractor.extract_cards([str(c) for c in cards])
 
         assert recipe.title == "1942 Heirloom Dark Holiday Wedding Fruitcake"
@@ -83,7 +92,7 @@ class TestMultiPartSequenceAssembly:
         """Tests 3-part Turkey Stuffing Feast sequence ordering, card_ids, and image_urls with injected client."""
         cards = [tmp_path / f"turkey_feast_card_{i}.jpg" for i in range(1, 4)]
         for c in cards:
-            c.write_bytes(b"dummy_bytes")
+            c.write_bytes(TINY_JPEG)
 
         expected_card_ids = [c.name for c in cards]
         mock_recipe = RecipeSchema(
@@ -94,13 +103,11 @@ class TestMultiPartSequenceAssembly:
                 "2. Stuff turkey and truss.",
                 "3. Roast at 325F until golden.",
             ],
+            card_ids=expected_card_ids,
         )
 
-        class MockClient:
-            async def extract_cards(self, card_inputs):
-                return mock_recipe
-
-        extractor = GeminiRecipeExtractor(client=MockClient())
+        client = ScriptedLLMClient([mock_recipe])
+        extractor = GeminiRecipeExtractor(llm_client=client)
         recipe = await extractor.extract_cards([str(c) for c in cards])
 
         assert recipe.title == "Grandma's Thanksgiving Roast Turkey & Sage Stuffing"
@@ -112,17 +119,20 @@ class TestMultiPartSequenceAssembly:
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("num_cards", [3, 4, 5, 6, 8])
-    async def test_synthetic_n_card_fallback_assembly(self, num_cards: int):
+    async def test_synthetic_n_card_fallback_assembly(self, num_cards: int, tmp_path: Path):
         """Tests arbitrary N-card sequence assembly (N >= 3) with injected client."""
-        synthetic_cards = [
-            VisualFingerprint(
-                card_id=f"synthetic_deck_c{i}_face.jpg",
-                image_path=f"/tmp/synthetic_deck_c{i}_face.jpg",
-                sha256_hash=f"synthetic_hash_{i}",
-                role=CardRole.SEQUENCE_START if i == 0 else CardRole.SEQUENCE_CONTINUATION,
+        synthetic_cards = []
+        for i in range(num_cards):
+            p = tmp_path / f"synthetic_deck_c{i}_face.jpg"
+            p.write_bytes(TINY_JPEG)
+            synthetic_cards.append(
+                VisualFingerprint(
+                    card_id=f"synthetic_deck_c{i}_face.jpg",
+                    image_path=str(p),
+                    sha256_hash=f"synthetic_hash_{i}",
+                    role=CardRole.SEQUENCE_START if i == 0 else CardRole.SEQUENCE_CONTINUATION,
+                )
             )
-            for i in range(num_cards)
-        ]
         expected_card_ids = [f"synthetic_deck_c{i}_face.jpg" for i in range(num_cards)]
 
         mock_recipe = RecipeSchema(
@@ -132,13 +142,11 @@ class TestMultiPartSequenceAssembly:
                 f"{i + 1}. Step {i + 1} continuation" if i > 0 else "1. Front preparation"
                 for i in range(num_cards)
             ],
+            card_ids=expected_card_ids,
         )
 
-        class MockClient:
-            async def extract_cards(self, card_inputs):
-                return mock_recipe
-
-        extractor = GeminiRecipeExtractor(client=MockClient())
+        client = ScriptedLLMClient([mock_recipe])
+        extractor = GeminiRecipeExtractor(llm_client=client)
         recipe = await extractor.extract_cards(synthetic_cards)
 
         assert recipe.title == f"Multi-Card Recipe ({num_cards} Cards)"
@@ -177,9 +185,8 @@ class TestInputRepresentationAndFallback:
             ingredients=["3 cups flour", "1 cup water", "1 tsp yeast"],
             directions=["1. Knead and bake."],
         )
-        mock_client = AsyncMock()
-        mock_client.extract_recipe = AsyncMock(return_value=mock_recipe)
-        extractor = GeminiRecipeExtractor(client=mock_client)
+        client = ScriptedLLMClient([mock_recipe])
+        extractor = GeminiRecipeExtractor(llm_client=client)
         recipe = await extractor.extract(img)
 
         assert isinstance(recipe, RecipeSchema)
@@ -195,11 +202,13 @@ class TestInputRepresentationAndFallback:
             await extractor.extract([])
 
     @pytest.mark.asyncio
-    async def test_mystery_untitled_card_guess_tagging(self):
-        """Tests that untitled/mystery cards receive [GUESS] tag or raise ExtractionUnavailable when unmocked."""
+    async def test_mystery_untitled_card_guess_tagging(self, tmp_path: Path):
+        """Tests that untitled/mystery cards receive title_is_inferred flag or raise ExtractionUnavailable when unmocked."""
+        img_p = tmp_path / "mystery_recipe_box_card_01.jpg"
+        img_p.write_bytes(TINY_JPEG)
         fp = VisualFingerprint(
             card_id="mystery_recipe_box_card_01.jpg",
-            image_path="/tmp/mystery_recipe_box_card_01.jpg",
+            image_path=str(img_p),
             sha256_hash="mystery_hash_12345",
             role=CardRole.STANDALONE,
             boundary_text=BoundaryText(first_line="Grandma's secret pudding"),
@@ -209,17 +218,19 @@ class TestInputRepresentationAndFallback:
         with pytest.raises(ExtractionUnavailable):
             await extractor_no_key.extract(fp)
 
-        # Mock client returning [GUESS] passes through cleanly
-        mock_client = AsyncMock()
-        mock_client.extract_recipe = AsyncMock(return_value=RecipeSchema(
-            title="Grandma's secret pudding [GUESS]",
+        # Injected client returning inferred title passes through cleanly
+        mock_recipe = RecipeSchema(
+            title="Grandma's secret pudding",
+            title_is_inferred=True,
             ingredients=["2 cups milk", "1/2 cup sugar"],
             directions=["1. Cook pudding."],
-        ))
-        extractor = GeminiRecipeExtractor(client=mock_client)
+        )
+        client = ScriptedLLMClient([mock_recipe])
+        extractor = GeminiRecipeExtractor(llm_client=client)
         recipe = await extractor.extract(fp)
-        assert recipe.title.endswith(" [GUESS]")
-        assert "Grandma's secret pudding [GUESS]" == recipe.title
+        assert recipe.title == "Grandma's secret pudding"
+        assert recipe.title_is_inferred is True
+        assert not recipe.title.endswith("[GUESS]")
 
 
 # ============================================================================

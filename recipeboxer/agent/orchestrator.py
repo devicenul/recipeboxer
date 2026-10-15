@@ -1149,7 +1149,7 @@ class RecipeBoxerAgent:
         """Adapts mock client into PairingOptimizer with custom semantic verifier."""
         mock = session.mock_client
 
-        class MockVerifierAdapter:
+        class _SessionVerifierAdapter:
             async def verify_correlation(
                 self, front_fp: VisualFingerprint, back_fp: VisualFingerprint, heuristic_score: float
             ) -> CorrelationProposal:
@@ -1171,7 +1171,7 @@ class RecipeBoxerAgent:
                     proposals.append(prop)
                 return proposals
 
-        return PairingOptimizer(verifier=MockVerifierAdapter())
+        return PairingOptimizer(verifier=_SessionVerifierAdapter())
 
     async def _run_custom_optimizer(
         self, optimizer: Any, fingerprints: List[VisualFingerprint]

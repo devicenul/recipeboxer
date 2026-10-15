@@ -27,4 +27,4 @@ CRITICAL STRUCTURING RULES:
    - Place author attribution, dates, and card signatures into `source_notes`.
 7. TITLE & TITLE INFERENCE:
    - If the recipe has an explicitly written/printed title on the card face, transcribe it cleanly and set `title_is_inferred = false`.
-   - If the card has NO visible title (e.g. continuation cards, untitled cards, back of card), infer a descriptive title from the ingredients/instructions (e.g. "Peach Cobbler") and set `title_is_inferred = true`. Do NOT append strings like '[GUESS]' to the title; simply set `title_is_inferred = true`.
+   - If the card has NO visible title (e.g. continuation cards, untitled cards, back of card), infer a descriptive title from the ingredients/instructions (e.g. "<title inferred from primary ingredient, e.g. Fruit Cobbler>") and set `title_is_inferred = true`. Do NOT append strings like '[GUESS]' to the title; simply set `title_is_inferred = true`.

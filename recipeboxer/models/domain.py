@@ -386,3 +386,11 @@ class VisualFingerprint(BaseModel):
         default=None,
         description="Reference key to substrate/multimodal embedding (WP-G4)",
     )
+    ocr_lines: List[str] = Field(
+        default_factory=list,
+        description="Full transcribed OCR lines when available for quote verification",
+    )
+    body_text: Optional[str] = Field(
+        default=None,
+        description="Full body text of card when available",
+    )

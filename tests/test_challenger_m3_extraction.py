@@ -17,6 +17,18 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from PIL import Image
 
+from recipeboxer.ai.client import ScriptedLLMClient
+
+TINY_JPEG = (
+    b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00"
+    b"\xff\xdb\x00C\x00\x08\x06\x06\x07\x06\x05\x08\x07\x07\x07\t\t\x08\n\x0c"
+    b"\x14\r\x0c\x0b\x0b\x0c\x19\x12\x13\x0f\x14\x1d\x1a\x1f\x1e\x1d\x1a\x1c"
+    b"\x1c $.' \",#\x1c\x1c(7),01444\x1f'9=82<.342\xff\xc0\x00\x0b\x08\x00\x01"
+    b"\x00\x01\x01\x01\x11\x00\xff\xc4\x00\x1f\x00\x00\x01\x05\x01\x01\x01"
+    b"\x01\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x01\x02\x03\x04\x05\x06"
+    b"\x07\x08\t\n\x0b\xff\xda\x00\x08\x01\x01\x00\x00?\x00\xbf\x00\xff\xd9"
+)
+
 from recipeboxer.agent.skills.print_clipping_extractor.parser import (
     get_print_clipping_prompt,
 )
@@ -97,12 +109,14 @@ class TestOfflineExtractionTitleGuessing:
     """Stress tests extraction title guessing heuristics across various boundary texts and filenames."""
 
     @pytest.mark.asyncio
-    async def test_untitled_or_unknown_card_appends_guess_suffix(self):
+    async def test_untitled_or_unknown_card_appends_guess_suffix(self, tmp_path):
         # Without API key or client, unmocked extractor raises ExtractionUnavailable
         unmocked = GeminiRecipeExtractor(api_key=None)
+        card_file = tmp_path / "untitled_index_card_01.jpg"
+        card_file.write_bytes(TINY_JPEG)
         fp = VisualFingerprint(
-            card_id="untitled_index_card_01.jpg",
-            image_path="/tmp/untitled_index_card_01.jpg",
+            card_id=card_file.name,
+            image_path=str(card_file),
             sha256_hash="hash123",
             role=CardRole.STANDALONE,
             boundary_text=BoundaryText(first_line="Peach Cobbler", last_line="Bake 30 mins."),
@@ -111,24 +125,27 @@ class TestOfflineExtractionTitleGuessing:
             await unmocked.extract(fp)
         assert exc_info.value.reason == FailureReason.NO_API_KEY
 
-        # Injected client returning recipe with [GUESS] title preserves [GUESS]
-        mock_client = AsyncMock()
-        mock_client.extract_recipe = AsyncMock(return_value=RecipeSchema(
+        # Injected client returning recipe with inferred title flags title_is_inferred without [GUESS]
+        client = ScriptedLLMClient([RecipeSchema(
             recipe_id="rec_guess_01",
-            title="Peach Cobbler [GUESS]",
+            title="Peach Cobbler",
+            title_is_inferred=True,
             ingredients=["2 cups peaches", "1 cup flour"],
             directions=["1. Bake 30 mins."],
-        ))
-        extractor = GeminiRecipeExtractor(client=mock_client)
+        )])
+        extractor = GeminiRecipeExtractor(llm_client=client)
         recipe = await extractor.extract(fp)
-        assert recipe.title == "Peach Cobbler [GUESS]"
-        assert recipe.title.endswith(" [GUESS]")
+        assert recipe.title == "Peach Cobbler"
+        assert not recipe.title.endswith(" [GUESS]")
+        assert getattr(recipe, "title_is_inferred", False) is True
 
     @pytest.mark.asyncio
-    async def test_known_and_standard_cards_do_not_append_guess(self):
+    async def test_known_and_standard_cards_do_not_append_guess(self, tmp_path):
+        card_file = tmp_path / "grandma_oatmeal_raisin_cookies.jpg"
+        card_file.write_bytes(TINY_JPEG)
         fp = VisualFingerprint(
-            card_id="grandma_oatmeal_raisin_cookies.jpg",
-            image_path="/tmp/grandma_oatmeal_raisin_cookies.jpg",
+            card_id=card_file.name,
+            image_path=str(card_file),
             sha256_hash="hash456",
             role=CardRole.STANDALONE,
             boundary_text=BoundaryText(
@@ -136,23 +153,26 @@ class TestOfflineExtractionTitleGuessing:
                 last_line="Yields 36 cookies.",
             ),
         )
-        mock_client = AsyncMock()
-        mock_client.extract_recipe = AsyncMock(return_value=RecipeSchema(
+        client = ScriptedLLMClient([RecipeSchema(
             recipe_id="rec_standard_01",
             title="Grandma's Best Oatmeal Raisin Cookies",
+            title_is_inferred=False,
             ingredients=["2 cups rolled oats", "1 cup raisins"],
             directions=["1. Bake 12 mins at 350F."],
-        ))
-        extractor = GeminiRecipeExtractor(client=mock_client)
+        )])
+        extractor = GeminiRecipeExtractor(llm_client=client)
         recipe = await extractor.extract(fp)
         assert recipe.title == "Grandma's Best Oatmeal Raisin Cookies"
         assert not recipe.title.endswith(" [GUESS]")
+        assert getattr(recipe, "title_is_inferred", False) is False
 
     @pytest.mark.asyncio
-    async def test_title_candidate_sanitization_strips_leading_numbers_and_punctuation(self):
+    async def test_title_candidate_sanitization_strips_leading_numbers_and_punctuation(self, tmp_path):
+        card_file = tmp_path / "mystery_recipe_numbered.jpg"
+        card_file.write_bytes(TINY_JPEG)
         fp = VisualFingerprint(
-            card_id="mystery_recipe_numbered.jpg",
-            image_path="/tmp/mystery_recipe_numbered.jpg",
+            card_id=card_file.name,
+            image_path=str(card_file),
             sha256_hash="hash789",
             role=CardRole.STANDALONE,
             boundary_text=BoundaryText(
@@ -160,16 +180,17 @@ class TestOfflineExtractionTitleGuessing:
                 last_line="Chill before serving.",
             ),
         )
-        mock_client = AsyncMock()
-        mock_client.extract_recipe = AsyncMock(return_value=RecipeSchema(
+        client = ScriptedLLMClient([RecipeSchema(
             recipe_id="rec_sanitized_01",
-            title="Heavenly Lemon Meringue Pie [GUESS]",
+            title="Heavenly Lemon Meringue Pie",
+            title_is_inferred=True,
             ingredients=["1 pie crust", "3 egg yolks", "1 cup sugar"],
             directions=["1. Chill before serving."],
-        ))
-        extractor = GeminiRecipeExtractor(client=mock_client)
+        )])
+        extractor = GeminiRecipeExtractor(llm_client=client)
         recipe = await extractor.extract(fp)
-        assert recipe.title == "Heavenly Lemon Meringue Pie [GUESS]"
+        assert recipe.title == "Heavenly Lemon Meringue Pie"
+        assert not recipe.title.endswith(" [GUESS]")
 
 
 class TestGeminiApiExtractionStoryAndGuessHandling:
@@ -179,7 +200,8 @@ class TestGeminiApiExtractionStoryAndGuessHandling:
     async def test_gemini_api_extraction_correctly_isolates_stories_and_flags_guess(self):
         llm_response = {
             "recipe_id": "rec_adv_001",
-            "title": "Rustic Autumn Apple Cobbler [GUESS]",
+            "title": "Rustic Autumn Apple Cobbler",
+            "title_is_inferred": True,
             "description": "Passed down from Great-Aunt Clara, who baked this every Sunday in October after harvest in 1948.",
             "yield_servings": "6 servings",
             "prep_time": "15 mins",
@@ -203,23 +225,14 @@ class TestGeminiApiExtractionStoryAndGuessHandling:
             "source_notes": "Great-Aunt Clara (1948 Handwritten Card, Ohio Church Box)",
         }
 
-        mock_client = AsyncMock()
-        mock_client.extract_recipe = AsyncMock(return_value=RecipeSchema(**llm_response))
-        extractor = GeminiRecipeExtractor(client=mock_client)
+        client = ScriptedLLMClient([RecipeSchema(**llm_response)])
+        extractor = GeminiRecipeExtractor(llm_client=client)
 
-        valid_jpeg = (
-            b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00"
-            b"\xff\xdb\x00C\x00\x08\x06\x06\x07\x06\x05\x08\x07\x07\x07\t\t\x08\n\x0c"
-            b"\x14\r\x0c\x0b\x0b\x0c\x19\x12\x13\x0f\x14\x1d\x1a\x1f\x1e\x1d\x1a\x1c"
-            b"\x1c $.' \",#\x1c\x1c(7),01444\x1f'9=82<.342\xff\xc0\x00\x0b\x08\x00\x01"
-            b"\x00\x01\x01\x01\x11\x00\xff\xc4\x00\x1f\x00\x00\x01\x05\x01\x01\x01"
-            b"\x01\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x01\x02\x03\x04\x05\x06"
-            b"\x07\x08\t\n\x0b\xff\xda\x00\x08\x01\x01\x00\x00?\x00\xbf\x00\xff\xd9"
-        )
+        valid_jpeg = TINY_JPEG
         recipe = await extractor.extract(valid_jpeg)
 
         assert isinstance(recipe, RecipeSchema)
-        assert recipe.title.endswith(" [GUESS]")
+        assert not recipe.title.endswith(" [GUESS]")
         assert "Great-Aunt Clara" in recipe.description
         assert "1948" in recipe.description
         assert "Ohio Church Box" in recipe.source_notes

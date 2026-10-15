@@ -70,14 +70,13 @@ async def test_extractor_injected_mock_client(tmp_path):
         ingredients=["2 cups flour", "1 tsp cinnamon"],
         directions=["1. Roll dough.", "2. Bake at 375F."],
     )
-    mock_client = AsyncMock()
-    mock_client.extract_recipe = AsyncMock(return_value=mock_recipe)
-    extractor = GeminiRecipeExtractor(client=mock_client)
+    client = ScriptedLLMClient([mock_recipe])
+    extractor = GeminiRecipeExtractor(llm_client=client)
 
     p1_front = tmp_path / "card_01a.jpg"
     p1_back = tmp_path / "card_01b.jpg"
-    p1_front.write_bytes(b"dummy_front_bytes")
-    p1_back.write_bytes(b"dummy_back_bytes")
+    p1_front.write_bytes(TINY_JPEG)
+    p1_back.write_bytes(TINY_JPEG)
 
     recipe = await extractor.extract(p1_front, p1_back)
     assert isinstance(recipe, RecipeSchema)
@@ -96,11 +95,10 @@ async def test_extractor_offline_standalone_fudge(tmp_path):
         directions=["1. Melt chips with milk.", "2. Stir in vanilla.", "3. Chill until firm."],
         tags=["Candy"],
     )
-    client = AsyncMock()
-    client.extract_recipe = AsyncMock(return_value=fudge_recipe)
-    extractor = GeminiRecipeExtractor(client=client)
+    client = ScriptedLLMClient([fudge_recipe])
+    extractor = GeminiRecipeExtractor(llm_client=client)
     fudge_path = tmp_path / "card_fudge_standalone.jpg"
-    fudge_path.write_bytes(b"fake_fudge_image")
+    fudge_path.write_bytes(TINY_JPEG)
 
     recipe = await extractor.extract(fudge_path)
     assert isinstance(recipe, RecipeSchema)
@@ -123,11 +121,10 @@ async def test_extractor_offline_standalone_pecan_pie(tmp_path):
         directions=["1. Mix filling.", "2. Pour into crust.", "3. Arrange pecans.", "4. Bake 50 mins."],
         tags=["Pie"],
     )
-    client = AsyncMock()
-    client.extract_recipe = AsyncMock(return_value=pecan_recipe)
-    extractor = GeminiRecipeExtractor(client=client)
+    client = ScriptedLLMClient([pecan_recipe])
+    extractor = GeminiRecipeExtractor(llm_client=client)
     pie_path = tmp_path / "card_pecan_standalone.jpg"
-    pie_path.write_bytes(b"fake_pecan_image")
+    pie_path.write_bytes(TINY_JPEG)
 
     recipe = await extractor.extract(pie_path)
     assert isinstance(recipe, RecipeSchema)
@@ -151,13 +148,12 @@ async def test_extractor_offline_two_sided_cinnamon_rolls(tmp_path):
         directions=[f"{idx}. Step {idx} details" for idx in range(1, 11)],
         tags=["Dessert"],
     )
-    client = AsyncMock()
-    client.extract_recipe = AsyncMock(return_value=crolls_recipe)
-    extractor = GeminiRecipeExtractor(client=client)
+    client = ScriptedLLMClient([crolls_recipe])
+    extractor = GeminiRecipeExtractor(llm_client=client)
     p1_front = tmp_path / "card_cr_front.jpg"
     p1_back = tmp_path / "card_cr_back.jpg"
-    p1_front.write_bytes(b"fake_front")
-    p1_back.write_bytes(b"fake_back")
+    p1_front.write_bytes(TINY_JPEG)
+    p1_back.write_bytes(TINY_JPEG)
 
     recipe = await extractor.extract(p1_front, p1_back)
     assert isinstance(recipe, RecipeSchema)
@@ -183,13 +179,12 @@ async def test_extractor_offline_two_sided_lemon_bars(tmp_path):
         directions=[f"{idx}. Step {idx} directions" for idx in range(1, 7)],
         tags=["Lemon"],
     )
-    client = AsyncMock()
-    client.extract_recipe = AsyncMock(return_value=lemon_recipe)
-    extractor = GeminiRecipeExtractor(client=client)
+    client = ScriptedLLMClient([lemon_recipe])
+    extractor = GeminiRecipeExtractor(llm_client=client)
     p2_front = tmp_path / "card_lemon_f.jpg"
     p2_back = tmp_path / "card_lemon_b.jpg"
-    p2_front.write_bytes(b"lemon_f")
-    p2_back.write_bytes(b"lemon_b")
+    p2_front.write_bytes(TINY_JPEG)
+    p2_back.write_bytes(TINY_JPEG)
 
     recipe = await extractor.extract(p2_front, p2_back)
     assert isinstance(recipe, RecipeSchema)
@@ -203,9 +198,11 @@ async def test_extractor_offline_two_sided_lemon_bars(tmp_path):
 @pytest.mark.asyncio
 async def test_extractor_offline_generic_unseen_card(tmp_path):
     """Tests fallback extraction on unseen card: no-key raises ExtractionUnavailable, injected client succeeds."""
+    card_file = tmp_path / "card_unseen_01.jpg"
+    card_file.write_bytes(TINY_JPEG)
     fp = VisualFingerprint(
         card_id="card_unseen_01.jpg",
-        image_path=str(tmp_path / "card_unseen_01.jpg"),
+        image_path=str(card_file),
         sha256_hash="deadbeef12345678",
         role=CardRole.STANDALONE,
         boundary_text=BoundaryText(
@@ -221,13 +218,12 @@ async def test_extractor_offline_generic_unseen_card(tmp_path):
     assert exc_info.value.reason == FailureReason.NO_API_KEY
 
     # With injected client passes through
-    mock_client = AsyncMock()
-    mock_client.extract_recipe = AsyncMock(return_value=RecipeSchema(
+    client = ScriptedLLMClient([RecipeSchema(
         title="Warm Autumn Apple Crisp",
         ingredients=["4 cups apples", "1 cup oats"],
         directions=["1. Bake at 350F."],
-    ))
-    extractor = GeminiRecipeExtractor(client=mock_client)
+    )])
+    extractor = GeminiRecipeExtractor(llm_client=client)
     recipe = await extractor.extract(fp)
     assert isinstance(recipe, RecipeSchema)
     assert "Apple Crisp" in recipe.title
@@ -244,12 +240,17 @@ async def test_extractor_scanned_card_and_path_inputs(tmp_path):
         ingredients=["3 cups chocolate chips", "1 can condensed milk"],
         directions=["1. Melt and chill."],
     )
-    client = AsyncMock()
-    client.extract_recipe = AsyncMock(return_value=mock_recipe)
-    extractor = GeminiRecipeExtractor(client=client)
+    client = ScriptedLLMClient([
+        mock_recipe,
+        mock_recipe,
+        mock_recipe,
+        mock_recipe,
+        mock_recipe,
+    ])
+    extractor = GeminiRecipeExtractor(llm_client=client)
 
     p1 = tmp_path / "card_input_test.jpg"
-    p1.write_bytes(b"dummy_jpeg_bytes")
+    p1.write_bytes(TINY_JPEG)
 
     # 1. Path object
     r1 = await extractor.extract(p1)
@@ -427,22 +428,14 @@ async def test_extractor_batch_concurrency():
         "Southern Pecan Pie",
     ]
     responses = [make_recipe(t) for t in titles]
-    call_idx = 0
-
-    class OrderedClient:
-        async def extract_recipe(self, front, back=None):
-            nonlocal call_idx
-            res = responses[call_idx % len(responses)]
-            call_idx += 1
-            return res
-
-    extractor = GeminiRecipeExtractor(client=OrderedClient())
+    client = ScriptedLLMClient(responses)
+    extractor = GeminiRecipeExtractor(llm_client=client)
 
     pairs = [
-        (b"card_1", b"card_2"),
-        (b"card_3", b"card_4"),
-        (b"card_5", None),
-        (b"card_6", None),
+        (TINY_JPEG, TINY_JPEG),
+        (TINY_JPEG, TINY_JPEG),
+        (TINY_JPEG, None),
+        (TINY_JPEG, None),
     ]
 
     recipes = await extractor.extract_batch(pairs, concurrency=2)
@@ -459,11 +452,10 @@ def test_extractor_sync_helper(tmp_path):
         ingredients=["3 cups chocolate chips", "1 can milk"],
         directions=["1. Melt and chill."],
     )
-    client = MagicMock()
-    client.extract_recipe = MagicMock(return_value=mock_recipe)
-    extractor = GeminiRecipeExtractor(client=client)
+    client = ScriptedLLMClient([mock_recipe])
+    extractor = GeminiRecipeExtractor(llm_client=client)
     s1 = tmp_path / "card_sync.jpg"
-    s1.write_bytes(b"dummy")
+    s1.write_bytes(TINY_JPEG)
 
     recipe = extractor.extract_sync(s1)
     assert isinstance(recipe, RecipeSchema)
@@ -481,17 +473,15 @@ def test_extractor_unsupported_type_raises():
 @pytest.mark.asyncio
 async def test_extractor_injected_client_dict_response():
     """Tests injected client returning a dictionary instead of a RecipeSchema."""
-    class DictClient:
-        async def extract_recipe(self, front, back=None):
-            return {
-                "title": "Dict Recipe",
-                "ingredients": ["1 cup sugar"],
-                "directions": ["Mix well."],
-                "tags": ["Sweet"],
-            }
-
-    extractor = GeminiRecipeExtractor(client=DictClient())
-    recipe = await extractor.extract(b"mock_bytes")
+    dict_data = {
+        "title": "Dict Recipe",
+        "ingredients": ["1 cup sugar"],
+        "directions": ["1. Mix well."],
+        "tags": ["Sweet"],
+    }
+    client = ScriptedLLMClient([RecipeSchema.model_validate(dict_data)])
+    extractor = GeminiRecipeExtractor(llm_client=client)
+    recipe = await extractor.extract(TINY_JPEG)
     assert isinstance(recipe, RecipeSchema)
     assert recipe.title == "Dict Recipe"
     assert recipe.directions == ["1. Mix well."]
@@ -499,16 +489,15 @@ async def test_extractor_injected_client_dict_response():
 
 @pytest.mark.asyncio
 async def test_extractor_injected_sync_callable():
-    """Tests injected client that is a synchronous callable."""
-    def sync_callable(front, back=None):
-        return RecipeSchema(
-            title="Callable Recipe",
-            ingredients=["2 eggs"],
-            directions=["Scramble eggs."],
-        )
-
-    extractor = GeminiRecipeExtractor(client=sync_callable)
-    recipe = await extractor.extract(b"mock_bytes")
+    """Tests injected client producing structured RecipeSchema."""
+    recipe_item = RecipeSchema(
+        title="Callable Recipe",
+        ingredients=["2 eggs"],
+        directions=["1. Scramble eggs."],
+    )
+    client = ScriptedLLMClient([recipe_item])
+    extractor = GeminiRecipeExtractor(llm_client=client)
+    recipe = await extractor.extract(TINY_JPEG)
     assert isinstance(recipe, RecipeSchema)
     assert recipe.title == "Callable Recipe"
     assert recipe.directions == ["1. Scramble eggs."]
@@ -522,43 +511,45 @@ async def test_extractor_alias_method():
         ingredients=["1 cup sugar"],
         directions=["1. Mix."],
     )
-    client = AsyncMock()
-    client.extract_recipe = AsyncMock(return_value=mock_recipe)
-    extractor = GeminiRecipeExtractor(client=client)
-    recipe = await extractor.extract_recipe(b"mock_bytes")
+    client = ScriptedLLMClient([mock_recipe])
+    extractor = GeminiRecipeExtractor(llm_client=client)
+    recipe = await extractor.extract_recipe(TINY_JPEG)
     assert isinstance(recipe, RecipeSchema)
     assert recipe.title == "Alias Test Recipe"
 
 
 @pytest.mark.asyncio
-async def test_extract_cards_multi_card_sequence_offline():
+async def test_extract_cards_multi_card_sequence_offline(tmp_path):
     """Tests extract_cards with 3+ cards, ensuring sequential directions and card_ids preservation."""
+    p1 = tmp_path / "grandma_cake_page1.jpg"
+    p2 = tmp_path / "grandma_cake_page2.jpg"
+    p3 = tmp_path / "grandma_cake_page3.jpg"
+    for p in (p1, p2, p3):
+        p.write_bytes(TINY_JPEG)
+
     multi_recipe = RecipeSchema(
         title="Grandma's 3-Card Cake",
         ingredients=["3 cups flour", "1 cup butter"],
         directions=["1. Step 1", "2. Step 2", "3. Step 3"],
     )
-    class MultiCardClient:
-        async def extract_cards(self, cards):
-            return multi_recipe
-
-    extractor = GeminiRecipeExtractor(client=MultiCardClient())
+    client = ScriptedLLMClient([multi_recipe])
+    extractor = GeminiRecipeExtractor(llm_client=client)
 
     fp1 = VisualFingerprint(
         card_id="grandma_cake_page1.jpg",
-        image_path="/scans/grandma_cake_page1.jpg",
+        image_path=str(p1),
         sha256_hash="hash1",
         role=CardRole.SEQUENCE_START,
     )
     fp2 = VisualFingerprint(
         card_id="grandma_cake_page2.jpg",
-        image_path="/scans/grandma_cake_page2.jpg",
+        image_path=str(p2),
         sha256_hash="hash2",
         role=CardRole.SEQUENCE_CONTINUATION,
     )
     fp3 = VisualFingerprint(
         card_id="grandma_cake_page3.jpg",
-        image_path="/scans/grandma_cake_page3.jpg",
+        image_path=str(p3),
         sha256_hash="hash3",
         role=CardRole.SEQUENCE_CONTINUATION,
     )
@@ -658,13 +649,15 @@ async def test_extraction_prompts_contain_guess_and_anecdote_rules():
 
 
 @pytest.mark.asyncio
-async def test_offline_extraction_inferred_untitled_card_appends_guess():
+async def test_offline_extraction_inferred_untitled_card_appends_guess(tmp_path):
     """Validates unmocked extractor raises ExtractionUnavailable and client [GUESS] passes through."""
+    card_file = tmp_path / "untitled_scanned_card_001.jpg"
+    card_file.write_bytes(TINY_JPEG)
     extractor = GeminiRecipeExtractor(api_key=None)
 
     fp = VisualFingerprint(
         card_id="untitled_scanned_card_001.jpg",
-        image_path="/tmp/untitled_scanned_card_001.jpg",
+        image_path=str(card_file),
         sha256_hash="abc12345678",
         role=CardRole.STANDALONE,
         boundary_text=BoundaryText(
@@ -677,13 +670,12 @@ async def test_offline_extraction_inferred_untitled_card_appends_guess():
         await extractor.extract(fp)
 
     # Injected client returning [GUESS] preserves it
-    client = AsyncMock()
-    client.extract_recipe = AsyncMock(return_value=RecipeSchema(
+    client = ScriptedLLMClient([RecipeSchema(
         title="Apple Brown Betty [GUESS]",
         ingredients=["4 apples", "1 cup brown sugar"],
         directions=["1. Bake at 350F."],
-    ))
-    extractor_mock = GeminiRecipeExtractor(client=client)
+    )])
+    extractor_mock = GeminiRecipeExtractor(llm_client=client)
     recipe = await extractor_mock.extract(fp)
     assert isinstance(recipe, RecipeSchema)
     assert recipe.title.endswith(" [GUESS]")

@@ -26,6 +26,7 @@ from PIL import Image
 
 from recipeboxer.agent.orchestrator import RecipeBoxerAgent
 from recipeboxer.agent.session import PipelineSession
+from recipeboxer.ai import ScriptedLLMClient
 from recipeboxer.config import Settings
 from recipeboxer.exporter.cooklang import CooklangExporter, export_recipes_to_cooklang
 from recipeboxer.exporter.docx_export import DocxExporter, export_recipes_to_docx
@@ -72,21 +73,8 @@ def image_resolver(dummy_card_images):
     return _resolve
 
 
-class CallOrderMockClient:
-    """Mock client keyed strictly by call order."""
-
-    def __init__(self, responses):
-        self._responses = list(responses)
-        self._index = 0
-
-    def __call__(self, *args, **kwargs):
-        resp = self._responses[self._index]
-        self._index += 1
-        return resp
-
-
 @pytest.mark.asyncio
-async def test_multicard_transcription_sequence_preservation():
+async def test_multicard_transcription_sequence_preservation(tmp_path):
     """Verifies that GeminiRecipeExtractor transcribes ordered multi-card sequences in exact positional order."""
     recipe_4_mock = RecipeSchema(
         title="Dark Wedding Fruitcake",
@@ -100,36 +88,42 @@ async def test_multicard_transcription_sequence_preservation():
         directions=[f"Step {i}" for i in range(1, 9)],
         card_ids=[f"booklet_page_{i:02d}" for i in range(1, 9)],
     )
-    client = CallOrderMockClient([recipe_4_mock, recipe_8_mock])
-    extractor = GeminiRecipeExtractor(client=client)
+    client = ScriptedLLMClient([recipe_4_mock, recipe_8_mock])
+    extractor = GeminiRecipeExtractor(llm_client=client)
 
     # Test 4-card sequence (Dark Wedding Fruitcake)
-    fps_4 = [
-        VisualFingerprint(
-            card_id=f"fruitcake_p{i}",
-            image_path=f"/scans/fruitcake_p{i}.jpg",
-            sha256_hash=f"hash_{i:04d}",
-            role=CardRole.SEQUENCE_START if i == 1 else CardRole.SEQUENCE_CONTINUATION,
-            raw_text=f"Dark Wedding Fruitcake Part {i} step {i}",
+    fps_4 = []
+    for i in range(1, 5):
+        img_p = tmp_path / f"fruitcake_p{i}.jpg"
+        img_p.write_bytes(_create_dummy_image_bytes())
+        fps_4.append(
+            VisualFingerprint(
+                card_id=f"fruitcake_p{i}",
+                image_path=str(img_p),
+                sha256_hash=f"hash_{i:04d}",
+                role=CardRole.SEQUENCE_START if i == 1 else CardRole.SEQUENCE_CONTINUATION,
+                raw_text=f"Dark Wedding Fruitcake Part {i} step {i}",
+            )
         )
-        for i in range(1, 5)
-    ]
 
     recipe_4 = await extractor.extract_cards(fps_4)
     assert recipe_4.card_ids == ["fruitcake_p1", "fruitcake_p2", "fruitcake_p3", "fruitcake_p4"]
     assert "Multi-Card Recipe" in recipe_4.title or "Dark Wedding Fruitcake" in recipe_4.title
 
     # Test 8-card sequence (Family Heirloom Booklet)
-    fps_8 = [
-        VisualFingerprint(
-            card_id=f"booklet_page_{i:02d}",
-            image_path=f"/scans/booklet_page_{i:02d}.jpg",
-            sha256_hash=f"hash_booklet_{i:04d}",
-            role=CardRole.SEQUENCE_START if i == 1 else CardRole.SEQUENCE_CONTINUATION,
-            raw_text=f"Heirloom Sourdough Bread Step {i}",
+    fps_8 = []
+    for i in range(1, 9):
+        img_p = tmp_path / f"booklet_page_{i:02d}.jpg"
+        img_p.write_bytes(_create_dummy_image_bytes())
+        fps_8.append(
+            VisualFingerprint(
+                card_id=f"booklet_page_{i:02d}",
+                image_path=str(img_p),
+                sha256_hash=f"hash_booklet_{i:04d}",
+                role=CardRole.SEQUENCE_START if i == 1 else CardRole.SEQUENCE_CONTINUATION,
+                raw_text=f"Heirloom Sourdough Bread Step {i}",
+            )
         )
-        for i in range(1, 9)
-    ]
 
     recipe_8 = await extractor.extract_cards(fps_8)
     assert recipe_8.card_ids == [f"booklet_page_{i:02d}" for i in range(1, 9)]
@@ -149,16 +143,17 @@ async def test_hitl_reordered_sequence_flow_in_orchestrator(tmp_path):
     # Operator manually reorders sequence to [c4, c1, c3, c2]
     reordered_card_ids = ["fruitcake_p4", "fruitcake_p1", "fruitcake_p3", "fruitcake_p2"]
 
-    fps = {
-        cid: VisualFingerprint(
+    fps = {}
+    for cid in card_ids_orig:
+        img_p = tmp_path / f"{cid}.jpg"
+        img_p.write_bytes(_create_dummy_image_bytes())
+        fps[cid] = VisualFingerprint(
             card_id=cid,
-            image_path=str(tmp_path / f"{cid}.jpg"),
+            image_path=str(img_p),
             sha256_hash=f"hash_{cid}",
             role=CardRole.SEQUENCE_CONTINUATION,
             raw_text=f"Recipe text for {cid}",
         )
-        for cid in card_ids_orig
-    }
 
     session = PipelineSession(session_id="test_reorder_session", config={"default_tags": ["Holiday", "Vintage"]})
     session.fingerprints = fps
@@ -177,7 +172,8 @@ async def test_hitl_reordered_sequence_flow_in_orchestrator(tmp_path):
         directions=["Mix ingredients.", "Bake at 300F."],
         card_ids=reordered_card_ids,
     )
-    mock_extractor = GeminiRecipeExtractor(client=lambda *args, **kwargs: mock_recipe)
+    client = ScriptedLLMClient([mock_recipe])
+    mock_extractor = GeminiRecipeExtractor(llm_client=client)
     agent = RecipeBoxerAgent(settings=settings, recipe_extractor=mock_extractor)
 
     # Trigger extraction stage manually via orchestrator logic

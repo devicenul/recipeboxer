@@ -44,7 +44,17 @@ from pydantic import BaseModel
 from recipeboxer.ai.replay import ScriptedLLMClient
 from recipeboxer.config import Settings, get_settings
 from recipeboxer.correlation.optimizer import PairingOptimizer
-from recipeboxer.correlation.semantic import GeminiSemanticVerifier
+from recipeboxer.correlation.semantic import GeminiSemanticVerifier, SetVerificationResponse
+
+TINY_JPEG = (
+    b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00"
+    b"\xff\xdb\x00C\x00\x08\x06\x06\x07\x06\x05\x08\x07\x07\x07\t\t\x08\n\x0c"
+    b"\x14\r\x0c\x0b\x0b\x0c\x19\x12\x13\x0f\x14\x1d\x1a\x1f\x1e\x1d\x1a\x1c"
+    b"\x1c $.' \",#\x1c\x1c(7),01444\x1f'9=82<.342\xff\xc0\x00\x0b\x08\x00\x01"
+    b"\x00\x01\x01\x01\x11\x00\xff\xc4\x00\x1f\x00\x00\x01\x05\x01\x01\x01"
+    b"\x01\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x01\x02\x03\x04\x05\x06"
+    b"\x07\x08\t\n\x0b\xff\xda\x00\x08\x01\x01\x00\x00?\x00\xbf\x00\xff\xd9"
+)
 from recipeboxer.ingestion.scanner import ScannedCard
 from recipeboxer.models.correlation import CorrelationProposal, CorrelationResult, SetVerification
 from recipeboxer.models.failures import FailureReason, SemanticVerificationUnavailable
@@ -226,62 +236,68 @@ class TestVisualFingerprintExtractionEdgeCases:
             "extracted_at": datetime.now(timezone.utc).isoformat(),
         }
 
-        # 1. client.analyze_fingerprint as sync MagicMock
-        mock_client1 = MagicMock()
-        mock_client1.analyze_fingerprint.return_value = mock_fp_dict
-        extractor1 = GeminiVisualExtractor(client=mock_client1)
-        res1 = await extractor1.extract(b"dummy_bytes", card_id="mock_magic_card.jpg")
-        assert isinstance(res1, VisualFingerprint)
-        assert res1.card_id == "mock_magic_card.jpg"
+    @pytest.mark.asyncio
+    async def test_extractor_with_scripted_llm_client_dict(self):
+        """Extractor handles ScriptedLLMClient returning dict payload."""
+        from recipeboxer.ai.replay import ScriptedLLMClient
+        mock_fp_dict = {
+            "card_id": "scripted_card.jpg",
+            "image_path": "/path/to/img.jpg",
+            "sha256_hash": "ff" * 32,
+            "paper_color": {
+                "tone_name": "White",
+                "hex_approx": "#ffffff",
+                "lab_l": 100.0,
+                "lab_a": 0.0,
+                "lab_b": 0.0,
+            },
+            "paper_ruling": "NONE",
+            "ink": {"dominant_color": "Black", "medium_type": "Ballpoint"},
+            "boundary_text": {"first_line": "Header", "last_line": "Footer"},
+            "extracted_at": datetime.now(timezone.utc).isoformat(),
+        }
 
-        # 2. client.extract as sync MagicMock
-        mock_client2 = MagicMock()
-        mock_client2.extract.return_value = mock_fp_dict
-        extractor2 = GeminiVisualExtractor(client=mock_client2)
-        res2 = await extractor2.extract(b"dummy_bytes", card_id="mock_magic_card.jpg")
-        assert isinstance(res2, VisualFingerprint)
-        assert res2.card_id == "mock_magic_card.jpg"
+        llm_client = ScriptedLLMClient([mock_fp_dict])
+        extractor = GeminiVisualExtractor(llm_client=llm_client)
+        res = await extractor.extract(b"dummy_bytes", card_id="scripted_card.jpg")
+        assert isinstance(res, VisualFingerprint)
+        assert res.card_id == "scripted_card.jpg"
 
     @pytest.mark.asyncio
-    async def test_extractor_with_asyncmock(self):
-        """Extractor handles AsyncMock returning VisualFingerprint."""
-        mock_fp = VisualFingerprint(
-            card_id="async_card.jpg",
-            image_path="/path/to/img.jpg",
-            sha256_hash="ee" * 32,
+    async def test_extractor_with_scripted_llm_client_response_model(self):
+        """Extractor handles ScriptedLLMClient returning FingerprintV2Response."""
+        from recipeboxer.ai.replay import ScriptedLLMClient
+        from recipeboxer.vision.fingerprint import FingerprintV2Response
+        mock_resp = FingerprintV2Response(
             role=CardRole.STANDALONE,
+            visible_title="Test Recipe",
+            paper_tone_name="White",
+            paper_hex="#ffffff",
         )
 
-        # 1. client.analyze_fingerprint as AsyncMock
-        mock_client1 = MagicMock()
-        mock_client1.analyze_fingerprint = AsyncMock(return_value=mock_fp)
-        extractor1 = GeminiVisualExtractor(client=mock_client1)
-        res1 = await extractor1.extract(b"dummy_bytes", card_id="async_card.jpg")
-        assert isinstance(res1, VisualFingerprint)
-        assert res1.card_id == "async_card.jpg"
-
-        # 2. client.extract as AsyncMock
-        mock_client2 = MagicMock()
-        mock_client2.extract = AsyncMock(return_value=mock_fp)
-        extractor2 = GeminiVisualExtractor(client=mock_client2)
-        res2 = await extractor2.extract(b"dummy_bytes", card_id="async_card.jpg")
-        assert isinstance(res2, VisualFingerprint)
-        assert res2.card_id == "async_card.jpg"
+        llm_client = ScriptedLLMClient([mock_resp])
+        extractor = GeminiVisualExtractor(llm_client=llm_client)
+        res = await extractor.extract(b"dummy_bytes", card_id="scripted_model_card.jpg")
+        assert isinstance(res, VisualFingerprint)
+        assert res.card_id == "scripted_model_card.jpg"
+        assert res.visible_title == "Test Recipe"
 
     @pytest.mark.asyncio
-    async def test_extractor_with_callable(self):
-        """Extractor handles callable client returning VisualFingerprint or dict."""
+    async def test_extractor_with_scripted_llm_client_visual_fingerprint(self):
+        """Extractor handles ScriptedLLMClient returning VisualFingerprint."""
+        from recipeboxer.ai.replay import ScriptedLLMClient
         mock_fp = VisualFingerprint(
-            card_id="callable_card.jpg",
+            card_id="fp_card.jpg",
             image_path="/path/to/img.jpg",
             sha256_hash="dd" * 32,
             role=CardRole.STANDALONE,
         )
 
-        extractor = GeminiVisualExtractor(client=lambda card: mock_fp)
-        res = await extractor.extract(b"dummy_bytes", card_id="callable_card.jpg")
+        llm_client = ScriptedLLMClient([mock_fp])
+        extractor = GeminiVisualExtractor(llm_client=llm_client)
+        res = await extractor.extract(b"dummy_bytes", card_id="fp_card.jpg")
         assert isinstance(res, VisualFingerprint)
-        assert res.card_id == "callable_card.jpg"
+        assert res.card_id == "fp_card.jpg"
 
 
 # ============================================================================
@@ -346,10 +362,14 @@ class TestSemanticVerifierMockAndFallback:
     """Stress-tests for GeminiSemanticVerifier with mock clients and offline fallback logic."""
 
     @pytest.fixture
-    def sample_front_back_fps(self):
+    def sample_front_back_fps(self, tmp_path):
+        f_path = tmp_path / "01_cinnamon_rolls_front.jpg"
+        b_path = tmp_path / "02_cinnamon_rolls_back.jpg"
+        f_path.write_bytes(TINY_JPEG)
+        b_path.write_bytes(TINY_JPEG)
         front = VisualFingerprint(
             card_id="01_cinnamon_rolls_front.jpg",
-            image_path="/scans/01_cinnamon_rolls_front.jpg",
+            image_path=str(f_path),
             sha256_hash="aa" * 32,
             role=CardRole.FRONT_ONLY,
             role_confidence=0.95,
@@ -366,7 +386,7 @@ class TestSemanticVerifierMockAndFallback:
         )
         back = VisualFingerprint(
             card_id="02_cinnamon_rolls_back.jpg",
-            image_path="/scans/02_cinnamon_rolls_back.jpg",
+            image_path=str(b_path),
             sha256_hash="bb" * 32,
             role=CardRole.BACK_ONLY,
             role_confidence=0.95,
@@ -385,179 +405,120 @@ class TestSemanticVerifierMockAndFallback:
 
     @pytest.mark.asyncio
     async def test_mock_client_returning_proposal_object(self, sample_front_back_fps):
-        """Verifier supports mock client returning CorrelationProposal directly."""
+        """Verifier supports ScriptedLLMClient returning SetVerificationResponse directly."""
         front, back = sample_front_back_fps
-        mock_proposal = CorrelationProposal(
-            proposal_id="prop_mock123",
-            front_card_id=front.card_id,
-            back_card_id=back.card_id,
-            heuristic_score=0.92,
-            semantic_score=0.98,
-            confidence=0.962,
-            is_standalone=False,
-            continuity_explanation="Mock verified perfect match",
-            recommended_action="PAIR",
-        )
-
-        class CustomMockClient:
-            async def verify_correlation(self, f, b, h):
-                return mock_proposal
-
-        verifier = GeminiSemanticVerifier(client=CustomMockClient())
+        client = ScriptedLLMClient([
+            SetVerificationResponse(
+                continuations=["Candidate 1"],
+                rejected=[],
+                evidence_quotes=["Cinnamon Rolls"],
+                confidence=0.98,
+            )
+        ])
+        verifier = GeminiSemanticVerifier(llm_client=client)
         result = await verifier.verify_pair(front, back)
 
-        assert result.proposal_id == "prop_mock123"
-        assert result.confidence == 0.962
         assert result.recommended_action == "PAIR"
+        assert result.semantic_verified is True
+        assert result.semantic_score == 0.98
 
     @pytest.mark.asyncio
     async def test_mock_client_returning_dict(self, sample_front_back_fps):
-        """Verifier parses dict returned by mock client into CorrelationProposal."""
+        """Verifier parses dict payload returned by ScriptedLLMClient into CorrelationProposal."""
         front, back = sample_front_back_fps
-        mock_dict = {
-            "proposal_id": "prop_dict456",
-            "front_card_id": front.card_id,
-            "back_card_id": back.card_id,
-            "heuristic_score": 0.85,
-            "semantic_score": 0.90,
-            "confidence": 0.885,
-            "is_standalone": False,
-            "continuity_explanation": "Dict payload verified",
-            "recommended_action": "PAIR",
-        }
-
-        class DictMockClient:
-            async def verify_correlation(self, f, b, h):
-                return mock_dict
-
-        verifier = GeminiSemanticVerifier(client=DictMockClient())
+        client = ScriptedLLMClient([
+            {
+                "continuations": ["Candidate 1"],
+                "rejected": [],
+                "evidence_quotes": ["Cinnamon Rolls"],
+                "confidence": 0.90,
+            }
+        ])
+        verifier = GeminiSemanticVerifier(llm_client=client)
         result = await verifier.verify_pair(front, back)
 
         assert isinstance(result, CorrelationProposal)
-        assert result.proposal_id == "prop_dict456"
-        assert result.confidence == 0.885
+        assert result.recommended_action == "PAIR"
+        assert result.semantic_score == 0.90
 
     @pytest.mark.asyncio
     async def test_mock_client_returning_model_dumpable(self, sample_front_back_fps):
-        """Verifier parses object with model_dump() method into CorrelationProposal."""
+        """Verifier handles model instance with ScriptedLLMClient."""
         front, back = sample_front_back_fps
-
-        class CustomDumpableModel(BaseModel):
-            proposal_id: str = "prop_dumpable789"
-            front_card_id: str = front.card_id
-            back_card_id: str = back.card_id
-            heuristic_score: float = 0.80
-            semantic_score: float = 0.85
-            confidence: float = 0.835
-            is_standalone: bool = False
-            continuity_explanation: str = "Model dump verified"
-            recommended_action: str = "PAIR"
-
-        class DumpableMockClient:
-            async def verify_correlation(self, f, b, h):
-                return CustomDumpableModel()
-
-        verifier = GeminiSemanticVerifier(client=DumpableMockClient())
+        client = ScriptedLLMClient([
+            SetVerificationResponse(
+                continuations=["Candidate 1"],
+                rejected=[],
+                evidence_quotes=["Cinnamon Rolls"],
+                confidence=0.85,
+            )
+        ])
+        verifier = GeminiSemanticVerifier(llm_client=client)
         result = await verifier.verify_pair(front, back)
 
         assert isinstance(result, CorrelationProposal)
-        assert result.proposal_id == "prop_dumpable789"
-        assert result.confidence == 0.835
+        assert result.recommended_action == "PAIR"
+        assert result.semantic_score == 0.85
 
     @pytest.mark.asyncio
     async def test_magicmock_sync_returning_dict(self, sample_front_back_fps):
-        """Verifier handles sync MagicMock returning dict without awaiting non-awaitable."""
+        """Verifier handles candidate rejection when not selected in continuations."""
         front, back = sample_front_back_fps
-        mock_dict = {
-            "proposal_id": "prop_magic_sync",
-            "front_card_id": front.card_id,
-            "back_card_id": back.card_id,
-            "heuristic_score": 0.85,
-            "semantic_score": 0.90,
-            "confidence": 0.885,
-            "is_standalone": False,
-            "continuity_explanation": "MagicMock sync dict verified",
-            "recommended_action": "PAIR",
-        }
+        client = ScriptedLLMClient([
+            SetVerificationResponse(
+                continuations=[],
+                rejected=["Candidate 1"],
+                evidence_quotes=[],
+                confidence=0.90,
+            )
+        ])
+        verifier = GeminiSemanticVerifier(llm_client=client)
+        result = await verifier.verify_pair(front, back)
 
-        # 1. client.verify_pair as sync MagicMock
-        mock_client1 = MagicMock()
-        mock_client1.verify_pair.return_value = mock_dict
-        verifier1 = GeminiSemanticVerifier(client=mock_client1)
-        res1 = await verifier1.verify_pair(front, back)
-        assert isinstance(res1, CorrelationProposal)
-        assert res1.proposal_id == "prop_magic_sync"
-
-        # 2. client.verify_correlation as sync MagicMock
-        mock_client2 = MagicMock()
-        mock_client2.verify_correlation.return_value = mock_dict
-        verifier2 = GeminiSemanticVerifier(client=mock_client2)
-        res2 = await verifier2.verify_pair(front, back)
-        assert isinstance(res2, CorrelationProposal)
-        assert res2.proposal_id == "prop_magic_sync"
+        assert isinstance(result, CorrelationProposal)
+        assert result.recommended_action == "REJECT"
+        assert result.semantic_score == 0.0
 
     @pytest.mark.asyncio
     async def test_magicmock_async_returning_dict(self, sample_front_back_fps):
-        """Verifier handles AsyncMock returning dict."""
+        """Verifier computes exact composite confidence weighting."""
         front, back = sample_front_back_fps
-        mock_dict = {
-            "proposal_id": "prop_magic_async",
-            "front_card_id": front.card_id,
-            "back_card_id": back.card_id,
-            "heuristic_score": 0.85,
-            "semantic_score": 0.90,
-            "confidence": 0.885,
-            "is_standalone": False,
-            "continuity_explanation": "AsyncMock dict verified",
-            "recommended_action": "PAIR",
-        }
+        client = ScriptedLLMClient([
+            SetVerificationResponse(
+                continuations=["Candidate 1"],
+                rejected=[],
+                evidence_quotes=["Cinnamon Rolls"],
+                confidence=0.80,
+            )
+        ])
+        verifier = GeminiSemanticVerifier(llm_client=client, heuristic_weight=0.30, semantic_weight=0.70)
+        result = await verifier.verify_pair(front, back, heuristic_score=0.90)
 
-        # 1. client.verify_pair as AsyncMock
-        mock_client1 = MagicMock()
-        mock_client1.verify_pair = AsyncMock(return_value=mock_dict)
-        verifier1 = GeminiSemanticVerifier(client=mock_client1)
-        res1 = await verifier1.verify_pair(front, back)
-        assert isinstance(res1, CorrelationProposal)
-        assert res1.proposal_id == "prop_magic_async"
-
-        # 2. client.verify_correlation as AsyncMock
-        mock_client2 = MagicMock()
-        mock_client2.verify_correlation = AsyncMock(return_value=mock_dict)
-        verifier2 = GeminiSemanticVerifier(client=mock_client2)
-        res2 = await verifier2.verify_pair(front, back)
-        assert isinstance(res2, CorrelationProposal)
-        assert res2.proposal_id == "prop_magic_async"
+        assert isinstance(result, CorrelationProposal)
+        assert result.recommended_action == "PAIR"
+        expected = round(0.30 * 0.90 + 0.70 * 0.80, 4)
+        assert result.confidence == expected
 
     @pytest.mark.asyncio
     async def test_callable_sync_and_async_client(self, sample_front_back_fps):
-        """Verifier handles direct callable clients (both sync and async functions)."""
+        """Verifier executes multiple scripted verification calls sequentially."""
         front, back = sample_front_back_fps
-        mock_dict = {
-            "proposal_id": "prop_callable",
-            "front_card_id": front.card_id,
-            "back_card_id": back.card_id,
-            "heuristic_score": 0.85,
-            "semantic_score": 0.90,
-            "confidence": 0.885,
-            "is_standalone": False,
-            "continuity_explanation": "Callable verified",
-            "recommended_action": "PAIR",
-        }
-
-        # Sync callable
-        verifier_sync = GeminiSemanticVerifier(client=lambda f, b, h: mock_dict)
-        res_sync = await verifier_sync.verify_pair(front, back)
-        assert isinstance(res_sync, CorrelationProposal)
-        assert res_sync.proposal_id == "prop_callable"
-
-        # Async callable
-        async def async_fn(f, b, h):
-            return mock_dict
-
-        verifier_async = GeminiSemanticVerifier(client=async_fn)
-        res_async = await verifier_async.verify_pair(front, back)
-        assert isinstance(res_async, CorrelationProposal)
-        assert res_async.proposal_id == "prop_callable"
+        back2 = VisualFingerprint(
+            card_id="03_cinnamon_rolls_extra.jpg",
+            image_path=str(back.image_path),
+            sha256_hash="cc" * 32,
+            role=CardRole.BACK_ONLY,
+            boundary_text=BoundaryText(first_line="Different recipe entirely"),
+        )
+        client = ScriptedLLMClient([
+            SetVerificationResponse(continuations=["Candidate 1"], confidence=0.95),
+            SetVerificationResponse(continuations=[], rejected=["Candidate 1"], confidence=0.85),
+        ])
+        verifier = GeminiSemanticVerifier(llm_client=client)
+        res1 = await verifier.verify_pair(front, back)
+        assert res1.recommended_action == "PAIR"
+        res2 = await verifier.verify_pair(front, back2)
+        assert res2.recommended_action == "REJECT"
 
     @pytest.mark.asyncio
     async def test_offline_fallback_strong_continuity_cues(self, sample_front_back_fps):

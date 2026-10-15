@@ -2,7 +2,7 @@ import React from 'react';
 import { DollarSign, AlertOctagon, PhoneCall } from 'lucide-react';
 
 export interface SpendMeterProps {
-  spendUsd: number;
+  spendUsd?: number | null;
   spendCapUsd?: number | null;
   totalCalls?: number;
   isBudgetExceeded?: boolean;
@@ -11,16 +11,17 @@ export interface SpendMeterProps {
 }
 
 export const SpendMeter: React.FC<SpendMeterProps> = ({
-  spendUsd = 0.0,
+  spendUsd = null,
   spendCapUsd = null,
   totalCalls = 0,
   isBudgetExceeded = false,
   onNavigateToSettings,
   className = '',
 }) => {
+  const isSpendKnown = spendUsd !== null && spendUsd !== undefined;
   const hasCap = spendCapUsd !== null && spendCapUsd !== undefined && spendCapUsd > 0;
-  const progressPercent = hasCap ? Math.min(100, (spendUsd / spendCapUsd) * 100) : 0;
-  const isNearCap = hasCap && progressPercent >= 85 && !isBudgetExceeded;
+  const progressPercent = hasCap && isSpendKnown ? Math.min(100, ((spendUsd as number) / spendCapUsd) * 100) : 0;
+  const isNearCap = hasCap && isSpendKnown && progressPercent >= 85 && !isBudgetExceeded;
 
   return (
     <div
@@ -43,7 +44,7 @@ export const SpendMeter: React.FC<SpendMeterProps> = ({
           }`}
         />
         <span className="font-mono text-xs">
-          ${spendUsd.toFixed(4)}
+          {isSpendKnown ? `$${(spendUsd as number).toFixed(4)}` : 'unknown'}
         </span>
       </div>
 
@@ -52,28 +53,32 @@ export const SpendMeter: React.FC<SpendMeterProps> = ({
         <div className="flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400">
           <span>/</span>
           <span className="font-mono">${spendCapUsd.toFixed(2)}</span>
-          <div
-            className="w-14 h-1.5 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden"
-            role="progressbar"
-            aria-valuenow={Math.round(progressPercent)}
-            aria-valuemin={0}
-            aria-valuemax={100}
-            title={`${Math.round(progressPercent)}% of run budget cap`}
-          >
-            <div
-              className={`h-full transition-all duration-300 ${
-                isBudgetExceeded
-                  ? 'bg-rose-600 dark:bg-rose-500'
-                  : isNearCap
-                  ? 'bg-amber-500'
-                  : 'bg-emerald-500'
-              }`}
-              style={{ width: `${progressPercent}%` }}
-            />
-          </div>
-          <span className="font-mono text-[10px]">
-            {Math.round(progressPercent)}%
-          </span>
+          {isSpendKnown && (
+            <>
+              <div
+                className="w-14 h-1.5 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden"
+                role="progressbar"
+                aria-valuenow={Math.round(progressPercent)}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                title={`${Math.round(progressPercent)}% of run budget cap`}
+              >
+                <div
+                  className={`h-full transition-all duration-300 ${
+                    isBudgetExceeded
+                      ? 'bg-rose-600 dark:bg-rose-500'
+                      : isNearCap
+                      ? 'bg-amber-500'
+                      : 'bg-emerald-500'
+                  }`}
+                  style={{ width: `${progressPercent}%` }}
+                />
+              </div>
+              <span className="font-mono text-[10px]">
+                {Math.round(progressPercent)}%
+              </span>
+            </>
+          )}
         </div>
       )}
 

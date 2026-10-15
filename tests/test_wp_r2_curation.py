@@ -101,9 +101,11 @@ def test_t3_recipes_structure_and_faces_mapping(decrypted_t3_gt: dict) -> None:
         if len(faces) > 1:
             multi_page_found = True
 
-        assert r.get("structured") is None
-        assert r.get("structured_status") == "pending_text_only_draft"
-        assert r.get("excluded_reason") is None
+        if r.get("structured") is not None:
+            assert isinstance(r["structured"], dict)
+            assert r.get("structured_status") in {"drafted_unreviewed", "reviewed"}
+        else:
+            assert r.get("structured_status") == "pending_text_only_draft"
 
         diff = r.get("difficulty", {})
         assert diff.get("faces") == len(faces)

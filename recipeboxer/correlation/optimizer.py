@@ -393,7 +393,22 @@ def path_cover(
     return sorted(repaired_chains, key=lambda c: c[0])
 
 
+# Named structural priors for global path cover optimization.
+# These priors represent empirical initial hypotheses regarding card boundaries and roles
+# used purely to parameterize dummy start / end transition costs in bipartite matching.
+# INVARIANT (INV-AC4 / FIND-04): They must NEVER be reported as CorrelationProposal.confidence
+# or recipe confidence.
+STRUCTURAL_PRIOR_START_TITLE: float = 0.85
+STRUCTURAL_PRIOR_START_DEFAULT: float = 0.50
+STRUCTURAL_PRIOR_COMPLETE_STANDALONE: float = 0.90
+STRUCTURAL_PRIOR_COMPLETE_DEFAULT: float = 0.50
+STRUCTURAL_PRIOR_EXPECTS_CONT_START: float = 0.85
+STRUCTURAL_PRIOR_EXPECTS_CONT_LOW: float = 0.15
+STRUCTURAL_PRIOR_EXPECTS_CONT_DEFAULT: float = 0.50
+
+
 class PairingOptimizer:
+
     """Solves open-ended directed sequence correlation and clustering for recipe digitization."""
 
     def __init__(
@@ -468,22 +483,26 @@ class PairingOptimizer:
         multi_card_prebuilt: Dict[Tuple[str, ...], CorrelationProposal] = {}
 
         for prop in proposals:
-            if prop.recommended_action == "REJECT" or prop.confidence < self.min_pair_confidence:
+            conf = prop.confidence if prop.confidence is not None else (prop.semantic_score if prop.semantic_score is not None else prop.heuristic_score)
+            if conf is None:
+                conf = 0.0
+
+            if prop.recommended_action == "REJECT" or conf < self.min_pair_confidence:
                 continue
 
             card_ids = prop.ordered_card_ids
             if len(card_ids) == 2:
                 u, v = card_ids[0], card_ids[1]
                 # Keep highest confidence if duplicate proposal exists
-                if (u, v) not in links or prop.confidence > links[(u, v)]:
-                    links[(u, v)] = prop.confidence
+                if (u, v) not in links or conf > links[(u, v)]:
+                    links[(u, v)] = conf
                     edge_prop_map[(u, v)] = prop
             elif len(card_ids) >= 3:
                 multi_card_prebuilt[tuple(card_ids)] = prop
                 for k in range(len(card_ids) - 1):
                     u, v = card_ids[k], card_ids[k + 1]
-                    if (u, v) not in links or prop.confidence > links[(u, v)]:
-                        links[(u, v)] = prop.confidence
+                    if (u, v) not in links or conf > links[(u, v)]:
+                        links[(u, v)] = conf
                         edge_prop_map[(u, v)] = prop
 
         # Construct node costs from completeness priors
@@ -491,13 +510,13 @@ class PairingOptimizer:
         for fp in fingerprints:
             role_str = _get_enum_str(fp.role)
             has_title = bool(getattr(fp, "visible_title", None))
-            is_start = 0.85 if (has_title or role_str == "SEQUENCE_START" or role_str == "FRONT") else 0.50
-            is_comp = 0.90 if (role_str == "STANDALONE" or getattr(fp, "is_standalone", False)) else 0.50
-            expects_cont = 0.85 if (
+            is_start = STRUCTURAL_PRIOR_START_TITLE if (has_title or role_str == "SEQUENCE_START" or role_str == "FRONT") else STRUCTURAL_PRIOR_START_DEFAULT
+            is_comp = STRUCTURAL_PRIOR_COMPLETE_STANDALONE if (role_str == "STANDALONE" or getattr(fp, "is_standalone", False)) else STRUCTURAL_PRIOR_COMPLETE_DEFAULT
+            expects_cont = STRUCTURAL_PRIOR_EXPECTS_CONT_START if (
                 role_str == "SEQUENCE_START"
                 or getattr(fp, "text_cut_off_end", False)
                 or (getattr(fp, "has_ingredients", False) and not getattr(fp, "has_directions", False))
-            ) else (0.15 if is_comp > 0.7 else 0.50)
+            ) else (STRUCTURAL_PRIOR_EXPECTS_CONT_LOW if is_comp > 0.7 else STRUCTURAL_PRIOR_EXPECTS_CONT_DEFAULT)
 
             node_costs[fp.card_id] = {
                 "expects_continuation": expects_cont,
@@ -521,14 +540,14 @@ class PairingOptimizer:
                 role_str = _get_enum_str(fp.role) if fp else ""
                 # Check if classified as standalone
                 if role_str == "STANDALONE" or (fp and getattr(fp, "is_standalone", False)):
-                    conf = getattr(fp, "role_confidence", 0.90) or 0.90
+                    conf = getattr(fp, "role_confidence", None)
                     standalone_prop = CorrelationProposal(
                         proposal_id=f"prop_{uuid.uuid4().hex[:8]}",
                         ordered_card_ids=[cid],
                         part_count=1,
                         transition_scores=[],
                         heuristic_score=0.0,
-                        semantic_score=0.0,
+                        semantic_score=None,
                         confidence=conf,
                         is_standalone=True,
                         continuity_explanation="Single-sided card classified as self-contained standalone recipe.",
@@ -562,7 +581,11 @@ class PairingOptimizer:
                         h_s = matched_p.heuristic_score if getattr(matched_p, "heuristic_score", None) is not None else t_conf
                         h_scores.append(h_s)
                         s_s = getattr(matched_p, "semantic_score", None)
-                        if s_s is not None:
+                        if s_s is not None and s_s > 0.0:
+                            s_scores.append(s_s)
+                        elif getattr(matched_p, "confidence", None) is not None and getattr(matched_p, "semantic_verified", True):
+                            s_scores.append(matched_p.confidence)
+                        elif s_s is not None:
                             s_scores.append(s_s)
                         if getattr(matched_p, "continuity_explanation", ""):
                             explanations.append(matched_p.continuity_explanation)
@@ -574,7 +597,7 @@ class PairingOptimizer:
                 missing_semantic = len(s_scores) < len(t_scores) or not s_scores
                 if missing_semantic:
                     avg_s = sum(s_scores) / len(s_scores) if s_scores else None
-                    final_conf = avg_h
+                    final_conf = min(t_scores) if t_scores else None
                     action = "UNCERTAIN"
                     sem_verified = False
                     deg_reason = "MISSING_SEMANTIC_EVIDENCE"

@@ -24,8 +24,12 @@ Pure numpy, scipy, and Pillow implementation. Production code must never import 
 
 from __future__ import annotations
 
+from collections import OrderedDict
+from dataclasses import dataclass
+import hashlib
 import io
 from pathlib import Path
+import threading
 from typing import Any, Dict, Optional, Tuple, Union
 
 import numpy as np
@@ -40,6 +44,87 @@ from scipy.ndimage import (
     uniform_filter,
 )
 from scipy.signal import fftconvolve
+
+
+@dataclass
+class _ShowThroughCardFeatures:
+    ink_count: int
+    r_norm: Optional[np.ndarray]
+    f_norm_h: Optional[np.ndarray]
+    f_norm_v: Optional[np.ndarray]
+
+
+class _BoundedLRU:
+    def __init__(self, maxsize: int = 1024):
+        self.maxsize = maxsize
+        self._data: OrderedDict[str, Any] = OrderedDict()
+        self._lock = threading.Lock()
+
+    def get(self, key: str) -> Any:
+        with self._lock:
+            if key not in self._data:
+                return None
+            self._data.move_to_end(key)
+            return self._data[key]
+
+    def set(self, key: str, value: Any) -> None:
+        with self._lock:
+            if key in self._data:
+                self._data.move_to_end(key)
+            self._data[key] = value
+            if len(self._data) > self.maxsize:
+                self._data.popitem(last=False)
+
+    def clear(self) -> None:
+        with self._lock:
+            self._data.clear()
+
+
+_WEAR_CACHE = _BoundedLRU(maxsize=1024)
+_SHOW_THROUGH_CACHE = _BoundedLRU(maxsize=1024)
+_SILHOUETTE_CACHE = _BoundedLRU(maxsize=1024)
+
+
+def clear_physical_pairing_cache() -> None:
+    """Clears all in-memory LRU feature caches for physical pairing."""
+    _WEAR_CACHE.clear()
+    _SHOW_THROUGH_CACHE.clear()
+    _SILHOUETTE_CACHE.clear()
+
+
+def _get_cache_key(image: Union[Image.Image, Path, str, bytes]) -> str:
+    """Generates a stable cache key for input image representations."""
+    if isinstance(image, bytes):
+        return hashlib.sha256(image).hexdigest()
+    if isinstance(image, (str, Path)):
+        p = Path(image)
+        try:
+            st = p.stat()
+            return f"path:{p.resolve()}:{st.st_size}:{st.st_mtime_ns}"
+        except Exception:
+            return f"path:{p}"
+    if isinstance(image, Image.Image):
+        key = getattr(image, "_rb_cache_key", None)
+        if key is not None:
+            return key
+        filename = getattr(image, "filename", None)
+        if filename:
+            try:
+                p = Path(filename)
+                st = p.stat()
+                key = f"file:{p.resolve()}:{st.st_size}:{st.st_mtime_ns}"
+                setattr(image, "_rb_cache_key", key)
+                return key
+            except Exception:
+                pass
+        try:
+            raw = image.tobytes()
+            key = f"im:{image.size}:{image.mode}:{hashlib.sha256(raw).hexdigest()}"
+        except Exception:
+            key = f"id:{id(image)}"
+        setattr(image, "_rb_cache_key", key)
+        return key
+    return f"fallback:{id(image)}"
 
 
 def _to_pil_image(image: Union[Image.Image, Path, str, bytes]) -> Image.Image:
@@ -63,6 +148,79 @@ def _to_pil_image(image: Union[Image.Image, Path, str, bytes]) -> Image.Image:
 # 1. SHOW-THROUGH SCORE
 # ============================================================================
 
+def _get_show_through_features(face: Union[Image.Image, Path, str, bytes]) -> Optional[_ShowThroughCardFeatures]:
+    key = _get_cache_key(face)
+    cached = _SHOW_THROUGH_CACHE.get(key)
+    if cached is not None:
+        return cached if not (isinstance(cached, str) and cached == "__NONE__") else None
+
+    try:
+        im = _to_pil_image(face)
+    except Exception:
+        _SHOW_THROUGH_CACHE.set(key, "__NONE__")
+        return None
+
+    if im.width < 10 or im.height < 10:
+        _SHOW_THROUGH_CACHE.set(key, "__NONE__")
+        return None
+
+    target_w, target_h = 240, 160
+    gray = np.array(im.convert("L").resize((target_w, target_h), Image.BILINEAR), dtype=np.float32)
+
+    bg = grey_closing(gray, size=(13, 13))
+    delta = np.maximum(0.0, bg - gray)
+    rule = np.maximum(0.0, grey_opening(delta, size=(1, 21)) - grey_opening(delta, size=(3, 21)))
+    delta = np.maximum(0.0, delta - rule)
+    ink_count = int(np.sum(delta > 20.0))
+
+    active_tgt = delta[delta > 5.0]
+    tau_tgt = max(25.0, float(np.percentile(active_tgt, 70)) if active_tgt.size > 0 else 25.0)
+    primary_mask = binary_dilation(delta > tau_tgt, iterations=2)
+
+    res_tgt = np.where(~primary_mask, np.clip(delta, 0.0, 25.0), 0.0)
+    res_tgt = res_tgt - gaussian_filter(res_tgt, sigma=8.0)
+    r_std = float(np.std(res_tgt))
+    r_norm = (
+        (res_tgt - float(np.mean(res_tgt))) / (r_std * np.sqrt(res_tgt.size))
+        if r_std >= 1e-4
+        else None
+    )
+
+    if ink_count < 35:
+        f_norm_h = None
+        f_norm_v = None
+    else:
+        ink_src = np.clip(delta, 0.0, 100.0)
+        ink_src = np.maximum(0.0, ink_src - gaussian_filter(ink_src, sigma=15.0))
+        ink_src_blur = gaussian_filter(ink_src, sigma=1.8)
+
+        flipped_src_h = np.fliplr(ink_src_blur)
+        flipped_src_v = np.flipud(ink_src_blur)
+
+        f_std_h = float(np.std(flipped_src_h))
+        f_std_v = float(np.std(flipped_src_v))
+
+        f_norm_h = (
+            (flipped_src_h - float(np.mean(flipped_src_h))) / (f_std_h * np.sqrt(flipped_src_h.size))
+            if f_std_h >= 1e-4
+            else None
+        )
+        f_norm_v = (
+            (flipped_src_v - float(np.mean(flipped_src_v))) / (f_std_v * np.sqrt(flipped_src_v.size))
+            if f_std_v >= 1e-4
+            else None
+        )
+
+    feats = _ShowThroughCardFeatures(
+        ink_count=ink_count,
+        r_norm=r_norm,
+        f_norm_h=f_norm_h,
+        f_norm_v=f_norm_v,
+    )
+    _SHOW_THROUGH_CACHE.set(key, feats)
+    return feats
+
+
 def show_through_score(
     face_a: Image.Image,
     face_b: Image.Image,
@@ -83,93 +241,48 @@ def show_through_score(
         or images are uncomputable.
     """
     try:
-        im_a = _to_pil_image(face_a)
-        im_b = _to_pil_image(face_b)
+        fa = _get_show_through_features(face_a)
+        fb = _get_show_through_features(face_b)
     except Exception:
         return None
 
-    if im_a.width < 10 or im_a.height < 10 or im_b.width < 10 or im_b.height < 10:
+    if fa is None or fb is None:
         return None
 
-    # Downscale to fast canonical working resolution
+    if fa.ink_count < 35 and fb.ink_count < 35:
+        return None
+
     target_w, target_h = 240, 160
-    gray_a = np.array(im_a.convert("L").resize((target_w, target_h), Image.BILINEAR), dtype=np.float32)
-    gray_b = np.array(im_b.convert("L").resize((target_w, target_h), Image.BILINEAR), dtype=np.float32)
+    cy, cx = target_h // 2, target_w // 2
 
-    # Estimate paper background via morphological closing (fills in dark text strokes)
-    bg_a = grey_closing(gray_a, size=(13, 13))
-    bg_b = grey_closing(gray_b, size=(13, 13))
-
-    delta_a = np.maximum(0.0, bg_a - gray_a)
-    delta_b = np.maximum(0.0, bg_b - gray_b)
-
-    # Suppress continuous thin horizontal ruling lines (features spanning > 21 px horizontally but <= 2 px tall)
-    rule_a = np.maximum(0.0, grey_opening(delta_a, size=(1, 21)) - grey_opening(delta_a, size=(3, 21)))
-    rule_b = np.maximum(0.0, grey_opening(delta_b, size=(1, 21)) - grey_opening(delta_b, size=(3, 21)))
-    delta_a = np.maximum(0.0, delta_a - rule_a)
-    delta_b = np.maximum(0.0, delta_b - rule_b)
-
-    # Validate that sufficient ink is present on at least one face
-    ink_a_count = int(np.sum(delta_a > 20.0))
-    ink_b_count = int(np.sum(delta_b > 20.0))
-    if ink_a_count < 35 and ink_b_count < 35:
-        return None
-
-    def _correlate_direction(
-        d_src: np.ndarray,
-        d_tgt: np.ndarray,
-        flip_mode: str,
-    ) -> float | None:
-        """Correlates source ink layout with target residue."""
-        if int(np.sum(d_src > 20.0)) < 35:
+    def _correlate(r_norm: Optional[np.ndarray], f_norm: Optional[np.ndarray]) -> float | None:
+        if f_norm is None:
             return None
-
-        # Mask target's own primary ink (upper contrast tail)
-        active_tgt = d_tgt[d_tgt > 5.0]
-        tau_tgt = max(25.0, float(np.percentile(active_tgt, 70)) if active_tgt.size > 0 else 25.0)
-        primary_mask = binary_dilation(d_tgt > tau_tgt, iterations=2)
-
-        # Target residue in unmasked paper regions
-        res_tgt = np.where(~primary_mask, np.clip(d_tgt, 0.0, 25.0), 0.0)
-        # Remove low-frequency illumination gradients
-        res_tgt = res_tgt - gaussian_filter(res_tgt, sigma=8.0)
-
-        # Source ink layout map (smoothed with paper bleed PSF)
-        ink_src = np.clip(d_src, 0.0, 100.0)
-        ink_src = np.maximum(0.0, ink_src - gaussian_filter(ink_src, sigma=15.0))
-        ink_src_blur = gaussian_filter(ink_src, sigma=1.8)
-
-        flipped_src = np.fliplr(ink_src_blur) if flip_mode == "h" else np.flipud(ink_src_blur)
-
-        r_std = float(np.std(res_tgt))
-        f_std = float(np.std(flipped_src))
-        if r_std < 1e-4 or f_std < 1e-4:
+        if r_norm is None:
             return 0.0
 
-        r_norm = (res_tgt - float(np.mean(res_tgt))) / (r_std * np.sqrt(res_tgt.size))
-        f_norm = (flipped_src - float(np.mean(flipped_src))) / (f_std * np.sqrt(flipped_src.size))
-
-        # 2D cross-correlation via FFT
         corr_map = fftconvolve(r_norm, f_norm[::-1, ::-1], mode="same")
-        cy, cx = target_h // 2, target_w // 2
-        # Search over small spatial shifts: dy in [-6, 6], dx in [-8, 8]
         sub = corr_map[cy - 6 : cy + 7, cx - 8 : cx + 9]
         raw_corr = float(np.max(sub))
-
-        # Calibrate raw Pearson correlation to [0.0, 1.0] via smoothstep
         t = float(np.clip((raw_corr - 0.18) / 0.22, 0.0, 1.0))
         return 3.0 * (t ** 2) - 2.0 * (t ** 3)
 
     scores: list[float] = []
-    for flip in ("h", "v"):
-        # Ghost of B on A
-        s_ba = _correlate_direction(delta_b, delta_a, flip)
-        if s_ba is not None:
-            scores.append(s_ba)
-        # Ghost of A on B
-        s_ab = _correlate_direction(delta_a, delta_b, flip)
-        if s_ab is not None:
-            scores.append(s_ab)
+    # Flip "h":
+    s_ba_h = _correlate(fa.r_norm, fb.f_norm_h)
+    if s_ba_h is not None:
+        scores.append(s_ba_h)
+    s_ab_h = _correlate(fb.r_norm, fa.f_norm_h)
+    if s_ab_h is not None:
+        scores.append(s_ab_h)
+
+    # Flip "v":
+    s_ba_v = _correlate(fa.r_norm, fb.f_norm_v)
+    if s_ba_v is not None:
+        scores.append(s_ba_v)
+    s_ab_v = _correlate(fb.r_norm, fa.f_norm_v)
+    if s_ab_v is not None:
+        scores.append(s_ab_v)
 
     if not scores:
         return None
@@ -180,6 +293,59 @@ def show_through_score(
 # ============================================================================
 # 2. MIRRORED WEAR SCORE
 # ============================================================================
+
+def _extract_wear_field(arr_rgb: np.ndarray, gray: np.ndarray) -> np.ndarray:
+    target_h, target_w = 160, 240
+    # 1. Stain blobs: chromatic deviation (coffee/tea and grease absorb blue)
+    # Median filter removes thin text strokes and ruling lines
+    smooth_rgb = np.zeros_like(arr_rgb)
+    for c in range(3):
+        smooth_rgb[:, :, c] = median_filter(arr_rgb[:, :, c], size=9)
+
+    chroma = (smooth_rgb[:, :, 0] + smooth_rgb[:, :, 1]) / 2.0 - smooth_rgb[:, :, 2]
+    bg_chroma = float(np.percentile(chroma, 40))
+    stain_field = uniform_filter(np.maximum(0.0, chroma - bg_chroma), size=7)
+
+    # 2. Perimeter and corner damage (dog-ears, tears, notches)
+    bg_gray = float(np.percentile(gray, 80))
+    margin_mask = np.zeros((target_h, target_w), dtype=np.float32)
+    margin_mask[:25, :] = 1.0
+    margin_mask[-25:, :] = 1.0
+    margin_mask[:, :25] = 1.0
+    margin_mask[:, -25:] = 1.0
+
+    edge_dev = np.abs(gray - bg_gray) * margin_mask
+    edge_field = uniform_filter(edge_dev, size=5)
+
+    # Normalized combination of stain and structural edge damage
+    wear_field = np.clip(stain_field / 15.0, 0.0, 1.0) * 0.70 + np.clip(edge_field / 40.0, 0.0, 1.0) * 0.50
+    return wear_field
+
+
+def _get_wear_field(face: Union[Image.Image, Path, str, bytes]) -> Optional[np.ndarray]:
+    key = _get_cache_key(face)
+    cached = _WEAR_CACHE.get(key)
+    if cached is not None:
+        return cached if not (isinstance(cached, str) and cached == "__NONE__") else None
+
+    try:
+        im = _to_pil_image(face)
+    except Exception:
+        _WEAR_CACHE.set(key, "__NONE__")
+        return None
+
+    if im.width < 10 or im.height < 10:
+        _WEAR_CACHE.set(key, "__NONE__")
+        return None
+
+    target_w, target_h = 240, 160
+    arr_a = np.array(im.convert("RGB").resize((target_w, target_h), Image.BILINEAR), dtype=np.float32)
+    gray_a = np.array(im.convert("L").resize((target_w, target_h), Image.BILINEAR), dtype=np.float32)
+
+    wear = _extract_wear_field(arr_a, gray_a)
+    _WEAR_CACHE.set(key, wear)
+    return wear
+
 
 def mirrored_wear_score(
     face_a: Image.Image,
@@ -200,55 +366,21 @@ def mirrored_wear_score(
         are detected on either card face.
     """
     try:
-        im_a = _to_pil_image(face_a)
-        im_b = _to_pil_image(face_b)
+        wa = _get_wear_field(face_a)
+        wb = _get_wear_field(face_b)
     except Exception:
         return None
 
-    if im_a.width < 10 or im_a.height < 10 or im_b.width < 10 or im_b.height < 10:
+    if wa is None or wb is None:
         return None
-
-    target_w, target_h = 240, 160
-    arr_a = np.array(im_a.convert("RGB").resize((target_w, target_h), Image.BILINEAR), dtype=np.float32)
-    arr_b = np.array(im_b.convert("RGB").resize((target_w, target_h), Image.BILINEAR), dtype=np.float32)
-    gray_a = np.array(im_a.convert("L").resize((target_w, target_h), Image.BILINEAR), dtype=np.float32)
-    gray_b = np.array(im_b.convert("L").resize((target_w, target_h), Image.BILINEAR), dtype=np.float32)
-
-    def _extract_wear_field(arr_rgb: np.ndarray, gray: np.ndarray) -> np.ndarray:
-        # 1. Stain blobs: chromatic deviation (coffee/tea and grease absorb blue)
-        # Median filter removes thin text strokes and ruling lines
-        smooth_rgb = np.zeros_like(arr_rgb)
-        for c in range(3):
-            smooth_rgb[:, :, c] = median_filter(arr_rgb[:, :, c], size=9)
-
-        chroma = (smooth_rgb[:, :, 0] + smooth_rgb[:, :, 1]) / 2.0 - smooth_rgb[:, :, 2]
-        bg_chroma = float(np.percentile(chroma, 40))
-        stain_field = uniform_filter(np.maximum(0.0, chroma - bg_chroma), size=7)
-
-        # 2. Perimeter and corner damage (dog-ears, tears, notches)
-        bg_gray = float(np.percentile(gray, 80))
-        margin_mask = np.zeros((target_h, target_w), dtype=np.float32)
-        margin_mask[:25, :] = 1.0
-        margin_mask[-25:, :] = 1.0
-        margin_mask[:, :25] = 1.0
-        margin_mask[:, -25:] = 1.0
-
-        edge_dev = np.abs(gray - bg_gray) * margin_mask
-        edge_field = uniform_filter(edge_dev, size=5)
-
-        # Normalized combination of stain and structural edge damage
-        wear_field = np.clip(stain_field / 15.0, 0.0, 1.0) * 0.70 + np.clip(edge_field / 40.0, 0.0, 1.0) * 0.50
-        return wear_field
-
-    wa = _extract_wear_field(arr_a, gray_a)
-    wb = _extract_wear_field(arr_b, gray_b)
 
     # Return None when neither face exhibits detectable wear features
     if float(np.max(wa)) < 0.15 and float(np.max(wb)) < 0.15:
         return None
 
-    scores: list[float] = []
+    target_w, target_h = 240, 160
     cy, cx = target_h // 2, target_w // 2
+    scores: list[float] = []
 
     for flip in ("h", "v"):
         wb_flip = np.fliplr(wb) if flip == "h" else np.flipud(wb)
@@ -350,6 +482,27 @@ def _segment_card_silhouette(image: Image.Image) -> Optional[Dict[str, Any]]:
     }
 
 
+def _get_silhouette(face: Union[Image.Image, Path, str, bytes]) -> Optional[Dict[str, Any]]:
+    key = _get_cache_key(face)
+    cached = _SILHOUETTE_CACHE.get(key)
+    if cached is not None:
+        return cached if not (isinstance(cached, str) and cached == "__NONE__") else None
+
+    try:
+        im = _to_pil_image(face)
+    except Exception:
+        _SILHOUETTE_CACHE.set(key, "__NONE__")
+        return None
+
+    if im.width < 10 or im.height < 10:
+        _SILHOUETTE_CACHE.set(key, "__NONE__")
+        return None
+
+    res = _segment_card_silhouette(im)
+    _SILHOUETTE_CACHE.set(key, res if res is not None else "__NONE__")
+    return res
+
+
 def outline_match_score(
     face_a: Image.Image,
     face_b: Image.Image,
@@ -368,16 +521,10 @@ def outline_match_score(
         reliably segmented from background (e.g. flush-cropped cards).
     """
     try:
-        im_a = _to_pil_image(face_a)
-        im_b = _to_pil_image(face_b)
+        ca = _get_silhouette(face_a)
+        cb = _get_silhouette(face_b)
     except Exception:
         return None
-
-    if im_a.width < 10 or im_a.height < 10 or im_b.width < 10 or im_b.height < 10:
-        return None
-
-    ca = _segment_card_silhouette(im_a)
-    cb = _segment_card_silhouette(im_b)
 
     # Return None when not computable (e.g. no card boundary)
     if ca is None or cb is None:

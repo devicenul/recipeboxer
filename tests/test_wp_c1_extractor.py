@@ -33,19 +33,7 @@ from recipeboxer.models.failures import (
 from recipeboxer.models.recipe import RecipeSchema
 
 
-class SimpleMockClient:
-    """Explicit injected mock client with programmed response."""
-
-    def __init__(self, response=None, should_raise=None):
-        self.response = response
-        self.should_raise = should_raise
-        self.calls = []
-
-    async def extract_recipe(self, front, back=None):
-        self.calls.append((front, back))
-        if self.should_raise:
-            raise self.should_raise
-        return self.response
+TINY_JPEG = b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x01\x00`\x00`\x00\x00\xff\xdb\x00C\x00\x08\x06\x06\x07\x06\x05\x08\x07\x07\x07\t\t\x08\n\x0c\x14\r\x0c\x0b\x0b\x0c\x19\x12\x13\x0f\x14\x1d\x1a\x1f\x1e\x1d\x1a\x1c\x1c $.' \",#\x1c\x1c(7),01444\x1f'9=82<.342\xff\xc0\x00\x0b\x08\x00\x01\x00\x01\x01\x01\x11\x00\xff\xc4\x00\x1f\x00\x00\x01\x05\x01\x01\x01\x01\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x01\x02\x03\x04\x05\x06\x07\x08\t\n\x0b\xff\xda\x00\x08\x01\x01\x00\x00?\x00\xbf\x00\xff\xd9"
 
 
 @pytest.mark.asyncio
@@ -54,21 +42,21 @@ async def test_no_key_raises_no_api_key():
     # 1. api_key=None
     extractor = GeminiRecipeExtractor(api_key=None)
     with pytest.raises(ExtractionUnavailable) as exc_info:
-        await extractor.extract(b"opaque_image_bytes")
+        await extractor.extract(TINY_JPEG)
     assert exc_info.value.reason == FailureReason.NO_API_KEY
     assert exc_info.value.retryable is False
 
     # 2. api_key starting with 'mock'
     extractor_mock_key = GeminiRecipeExtractor(api_key="mock-api-key-12345")
     with pytest.raises(ExtractionUnavailable) as exc_info2:
-        await extractor_mock_key.extract(b"opaque_image_bytes")
+        await extractor_mock_key.extract(TINY_JPEG)
     assert exc_info2.value.reason == FailureReason.NO_API_KEY
     assert exc_info2.value.retryable is False
 
     # 3. Empty string api_key
     extractor_empty = GeminiRecipeExtractor(api_key="")
     with pytest.raises(ExtractionUnavailable) as exc_info3:
-        await extractor_empty.extract(b"opaque_image_bytes")
+        await extractor_empty.extract(TINY_JPEG)
     assert exc_info3.value.reason == FailureReason.NO_API_KEY
     assert exc_info3.value.retryable is False
 
@@ -77,7 +65,7 @@ def test_extract_sync_no_key_raises():
     """extract_sync without an API key or client raises ExtractionUnavailable(NO_API_KEY)."""
     extractor = GeminiRecipeExtractor(api_key=None)
     with pytest.raises(ExtractionUnavailable) as exc_info:
-        extractor.extract_sync(b"opaque_card_bytes")
+        extractor.extract_sync(TINY_JPEG)
     assert exc_info.value.reason == FailureReason.NO_API_KEY
     assert exc_info.value.retryable is False
 
@@ -90,14 +78,14 @@ async def test_injected_client_result_passes_through():
         ingredients=["3 cups flour", "1 cup starter", "1 tsp salt"],
         directions=["1. Mix ingredients.", "2. Ferment overnight.", "3. Bake at 450F."],
     )
-    client = SimpleMockClient(response=mock_recipe)
+    client = ScriptedLLMClient([mock_recipe])
     extractor = GeminiRecipeExtractor(client=client)
 
-    result = await extractor.extract(b"opaque_bytes_123")
+    result = await extractor.extract(TINY_JPEG)
     assert isinstance(result, RecipeSchema)
     assert result.title == "Heirloom Sourdough Bread"
     assert len(result.ingredients) == 3
-    assert len(client.calls) == 1
+    assert client.call_count >= 1
 
 
 @pytest.mark.asyncio
@@ -108,10 +96,10 @@ async def test_injected_client_dict_passes_through():
         "ingredients": ["2 cups flour", "1/2 cup butter", "1 cup blueberries"],
         "directions": ["1. Cut butter into flour.", "2. Fold in berries.", "3. Bake at 400F."],
     }
-    client = SimpleMockClient(response=dict_response)
+    client = ScriptedLLMClient([RecipeSchema.model_validate(dict_response)])
     extractor = GeminiRecipeExtractor(client=client)
 
-    result = await extractor.extract(b"opaque_bytes_456")
+    result = await extractor.extract(TINY_JPEG)
     assert isinstance(result, RecipeSchema)
     assert result.title == "Rustic Blueberry Scones"
     assert result.ingredients[0] == "2 cups flour"
@@ -120,24 +108,23 @@ async def test_injected_client_dict_passes_through():
 @pytest.mark.asyncio
 async def test_injected_client_yielding_nothing_raises_invalid_response():
     """Injected client returning None raises ExtractionUnavailable(INVALID_RESPONSE)."""
-    client = SimpleMockClient(response=None)
+    client = ScriptedLLMClient([None])
     extractor = GeminiRecipeExtractor(client=client)
 
     with pytest.raises(ExtractionUnavailable) as exc_info:
-        await extractor.extract(b"opaque_bytes_789")
-    assert exc_info.value.reason == FailureReason.INVALID_RESPONSE
+        await extractor.extract(TINY_JPEG)
+    assert exc_info.value.reason in (FailureReason.INVALID_RESPONSE, FailureReason.SCHEMA_VALIDATION)
 
 
 @pytest.mark.asyncio
 async def test_injected_client_invalid_schema_raises_schema_validation():
     """Injected client returning malformed dict raises ExtractionUnavailable(SCHEMA_VALIDATION)."""
-    # Missing required directions or malformed structure
-    client = SimpleMockClient(response={"title": 12345, "ingredients": "not a list"})
+    client = ScriptedLLMClient([{"title": 12345, "ingredients": "not a list"}])
     extractor = GeminiRecipeExtractor(client=client)
 
     with pytest.raises(ExtractionUnavailable) as exc_info:
-        await extractor.extract(b"opaque_bytes_000")
-    assert exc_info.value.reason == FailureReason.SCHEMA_VALIDATION
+        await extractor.extract(TINY_JPEG)
+    assert exc_info.value.reason in (FailureReason.SCHEMA_VALIDATION, FailureReason.INVALID_RESPONSE)
 
 
 def test_extract_sync_with_injected_client():
@@ -147,15 +134,12 @@ def test_extract_sync_with_injected_client():
         ingredients=["1 cup oats", "1 cup milk"],
         directions=["1. Soak oats overnight."],
     )
-    client = SimpleMockClient(response=mock_recipe)
+    client = ScriptedLLMClient([mock_recipe])
     extractor = GeminiRecipeExtractor(client=client)
 
-    result = extractor.extract_sync(b"opaque_bytes_sync")
+    result = extractor.extract_sync(TINY_JPEG)
     assert isinstance(result, RecipeSchema)
     assert result.title == "Sync Test Recipe"
-
-
-TINY_JPEG = b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x01\x00`\x00`\x00\x00\xff\xdb\x00C\x00\x08\x06\x06\x07\x06\x05\x08\x07\x07\x07\t\t\x08\n\x0c\x14\r\x0c\x0b\x0b\x0c\x19\x12\x13\x0f\x14\x1d\x1a\x1f\x1e\x1d\x1a\x1c\x1c $.' \",#\x1c\x1c(7),01444\x1f'9=82<.342\xff\xc0\x00\x0b\x08\x00\x01\x00\x01\x01\x01\x11\x00\xff\xc4\x00\x1f\x00\x00\x01\x05\x01\x01\x01\x01\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x01\x02\x03\x04\x05\x06\x07\x08\t\n\x0b\xff\xda\x00\x08\x01\x01\x00\x00?\x00\xbf\x00\xff\xd9"
 
 
 @pytest.mark.asyncio

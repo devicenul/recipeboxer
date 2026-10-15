@@ -57,10 +57,14 @@ from recipeboxer.models.failures import (
     StageUnavailableError,
 )
 from recipeboxer.models.hitl import CardPairApproval, HITLDecision, HitlItemType
-from recipeboxer.models.pipeline import PipelineState
+from recipeboxer.models.pipeline import FailedRecipe, PipelineState
 from recipeboxer.models.recipe import RecipeSchema
 
 logger = logging.getLogger("recipeboxer.headless")
+
+# Suppress debug/info logging from HTTP transports to prevent credential leakage
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("google_genai").setLevel(logging.WARNING)
 
 
 
@@ -441,6 +445,49 @@ async def run_headless_analysis(
         bridge_task.cancel()
 
     # Determine overall status
+    # Assemble failures output first
+    failures_out: List[Dict[str, Any]] = []
+    for f in session.failures:
+        stage_str = f.stage.value if hasattr(f.stage, "value") else str(f.stage)
+        reason_str = f.reason.value if hasattr(f.reason, "value") else str(f.reason)
+        failures_out.append({
+            "stage": stage_str,
+            "reason": reason_str,
+            "image_ids": list(f.card_ids or []),
+            "message": f.message or "",
+        })
+
+    # Separate valid recipes from FailedRecipe stubs (FIND-03)
+    valid_recipes: List[Any] = []
+    for r in session.recipes:
+        is_failed = (
+            isinstance(r, FailedRecipe)
+            or getattr(r, "status", None) == "FAILED"
+            or (hasattr(r, "title") and str(r.title).startswith("Extraction Failed"))
+        )
+        if is_failed:
+            fail_obj = getattr(r, "failure", None)
+            cids = list(getattr(r, "card_ids", []) or [])
+            if fail_obj:
+                stage_str = fail_obj.stage.value if hasattr(fail_obj.stage, "value") else str(fail_obj.stage)
+                reason_str = fail_obj.reason.value if hasattr(fail_obj.reason, "value") else str(fail_obj.reason)
+                failures_out.append({
+                    "stage": stage_str,
+                    "reason": reason_str,
+                    "image_ids": cids,
+                    "message": fail_obj.message or getattr(r, "description", ""),
+                })
+            else:
+                failures_out.append({
+                    "stage": "EXTRACTION",
+                    "reason": "EXTRACTION_FAILED",
+                    "image_ids": cids,
+                    "message": getattr(r, "description", "") or "Recipe extraction failed",
+                })
+        else:
+            valid_recipes.append(r)
+
+    # Determine overall status
     is_no_live_model = False
     for f in session.failures:
         if f.reason == FailureReason.NO_API_KEY:
@@ -461,16 +508,18 @@ async def run_headless_analysis(
         status = "budget_exceeded"
     elif is_no_live_model:
         status = "no_live_model"
-    elif session.state == PipelineState.FAILED:
-        status = "error"
+    elif session.state == PipelineState.FAILED or (len(valid_recipes) == 0 and len(session.cards) > 0):
+        status = "failed"
+    elif len(failures_out) > 0:
+        status = "partial"
     else:
         status = "ok"
 
-    # Assemble recipes output
+    # Assemble recipes output from valid extracted recipes only
     recipes_out: List[Dict[str, Any]] = []
     assigned_card_ids: set[str] = set()
 
-    for idx, r in enumerate(session.recipes, 1):
+    for idx, r in enumerate(valid_recipes, 1):
         cids = list(getattr(r, "card_ids", []) or [])
         for cid in cids:
             assigned_card_ids.add(cid)
@@ -513,18 +562,6 @@ async def run_headless_analysis(
     unassigned_image_ids = [
         cid for cid in all_card_ids if cid not in assigned_card_ids
     ]
-
-    # Assemble failures output
-    failures_out: List[Dict[str, Any]] = []
-    for f in session.failures:
-        stage_str = f.stage.value if hasattr(f.stage, "value") else str(f.stage)
-        reason_str = f.reason.value if hasattr(f.reason, "value") else str(f.reason)
-        failures_out.append({
-            "stage": stage_str,
-            "reason": reason_str,
-            "image_ids": list(f.card_ids or []),
-            "message": f.message or "",
-        })
 
     # Assemble ledger output
     records = ledger.get_records()
@@ -572,6 +609,6 @@ async def run_headless_analysis(
     if out_file:
         out_p = Path(out_file).resolve()
         out_p.parent.mkdir(parents=True, exist_ok=True)
-        out_p.write_text(json.dumps(result, indent=2), encoding="utf-8")
+        out_p.write_text(json.dumps(result, indent=2, default=str), encoding="utf-8")
 
     return result

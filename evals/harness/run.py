@@ -25,6 +25,8 @@ from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 from evals.harness.obfuscation import DeckMapping, prepare_obfuscated_deck
 
 logger = logging.getLogger("evals.harness.run")
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("google_genai").setLevel(logging.WARNING)
 
 ENV_ALLOWLIST = {
     "PATH",
@@ -402,6 +404,7 @@ def run_benchmark(
 
                     deck_outputs.append({
                         "deck_id": deck_id,
+                        "status": sut_status,
                         "recipes": mapped_recipes,
                         "unassigned_image_ids": mapped_unassigned,
                         "failures": mapped_failures,
@@ -419,6 +422,7 @@ def run_benchmark(
                         overall_status = "error"
                     deck_outputs.append({
                         "deck_id": deck_id,
+                        "status": "failed",
                         "recipes": [],
                         "unassigned_image_ids": [p.name for p in img_paths],
                         "failures": [{
@@ -435,6 +439,7 @@ def run_benchmark(
                     overall_status = "error"
                 deck_outputs.append({
                     "deck_id": deck_id,
+                    "status": "failed",
                     "recipes": [],
                     "unassigned_image_ids": [p.name for p in img_paths],
                     "failures": [{
@@ -477,6 +482,43 @@ def run_benchmark(
     }
     (out_path / "ledger.json").write_text(json.dumps(ledger_payload, indent=2), encoding="utf-8")
 
+    if overall_status != "cheat_detected":
+        if any(d.get("status") == "budget_exceeded" for d in deck_outputs) or overall_status == "budget_exceeded":
+            overall_status = "budget_exceeded"
+        elif any(d.get("status") == "no_live_model" for d in deck_outputs) or overall_status == "no_live_model":
+            overall_status = "no_live_model"
+        else:
+            total_recipes = sum(len(d.get("recipes", [])) for d in deck_outputs)
+            total_failures = sum(len(d.get("failures", [])) for d in deck_outputs)
+            has_deck_partial = any(
+                d.get("status") in ("partial", "error", "failed") or len(d.get("failures", [])) > 0
+                for d in deck_outputs
+            )
+            if total_recipes == 0:
+                overall_status = "failed"
+            elif has_deck_partial or total_failures > 0:
+                overall_status = "partial"
+            else:
+                overall_status = "ok"
+
+    deck_failure_summaries: Dict[str, Any] = {}
+    for d in deck_outputs:
+        did = d.get("deck_id", "d01")
+        f_list = d.get("failures", [])
+        if f_list:
+            by_stage: Dict[str, int] = {}
+            reasons = set()
+            for f in f_list:
+                st = f.get("stage", "UNKNOWN")
+                by_stage[st] = by_stage.get(st, 0) + 1
+                r = f.get("reason")
+                if r:
+                    reasons.add(str(r))
+            deck_failure_summaries[did] = {
+                "failure_count": len(f_list),
+                "by_stage": by_stage,
+                "reasons": sorted(list(reasons)),
+            }
 
     outputs_payload = {
         "schema": "rb-out/1",
@@ -490,6 +532,8 @@ def run_benchmark(
         "decks": deck_outputs,
         "status": overall_status,
     }
+    if deck_failure_summaries:
+        outputs_payload["failure_summary"] = deck_failure_summaries
     (out_path / "outputs.json").write_text(json.dumps(outputs_payload, indent=2), encoding="utf-8")
 
     return outputs_payload
