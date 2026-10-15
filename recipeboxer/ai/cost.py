@@ -12,6 +12,7 @@ Implements:
 from __future__ import annotations
 
 import importlib.resources
+import json
 import logging
 import math
 from dataclasses import dataclass, field
@@ -233,9 +234,13 @@ class CostLedger(UsageLedger):
         self,
         prices: PriceTable,
         guard: Optional["BudgetGuard"] = None,
+        flush_path: Optional[Union[str, Path]] = None,
     ) -> None:
         self.prices = prices
         self.guard = guard
+        self.flush_path = Path(flush_path).resolve() if flush_path is not None else None
+        if self.flush_path is not None:
+            self.flush_path.parent.mkdir(parents=True, exist_ok=True)
         self._records: List[UsageRecord] = []
         self.total_usd: float = 0.0
         self.calls: int = 0
@@ -283,6 +288,108 @@ class CostLedger(UsageLedger):
         # Store cost_usd attribute directly on record for convenient access
         object.__setattr__(record, "cost_usd", cost)
         self._records.append(record)
+
+        # Incremental append-only JSONL flush (WP-SCALE Task 2)
+        if self.flush_path is not None:
+            try:
+                call_entry = {
+                    "type": "call",
+                    "stage": stage_str,
+                    "model": model,
+                    "input_tokens": usage.input_tokens,
+                    "output_tokens": usage.output_tokens,
+                    "thinking_tokens": usage.thinking_tokens,
+                    "total_tokens": usage.total_tokens,
+                    "latency_ms": latency_ms,
+                    "attempts": attempts,
+                    "timestamp": record.timestamp.isoformat(),
+                }
+                if cost is not None:
+                    call_entry["cost_usd"] = float(cost)
+                totals_entry = {
+                    "type": "totals",
+                    "calls": self.calls,
+                    "input_tokens": self.total_input_tokens,
+                    "output_tokens": self.total_output_tokens,
+                    "thinking_tokens": self.total_thinking_tokens,
+                    "total_tokens": self.total_tokens,
+                    "latency_ms": self.total_latency_ms,
+                    "total_usd": round(self.total_usd, 6),
+                    "timestamp": record.timestamp.isoformat(),
+                }
+                with open(self.flush_path, "a", encoding="utf-8") as f:
+                    f.write(json.dumps(call_entry) + "\n")
+                    f.write(json.dumps(totals_entry) + "\n")
+                    f.flush()
+            except Exception as flush_err:
+                logger.warning("Failed to incrementally flush ledger: %s", flush_err)
+
+    @classmethod
+    def load_from_jsonl(cls, path: Union[str, Path]) -> Dict[str, Any]:
+        """Loads calls and totals dictionary from an incremental JSONL ledger file."""
+        p = Path(path).resolve()
+        if not p.exists():
+            return {
+                "calls": [],
+                "totals": {
+                    "calls": 0,
+                    "input_tokens": 0,
+                    "output_tokens": 0,
+                    "thinking_tokens": 0,
+                    "total_tokens": 0,
+                    "latency_ms": 0.0,
+                },
+            }
+
+        calls: List[Dict[str, Any]] = []
+        latest_totals: Optional[Dict[str, Any]] = None
+
+        with open(p, "r", encoding="utf-8") as f:
+            for line in f:
+                line_str = line.strip()
+                if not line_str:
+                    continue
+                try:
+                    item = json.loads(line_str)
+                    if item.get("type") == "call":
+                        call_entry = {
+                            "stage": item.get("stage"),
+                            "model": item.get("model"),
+                            "input_tokens": item.get("input_tokens", 0),
+                            "output_tokens": item.get("output_tokens", 0),
+                            "thinking_tokens": item.get("thinking_tokens", 0),
+                            "latency_ms": item.get("latency_ms", 0.0),
+                            "attempts": item.get("attempts", 1),
+                        }
+                        if "cost_usd" in item:
+                            call_entry["cost_usd"] = float(item["cost_usd"])
+                        calls.append(call_entry)
+                    elif item.get("type") == "totals":
+                        latest_totals = item
+                except Exception:
+                    pass
+
+        if latest_totals is None:
+            total_in = sum(c.get("input_tokens", 0) for c in calls)
+            total_out = sum(c.get("output_tokens", 0) for c in calls)
+            total_think = sum(c.get("thinking_tokens", 0) for c in calls)
+            total_lat = sum(c.get("latency_ms", 0.0) for c in calls)
+            total_usd = sum(c.get("cost_usd", 0.0) for c in calls if "cost_usd" in c)
+            latest_totals = {
+                "calls": len(calls),
+                "input_tokens": total_in,
+                "output_tokens": total_out,
+                "thinking_tokens": total_think,
+                "total_tokens": total_in + total_out,
+                "latency_ms": total_lat,
+                "total_usd": round(total_usd, 6),
+            }
+        else:
+            latest_totals = dict(latest_totals)
+            latest_totals.pop("type", None)
+            latest_totals.pop("timestamp", None)
+
+        return {"calls": calls, "totals": latest_totals}
 
     def get_records(self, stage: Optional[Union[LLMStage, str]] = None) -> List[UsageRecord]:
         """Returns recorded entries, optionally filtered by stage."""

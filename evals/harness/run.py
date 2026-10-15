@@ -11,12 +11,14 @@ Executes the System Under Test (SUT) against evaluation tiers (T0-T4) adhering s
 from __future__ import annotations
 
 import argparse
+import io
 import json
 import logging
 import os
 import shutil
 import subprocess
 import sys
+import tarfile
 import tempfile
 import uuid
 from pathlib import Path
@@ -27,6 +29,13 @@ from evals.harness.obfuscation import DeckMapping, prepare_obfuscated_deck
 logger = logging.getLogger("evals.harness.run")
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("google_genai").setLevel(logging.WARNING)
+
+
+def compute_deck_timeout(img_count: int, explicit_timeout: Optional[int] = None) -> int:
+    """Computes deck timeout scaling with deck size (base 180s + 30s per image, min 300s)."""
+    if explicit_timeout is not None:
+        return explicit_timeout
+    return max(300, 180 + 30 * img_count)
 
 ENV_ALLOWLIST = {
     "PATH",
@@ -214,7 +223,7 @@ def run_benchmark(
     variant: str = "opaque",
     profile: str = "balanced",
     model_profile: Optional[str] = None,
-    timeout_s: int = 600,
+    timeout_s: Optional[int] = None,
     seed: int = 42,
     budget_usd: Optional[float] = None,
     max_calls: Optional[int] = None,
@@ -244,6 +253,22 @@ def run_benchmark(
         os.environ.get("GEMINI_API_KEY", "").strip()
         or os.environ.get("RECIPEBOXER_GEMINI_API_KEY", "").strip()
     )
+
+    # T2 support: decrypt images from evals/vault/t2.images.tar.enc to managed private temp dir (Task 4)
+    norm_tier = tier.upper()
+    t2_temp_dir_ctx: Optional[tempfile.TemporaryDirectory] = None
+    if norm_tier == "T2" and not images_dir:
+        enc_tar_path = repo_root / "evals" / "vault" / "t2.images.tar.enc"
+        if not enc_tar_path.exists():
+            raise FileNotFoundError(f"T2 encrypted images not found at {enc_tar_path}")
+        from evals.vault import decrypt_bytes
+        _log("Decrypting T2 images from vault archive to private temporary directory...")
+        tar_bytes = decrypt_bytes(enc_tar_path.read_bytes())
+        t2_temp_dir_ctx = tempfile.TemporaryDirectory(prefix="t2_corpus_")
+        t2_dir = Path(t2_temp_dir_ctx.name)
+        with tarfile.open(fileobj=io.BytesIO(tar_bytes)) as tar:
+            tar.extractall(path=t2_dir)
+        images_dir = t2_dir
 
     deck_filter = set(decks) if decks else None
     resolved_decks = resolve_deck_images(tier, images_dir=images_dir, deck_filter=deck_filter)
@@ -332,7 +357,8 @@ def run_benchmark(
             # Scrubbed execution environment
             sut_env = build_scrubbed_env(allow_live_key=has_live_key)
 
-            _log(f"Executing SUT subprocess for deck '{deck_id}' (cwd={temp_dir})...")
+            eff_deck_timeout = compute_deck_timeout(len(img_paths), timeout_s)
+            _log(f"Executing SUT subprocess for deck '{deck_id}' (cwd={temp_dir}, timeout={eff_deck_timeout}s)...")
             try:
                 proc = subprocess.run(
                     cmd,
@@ -341,7 +367,7 @@ def run_benchmark(
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
                     text=True,
-                    timeout=timeout_s,
+                    timeout=eff_deck_timeout,
                 )
                 _log(f"SUT Exit Code: {proc.returncode}")
                 if proc.stdout:
@@ -440,20 +466,72 @@ def run_benchmark(
                     })
 
             except subprocess.TimeoutExpired:
-                _log(f"ERROR: SUT subprocess timed out after {timeout_s}s on deck '{deck_id}'")
-                if overall_status == "ok":
-                    overall_status = "error"
+                _log(f"ERROR: SUT subprocess timed out after {eff_deck_timeout}s on deck '{deck_id}'")
+                overall_status = "timeout"
+
+                partial_recipes: List[Dict[str, Any]] = []
+                partial_unassigned = [p.name for p in img_paths]
+                partial_failures: List[Dict[str, Any]] = []
+                partial_calls: List[Dict[str, Any]] = []
+
+                if temp_out.exists():
+                    try:
+                        sut_res = json.loads(temp_out.read_text(encoding="utf-8"))
+                        for r in sut_res.get("recipes", []):
+                            raw_cids = r.get("image_ids", [])
+                            orig_cids = [deck_map.map_temp_to_orig(cid) for cid in raw_cids]
+                            r_copy = dict(r)
+                            r_copy["image_ids"] = orig_cids
+                            if "recipe" in r_copy and isinstance(r_copy["recipe"], dict):
+                                r_copy["recipe"] = dict(r_copy["recipe"])
+                                r_copy["recipe"]["card_ids"] = orig_cids
+                            partial_recipes.append(r_copy)
+
+                        assigned_orig = {cid for r in partial_recipes for cid in r.get("image_ids", [])}
+                        partial_unassigned = [p.name for p in img_paths if p.name not in assigned_orig]
+
+                        seen_f: set[tuple[str, tuple[str, ...]]] = set()
+                        for f in sut_res.get("failures", []):
+                            f_copy = dict(f)
+                            raw_f_cids = f.get("image_ids", [])
+                            f_orig_cids = [deck_map.map_temp_to_orig(cid) for cid in raw_f_cids]
+                            f_copy["image_ids"] = f_orig_cids
+                            f_key = (f_copy.get("stage", ""), tuple(sorted(str(c) for c in f_orig_cids)))
+                            if f_key not in seen_f:
+                                seen_f.add(f_key)
+                                partial_failures.append(f_copy)
+
+                        deck_ledger = sut_res.get("ledger", {})
+                        if deck_ledger.get("calls"):
+                            partial_calls.extend(deck_ledger.get("calls", []))
+                    except Exception as e:
+                        _log(f"Warning: could not parse partial output file: {e}")
+
+                # Check incremental ledger JSONL (WP-SCALE Task 2)
+                ledger_jsonl = temp_dir / "ledger.jsonl"
+                if ledger_jsonl.exists() and not partial_calls:
+                    try:
+                        from recipeboxer.ai.cost import CostLedger
+                        loaded = CostLedger.load_from_jsonl(ledger_jsonl)
+                        partial_calls.extend(loaded.get("calls", []))
+                    except Exception as e:
+                        _log(f"Warning: could not load calls from ledger.jsonl: {e}")
+
+                all_ledger_calls.extend(partial_calls)
+
+                partial_failures.append({
+                    "stage": "EXECUTION",
+                    "reason": "TIMEOUT",
+                    "image_ids": [p.name for p in img_paths],
+                    "message": f"SUT subprocess exceeded {eff_deck_timeout}s timeout limit.",
+                })
+
                 deck_outputs.append({
                     "deck_id": deck_id,
-                    "status": "failed",
-                    "recipes": [],
-                    "unassigned_image_ids": [p.name for p in img_paths],
-                    "failures": [{
-                        "stage": "EXECUTION",
-                        "reason": "TIMEOUT",
-                        "image_ids": [p.name for p in img_paths],
-                        "message": f"SUT subprocess exceeded {timeout_s}s timeout limit.",
-                    }],
+                    "status": "timeout",
+                    "recipes": partial_recipes,
+                    "unassigned_image_ids": partial_unassigned,
+                    "failures": partial_failures,
                 })
 
     log_fp.close()
@@ -491,13 +569,15 @@ def run_benchmark(
     if overall_status != "cheat_detected":
         if any(d.get("status") == "budget_exceeded" for d in deck_outputs) or overall_status == "budget_exceeded":
             overall_status = "budget_exceeded"
+        elif any(d.get("status") == "timeout" for d in deck_outputs) or overall_status == "timeout":
+            overall_status = "timeout"
         elif any(d.get("status") == "no_live_model" for d in deck_outputs) or overall_status == "no_live_model":
             overall_status = "no_live_model"
         else:
             total_recipes = sum(len(d.get("recipes", [])) for d in deck_outputs)
             total_failures = sum(len(d.get("failures", [])) for d in deck_outputs)
             has_deck_partial = any(
-                d.get("status") in ("partial", "error", "failed") or len(d.get("failures", [])) > 0
+                d.get("status") in ("partial", "error", "failed", "timeout") or len(d.get("failures", [])) > 0
                 for d in deck_outputs
             )
             if total_recipes == 0:
@@ -542,6 +622,12 @@ def run_benchmark(
         outputs_payload["failure_summary"] = deck_failure_summaries
     (out_path / "outputs.json").write_text(json.dumps(outputs_payload, indent=2), encoding="utf-8")
 
+    if t2_temp_dir_ctx is not None:
+        try:
+            t2_temp_dir_ctx.cleanup()
+        except Exception:
+            pass
+
     return outputs_payload
 
 
@@ -576,7 +662,7 @@ def create_run_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--budget-usd", type=float, default=None, help="Evaluation run spending cap in USD (WP-B3)")
     parser.add_argument("--max-calls", type=int, default=None, help="Maximum number of LLM generation calls (WP-B3)")
-    parser.add_argument("--timeout", type=int, default=600, help="Per-deck timeout in seconds")
+    parser.add_argument("--timeout", type=int, default=None, help="Per-deck timeout override in seconds (default: scaled by deck size)")
     return parser
 
 

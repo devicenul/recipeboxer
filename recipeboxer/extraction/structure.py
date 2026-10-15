@@ -243,6 +243,11 @@ async def structure(
     # 2. Build parts: formatted transcripts + card face images with neutral labels
     transcript_text = _format_transcript_text(transcript)
 
+    # Scale timeout and max_output_tokens dynamically for long transcripts (WP-SCALE Task 5)
+    timeout_s = max(timeout_s, 60.0 + (len(transcript_text) // 500) * 15.0 + len(faces) * 15.0)
+    profile_params = settings.profile_params()
+    max_output_tokens = profile_params.get("max_output_tokens", 8192)
+
     parts: List[Union[TextPart, ImagePart]] = [
         TextPart(
             text=(
@@ -272,6 +277,7 @@ async def structure(
         parts=parts,
         response_model=RecipeStructureResponse,
         temperature=0.0,
+        max_output_tokens=max_output_tokens,
         timeout_s=timeout_s,
         metadata={
             "n_faces": len(faces),
@@ -280,13 +286,24 @@ async def structure(
         },
     )
 
-    # 4. Execute generation with error handling
+    # 4. Execute generation with error handling and repair loop on parse errors
+    response: Optional[LLMResponse] = None
     try:
         response = await llm_client.generate(request)
     except BudgetExceeded:
         # BudgetExceeded must ALWAYS propagate without swallowing
         raise
     except StageUnavailableError as exc:
+        # Check if error contains raw text that can be repaired (WP-SCALE Task 5)
+        raw_text_payload = exc.details.get("raw_text") if exc.details else None
+        if raw_text_payload and exc.reason in (FailureReason.INVALID_RESPONSE, FailureReason.SCHEMA_VALIDATION):
+            try:
+                from recipeboxer.extraction.repair import validate_and_repair
+                logger.info("Attempting repair loop on invalid structure response: %s", exc)
+                repaired = await validate_and_repair(raw_text_payload, llm_client, settings)
+                return _postprocess_recipe(repaired, transcript, len(faces))
+            except Exception as repair_exc:
+                logger.warning("Repair loop failed after parse error: %s", repair_exc)
         if isinstance(exc, ExtractionUnavailable):
             raise
         raise ExtractionUnavailable(
@@ -311,7 +328,7 @@ async def structure(
 
     # 5. Extract and validate Recipe instance
     recipe: Optional[Recipe] = None
-    if response.parsed is not None:
+    if response is not None and response.parsed is not None:
         if isinstance(response.parsed, RecipeStructureResponse):
             recipe = response.parsed.to_recipe()
         elif isinstance(response.parsed, Recipe):
@@ -321,14 +338,11 @@ async def structure(
                 recipe = RecipeStructureResponse.model_validate(response.parsed).to_recipe()
             except Exception:
                 recipe = Recipe.model_validate(response.parsed)
-    elif response.raw_text:
+    elif response is not None and response.raw_text:
         try:
-            json_text = _extract_json_text(response.raw_text)
-            data = json.loads(json_text)
-            try:
-                recipe = RecipeStructureResponse.model_validate(data).to_recipe()
-            except Exception:
-                recipe = Recipe.model_validate(data)
+            from recipeboxer.extraction.repair import validate_and_repair
+            repaired = await validate_and_repair(response.raw_text, llm_client, settings)
+            recipe = repaired
         except Exception as parse_err:
             raise ExtractionUnavailable(
                 f"Failed to parse structured recipe schema: {parse_err}",

@@ -64,6 +64,7 @@ PROFILE_PARAMS: Dict[str, Dict[str, Any]] = {
         "thinking_budget_transcribe": 0,
         "self_consistency": "off",
         "grounding": False,
+        "max_output_tokens": 4096,
     },
     "balanced": {
         "image_long_edge": 1600,
@@ -71,6 +72,7 @@ PROFILE_PARAMS: Dict[str, Dict[str, Any]] = {
         "self_consistency": "flagged",
         "grounding": True,
         "other_model": DEFAULT_CONSISTENCY_MODEL,
+        "max_output_tokens": 8192,
     },
     "best": {
         "image_long_edge": 2000,
@@ -78,17 +80,18 @@ PROFILE_PARAMS: Dict[str, Dict[str, Any]] = {
         "self_consistency": "flagged_other_model",
         "grounding": True,
         "other_model": DEFAULT_FLASH_MODEL,
+        "max_output_tokens": 16384,
     },
 }
 
 
 DEFAULT_STAGE_TIMEOUTS: Dict[str, float] = {
     "FINGERPRINT": 30.0,
-    "SET_VERIFY": 45.0,
+    "SET_VERIFY": 60.0,
     "TRANSCRIBE": 120.0,
-    "STRUCTURE": 45.0,
+    "STRUCTURE": 90.0,
     "GROUNDING": 30.0,
-    "REPAIR": 30.0,
+    "REPAIR": 45.0,
     "JUDGE": 30.0,
     "MODALITY": 20.0,
 }
@@ -178,15 +181,15 @@ class Settings(BaseSettings):
         description="Per-stage timeout limits in seconds",
     )
     llm_max_concurrency: int = Field(
-        default=5,
+        default=8,
         ge=1,
         le=50,
-        description="Maximum concurrent LLM generation calls",
+        description="Maximum concurrent LLM generation calls (paid Tier 1 default: 8; free-tier: 2)",
     )
     llm_rpm_limit: int = Field(
-        default=60,
+        default=120,
         ge=1,
-        description="Maximum LLM requests per minute (token bucket limiter)",
+        description="Maximum LLM requests per minute (token bucket limiter; paid Tier 1 default: 120; free-tier: 15)",
     )
     quality_profile: str = Field(
         default="balanced",

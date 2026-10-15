@@ -214,8 +214,9 @@ async def transcribe(
     model = settings.get_stage_model(LLMStage.TRANSCRIBE)
     thinking_budget = compute_transcribe_thinking_budget(settings, prompt_id, faces)
     timeout_s = settings.get_stage_timeout(LLMStage.TRANSCRIBE)
-    if (thinking_budget is not None and thinking_budget > 1024) or len(faces) > 2:
-        timeout_s = max(timeout_s, 120.0 + len(faces) * 15.0)
+    # Dynamic scaling for thinking tokens and multiple faces (WP-SCALE Task 5)
+    timeout_s = max(timeout_s, 90.0 + (thinking_budget or 0) * 0.05 + len(faces) * 20.0)
+    max_output_tokens = max(8192, (thinking_budget or 0) + 4096)
 
     # 3. Build multimodal LLM parts with neutral labels
     parts: List[Union[TextPart, ImagePart]] = [
@@ -246,6 +247,7 @@ async def transcribe(
         response_model=FaceTranscriptList,
         temperature=0.1,
         thinking_budget=thinking_budget,
+        max_output_tokens=max_output_tokens,
         timeout_s=timeout_s,
         metadata={"n_faces": len(faces), "prompt_id": prompt_id},
     )

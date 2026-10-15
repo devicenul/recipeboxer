@@ -14,13 +14,21 @@ from recipeboxer.agent.session import PipelineSession
 from recipeboxer.config import Settings, get_settings, has_usable_gemini_key, is_usable_gemini_key
 from recipeboxer.ai.client import LLMClient, LLMStage
 from recipeboxer.correlation.engine import (
+    FeatureToggles,
     FileImageProvider,
     GroupingEngine,
     GroupingResult,
     ImageProvider,
+    _feature_is_active,
+    _is_candidate_anchor,
 )
-from recipeboxer.correlation.optimizer import PairingOptimizer
-from recipeboxer.correlation.semantic import GeminiSemanticVerifier
+from recipeboxer.correlation.background import DeckBackground
+from recipeboxer.correlation.calibration import DEFAULT_CALIBRATION_PATH, LinkCalibrator
+from recipeboxer.correlation.content import completeness_prior
+from recipeboxer.correlation.evidence import compute_raw_features
+from recipeboxer.correlation.optimizer import PairingOptimizer, path_cover
+from recipeboxer.correlation.screening import top_k_candidates
+from recipeboxer.correlation.semantic import GeminiSemanticVerifier, SetVerifier
 from recipeboxer.exporter.plan_to_eat import PlanToEatExporter
 from recipeboxer.extraction.extractor import RecipeExtractor
 from recipeboxer.ingestion.runner import (
@@ -30,7 +38,12 @@ from recipeboxer.ingestion.runner import (
     IngestionRunner,
 )
 from recipeboxer.ingestion.scanner import ScannedCard, scan_card_directory
-from recipeboxer.models.correlation import CorrelationProposal, CorrelationResult
+from recipeboxer.models.correlation import (
+    CorrelationProposal,
+    CorrelationResult,
+    PairEvidence,
+    SetVerification,
+)
 from recipeboxer.models.domain import CardRole, VisualFingerprint
 from recipeboxer.models.failures import (
     BudgetExceeded,
@@ -57,6 +70,371 @@ from recipeboxer.vision.fingerprint import GeminiVisualExtractor
 logger = logging.getLogger(__name__)
 
 
+class ConcurrentGroupingEngine(GroupingEngine):
+    """GroupingEngine executing multimodal set-level verifications concurrently with bounded semaphore."""
+
+    async def group(
+        self,
+        fps: List[VisualFingerprint],
+        images: ImageProvider,
+        *,
+        llm_client: Optional[LLMClient] = None,
+        settings: Optional[Any] = None,
+        embedder: Optional[Any] = None,
+        toggles: Optional[FeatureToggles] = None,
+    ) -> GroupingResult:
+        eff_settings = settings or get_settings()
+        eff_toggles = toggles if toggles is not None else FeatureToggles.from_env()
+        review_threshold = float(getattr(eff_settings, "grouping_review_threshold", 0.70))
+
+        # Handle empty collection
+        if not fps:
+            return GroupingResult(
+                chains=[],
+                proposals=[],
+                evidence=[],
+                verifications=[],
+                needs_review=[],
+                stats={"card_count": 0, "chains_count": 0},
+            )
+
+        # Handle single card collection
+        if len(fps) == 1:
+            fp = fps[0]
+            is_sem_verified = bool(llm_client is not None and eff_toggles.set_verify)
+            is_deg = bool(getattr(fp, "degraded", False))
+            action = "STANDALONE" if is_sem_verified else "UNCERTAIN"
+            deg_reason = None if is_sem_verified else ("DEGRADED_FINGERPRINT" if is_deg else "NO_LLM_CLIENT")
+
+            needs_rev = [fp.card_id] if (is_deg or not is_sem_verified) else []
+
+            prop = CorrelationProposal(
+                proposal_id=f"prop_{uuid.uuid4().hex[:8]}",
+                ordered_card_ids=[fp.card_id],
+                part_count=1,
+                transition_scores=[],
+                heuristic_score=0.0,
+                semantic_score=1.0 if is_sem_verified else None,
+                confidence=None,
+                is_standalone=True,
+                continuity_explanation="Single-card collection classified as standalone recipe." if is_sem_verified else "Unverified card proposal awaiting review.",
+                recommended_action=action,
+                semantic_verified=is_sem_verified,
+                degraded_reason=deg_reason,
+            )
+            return GroupingResult(
+                chains=[[fp.card_id]],
+                proposals=[prop],
+                evidence=[],
+                verifications=[],
+                needs_review=needs_rev,
+                stats={"card_count": 1, "chains_count": 1},
+            )
+
+        # 1. DeckBackground fitting
+        pair_fn = (lambda a, b: compute_raw_features(a, b, images=images)) if images else None
+        background = DeckBackground.fit(fps, raw_pair_fn=pair_fn)
+
+        # 2. Top-k candidate screening
+        active_embedder = embedder if eff_toggles.embeddings else None
+        candidates_by_anchor = top_k_candidates(
+            fps,
+            background,
+            k=5,
+            embedder=active_embedder,
+            images=images,
+        )
+
+        all_evidence: List[PairEvidence] = []
+        for ev_list in candidates_by_anchor.values():
+            for ev in ev_list:
+                active_features = [f for f in ev.features if _feature_is_active(f.name, eff_toggles)]
+                new_total_log_lr = sum(
+                    f.weight * f.log_lr
+                    for f in active_features
+                    if f.log_lr is not None
+                )
+                ev.features = active_features
+                ev.total_log_lr = round(new_total_log_lr, 4)
+                all_evidence.append(ev)
+
+        # 3. Multimodal Set-Level Verification (CONCURRENT)
+        verifications: List[SetVerification] = []
+        verification_by_anchor: Dict[str, SetVerification] = {}
+
+        can_verify = eff_toggles.set_verify and (llm_client is not None or self.set_verifier is not None)
+        if can_verify:
+            verifier = self.set_verifier or SetVerifier(llm_client=llm_client, settings=eff_settings)
+            fp_map = {fp.card_id: fp for fp in fps}
+
+            concurrency = getattr(eff_settings, "llm_max_concurrency", 8) or 8
+            sem = asyncio.Semaphore(concurrency)
+
+            candidate_tasks = []
+            for anchor_id, ev_list in candidates_by_anchor.items():
+                if not ev_list:
+                    continue
+                anchor_fp = fp_map.get(anchor_id)
+                if not anchor_fp or not _is_candidate_anchor(anchor_fp):
+                    continue
+                cand_fps = [fp_map[ev.b] for ev in ev_list if ev.b in fp_map]
+                if not cand_fps:
+                    continue
+                candidate_tasks.append((anchor_id, anchor_fp, cand_fps))
+
+            async def _run_single_verify(aid: str, a_fp: VisualFingerprint, c_fps: List[VisualFingerprint]):
+                async with sem:
+                    try:
+                        ver_res = await verifier.verify(a_fp, c_fps, images=images)
+                        return aid, ver_res
+                    except BudgetExceeded:
+                        raise
+                    except Exception as exc:
+                        logger.warning(f"SetVerifier failed for anchor card {aid}: {exc}")
+                        return aid, None
+
+            if candidate_tasks:
+                verify_results = await asyncio.gather(
+                    *[_run_single_verify(aid, a_fp, c_fps) for aid, a_fp, c_fps in candidate_tasks]
+                )
+                for aid, ver in verify_results:
+                    if ver is not None:
+                        verifications.append(ver)
+                        verification_by_anchor[aid] = ver
+
+        # 4. Calibration
+        calibrator = self.calibrator
+        if calibrator is None:
+            default_path = Path(DEFAULT_CALIBRATION_PATH)
+            if default_path.exists():
+                try:
+                    calibrator = LinkCalibrator.load(default_path)
+                except Exception as exc:
+                    logger.warning(f"Failed to load default calibration from {default_path}: {exc}")
+                    calibrator = LinkCalibrator()
+            else:
+                calibrator = LinkCalibrator()
+
+        verified_positive_edges: Set[Tuple[str, str]] = set()
+        verified_negative_edges: Set[Tuple[str, str]] = set()
+
+        for ver in verifications:
+            seq = [ver.anchor] + list(ver.continuations or [])
+            for idx in range(len(seq) - 1):
+                verified_positive_edges.add((seq[idx], seq[idx + 1]))
+            for rej in (ver.rejected or []):
+                for s_node in seq:
+                    verified_negative_edges.add((s_node, rej))
+                    verified_negative_edges.add((rej, s_node))
+
+        links: Dict[Tuple[str, str], float] = {}
+        pair_ev_by_edge: Dict[Tuple[str, str], PairEvidence] = {}
+
+        for ev in all_evidence:
+            edge = (ev.a, ev.b)
+            set_verified_outcome: Optional[bool] = None
+            if edge in verified_positive_edges:
+                set_verified_outcome = True
+            elif edge in verified_negative_edges:
+                set_verified_outcome = False
+            elif not can_verify:
+                set_verified_outcome = None
+
+            p = calibrator.predict(ev, set_verified=set_verified_outcome)
+            ev.p_link = round(p, 4)
+            links[edge] = ev.p_link
+            pair_ev_by_edge[edge] = ev
+
+        # 5. Completeness priors & node costs
+        node_costs: Dict[str, Dict[str, Any]] = {}
+        for fp in fps:
+            prior = completeness_prior(fp)
+            has_title = bool(getattr(fp, "visible_title", None))
+            node_costs[fp.card_id] = {
+                "expects_continuation": prior.get("expects_continuation", 0.50),
+                "is_complete": prior.get("is_complete", 0.50),
+                "is_start": prior.get("is_start", 0.50),
+                "has_title": has_title,
+                "visible_title": getattr(fp, "visible_title", None),
+            }
+
+        # 6. Global Min-Cost Path Cover Optimization
+        node_ids = [fp.card_id for fp in fps]
+        chains = path_cover(node_ids, links, node_costs)
+
+        if os.environ.get("RB_DEBUG_GROUPING") == "1":
+            try:
+                debug_payload = {
+                    "cards": node_ids,
+                    "links": [
+                        {"from": k[0], "to": k[1], "p_link": float(v)}
+                        for k, v in sorted(links.items(), key=lambda x: -x[1])
+                    ],
+                    "node_costs": node_costs,
+                    "chains": chains,
+                    "verifications": [
+                        {
+                            "anchor": v.anchor,
+                            "continuations": v.continuations,
+                            "rejected": v.rejected,
+                            "evidence_quotes": v.evidence_quotes,
+                        }
+                        for v in verifications
+                    ],
+                }
+                Path("grouping_debug.json").write_text(json.dumps(debug_payload, indent=2), encoding="utf-8")
+            except Exception as d_exc:
+                logger.warning(f"Failed to write RB_DEBUG_GROUPING dump: {d_exc}")
+
+        # 7. Build CorrelationProposals and HITL Routing
+        proposals: List[CorrelationProposal] = []
+        needs_review_cards: Set[str] = set()
+        fp_by_id = {fp.card_id: fp for fp in fps}
+
+        for chain in chains:
+            if len(chain) == 1:
+                cid = chain[0]
+                fp = fp_by_id.get(cid)
+                is_deg = bool(getattr(fp, "degraded", False))
+
+                if not can_verify:
+                    sem_verified = False
+                    action = "UNCERTAIN"
+                    deg_reason = "NO_LLM_CLIENT" if llm_client is None else "SET_VERIFY_DISABLED"
+                    needs_review_cards.add(cid)
+                else:
+                    sem_verified = True
+                    action = "STANDALONE"
+                    deg_reason = None
+                    if is_deg:
+                        needs_review_cards.add(cid)
+
+                prop = CorrelationProposal(
+                    proposal_id=f"prop_{uuid.uuid4().hex[:8]}",
+                    ordered_card_ids=[cid],
+                    part_count=1,
+                    transition_scores=[],
+                    heuristic_score=0.0,
+                    semantic_score=1.0 if can_verify else None,
+                    confidence=None,
+                    is_standalone=True,
+                    continuity_explanation="Single-sided card classified as standalone recipe." if can_verify else "Unverified card proposal awaiting review.",
+                    recommended_action=action,
+                    semantic_verified=sem_verified,
+                    degraded_reason=deg_reason,
+                )
+                proposals.append(prop)
+
+            else:
+                t_scores: List[float] = []
+                s_scores: List[float] = []
+                collected_quotes: List[str] = []
+                top_features: List[str] = []
+                all_transitions_verified = True
+                has_low_confidence = False
+
+                for k in range(len(chain) - 1):
+                    edge = (chain[k], chain[k + 1])
+                    p_link = links.get(edge, 0.50)
+                    t_scores.append(round(p_link, 4))
+
+                    ev = pair_ev_by_edge.get(edge)
+                    if ev:
+                        sorted_feats = sorted(
+                            [f for f in ev.features if f.log_lr is not None],
+                            key=lambda f: f.log_lr or 0.0,
+                            reverse=True,
+                        )
+                        for f in sorted_feats[:2]:
+                            top_features.append(f"{f.name} (log_lr={f.log_lr:.2f})")
+
+                    ver = verification_by_anchor.get(chain[k]) or verification_by_anchor.get(chain[k + 1])
+                    if ver:
+                        cand_target = chain[k + 1] if chain[k] == ver.anchor else chain[k]
+                        if cand_target in ver.continuations:
+                            for q in ver.evidence_quotes:
+                                if q not in collected_quotes:
+                                    collected_quotes.append(q)
+                            if ver.confidence is not None:
+                                s_scores.append(ver.confidence)
+                        else:
+                            all_transitions_verified = False
+                    else:
+                        all_transitions_verified = False
+
+                chain_conf = min(s_scores) if s_scores else (min(t_scores) if t_scores else None)
+                has_low_confidence = bool(chain_conf is not None and chain_conf < review_threshold)
+                avg_h = sum(t_scores) / len(t_scores) if t_scores else 0.50
+                avg_s = sum(s_scores) / len(s_scores) if s_scores else (1.0 if all_transitions_verified else 0.0)
+
+                if not can_verify:
+                    sem_verified = False
+                    action = "UNCERTAIN"
+                    deg_reason = "NO_LLM_CLIENT" if llm_client is None else "SET_VERIFY_DISABLED"
+                    for cid in chain:
+                        needs_review_cards.add(cid)
+                else:
+                    sem_verified = all_transitions_verified
+                    deg_reason = None if sem_verified else "UNVERIFIED_TRANSITION"
+                    if not sem_verified or has_low_confidence:
+                        action = "NEEDS_REVIEW"
+                        for cid in chain:
+                            needs_review_cards.add(cid)
+                    else:
+                        action = "SEQUENCE" if len(chain) > 2 else "PAIR"
+
+                for cid in chain:
+                    if getattr(fp_by_id.get(cid), "degraded", False):
+                        needs_review_cards.add(cid)
+                        action = "NEEDS_REVIEW"
+
+                conf_str = f"Calibrated p={chain_conf:.3f}." if chain_conf is not None else "Uncalibrated."
+                expl_parts = [
+                    f"Linked {len(chain)}-card sequence ({' -> '.join(chain)}). {conf_str}"
+                ]
+                if collected_quotes:
+                    expl_parts.append("Quotes: " + "; ".join(f'"{q}"' for q in collected_quotes[:3]))
+                if top_features:
+                    expl_parts.append("Evidence: " + ", ".join(top_features[:4]))
+                explanation = " ".join(expl_parts)
+
+                prop = CorrelationProposal(
+                    proposal_id=f"prop_{uuid.uuid4().hex[:8]}",
+                    ordered_card_ids=chain,
+                    part_count=len(chain),
+                    transition_scores=t_scores,
+                    heuristic_score=round(avg_h, 4),
+                    semantic_score=round(avg_s, 4) if can_verify else None,
+                    confidence=round(chain_conf, 4) if chain_conf is not None else None,
+                    is_standalone=False,
+                    continuity_explanation=explanation,
+                    recommended_action=action,
+                    semantic_verified=sem_verified,
+                    degraded_reason=deg_reason,
+                )
+                proposals.append(prop)
+
+        sorted_needs_review = sorted(list(needs_review_cards))
+
+        stats = {
+            "card_count": len(fps),
+            "chains_count": len(chains),
+            "pairs_evaluated": len(all_evidence),
+            "proposals_count": len(proposals),
+            "needs_review_count": len(sorted_needs_review),
+            "unverified_proposals_count": sum(1 for p in proposals if not p.semantic_verified),
+        }
+
+        return GroupingResult(
+            chains=chains,
+            proposals=proposals,
+            evidence=all_evidence,
+            verifications=verifications,
+            needs_review=sorted_needs_review,
+            stats=stats,
+        )
+
+
 class RecipeBoxerAgent:
     """Coordinates multi-stage recipe card digitization using Google Antigravity patterns."""
 
@@ -77,7 +455,7 @@ class RecipeBoxerAgent:
         self.visual_extractor = visual_extractor or GeminiVisualExtractor()
         self.semantic_verifier = semantic_verifier or GeminiSemanticVerifier()
         self.pairing_optimizer = pairing_optimizer or PairingOptimizer(verifier=self.semantic_verifier)
-        self.grouping_engine = grouping_engine or GroupingEngine()
+        self.grouping_engine = grouping_engine or ConcurrentGroupingEngine()
         self.recipe_extractor = recipe_extractor or RecipeExtractor()
         self.csv_exporter = csv_exporter or PlanToEatExporter()
         try:
@@ -783,15 +1161,24 @@ class RecipeBoxerAgent:
                 session.state = PipelineState.EXTRACTING
                 session.progress_metrics.extracted = 0
 
-                for approval in session.approvals:
+                approvals_list = list(session.approvals)
+                eff_concurrency = (
+                    getattr(session.settings, "llm_max_concurrency", None)
+                    or getattr(self.settings, "llm_max_concurrency", 8)
+                    or 8
+                )
+                eff_concurrency = max(1, int(eff_concurrency))
+                sem = asyncio.Semaphore(eff_concurrency)
+
+                extracted_slots: List[Optional[Union[RecipeSchema, FailedRecipe]]] = [None] * len(approvals_list)
+
+                async def _process_single_approval(idx: int, approval: Any) -> None:
                     if session.is_cancelled:
-                        session.state = PipelineState.CANCELLED
-                        session.end_time = time.monotonic()
                         return
 
                     if approval.decision == HITLDecision.REJECT or getattr(approval, "is_rejected", False):
                         logger.info(f"[{session.session_id}] Skipping rejected proposal {approval.proposal_id}")
-                        continue
+                        return
 
                     ordered_card_ids: List[str] = []
                     if getattr(approval, "ordered_card_ids", None):
@@ -809,96 +1196,11 @@ class RecipeBoxerAgent:
                         logger.warning(
                             f"[{session.session_id}] Missing cards for approval '{approval.proposal_id}' in fingerprints."
                         )
-                        continue
+                        return
 
-                    try:
-                        recipe = await self._extract_single_recipe(
-                            session,
-                            front_fp=ordered_fps[0] if ordered_fps else None,
-                            back_fp=ordered_fps[1] if len(ordered_fps) > 1 else None,
-                            ordered_fps=ordered_fps,
-                        )
-                        if recipe:
-                            recipe.card_ids = ordered_card_ids if ordered_card_ids else [fp.card_id for fp in ordered_fps]
-                            recipe.image_urls = [
-                                f"/api/cards/{cid}/image?session_id={session.session_id}"
-                                for cid in recipe.card_ids
-                            ]
-
-                            session_tags: List[str] = []
-                            cfg = session.config
-                            if hasattr(cfg, "default_tags") and cfg.default_tags:
-                                session_tags = list(cfg.default_tags)
-                            elif isinstance(cfg, dict) and cfg.get("default_tags"):
-                                dt = cfg["default_tags"]
-                                if isinstance(dt, list):
-                                    session_tags = [str(t).strip() for t in dt if str(t).strip()]
-                                elif isinstance(dt, str):
-                                    session_tags = [t.strip() for t in dt.split(",") if t.strip()]
-                            elif hasattr(session, "ingestion_config") and session.ingestion_config and session.ingestion_config.default_tags:
-                                session_tags = list(session.ingestion_config.default_tags)
-
-                            if session_tags:
-                                combined_tags = list(session_tags) + list(recipe.tags or [])
-                                recipe.tags = RecipeSchema.clean_and_deduplicate_tags(combined_tags)
-
-                            newly_extracted_recipes.append(recipe)
-                        else:
-                            # Recipe extraction returned None -> StageFailure
-                            fail = StageFailure(
-                                stage=PipelineStage.EXTRACTION,
-                                reason=FailureReason.INVALID_RESPONSE,
-                                message=f"Recipe extraction returned empty for {ordered_card_ids}",
-                                card_ids=ordered_card_ids,
-                                proposal_id=approval.proposal_id,
-                                retryable=True,
-                                details={"card_ids": ordered_card_ids, "proposal_id": approval.proposal_id},
-                            )
-                            session.add_failure(fail)
-                            session.enqueue_hitl_failure(
-                                stage=PipelineStage.EXTRACTION,
-                                card_ids=ordered_card_ids,
-                                proposal_id=approval.proposal_id,
-                                failure=fail,
-                                message=f"Recipe extraction returned empty for {ordered_card_ids}",
-                            )
-                            failed_recipe = FailedRecipe(
-                                recipe_id=f"rec_failed_{uuid.uuid4().hex[:8]}",
-                                title=f"Extraction Failed ({', '.join(ordered_card_ids)})",
-                                description=f"Recipe extraction returned empty for cards: {ordered_card_ids}",
-                                card_ids=ordered_card_ids,
-                                image_urls=[
-                                    f"/api/cards/{cid}/image?session_id={session.session_id}"
-                                    for cid in ordered_card_ids
-                                ],
-                                status="FAILED",
-                                failure=fail,
-                            )
-                            newly_extracted_recipes.append(failed_recipe)
-                    except BudgetExceeded as be:
-                        logger.warning(
-                            f"[{session.session_id}] Budget exceeded during recipe extraction for {ordered_card_ids}: {be}"
-                        )
-                        fail = be.to_failure(proposal_id=approval.proposal_id)
-                        session.add_failure(fail)
-                        budget_item = HitlItem(
-                            item_id=f"hitl_budget_{uuid.uuid4().hex[:8]}",
-                            item_type=HitlItemType.BUDGET,
-                            kind="budget",
-                            stage="EXTRACTION",
-                            card_ids=ordered_card_ids,
-                            proposal_id=approval.proposal_id,
-                            failure=fail,
-                            needs_review=True,
-                            message=str(be),
-                        )
-                        session.enqueue_hitl_item(budget_item)
-                        resumed = await session.pause_for_hitl()
-                        if not resumed or session.is_cancelled:
-                            session.state = PipelineState.CANCELLED
-                            session.end_time = time.monotonic()
+                    async with sem:
+                        if session.is_cancelled:
                             return
-                        # If resumed with raised cap, retry this recipe extraction
                         try:
                             recipe = await self._extract_single_recipe(
                                 session,
@@ -908,50 +1210,162 @@ class RecipeBoxerAgent:
                             )
                             if recipe:
                                 recipe.card_ids = ordered_card_ids if ordered_card_ids else [fp.card_id for fp in ordered_fps]
-                                newly_extracted_recipes.append(recipe)
-                        except Exception as retry_exc:
-                            logger.error(f"Retry extraction failed after budget resume: {retry_exc}")
-                    except Exception as exc:
-                        logger.error(
-                            f"[{session.session_id}] Recipe extraction failed for {ordered_card_ids}: {exc}"
-                        )
-                        session.errors.append(f"Extraction failed for {ordered_card_ids}: {str(exc)}")
+                                recipe.image_urls = [
+                                    f"/api/cards/{cid}/image?session_id={session.session_id}"
+                                    for cid in recipe.card_ids
+                                ]
 
+                                session_tags: List[str] = []
+                                cfg = session.config
+                                if hasattr(cfg, "default_tags") and cfg.default_tags:
+                                    session_tags = list(cfg.default_tags)
+                                elif isinstance(cfg, dict) and cfg.get("default_tags"):
+                                    dt = cfg["default_tags"]
+                                    if isinstance(dt, list):
+                                        session_tags = [str(t).strip() for t in dt if str(t).strip()]
+                                    elif isinstance(dt, str):
+                                        session_tags = [t.strip() for t in dt.split(",") if t.strip()]
+                                elif hasattr(session, "ingestion_config") and session.ingestion_config and session.ingestion_config.default_tags:
+                                    session_tags = list(session.ingestion_config.default_tags)
 
-                        if isinstance(exc, StageUnavailableError):
-                            fail = exc.to_failure(proposal_id=approval.proposal_id)
-                        else:
-                            fail = StageFailure(
-                                stage=PipelineStage.EXTRACTION,
-                                reason=FailureReason.TIMEOUT if "timeout" in str(exc).lower() else FailureReason.UNKNOWN,
-                                message=str(exc),
+                                if session_tags:
+                                    combined_tags = list(session_tags) + list(recipe.tags or [])
+                                    recipe.tags = RecipeSchema.clean_and_deduplicate_tags(combined_tags)
+
+                                extracted_slots[idx] = recipe
+                            else:
+                                # Recipe extraction returned None -> StageFailure
+                                fail = StageFailure(
+                                    stage=PipelineStage.EXTRACTION,
+                                    reason=FailureReason.INVALID_RESPONSE,
+                                    message=f"Recipe extraction returned empty for {ordered_card_ids}",
+                                    card_ids=ordered_card_ids,
+                                    proposal_id=approval.proposal_id,
+                                    retryable=True,
+                                    details={"card_ids": ordered_card_ids, "proposal_id": approval.proposal_id},
+                                )
+                                session.add_failure(fail)
+                                session.enqueue_hitl_failure(
+                                    stage=PipelineStage.EXTRACTION,
+                                    card_ids=ordered_card_ids,
+                                    proposal_id=approval.proposal_id,
+                                    failure=fail,
+                                    message=f"Recipe extraction returned empty for {ordered_card_ids}",
+                                )
+                                failed_recipe = FailedRecipe(
+                                    recipe_id=f"rec_failed_{uuid.uuid4().hex[:8]}",
+                                    title=f"Extraction Failed ({', '.join(ordered_card_ids)})",
+                                    description=f"Recipe extraction returned empty for cards: {ordered_card_ids}",
+                                    card_ids=ordered_card_ids,
+                                    image_urls=[
+                                        f"/api/cards/{cid}/image?session_id={session.session_id}"
+                                        for cid in ordered_card_ids
+                                    ],
+                                    status="FAILED",
+                                    failure=fail,
+                                )
+                                extracted_slots[idx] = failed_recipe
+                        except BudgetExceeded as be:
+                            logger.warning(
+                                f"[{session.session_id}] Budget exceeded during recipe extraction for {ordered_card_ids}: {be}"
+                            )
+                            fail = be.to_failure(proposal_id=approval.proposal_id)
+                            session.add_failure(fail)
+                            budget_item = HitlItem(
+                                item_id=f"hitl_budget_{uuid.uuid4().hex[:8]}",
+                                item_type=HitlItemType.BUDGET,
+                                kind="budget",
+                                stage="EXTRACTION",
                                 card_ids=ordered_card_ids,
                                 proposal_id=approval.proposal_id,
-                                retryable=True,
-                                details={"card_ids": ordered_card_ids, "proposal_id": approval.proposal_id},
+                                failure=fail,
+                                needs_review=True,
+                                message=str(be),
                             )
-                        session.add_failure(fail)
-                        session.enqueue_hitl_failure(
-                            stage=PipelineStage.EXTRACTION,
-                            card_ids=ordered_card_ids,
-                            proposal_id=approval.proposal_id,
-                            failure=fail,
-                            message=f"Recipe extraction failed for {ordered_card_ids}: {str(exc)}",
-                        )
-                        failed_recipe = FailedRecipe(
-                            recipe_id=f"rec_failed_{uuid.uuid4().hex[:8]}",
-                            title=f"Extraction Failed ({', '.join(ordered_card_ids)})",
-                            description=f"Recipe extraction failed: {str(exc)}",
-                            card_ids=ordered_card_ids,
-                            image_urls=[
-                                f"/api/cards/{cid}/image?session_id={session.session_id}"
-                                for cid in ordered_card_ids
-                            ],
-                            status="FAILED",
-                            failure=fail,
-                        )
-                        newly_extracted_recipes.append(failed_recipe)
+                            session.enqueue_hitl_item(budget_item)
+                            resumed = await session.pause_for_hitl()
+                            if not resumed or session.is_cancelled:
+                                session.state = PipelineState.CANCELLED
+                                session.end_time = time.monotonic()
+                                return
+                            # If resumed with raised cap, retry this recipe extraction
+                            try:
+                                recipe = await self._extract_single_recipe(
+                                    session,
+                                    front_fp=ordered_fps[0] if ordered_fps else None,
+                                    back_fp=ordered_fps[1] if len(ordered_fps) > 1 else None,
+                                    ordered_fps=ordered_fps,
+                                )
+                                if recipe:
+                                    recipe.card_ids = ordered_card_ids if ordered_card_ids else [fp.card_id for fp in ordered_fps]
+                                    extracted_slots[idx] = recipe
+                            except Exception as retry_exc:
+                                logger.error(f"Retry extraction failed after budget resume: {retry_exc}")
+                        except Exception as exc:
+                            logger.error(
+                                f"[{session.session_id}] Recipe extraction failed for {ordered_card_ids}: {exc}"
+                            )
+                            session.errors.append(f"Extraction failed for {ordered_card_ids}: {str(exc)}")
 
+                            if isinstance(exc, StageUnavailableError):
+                                fail = exc.to_failure(proposal_id=approval.proposal_id)
+                            else:
+                                fail = StageFailure(
+                                    stage=PipelineStage.EXTRACTION,
+                                    reason=FailureReason.TIMEOUT if "timeout" in str(exc).lower() else FailureReason.UNKNOWN,
+                                    message=str(exc),
+                                    card_ids=ordered_card_ids,
+                                    proposal_id=approval.proposal_id,
+                                    retryable=True,
+                                    details={"card_ids": ordered_card_ids, "proposal_id": approval.proposal_id},
+                                )
+                            session.add_failure(fail)
+                            session.enqueue_hitl_failure(
+                                stage=PipelineStage.EXTRACTION,
+                                card_ids=ordered_card_ids,
+                                proposal_id=approval.proposal_id,
+                                failure=fail,
+                                message=f"Recipe extraction failed for {ordered_card_ids}: {str(exc)}",
+                            )
+                            failed_recipe = FailedRecipe(
+                                recipe_id=f"rec_failed_{uuid.uuid4().hex[:8]}",
+                                title=f"Extraction Failed ({', '.join(ordered_card_ids)})",
+                                description=f"Recipe extraction failed: {str(exc)}",
+                                card_ids=ordered_card_ids,
+                                image_urls=[
+                                    f"/api/cards/{cid}/image?session_id={session.session_id}"
+                                    for cid in ordered_card_ids
+                                ],
+                                status="FAILED",
+                                failure=fail,
+                            )
+                            extracted_slots[idx] = failed_recipe
+
+                        # Call incremental extraction hook if configured on session
+                        if extracted_slots[idx] is not None:
+                            on_ext = getattr(session, "on_recipe_extracted", None)
+                            if callable(on_ext):
+                                try:
+                                    on_ext(extracted_slots[idx])
+                                except Exception as cb_exc:
+                                    logger.warning(f"Error in on_recipe_extracted callback: {cb_exc}")
+
+                        # Update metrics
+                        session.progress_metrics.extracted = sum(
+                            1 for r in extracted_slots if r is not None and getattr(r, "status", None) != "FAILED"
+                        )
+                        session.progress_metrics.failed_extractions = sum(
+                            1 for r in extracted_slots if r is not None and getattr(r, "status", None) == "FAILED"
+                        )
+
+                await asyncio.gather(*[_process_single_approval(idx, app) for idx, app in enumerate(approvals_list)])
+
+                if session.is_cancelled:
+                    session.state = PipelineState.CANCELLED
+                    session.end_time = time.monotonic()
+                    return
+
+                newly_extracted_recipes = [r for r in extracted_slots if r is not None]
                 session.progress_metrics.extracted = len(newly_extracted_recipes)
                 session.progress_metrics.failed_extractions = sum(
                     1 for r in newly_extracted_recipes if getattr(r, "status", None) == "FAILED"

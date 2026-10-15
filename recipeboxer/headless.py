@@ -25,7 +25,7 @@ from typing import Any, Callable, Dict, List, Optional, Sequence, Union
 
 from PIL import Image
 
-from recipeboxer.agent.orchestrator import RecipeBoxerAgent
+from recipeboxer.agent.orchestrator import ConcurrentGroupingEngine, RecipeBoxerAgent
 from recipeboxer.agent.session import PipelineSession
 from recipeboxer.ai.client import (
     ImagePart,
@@ -279,7 +279,8 @@ async def run_headless_analysis(
     if eff_cap_usd is not None or eff_max_calls is not None:
         guard = BudgetGuard(cap_usd=eff_cap_usd, max_calls=eff_max_calls)
 
-    ledger = CostLedger(prices=price_table, guard=guard)
+    flush_path = (Path(out_file).resolve().parent / "ledger.jsonl") if out_file else None
+    ledger = CostLedger(prices=price_table, guard=guard, flush_path=flush_path)
 
     # Determine key availability (INV-AC6)
     has_key = has_usable_gemini_key(eff_settings)
@@ -343,7 +344,7 @@ async def run_headless_analysis(
                 settings=eff_settings,
             )
             pairing_opt = PairingOptimizer(verifier=sem_verifier)
-            grouping_engine = GroupingEngine()
+            grouping_engine = ConcurrentGroupingEngine()
             session.mock_client = recording_client
             session.grouping_engine = grouping_engine
             session.extractor = vis_extractor
@@ -375,7 +376,7 @@ async def run_headless_analysis(
             settings=eff_settings,
         )
         pairing_opt = PairingOptimizer(verifier=sem_verifier)
-        grouping_engine = GroupingEngine()
+        grouping_engine = ConcurrentGroupingEngine()
         session.extractor = vis_extractor
         session.grouping_engine = grouping_engine
         session.recipe_extractor_fn = rec_extractor.extract
@@ -391,6 +392,89 @@ async def run_headless_analysis(
         oracle_opt = OracleGroupingOptimizer(parsed_image_sets)
         session.optimizer = oracle_opt
         agent_kwargs["pairing_optimizer"] = oracle_opt
+
+    def _flush_partial_output(_extracted_item: Optional[Any] = None) -> None:
+        if not out_file:
+            return
+        try:
+            p_recipes_out: List[Dict[str, Any]] = []
+            p_assigned_cids: set[str] = set()
+            for p_idx, r in enumerate(session.recipes, 1):
+                if (
+                    isinstance(r, FailedRecipe)
+                    or getattr(r, "status", None) == "FAILED"
+                    or (hasattr(r, "title") and str(r.title).startswith("Extraction Failed"))
+                ):
+                    continue
+                cids = list(getattr(r, "card_ids", []) or [])
+                for cid in cids:
+                    p_assigned_cids.add(cid)
+                r_dump = r.model_dump(mode="json") if hasattr(r, "model_dump") else (r if isinstance(r, dict) else {})
+                if isinstance(r_dump, dict):
+                    r_dump["created_at"] = None
+                    r_dump["updated_at"] = None
+                    if "image_urls" in r_dump:
+                        r_dump["image_urls"] = [f"/api/cards/{cid}/image" for cid in cids]
+                pred_id = getattr(r, "recipe_id", None) or f"p{p_idx}"
+                p_recipes_out.append({
+                    "pred_id": pred_id,
+                    "image_ids": cids,
+                    "recipe": r_dump,
+                    "confidence": float(r.confidence) if getattr(r, "confidence", None) is not None else None,
+                    "flags": [],
+                })
+            p_unassigned = [c.card_id for c in session.cards if c.card_id not in p_assigned_cids]
+
+            p_failures_out: List[Dict[str, Any]] = []
+            for f in session.failures:
+                stage_str = f.stage.value if hasattr(f.stage, "value") else str(f.stage)
+                reason_str = f.reason.value if hasattr(f.reason, "value") else str(f.reason)
+                p_failures_out.append({
+                    "stage": stage_str,
+                    "reason": reason_str,
+                    "image_ids": list(f.card_ids or []),
+                    "message": f.message or "",
+                })
+
+            p_res = {
+                "status": "partial" if p_recipes_out else ("failed" if session.failures else "ok"),
+                "recipes": p_recipes_out,
+                "unassigned_image_ids": p_unassigned,
+                "failures": p_failures_out,
+                "ledger": {
+                    "calls": [
+                        {
+                            "stage": rc.stage,
+                            "model": rc.model,
+                            "input_tokens": rc.usage.input_tokens,
+                            "output_tokens": rc.usage.output_tokens,
+                            "thinking_tokens": rc.usage.thinking_tokens,
+                            "latency_ms": rc.latency_ms,
+                            "attempts": rc.attempts,
+                            **({"cost_usd": float(getattr(rc, "cost_usd", 0.0))} if getattr(rc, "cost_usd", None) is not None else {}),
+                        }
+                        for rc in ledger.get_records()
+                    ],
+                    "totals": {
+                        "calls": len(ledger.get_records()),
+                        "input_tokens": ledger.total_input_tokens,
+                        "output_tokens": ledger.total_output_tokens,
+                        "thinking_tokens": ledger.total_thinking_tokens,
+                        "total_tokens": ledger.total_tokens,
+                        "latency_ms": ledger.total_latency_ms,
+                        "total_usd": round(getattr(ledger, "total_usd", 0.0), 6),
+                    },
+                },
+            }
+            out_p = Path(out_file).resolve()
+            out_p.parent.mkdir(parents=True, exist_ok=True)
+            tmp_write = out_p.with_suffix(out_p.suffix + ".tmp")
+            tmp_write.write_text(json.dumps(p_res, indent=2, default=str), encoding="utf-8")
+            tmp_write.replace(out_p)
+        except Exception as p_exc:
+            logger.debug(f"Failed to flush partial output: {p_exc}")
+
+    session.on_recipe_extracted = _flush_partial_output
 
     agent = RecipeBoxerAgent(**agent_kwargs)
 
@@ -426,6 +510,7 @@ async def run_headless_analysis(
                         except Exception:
                             session.approvals = approvals
                             session.approval_event.set()
+                        _flush_partial_output()
                 await asyncio.sleep(0.02)
         except asyncio.CancelledError:
             pass

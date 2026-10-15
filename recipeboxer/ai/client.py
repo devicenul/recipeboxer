@@ -18,6 +18,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import logging
 import random
 import time
 from abc import ABC, abstractmethod
@@ -37,6 +38,8 @@ from recipeboxer.models.failures import (
     SemanticVerificationUnavailable,
     StageUnavailableError,
 )
+
+logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
 
@@ -414,15 +417,24 @@ def create_stage_error(
 
 
 def _extract_json_text(text: str) -> str:
-    """Strips Markdown code block wrappers (```json ... ```) to extract raw JSON payload."""
+    """Strips Markdown code block wrappers or outer prose to extract raw JSON payload."""
+    import re
     s = text.strip()
-    if s.startswith("```"):
-        lines = s.splitlines()
-        if lines and lines[0].startswith("```"):
-            lines = lines[1:]
-        if lines and lines[-1].strip().startswith("```"):
-            lines = lines[:-1]
-        s = "\n".join(lines).strip()
+    m = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", s, re.IGNORECASE)
+    if m:
+        candidate = m.group(1).strip()
+        if candidate:
+            return candidate
+    first_brace = s.find("{")
+    last_brace = s.rfind("}")
+    first_bracket = s.find("[")
+    last_bracket = s.rfind("]")
+    if first_brace != -1 and (first_bracket == -1 or first_brace < first_bracket):
+        if last_brace != -1 and last_brace > first_brace:
+            return s[first_brace:last_brace + 1].strip()
+    elif first_bracket != -1:
+        if last_bracket != -1 and last_bracket > first_bracket:
+            return s[first_bracket:last_bracket + 1].strip()
     return s
 
 
@@ -571,6 +583,8 @@ class GenAIClient(LLMClient):
             start_time = time.monotonic()
 
             try:
+                eff_timeout_s = min(300.0, timeout_s * (1.0 + 0.25 * (attempts - 1)))
+
                 async with self._semaphore:
                     raw_response = await asyncio.wait_for(
                         self._client.aio.models.generate_content(
@@ -578,7 +592,7 @@ class GenAIClient(LLMClient):
                             contents=sdk_contents,
                             config=config,
                         ),
-                        timeout=timeout_s,
+                        timeout=eff_timeout_s,
                     )
 
                 latency_ms = (time.monotonic() - start_time) * 1000.0
@@ -601,18 +615,25 @@ class GenAIClient(LLMClient):
                     fr = getattr(cand, "finish_reason", None)
                     finish_reason = fr.value if hasattr(fr, "value") else str(fr) if fr else "STOP"
 
-                # Extract raw response text
+                # Extract raw response text (separating thoughts from output)
                 raw_text = ""
                 try:
                     raw_text = raw_response.text or ""
                 except Exception:
-                    if getattr(raw_response, "candidates", None):
-                        c0 = raw_response.candidates[0]
-                        if getattr(c0, "content", None) and getattr(c0.content, "parts", None):
-                            text_parts = [
-                                p.text for p in c0.content.parts if getattr(p, "text", None)
-                            ]
-                            raw_text = "".join(text_parts)
+                    pass
+
+                if not raw_text and getattr(raw_response, "candidates", None):
+                    c0 = raw_response.candidates[0]
+                    if getattr(c0, "content", None) and getattr(c0.content, "parts", None):
+                        non_thought_parts = [
+                            p.text for p in c0.content.parts
+                            if getattr(p, "text", None) and not getattr(p, "thought", False)
+                        ]
+                        if non_thought_parts:
+                            raw_text = "".join(non_thought_parts)
+                        else:
+                            all_parts = [p.text for p in c0.content.parts if getattr(p, "text", None)]
+                            raw_text = "".join(all_parts)
 
                 # Structured response validation
                 parsed = None
@@ -626,6 +647,16 @@ class GenAIClient(LLMClient):
                         try:
                             json_obj = json.loads(json_str)
                         except json.JSONDecodeError as exc:
+                            if attempts < max_attempts:
+                                logger.warning(
+                                    f"Attempt {attempts} returned invalid JSON: {exc}; retrying..."
+                                )
+                                sleep_s = min(
+                                    60.0,
+                                    base_delay * (2 ** (attempts - 1)) + random.uniform(0.0, 0.5 * base_delay),
+                                )
+                                await asyncio.sleep(sleep_s)
+                                continue
                             raise create_stage_error(
                                 request.stage,
                                 f"Model response is not valid JSON: {exc}",
@@ -636,6 +667,16 @@ class GenAIClient(LLMClient):
                         try:
                             parsed = request.response_model.model_validate(json_obj)
                         except Exception as exc:
+                            if attempts < max_attempts:
+                                logger.warning(
+                                    f"Attempt {attempts} failed schema validation: {exc}; retrying..."
+                                )
+                                sleep_s = min(
+                                    60.0,
+                                    base_delay * (2 ** (attempts - 1)) + random.uniform(0.0, 0.5 * base_delay),
+                                )
+                                await asyncio.sleep(sleep_s)
+                                continue
                             raise create_stage_error(
                                 request.stage,
                                 f"Model response failed Pydantic schema validation: {exc}",
