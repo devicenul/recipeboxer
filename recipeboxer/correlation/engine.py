@@ -21,7 +21,7 @@ from recipeboxer.config import get_settings
 from recipeboxer.correlation.background import DeckBackground
 from recipeboxer.correlation.calibration import DEFAULT_CALIBRATION_PATH, LinkCalibrator
 from recipeboxer.correlation.content import completeness_prior
-from recipeboxer.correlation.evidence import compute_raw_features
+from recipeboxer.correlation.evidence import compute_raw_features, pair_evidence
 from recipeboxer.correlation.optimizer import path_cover
 from recipeboxer.correlation.screening import top_k_candidates
 from recipeboxer.correlation.semantic import SetVerifier
@@ -311,7 +311,7 @@ class GroupingEngine:
         verifications: List[SetVerification] = []
         verification_by_anchor: Dict[str, SetVerification] = {}
 
-        can_verify = eff_toggles.set_verify and llm_client is not None
+        can_verify = eff_toggles.set_verify and (llm_client is not None or self.set_verifier is not None)
         if can_verify:
             verifier = self.set_verifier or SetVerifier(llm_client=llm_client, settings=eff_settings)
             fp_map = {fp.card_id: fp for fp in fps}
@@ -379,6 +379,26 @@ class GroupingEngine:
             ev.p_link = round(p, 4)
             links[edge] = ev.p_link
             pair_ev_by_edge[edge] = ev
+
+        # Ensure any verified positive edges from SetVerifier are included in links even if not screened in top_k
+        fp_by_id = {fp.card_id: fp for fp in fps}
+        for u_id, v_id in verified_positive_edges:
+            edge = (u_id, v_id)
+            if edge not in links and u_id in fp_by_id and v_id in fp_by_id:
+                ev = pair_evidence(fp_by_id[u_id], fp_by_id[v_id], background, images=images)
+                active_features = [f for f in ev.features if _feature_is_active(f.name, eff_toggles)]
+                new_total_log_lr = sum(
+                    f.weight * f.log_lr
+                    for f in active_features
+                    if f.log_lr is not None
+                )
+                ev.features = active_features
+                ev.total_log_lr = round(new_total_log_lr, 4)
+                p = calibrator.predict(ev, set_verified=True)
+                ev.p_link = round(p, 4)
+                links[edge] = ev.p_link
+                pair_ev_by_edge[edge] = ev
+                all_evidence.append(ev)
 
         # 5. Completeness priors & node costs
         node_costs: Dict[str, Dict[str, Any]] = {}

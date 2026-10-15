@@ -91,8 +91,8 @@ DEFAULT_PRIORS: Dict[str, FeaturePrior] = {
         domain_max=50.0,
         num_bins=25,
         prior_type="folded_normal",
-        prior_params={"sigma": 1.5},  # Same-recipe cards typically have Delta E <= 2.0
-        var_threshold=0.05,
+        prior_params={"sigma": 5.0},  # Same-recipe cards typically have Delta E <= 5.0 - 6.0
+        var_threshold=0.10,
     ),
     "ruling": FeaturePrior(
         name="ruling",
@@ -109,7 +109,7 @@ DEFAULT_PRIORS: Dict[str, FeaturePrior] = {
         domain_max=180.0,
         num_bins=18,
         prior_type="folded_normal",
-        prior_params={"sigma": 15.0},  # Angular hue difference <= 15 deg
+        prior_params={"sigma": 20.0},  # Angular hue difference <= 20 deg
         var_threshold=5.0,
     ),
     "aspect_ratio": FeaturePrior(
@@ -118,7 +118,7 @@ DEFAULT_PRIORS: Dict[str, FeaturePrior] = {
         domain_max=1.0,
         num_bins=20,
         prior_type="folded_normal",
-        prior_params={"sigma": 0.04},
+        prior_params={"sigma": 0.06},
         var_threshold=0.005,
     ),
     "capture_gap": FeaturePrior(
@@ -145,8 +145,8 @@ DEFAULT_PRIORS: Dict[str, FeaturePrior] = {
         domain_min=0.0,
         domain_max=1.0,
         num_bins=20,
-        prior_type="beta",
-        prior_params={"alpha": 4.0, "beta": 1.5},
+        prior_type="exponential",
+        prior_params={"decay": 4.0},
         var_threshold=0.01,
     ),
     "show_through": FeaturePrior(
@@ -154,8 +154,8 @@ DEFAULT_PRIORS: Dict[str, FeaturePrior] = {
         domain_min=0.0,
         domain_max=1.0,
         num_bins=20,
-        prior_type="beta",
-        prior_params={"alpha": 3.0, "beta": 1.5},
+        prior_type="exponential",
+        prior_params={"decay": 3.0},
         var_threshold=0.01,
     ),
     "mirrored_wear": FeaturePrior(
@@ -163,8 +163,8 @@ DEFAULT_PRIORS: Dict[str, FeaturePrior] = {
         domain_min=0.0,
         domain_max=1.0,
         num_bins=20,
-        prior_type="beta",
-        prior_params={"alpha": 3.0, "beta": 1.5},
+        prior_type="exponential",
+        prior_params={"decay": 3.0},
         var_threshold=0.01,
     ),
     "outline": FeaturePrior(
@@ -172,8 +172,8 @@ DEFAULT_PRIORS: Dict[str, FeaturePrior] = {
         domain_min=0.0,
         domain_max=1.0,
         num_bins=20,
-        prior_type="beta",
-        prior_params={"alpha": 3.0, "beta": 1.5},
+        prior_type="exponential",
+        prior_params={"decay": 3.0},
         var_threshold=0.01,
     ),
     "content_xref": FeaturePrior(
@@ -181,8 +181,8 @@ DEFAULT_PRIORS: Dict[str, FeaturePrior] = {
         domain_min=0.0,
         domain_max=1.0,
         num_bins=20,
-        prior_type="beta",
-        prior_params={"alpha": 3.5, "beta": 1.5},
+        prior_type="exponential",
+        prior_params={"decay": 4.0},
         var_threshold=0.01,
     ),
     "sentence_continuity": FeaturePrior(
@@ -190,8 +190,8 @@ DEFAULT_PRIORS: Dict[str, FeaturePrior] = {
         domain_min=0.0,
         domain_max=1.0,
         num_bins=20,
-        prior_type="beta",
-        prior_params={"alpha": 4.0, "beta": 1.5},
+        prior_type="exponential",
+        prior_params={"decay": 4.0},
         var_threshold=0.01,
     ),
     "step_continuity": FeaturePrior(
@@ -199,8 +199,8 @@ DEFAULT_PRIORS: Dict[str, FeaturePrior] = {
         domain_min=0.0,
         domain_max=1.0,
         num_bins=20,
-        prior_type="beta",
-        prior_params={"alpha": 4.0, "beta": 1.5},
+        prior_type="exponential",
+        prior_params={"decay": 4.0},
         var_threshold=0.01,
     ),
     "title_position": FeaturePrior(
@@ -208,8 +208,8 @@ DEFAULT_PRIORS: Dict[str, FeaturePrior] = {
         domain_min=0.0,
         domain_max=1.0,
         num_bins=20,
-        prior_type="beta",
-        prior_params={"alpha": 3.0, "beta": 1.5},
+        prior_type="exponential",
+        prior_params={"decay": 4.0},
         var_threshold=0.01,
     ),
     "embedding_sim": FeaturePrior(
@@ -217,8 +217,8 @@ DEFAULT_PRIORS: Dict[str, FeaturePrior] = {
         domain_min=-1.0,
         domain_max=1.0,
         num_bins=20,
-        prior_type="beta",
-        prior_params={"alpha": 4.0, "beta": 1.5},
+        prior_type="exponential",
+        prior_params={"decay": 4.0},
         var_threshold=0.01,
     ),
     "ocr_cue": FeaturePrior(
@@ -226,11 +226,12 @@ DEFAULT_PRIORS: Dict[str, FeaturePrior] = {
         domain_min=0.0,
         domain_max=1.0,
         num_bins=20,
-        prior_type="beta",
-        prior_params={"alpha": 3.5, "beta": 1.5},
+        prior_type="exponential",
+        prior_params={"decay": 4.0},
         var_threshold=0.01,
     ),
 }
+
 
 
 @dataclass
@@ -432,13 +433,13 @@ class DeckBackground:
             if lab_a is None:
                 return None
 
-            # Count cards in deck matching paper LAB within Delta E <= 4.0
+            # Count cards in deck matching paper LAB within Delta E <= 6.5
             matches = 0
             for card in self.card_substrates:
                 c_lab = card.get("paper_lab")
                 if c_lab:
                     de = math.sqrt(sum((x - y) ** 2 for x, y in zip(lab_a, c_lab)))
-                    if de <= 4.0:
+                    if de <= 6.5:
                         matches += 1
 
             fraction = max(1.0 / self.deck_size, matches / self.deck_size)
@@ -521,7 +522,7 @@ class DeckBackground:
                 # For ruling: match if raw >= 0.85
                 # For ink_hue: match if raw <= 20.0
                 is_match = False
-                if name == "paper_lab" and raw <= 3.0:
+                if name == "paper_lab" and raw <= 6.5:
                     is_match = True
                 elif name == "ruling" and raw >= 0.85:
                     is_match = True
@@ -534,8 +535,8 @@ class DeckBackground:
                     p_same = 0.90
                     p_bg = max(0.01, rarity_fraction)
                     llr = math.log(p_same / p_bg)
-                    # If common stock in a homogeneous deck (e.g. fraction >= 0.80), llr is dampened near 0
-                    if rarity_fraction >= 0.80:
+                    # If common stock in a homogeneous deck (e.g. fraction >= 0.70), llr is dampened near 0
+                    if rarity_fraction >= 0.70:
                         llr = max(-0.15, min(0.15, llr * 0.1))
                     return round(llr, 4)
 
@@ -556,5 +557,33 @@ class DeckBackground:
         if dist.variance < prior.var_threshold * 10.0:
             scale = dist.variance / (prior.var_threshold * 10.0)
             llr *= scale
+
+        # Neutral cues carries zero mutual information
+        if name == "sentence_continuity" and 0.45 <= raw <= 0.55:
+            return 0.0
+        if name == "title_position" and 0.45 <= raw <= 0.55:
+            return 0.0
+        if name in ("ocr_cue", "marker_evidence") and 0.35 <= raw <= 0.65:
+            return 0.0
+
+        # Positive continuation cues must never penalize true links
+        if name == "sentence_continuity" and raw >= 0.70:
+            llr = max(0.2, llr)
+        if name == "title_position" and raw >= 0.85:
+            llr = max(0.2, llr)
+        if name == "step_continuity" and raw >= 0.60:
+            llr = max(0.1, llr)
+        if name == "header_score" and raw >= 0.70:
+            llr = max(0.2, llr)
+        if name in ("ocr_cue", "marker_evidence") and raw >= 0.70:
+            llr = max(0.2, llr)
+
+        # Soft feature penalty bounds (prevent single non-definitive mismatch from vetoing valid pairs)
+        if name == "ruling":
+            llr = max(-1.2, llr)
+        elif name == "content_xref":
+            llr = max(-0.2, llr)
+        elif name in ("sentence_continuity", "step_continuity", "ocr_cue", "marker_evidence"):
+            llr = max(-1.5, llr)
 
         return round(llr, 4)

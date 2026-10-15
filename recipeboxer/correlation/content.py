@@ -516,7 +516,7 @@ def _compute_title_position(
     is_b_continuation_title = False
     if title_b:
         tb_lower = title_b.lower()
-        if any(h in tb_lower for h in ("cont", "continued", "page 2", "card 2", "pt 2", "part 2")):
+        if any(h in tb_lower for h in ("cont", "continued", "page 2", "card 2", "pt 2", "part 2", "page 3", "card 3", "part 3", "pt 3", "page 4", "card 4", "part 4", "pt 4", "page2", "card2", "part2", "pt2")):
             is_b_continuation_title = True
 
     if title_a and (not title_b or is_b_continuation_title):
@@ -544,6 +544,13 @@ def _compute_title_position(
             note=f"Title clash: separate titles '{title_a}' vs '{title_b}'",
         )
     elif not title_a and title_b:
+        if is_b_continuation_title:
+            return FeatureEvidence(
+                name="title_position",
+                raw=0.95,
+                log_lr=None,
+                note=f"Following card B has continuation title ('{title_b}') after untitled card A",
+            )
         # Reverse order: title appears on back card B instead of front card A
         return FeatureEvidence(
             name="title_position",
@@ -583,7 +590,37 @@ def _compute_marker_evidence(
             note="Uncomputable: no markers or text available",
         )
 
-    # 1. Page/part numbering progression: e.g. "page 1" / "1" on A and "page 2" / "2" on B
+    # 1. Text marker matching helpers ('over' on A, 'cont\'d' / 'page 2' on B)
+    def _has_forward_marker(markers: List[str], lines: List[str]) -> bool:
+        for m in markers:
+            m_norm = re.sub(r"[^a-z0-9]", " ", m).strip()
+            m_nospace = re.sub(r"[^a-z0-9]", "", m).strip()
+            if any(fm in m_norm or fm in m_nospace for fm in ("over", "turn over", "see back", "pto", "cont", "continued")):
+                return True
+        for ln in lines[-2:]:
+            ln_norm = re.sub(r"[^a-z0-9]", " ", ln).strip()
+            ln_nospace = re.sub(r"[^a-z0-9]", "", ln).strip()
+            words = ln_norm.split()
+            if "over" in words and len(words) <= 4:
+                return True
+            if any(fm in ln_norm or fm in ln_nospace for fm in ("turn over", "see back", "p t o", "pto", "cont d", "continued")):
+                return True
+        return False
+
+    def _has_continuation_marker(markers: List[str], lines: List[str]) -> bool:
+        for m in markers:
+            m_norm = re.sub(r"[^a-z0-9]", " ", m).strip()
+            m_nospace = re.sub(r"[^a-z0-9]", "", m).strip()
+            if any(cm in m_norm or cm in m_nospace for cm in ("cont", "continued", "page 2", "card 2", "part 2", "pt 2", "page 3", "card 3", "part 3", "pt 3", "page 4", "card 4", "part 4", "pt 4", "instructions continued", "page2", "card2", "part2", "pt2")):
+                return True
+        for ln in lines[:2]:
+            ln_norm = re.sub(r"[^a-z0-9]", " ", ln).strip()
+            ln_nospace = re.sub(r"[^a-z0-9]", "", ln).strip()
+            if any(cm in ln_norm or cm in ln_nospace for cm in ("cont", "continued", "page 2", "card 2", "part 2", "pt 2", "page 3", "card 3", "part 3", "pt 3", "page 4", "card 4", "part 4", "pt 4", "page2", "card2", "part2", "pt2")):
+                return True
+        return False
+
+    # 2. Page/part numbering progression: e.g. "page 1" / "1" on A and "page 2" / "2" on B
     def _extract_page_num(markers: List[str], lines: List[str]) -> Optional[int]:
         for m in markers:
             # Handle OCR noise like "- 2 -", "(2)", "p. 2", "card #2"
@@ -618,43 +655,27 @@ def _compute_marker_evidence(
                 log_lr=None,
                 note=f"Forward page/card gap: {page_a} -> {page_b}",
             )
-        elif page_b <= page_a:
+        elif page_b == page_a:
+            if _has_continuation_marker(markers_b, lines_b):
+                return FeatureEvidence(
+                    name="marker_evidence",
+                    raw=0.85,
+                    log_lr=None,
+                    note=f"Continuation header detected on Card B with marker {page_b}",
+                )
+            return FeatureEvidence(
+                name="marker_evidence",
+                raw=0.40,
+                log_lr=None,
+                note=f"Ambiguous equal page markers: {page_a} vs {page_b}",
+            )
+        elif page_b < page_a:
             return FeatureEvidence(
                 name="marker_evidence",
                 raw=0.0,
                 log_lr=None,
-                note=f"Reverse or duplicate page markers: {page_a} vs {page_b}",
+                note=f"Reverse page markers: {page_a} vs {page_b}",
             )
-
-    # 2. Text marker matching ('over' on A, 'cont\'d' / 'page 2' on B)
-    def _has_forward_marker(markers: List[str], lines: List[str]) -> bool:
-        for m in markers:
-            m_norm = re.sub(r"[^a-z0-9]", " ", m).strip()
-            m_nospace = re.sub(r"[^a-z0-9]", "", m).strip()
-            if any(fm in m_norm or fm in m_nospace for fm in ("over", "turn over", "see back", "pto", "cont", "continued")):
-                return True
-        for ln in lines[-2:]:
-            ln_norm = re.sub(r"[^a-z0-9]", " ", ln).strip()
-            ln_nospace = re.sub(r"[^a-z0-9]", "", ln).strip()
-            words = ln_norm.split()
-            if "over" in words and len(words) <= 4:
-                return True
-            if any(fm in ln_norm or fm in ln_nospace for fm in ("turn over", "see back", "p t o", "pto", "cont d", "continued")):
-                return True
-        return False
-
-    def _has_continuation_marker(markers: List[str], lines: List[str]) -> bool:
-        for m in markers:
-            m_norm = re.sub(r"[^a-z0-9]", " ", m).strip()
-            m_nospace = re.sub(r"[^a-z0-9]", "", m).strip()
-            if any(cm in m_norm or cm in m_nospace for cm in ("cont", "continued", "page 2", "card 2", "part 2", "pt 2", "instructions continued", "page2", "card2", "part2", "pt2")):
-                return True
-        for ln in lines[:2]:
-            ln_norm = re.sub(r"[^a-z0-9]", " ", ln).strip()
-            ln_nospace = re.sub(r"[^a-z0-9]", "", ln).strip()
-            if any(cm in ln_norm or cm in ln_nospace for cm in ("cont", "continued", "page 2", "card 2", "part 2", "pt 2", "page2", "card2", "part2", "pt2")):
-                return True
-        return False
 
     a_forward = _has_forward_marker(markers_a, lines_a) or (page_a is not None and page_a == 1)
     b_cont = _has_continuation_marker(markers_b, lines_b) or (page_b is not None and page_b >= 2)

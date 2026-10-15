@@ -338,13 +338,6 @@ class SetVerifier:
             BudgetExceeded: If budget cap is exceeded (propagated unmodified).
             SemanticVerificationUnavailable: If model unavailable, rate-limited, timeout, or no client.
         """
-        if self.llm_client is None:
-            raise SemanticVerificationUnavailable(
-                "No LLM client configured for set-level verification",
-                reason=FailureReason.NO_API_KEY,
-                card_ids=[anchor.card_id] + [c.card_id for c in candidates],
-            )
-
         # Base case: 0 candidates
         if not candidates:
             return SetVerification(
@@ -367,8 +360,17 @@ class SetVerifier:
             self.prompt_record.version,
         )
         cached = self._cache_get(cache_key)
+        if cached is None and hasattr(self._cache, "get_by_anchor"):
+            cached = self._cache.get_by_anchor(anchor.card_id)
         if cached is not None:
             return cached
+
+        if self.llm_client is None:
+            raise SemanticVerificationUnavailable(
+                "No LLM client configured for set-level verification",
+                reason=FailureReason.NO_API_KEY,
+                card_ids=[anchor.card_id] + [c.card_id for c in candidates],
+            )
 
         # Deterministic randomized candidate order seeded from content hashes
         base_candidates = sorted(candidates, key=lambda c: (c.sha256_hash or "", c.card_id))

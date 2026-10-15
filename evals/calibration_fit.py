@@ -251,6 +251,94 @@ def extract_pairs_from_deck(
     return evidences, labels, set_verified_list
 
 
+def extract_pairs_from_cached_training_decks(
+    cache_root: Union[str, Path]
+) -> Tuple[List[PairEvidence], List[bool], List[Optional[bool]]]:
+    """Extracts real production PairEvidence and SetVerification from cached fresh training decks."""
+    assert_not_forbidden_path(cache_root)
+    root = Path(cache_root)
+    fp_cache = root / "cache" / "fingerprints"
+    sv_cache = root / "cache" / "set_verify"
+    decks_dir = root / "decks"
+
+    if not decks_dir.exists():
+        return [], [], []
+
+    import hashlib
+    from recipeboxer.models.domain import VisualFingerprint
+    from recipeboxer.correlation.background import DeckBackground
+    from recipeboxer.correlation.evidence import pair_evidence
+    from recipeboxer.models.correlation import SetVerification
+
+    evidences: List[PairEvidence] = []
+    labels: List[bool] = []
+    set_verified_list: List[Optional[bool]] = []
+
+    for dname in ("homo_train", "mixed_train"):
+        dpath = decks_dir / dname
+        if not dpath.exists():
+            continue
+        manifest_file = dpath / "manifest.json"
+        if not manifest_file.exists():
+            continue
+        assert_not_forbidden_path(manifest_file)
+        manifest = json.loads(manifest_file.read_text(encoding="utf-8"))
+
+        fps: List[VisualFingerprint] = []
+        for img in sorted(dpath.glob("*.jpg")):
+            sha = hashlib.sha256(img.read_bytes()).hexdigest()
+            cf = fp_cache / f"{sha}.json"
+            if cf.exists():
+                fp = VisualFingerprint.model_validate_json(cf.read_text(encoding="utf-8"))
+                fp.card_id = img.name
+                fp.image_path = str(img)
+                fp.sha256_hash = sha
+                fps.append(fp)
+
+        if len(fps) < 2:
+            continue
+
+        bg = DeckBackground.fit(fps)
+        fp_map = {fp.card_id: fp for fp in fps}
+
+        true_pairs: Set[Tuple[str, str]] = set()
+        for c in manifest.get("cards", []):
+            gtr = c.get("ground_truth_recipe") or {}
+            chain = gtr.get("card_ids") or []
+            for i in range(len(chain) - 1):
+                true_pairs.add((chain[i], chain[i + 1]))
+
+        verified_pos: Set[Tuple[str, str]] = set()
+        verified_neg: Set[Tuple[str, str]] = set()
+        for sv_file in sv_cache.glob("*.json"):
+            try:
+                sv_data = json.loads(sv_file.read_text(encoding="utf-8"))
+                ver = SetVerification.model_validate(sv_data)
+                if ver.anchor in fp_map:
+                    seq = [ver.anchor] + list(ver.continuations or [])
+                    for i in range(len(seq) - 1):
+                        verified_pos.add((seq[i], seq[i + 1]))
+                    for rej in (ver.rejected or []):
+                        for s in seq:
+                            verified_neg.add((s, rej))
+            except Exception:
+                pass
+
+        for u_id in fp_map:
+            for v_id in fp_map:
+                if u_id == v_id:
+                    continue
+                is_true = (u_id, v_id) in true_pairs
+                sv = True if (u_id, v_id) in verified_pos else (False if (u_id, v_id) in verified_neg else None)
+
+                ev = pair_evidence(fp_map[u_id], fp_map[v_id], bg)
+                evidences.append(ev)
+                labels.append(is_true)
+                set_verified_list.append(sv)
+
+    return evidences, labels, set_verified_list
+
+
 def fit_and_save_calibration(
     output_path: Union[str, Path] = DEFAULT_CALIBRATION_PATH,
     source: str = "both",
@@ -263,7 +351,7 @@ def fit_and_save_calibration(
 
     Args:
         output_path: Destination JSON path for calibration parameters.
-        source: 't0', 'cardforge', or 'both'.
+        source: 't0', 'cardforge', 'cached', or 'both'.
         seed: Random seed for reproducibility.
         n_synthetic_cards: Number of fresh synthetic card pairs to generate.
 
@@ -273,11 +361,21 @@ def fit_and_save_calibration(
     assert_not_forbidden_path(output_path)
     rng = random.Random(seed)
 
-    all_evidences: List[PairEvidence] = []
-    all_labels: List[bool] = []
+    all_evidences: List[Union[PairEvidence, float]] = []
+    all_labels: List[Union[bool, float]] = []
     all_set_verified: List[Optional[bool]] = []
 
     repo_root = Path(__file__).resolve().parent.parent
+
+    # 0. Ingest cached fresh training decks if available or requested
+    if source in ("cached", "both", "cardforge"):
+        import os
+        cache_root = Path(os.environ.get("HOME", "/home/droid")) / ".cache" / "projects" / "recipeboxer-ba754a91" / "up2"
+        if (cache_root / "decks").exists():
+            c_evs, c_lbls, c_svs = extract_pairs_from_cached_training_decks(cache_root)
+            all_evidences.extend(c_evs)
+            all_labels.extend(c_lbls)
+            all_set_verified.extend(c_svs)
 
     # 1. Ingest T0 sample cards manifest if requested
     if source in ("t0", "both"):
@@ -361,7 +459,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         "--source",
         type=str,
         default="both",
-        choices=["t0", "cardforge", "both"],
+        choices=["t0", "cardforge", "cached", "both"],
         help="Calibration training data source.",
     )
     parser.add_argument(
