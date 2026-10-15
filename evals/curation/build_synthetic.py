@@ -16,6 +16,7 @@ Enforces Wave 3 interface contracts and procedural secrecy:
 from __future__ import annotations
 
 import argparse
+import copy
 import datetime
 import hashlib
 import io
@@ -46,7 +47,7 @@ from cardforge.models import (
     RecipeSchema,
     RulingStyle,
 )
-from cardforge.generator import SyntheticCardGenerator
+from cardforge.generator import SyntheticCardGenerator, adapt_text_for_font, MissingGlyphError
 from evals.vault import encrypt_bytes, load_recipients, get_repo_root
 
 # Unit pattern for recipe ingredient parser
@@ -94,6 +95,145 @@ def parse_ingredient_line(line: str) -> Dict[str, Any]:
     return {"raw": clean, "quantity": None, "unit": None, "item": clean, "section": None}
 
 
+DISTINCTIVE_INGREDIENTS = {
+    "apple", "apples", "banana", "beef", "berry", "berries", "cabbage", "carrot", "carrots",
+    "cheese", "chicken", "chocolate", "cocoa", "coffee", "corn", "crab", "currant", "currants",
+    "date", "dates", "duck", "egg", "eggs", "fig", "figs", "fish", "ginger", "grape", "grapes",
+    "ham", "hominy", "lamb", "lemon", "lemons", "lobster", "mushroom", "mushrooms", "mutton",
+    "nut", "nuts", "oat", "oats", "oatmeal", "onion", "onions", "orange", "oranges", "oyster",
+    "oysters", "pea", "peas", "peach", "peaches", "peanut", "peanuts", "pear", "pears", "pecan",
+    "pecans", "pork", "potato", "potatoes", "prune", "prunes", "pumpkin", "raisin", "raisins",
+    "raspberry", "rice", "salmon", "shrimp", "spinach", "squash", "strawberry", "strawberries",
+    "tea", "tomato", "tomatoes", "turkey", "veal", "walnut", "walnuts"
+}
+
+
+def check_title_body_consistency(
+    title: str,
+    ingredients: List[str],
+    directions: List[str],
+) -> Tuple[bool, str]:
+    """Audits title/body consistency so recipes never mislabel dishes or ingredients."""
+    full_text = (" ".join(ingredients) + " " + " ".join(directions)).lower()
+    title_words = re.findall(r"[a-zA-Z]+", title.lower())
+
+    # 1. Distinctive ingredient check
+    for w in title_words:
+        if w in DISTINCTIVE_INGREDIENTS:
+            stem = w[:-1] if w.endswith("s") else w
+            if stem not in full_text:
+                return (
+                    False,
+                    f"Distinctive ingredient '{w}' from title '{title}' not found in ingredients or directions.",
+                )
+
+    # 2. General title relevance check: at least one substantial title word must appear in body
+    stop_words = {
+        "recipe", "recipes", "style", "with", "from", "first", "second", "modern", "standard",
+        "version", "part", "warm", "cold", "rich", "plain", "best", "good", "quick",
+        "easy", "homemade", "simple", "traditional", "baked", "boiled", "fried",
+        "roast", "roasted", "steamed", "fresh", "sweet", "sour", "card", "back", "front",
+    }
+    substantive = [w for w in title_words if len(w) >= 4 and w not in stop_words]
+    if substantive:
+        stems = [w[:-1] if w.endswith("s") else w for w in substantive]
+        if not any(s in full_text for s in stems):
+            return (
+                False,
+                f"No substantive title words from '{title}' found in ingredients or directions.",
+            )
+
+    return True, ""
+
+
+def make_near_duplicate_variant(
+    base_recipe: Dict[str, Any],
+    variant_title: str,
+    variant_type: str = "numeric",
+    seed: int = 42,
+) -> Dict[str, Any]:
+    """Synthesizes a genuine near-duplicate recipe variant with matching title and body."""
+    rng = random.Random(seed)
+    v = copy.deepcopy(base_recipe)
+    v["title"] = variant_title
+    ings = list(v.get("ingredients", []))
+    dirs = list(v.get("directions", []))
+
+    new_ings = []
+    modified_ing = False
+    for ig in ings:
+        if not modified_ing and any(k in ig.lower() for k in ("sugar", "butter", "milk", "water", "flour")):
+            if "1/3" in ig or "⅓" in ig:
+                new_ings.append(ig.replace("1/3", "1/2").replace("⅓", "½"))
+                modified_ing = True
+                continue
+            elif "1/4" in ig or "¼" in ig:
+                new_ings.append(ig.replace("1/4", "1/3").replace("¼", "⅓"))
+                modified_ing = True
+                continue
+            elif "1/2" in ig or "½" in ig:
+                new_ings.append(ig.replace("1/2", "3/4").replace("½", "¾"))
+                modified_ing = True
+                continue
+            elif "1 cup" in ig.lower():
+                new_ings.append(ig.replace("1 cup", "1¼ cups").replace("1 Cup", "1¼ Cups"))
+                modified_ing = True
+                continue
+        new_ings.append(ig)
+
+    # Add or tweak subtle flavoring
+    if variant_type in ("numeric", "modern", "rich"):
+        if not any("vanilla" in ig.lower() or "nutmeg" in ig.lower() or "cinnamon" in ig.lower() for ig in ings):
+            new_ings.append("½ teaspoon vanilla extract" if rng.random() < 0.5 else "¼ teaspoon grated nutmeg")
+    elif variant_type == "peacetime":
+        new_ings = [ig.replace("corn syrup", "sugar").replace("shortening", "butter") for ig in new_ings]
+
+    v["ingredients"] = new_ings
+    v["structured_ingredients"] = [parse_ingredient_line(ig) for ig in new_ings]
+
+    # Adjust cooking time slightly
+    new_dirs = []
+    for d in dirs:
+        if "minutes" in d.lower():
+            new_dirs.append(re.sub(r'(\d+)\s+minutes', lambda m: f"{int(m.group(1)) + 5} minutes", d))
+        else:
+            new_dirs.append(d)
+    v["directions"] = new_dirs
+
+    # Assert consistency of generated variant
+    ok, err = check_title_body_consistency(v["title"], v["ingredients"], v["directions"])
+    if not ok:
+        raise ValueError(f"Generated near-duplicate variant failed consistency: {err}")
+
+    return v
+
+
+def is_candidate_recipe_title(cand_title: str) -> bool:
+    """Filters candidate title strings to reject captions, metadata, and non-recipes."""
+    if not (3 <= len(cand_title) <= 50):
+        return False
+    clean = cand_title.strip()
+    if clean.startswith("[") or clean.endswith("]"):
+        return False
+    if "Illustration" in clean or "Page " in clean or "_Page" in clean or "Fig." in clean:
+        return False
+    if clean.endswith(":") or clean.endswith(";") or clean.endswith(","):
+        return False
+    upper_bad = (
+        "CHAPTER", "INDEX", "PART ", "TABLE", "RULES", "FOOD", "NOTE",
+        "CONTENTS", "PREFACE", "MENUS", "BILL OF FARE", "INTRODUCTION"
+    )
+    if any(clean.upper().startswith(p) for p in upper_bad):
+        return False
+    lower_bad = (
+        "ration", "require", "stand until", "let stand", "digestive", "diet",
+        "illustration", "servings", "calories", "nutritive"
+    )
+    if any(p in clean.lower() for p in lower_bad):
+        return False
+    return True
+
+
 def parse_recipes_from_text(
     text: str,
     source_note: str,
@@ -123,12 +263,7 @@ def parse_recipes_from_text(
 
         cand_title = lines[0]
         # Candidate title filter
-        if (len(lines) == 1 and 3 <= len(cand_title) <= 50 and
-            not cand_title.endswith(':') and not cand_title.startswith('CHAPTER') and
-            not cand_title.startswith('INDEX') and not cand_title.startswith('PART ') and
-            not cand_title.startswith('TABLE') and not cand_title.startswith('RULES') and
-            not cand_title.startswith('FOOD') and not cand_title.startswith('NOTE')):
-
+        if len(lines) == 1 and is_candidate_recipe_title(cand_title):
             next_b = blocks[i+1].strip()
             next_lines = [l.strip() for l in next_b.splitlines() if l.strip()]
             ings = [l for l in next_lines if qty_re.match(l) or fraction_re.match(l)]
@@ -136,17 +271,27 @@ def parse_recipes_from_text(
             if 3 <= len(ings) <= 12:
                 dirs = []
                 j = i + 2
-                while j < min(i + 5, len(blocks)):
+                while j < min(i + 6, len(blocks)):
                     dir_b = blocks[j].strip()
                     if not dir_b:
                         j += 1
                         continue
-                    if len(dir_b.splitlines()) == 1 and dir_b.isupper():
-                        break
                     dir_lines = [l.strip() for l in dir_b.splitlines() if l.strip()]
+                    # Stop if this block is the candidate title of the NEXT recipe
+                    if len(dir_lines) == 1 and is_candidate_recipe_title(dir_lines[0]):
+                        if j + 1 < len(blocks):
+                            next_next = [l.strip() for l in blocks[j+1].splitlines() if l.strip()]
+                            if sum(1 for l in next_next if qty_re.match(l) or fraction_re.match(l)) >= 3:
+                                break
                     if sum(1 for l in dir_lines if qty_re.match(l)) > 2:
                         break
-                    dirs.append(' '.join(dir_lines))
+                    # Clean out illustration captions and page notes
+                    clean_lines = [
+                        l for l in dir_lines
+                        if not l.startswith("[") and "Illustration" not in l and "_Page" not in l
+                    ]
+                    if clean_lines:
+                        dirs.append(' '.join(clean_lines))
                     j += 1
 
                 if dirs:
@@ -162,16 +307,19 @@ def parse_recipes_from_text(
                         else:
                             step_list.append(d)
 
-                    recipes.append({
-                        "title": t_clean,
-                        "ingredients": ings,
-                        "structured_ingredients": [parse_ingredient_line(l) for l in ings],
-                        "directions": step_list[:8],
-                        "yield": "4 to 6 servings",
-                        "source_note": source_note,
-                        "notes": [],
-                    })
-                    i = j - 1
+                    # Validate title/body consistency
+                    ok, _ = check_title_body_consistency(t_clean, ings, step_list)
+                    if ok:
+                        recipes.append({
+                            "title": t_clean,
+                            "ingredients": ings,
+                            "structured_ingredients": [parse_ingredient_line(l) for l in ings],
+                            "directions": step_list[:8],
+                            "yield": "4 to 6 servings",
+                            "source_note": source_note,
+                            "notes": [],
+                        })
+                        i = j - 1
         i += 1
     return recipes
 
@@ -436,6 +584,13 @@ def generate_deck_faces(
     rendered_images: List[Tuple[str, Image.Image]] = []
 
     for r_idx, r_data in enumerate(recipes_data):
+        # 1. Assert title/body consistency
+        ok, reason = check_title_body_consistency(
+            r_data["title"], r_data["ingredients"], r_data["directions"]
+        )
+        if not ok:
+            raise ValueError(f"Deck '{deck_id}' recipe '{r_data['title']}' failed consistency: {reason}")
+
         seed_val = base_seed + (r_idx * 17)
         gen = SyntheticCardGenerator(seed=seed_val)
         stock = stock_mapping[r_idx % len(stock_mapping)]
@@ -447,13 +602,20 @@ def generate_deck_faces(
         face_ids = [f"{rng.getrandbits(48):012x}.jpg" for _ in range(n_faces)]
         rec_id = f"r{r_idx + 1:03d}"
 
+        # 2. Adapt text for writer font so rendered text and GT never silently drop characters
+        font_style = writer.font_style
+        adapted_title = adapt_text_for_font(r_data["title"], font_style)
+        adapted_ings = [adapt_text_for_font(ig, font_style) for ig in r_data["ingredients"]]
+        adapted_dirs = [adapt_text_for_font(d, font_style) for d in r_data["directions"]]
+        adapted_structured_ings = [parse_ingredient_line(ig) for ig in adapted_ings]
+
         rec_obj = RecipeSchema(
             recipe_id=rec_id,
-            title=r_data["title"],
+            title=adapted_title,
             yield_servings=r_data.get("yield", "4 servings"),
             total_time="45 mins",
-            ingredients=r_data["ingredients"],
-            directions=r_data["directions"],
+            ingredients=adapted_ings,
+            directions=adapted_dirs,
             source_notes=r_data.get("source_note", ""),
             card_ids=face_ids,
         )
@@ -502,11 +664,11 @@ def generate_deck_faces(
             "faces": face_ids,
             "verbatim": verbatims,
             "structured": {
-                "title": r_data["title"],
+                "title": adapted_title,
                 "yield": r_data.get("yield", None),
                 "source_note": r_data.get("source_note", None),
-                "ingredients": r_data.get("structured_ingredients", []),
-                "directions": r_data.get("directions", []),
+                "ingredients": adapted_structured_ings,
+                "directions": adapted_dirs,
                 "notes": r_data.get("notes", []),
             },
             "difficulty": {
@@ -529,7 +691,7 @@ def build_t1(
     cache_dir: Path,
     corpora_dir: Path,
     vault_dir: Path,
-    base_seed: int = 50000,
+    base_seed: int = 55000,
 ) -> Dict[str, Any]:
     """Generates Tier 1 dev-eval corpus, public images, and encrypted GT."""
     t1_dir = corpora_dir / "t1"
@@ -606,17 +768,31 @@ def build_t1(
     for fname, img in d02_rendered:
         img.save(d02_path / fname, format="JPEG", quality=80)
 
-    # Deck d03: Near-duplicate recipes (variants of same dish)
+    # Deck d03: Near-duplicate recipes (genuine variants of same dish)
     # 10 recipes
-    d03_recipes = all_t1_recipes[24:34]
-    # Inject near-duplicate variant naming for pairs
-    if len(d03_recipes) >= 6:
-        d03_recipes[0]["title"] = f"{d03_recipes[0]['title']} I"
-        d03_recipes[1]["title"] = f"{d03_recipes[0]['title'][:-2]} II"
-        d03_recipes[2]["title"] = f"{d03_recipes[2]['title']} I"
-        d03_recipes[3]["title"] = f"{d03_recipes[2]['title'][:-2]} II"
-        d03_recipes[4]["title"] = f"{d03_recipes[4]['title']} (Old-Style)"
-        d03_recipes[5]["title"] = f"{d03_recipes[4]['title'].split(' (')[0]} (Modern)"
+    d03_pool = all_t1_recipes[24:34]
+    d03_recipes = []
+    # Pair 1: Dish variant I & II
+    rec0 = copy.deepcopy(d03_pool[0])
+    rec0["title"] = f"{rec0['title']} I"
+    rec1 = make_near_duplicate_variant(d03_pool[0], f"{d03_pool[0]['title']} II", "numeric", seed=base_seed + 301)
+    d03_recipes.extend([rec0, rec1])
+
+    # Pair 2: Dish variant I & II
+    rec2 = copy.deepcopy(d03_pool[1])
+    rec2["title"] = f"{rec2['title']} I"
+    rec3 = make_near_duplicate_variant(d03_pool[1], f"{d03_pool[1]['title']} II", "numeric", seed=base_seed + 302)
+    d03_recipes.extend([rec2, rec3])
+
+    # Pair 3: Dish (Old-Style) & (Modern)
+    rec4 = copy.deepcopy(d03_pool[2])
+    rec4["title"] = f"{rec4['title']} (Old-Style)"
+    rec5 = make_near_duplicate_variant(d03_pool[2], f"{d03_pool[2]['title']} (Modern)", "modern", seed=base_seed + 303)
+    d03_recipes.extend([rec4, rec5])
+
+    # Remaining 4 recipes
+    for rem in d03_pool[3:7]:
+        d03_recipes.append(copy.deepcopy(rem))
 
     d03_stocks = [stocks["s_t1_cream"], stocks["s_t1_narrow"], stocks["s_t1_yellow"]] * 4
     d03_writers = [writers["w_t1_cursive_blue"], writers["w_t1_cursive_sepia"], writers["w_t1_typewriter"]] * 4
@@ -683,7 +859,13 @@ def build_t1(
         "n_images": len(d04_imgs),
         "recipe_items": [
             {
-                "recipe_data": d04_recipes_raw[idx],
+                "recipe_data": {
+                    "title": d04_gt["recipes"][idx]["structured"]["title"],
+                    "yield": d04_gt["recipes"][idx]["structured"]["yield"],
+                    "ingredients": [ig["raw"] for ig in d04_gt["recipes"][idx]["structured"]["ingredients"]],
+                    "directions": d04_gt["recipes"][idx]["structured"]["directions"],
+                    "source_note": d04_gt["recipes"][idx]["structured"]["source_note"],
+                },
                 "stock_id": d04_stocks[idx].stock_id,
                 "writer_id": d04_writers[idx].writer_id,
                 "num_faces": d04_faces[idx],
@@ -718,7 +900,7 @@ def build_t1(
 def build_t2(
     cache_dir: Path,
     vault_dir: Path,
-    base_seed: int = 70000,
+    base_seed: int = 75000,
 ) -> Dict[str, Any]:
     """Generates Tier 2 held-out corpus and writes encrypted images tar + encrypted GT."""
     # 1. Ingest recipes from T2 Project Gutenberg sources (completely distinct from T1)
@@ -789,15 +971,29 @@ def build_t2(
             ti.mtime = int(datetime.datetime.now(datetime.timezone.utc).timestamp())
             tar.addfile(ti, io.BytesIO(data))
 
-        # Deck d03: Near-duplicate recipes (held out)
-        d03_recipes = all_t2_recipes[24:34]
-        if len(d03_recipes) >= 6:
-            d03_recipes[0]["title"] = f"{d03_recipes[0]['title']} (War-Time Version)"
-            d03_recipes[1]["title"] = f"{d03_recipes[0]['title'].split(' (')[0]} (Peace-Time Standard)"
-            d03_recipes[2]["title"] = f"{d03_recipes[2]['title']} I"
-            d03_recipes[3]["title"] = f"{d03_recipes[2]['title'][:-2]} II"
-            d03_recipes[4]["title"] = f"Rich {d03_recipes[4]['title']}"
-            d03_recipes[5]["title"] = f"Plain {d03_recipes[4]['title'].replace('Rich ', '')}"
+        # Deck d03: Near-duplicate recipes (genuine variants of same dish)
+        d03_pool = all_t2_recipes[24:34]
+        d03_recipes = []
+        # Pair 1: War-Time Version vs Peace-Time Standard
+        rec0 = copy.deepcopy(d03_pool[0])
+        rec0["title"] = f"{rec0['title']} (War-Time Version)"
+        rec1 = make_near_duplicate_variant(d03_pool[0], f"{d03_pool[0]['title']} (Peace-Time Standard)", "peacetime", seed=base_seed + 301)
+        d03_recipes.extend([rec0, rec1])
+
+        # Pair 2: Variant I & II
+        rec2 = copy.deepcopy(d03_pool[1])
+        rec2["title"] = f"{rec2['title']} I"
+        rec3 = make_near_duplicate_variant(d03_pool[1], f"{d03_pool[1]['title']} II", "numeric", seed=base_seed + 302)
+        d03_recipes.extend([rec2, rec3])
+
+        # Pair 3: Rich vs Plain
+        rec4 = copy.deepcopy(d03_pool[2])
+        rec4["title"] = f"Rich {d03_pool[2]['title']}"
+        rec5 = make_near_duplicate_variant(d03_pool[2], f"Plain {d03_pool[2]['title']}", "plain", seed=base_seed + 303)
+        d03_recipes.extend([rec4, rec5])
+
+        for rem in d03_pool[3:7]:
+            d03_recipes.append(copy.deepcopy(rem))
 
         d03_stocks = [stocks["s_t2_ivory"], stocks["s_t2_canary"], stocks["s_t2_parchment"]] * 4
         d03_writers = [writers["w_t2_fountain_black"], writers["w_t2_ballpoint"], writers["w_t2_typewriter"]] * 4
@@ -870,14 +1066,14 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument(
         "--t1-seed",
         type=int,
-        default=50000,
-        help="Base random seed for T1 (default: 50000)",
+        default=55000,
+        help="Base random seed for T1 (default: 55000)",
     )
     parser.add_argument(
         "--t2-seed",
         type=int,
-        default=70000,
-        help="Base random seed for T2 (default: 70000)",
+        default=75000,
+        help="Base random seed for T2 (default: 75000)",
     )
 
     args = parser.parse_args(argv)

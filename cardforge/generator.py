@@ -49,11 +49,200 @@ from cardforge.templates_t0 import ARCHIVAL_RECIPE_TEMPLATES
 
 _FONTS_DIR = Path(__file__).resolve().parent / "fonts"
 
+try:
+    from fontTools.ttLib import TTFont
+except ImportError:
+    TTFont = None
+
+
+class MissingGlyphError(ValueError):
+    """Raised when rendered text contains a character with no glyph in the font."""
+    pass
+
+
 # ============================================================================
-# 2. FONT MANAGEMENT & FALLBACKS
+# 2. FONT MANAGEMENT, GLYPH VALIDATION & FALLBACKS
 # ============================================================================
 
 _FONT_CACHE: Dict[Tuple[str, int], ImageFont.ImageFont] = {}
+_CMAP_CACHE: Dict[str, Set[int]] = {}
+
+FRACTION_TRANSLITERATION: Dict[str, str] = {
+    "¼": "1/4",
+    "½": "1/2",
+    "¾": "3/4",
+    "⅓": "1/3",
+    "⅔": "2/3",
+    "⅛": "1/8",
+    "⅜": "3/8",
+    "⅝": "5/8",
+    "⅞": "7/8",
+}
+
+SYMBOL_TRANSLITERATION: Dict[str, str] = {
+    "–": "-",    # en dash
+    "—": "--",   # em dash
+    "“": '"',    # left double quote
+    "”": '"',    # right double quote
+    "‘": "'",    # left single quote
+    "’": "'",    # right single quote
+    "•": "-",    # bullet
+    "×": "x",    # multiplication sign
+    "°": " deg", # degree
+}
+
+
+def get_font_cmap(font_or_path: Union[ImageFont.ImageFont, str, Path]) -> Optional[Set[int]]:
+    """Retrieves the Unicode character map (cmap) codepoints for a font, path, or style name."""
+    p: Optional[str] = None
+    if isinstance(font_or_path, Path):
+        p = str(font_or_path)
+    elif isinstance(font_or_path, str):
+        if os.path.exists(font_or_path):
+            p = font_or_path
+        else:
+            f = get_font(font_or_path)
+            if hasattr(f, "path") and f.path:
+                p = str(f.path)
+    elif hasattr(font_or_path, "path") and font_or_path.path:
+        p = str(font_or_path.path)
+
+    if p and p in _CMAP_CACHE:
+        return _CMAP_CACHE[p]
+
+    if p and TTFont and os.path.exists(p):
+        try:
+            tt = TTFont(p)
+            cmap = set(tt.getBestCmap().keys())
+            _CMAP_CACHE[p] = cmap
+            return cmap
+        except Exception:
+            pass
+    return None
+
+
+def check_font_missing_glyphs(
+    text: str,
+    font: ImageFont.ImageFont,
+    font_style: str = "",
+) -> List[str]:
+    """Returns a list of characters in text lacking a glyph in font."""
+    if not text:
+        return []
+    cmap = get_font_cmap(font)
+    missing = []
+    if cmap is not None:
+        for c in text:
+            if c in ("\n", "\r", "\t"):
+                continue
+            if ord(c) not in cmap:
+                missing.append(c)
+    else:
+        for c in text:
+            if c in ("\n", "\r", "\t", " "):
+                continue
+            try:
+                mask = font.getmask(c)
+                if mask.getbbox() is None:
+                    missing.append(c)
+            except Exception:
+                missing.append(c)
+    return missing
+
+
+def validate_font_glyphs(
+    text: str,
+    font: ImageFont.ImageFont,
+    font_style: str = "",
+) -> None:
+    """Cardforge self-check: fails generation if any char lacks a glyph in font (no silent tofu/blank)."""
+    missing = check_font_missing_glyphs(text, font, font_style)
+    if missing:
+        unique_missing = list(dict.fromkeys(missing))
+        desc = ", ".join(f"'{c}' (U+{ord(c):04X})" for c in unique_missing)
+        font_name = font_style or getattr(font, "path", "default_font")
+        raise MissingGlyphError(
+            f"Font '{font_name}' lacks glyph(s) for {desc} in text: {text!r}"
+        )
+
+
+def adapt_text_for_font(
+    text: str,
+    font_style: str = "default",
+    font: Optional[ImageFont.ImageFont] = None,
+) -> str:
+    """Adapts text for a specific font style so rendered text never silently drops characters.
+
+    Applies consistent transliteration for characters unsupported by the font:
+    - If a font lacks vulgar fractions (e.g. marck_script, special_elite), transliterates
+      all vulgar fractions to consistent ASCII representations (e.g. '1/2', '1/3').
+    - If a font lacks dashes, quotes, or special symbols, transliterates them to ASCII equivalents.
+    """
+    if not text:
+        return text
+
+    style_lower = font_style.lower().strip()
+    f = font or get_font(font_style, size=16)
+    cmap = get_font_cmap(f)
+
+    # Determine whether font lacks fractions
+    # marck_script lacks all fractions; special_elite lacks thirds/eighths.
+    # To keep fraction rendering consistent on cards of that font, transliterate all fractions.
+    needs_fraction_transliteration = False
+    if style_lower in ("marck_script", "vintage_cursive", "script", "special_elite", "typewriter_distressed", "vintage_typewriter"):
+        needs_fraction_transliteration = True
+    elif cmap is not None:
+        for char in FRACTION_TRANSLITERATION:
+            if char in text and ord(char) not in cmap:
+                needs_fraction_transliteration = True
+                break
+
+    result = []
+    for c in text:
+        if c in FRACTION_TRANSLITERATION and needs_fraction_transliteration:
+            result.append(FRACTION_TRANSLITERATION[c])
+        elif cmap is not None and ord(c) not in cmap and c not in ("\n", "\r", "\t"):
+            if c in SYMBOL_TRANSLITERATION:
+                result.append(SYMBOL_TRANSLITERATION[c])
+            elif c in FRACTION_TRANSLITERATION:
+                result.append(FRACTION_TRANSLITERATION[c])
+            else:
+                result.append(c)
+        else:
+            result.append(c)
+
+    return "".join(result)
+
+
+def draw_text_with_fallback(
+    draw: ImageDraw.ImageDraw,
+    xy: Tuple[int, int],
+    text: str,
+    font: ImageFont.ImageFont,
+    font_style: str,
+    fill: Any,
+    fallback_font: Optional[ImageFont.ImageFont] = None,
+) -> None:
+    """Renders text with validation and optional per-character fallback font."""
+    missing = check_font_missing_glyphs(text, font, font_style)
+    if not missing:
+        draw.text(xy, text, fill=fill, font=font)
+        return
+    if fallback_font is not None:
+        cmap = get_font_cmap(font) or set()
+        cur_x, cur_y = xy
+        for c in text:
+            char_font = fallback_font if ord(c) not in cmap else font
+            validate_font_glyphs(c, char_font, "fallback")
+            draw.text((cur_x, cur_y), c, fill=fill, font=char_font)
+            try:
+                bbox = char_font.getbbox(c)
+                cur_x += max(bbox[2] - bbox[0], 8)
+            except Exception:
+                cur_x += 10
+        return
+    validate_font_glyphs(text, font, font_style)
+
 
 def get_font(
     style: str = "default",
@@ -88,6 +277,8 @@ def get_font(
         candidates.append("/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf")
     elif style == "cursive":
         candidates = [
+            str(_FONTS_DIR / "caveat.ttf"),
+            str(_FONTS_DIR / "marck_script.ttf"),
             "/System/Library/Fonts/Supplemental/SnellRoundhand.ttc",
             "/System/Library/Fonts/Supplemental/Brush Script.ttf",
             "/System/Library/Fonts/Supplemental/Zapfino.ttf",
@@ -102,6 +293,7 @@ def get_font(
         ]
     elif style == "typewriter":
         candidates = [
+            str(_FONTS_DIR / "special_elite.ttf"),
             "/System/Library/Fonts/Supplemental/Courier New.ttf",
             "/System/Library/Fonts/Courier.dfont",
             "/System/Library/Fonts/Menlo.ttc",
@@ -332,6 +524,7 @@ def render_handwritten_lines(
     for line in lines:
         if y + line_height > max_height - 15:
             break
+        validate_font_glyphs(line, font, font_style)
         # Baseline wobble per line
         y_wobble = rng.randint(-1, 2)
         x = start_x + rng.randint(-2, 2)
@@ -355,15 +548,17 @@ def render_typewritten_lines(
     ink_color: Tuple[int, int, int],
     font_size: int,
     rng: random.Random,
+    font_style: str = "typewriter",
 ) -> int:
     """Renders text simulating a mechanical typewriter with character bounce and ribbon wear."""
-    font = get_font("typewriter", size=font_size)
+    font = get_font(font_style, size=font_size)
     y = start_y
     line_height = int(font_size * 1.4)
 
     for line in lines:
         if y + line_height > max_height - 15:
             break
+        validate_font_glyphs(line, font, font_style)
         x = start_x
         # Character by character bounce and strike variability
         for char in line:
@@ -1579,10 +1774,14 @@ class SyntheticCardGenerator:
         modality = wtr.modality
         font_style = wtr.font_style
 
-        # Split recipe content across faces
-        ings = list(recipe.ingredients) or ["1 cup flour", "1/2 cup sugar"]
-        dirs = list(recipe.directions) or ["Mix well and bake."]
-        title = recipe.title or "Historical Recipe"
+        # Split recipe content across faces, adapting text for font
+        raw_ings = list(recipe.ingredients) or ["1 cup flour", "1/2 cup sugar"]
+        raw_dirs = list(recipe.directions) or ["Mix well and bake."]
+        raw_title = recipe.title or "Historical Recipe"
+
+        ings = [adapt_text_for_font(ig, font_style) for ig in raw_ings]
+        dirs = [adapt_text_for_font(d, font_style) for d in raw_dirs]
+        title = adapt_text_for_font(raw_title, font_style)
 
         face_plans = []
         if num_faces == 1:
@@ -1729,13 +1928,16 @@ class SyntheticCardGenerator:
             y = 22
 
             if fp["has_title"]:
-                title_font = get_font("headline" if modality == CardModality.PRINTED_CLIPPING else font_style, size=19)
+                title_font_style = "headline" if modality == CardModality.PRINTED_CLIPPING else font_style
+                title_font = get_font(title_font_style, size=19)
                 t_str = title.upper() if modality == CardModality.TYPEWRITTEN else title
+                validate_font_glyphs(t_str, title_font, title_font_style)
                 draw.text((40, y), t_str, fill=(*ink_col, 255), font=title_font)
                 verbatim_lines.append(t_str)
                 y = 66
             elif fp["header"]:
                 hdr_font = get_font(font_style, size=14)
+                validate_font_glyphs(fp["header"], hdr_font, font_style)
                 draw.text((40, y), fp["header"], fill=(*ink_col, 230), font=hdr_font)
                 verbatim_lines.append(fp["header"])
                 y = 58
@@ -1746,19 +1948,21 @@ class SyntheticCardGenerator:
             if fp["ings"]:
                 ing_hdr = "--- INGREDIENTS ---" if modality == CardModality.TYPEWRITTEN else "Ingredients:"
                 if fp["has_title"] or len(face_plans) > 1:
-                    hdr_font = get_font("typewriter" if modality == CardModality.TYPEWRITTEN else "headline", size=13)
+                    hdr_style = "typewriter" if modality == CardModality.TYPEWRITTEN else "headline"
+                    hdr_font = get_font(hdr_style, size=13)
+                    validate_font_glyphs(ing_hdr, hdr_font, hdr_style)
                     draw.text((40, y), ing_hdr, fill=(*ink_col, 240), font=hdr_font)
                     verbatim_lines.append(ing_hdr)
                     y += 20
                 if modality == CardModality.TYPEWRITTEN:
                     y = render_typewritten_lines(
-                        draw, [f"- {ig}" for ig in fp["ings"]], 40, y, cw, ch, ink_col, 13, self.rng
+                        draw, [f"- {ig}" for ig in fp["ings"]], 40, y, cw, ch, ink_col, 13, self.rng, font_style=font_style
                     )
                     for ig in fp["ings"]:
                         verbatim_lines.append(f"- {ig}")
                 elif modality == CardModality.PRINTED_CLIPPING:
                     y = render_typewritten_lines(
-                        draw, [f"• {ig}" for ig in fp["ings"]], 40, y, cw, ch, ink_col, 13, self.rng
+                        draw, [f"• {ig}" for ig in fp["ings"]], 40, y, cw, ch, ink_col, 13, self.rng, font_style="print"
                     )
                     for ig in fp["ings"]:
                         verbatim_lines.append(f"• {ig}")
@@ -1775,17 +1979,19 @@ class SyntheticCardGenerator:
                     y += 8
                 dir_hdr = "--- DIRECTIONS ---" if modality == CardModality.TYPEWRITTEN else "Directions:"
                 if fp["has_title"] or len(face_plans) > 1:
-                    hdr_font = get_font("typewriter" if modality == CardModality.TYPEWRITTEN else "headline", size=13)
+                    hdr_style = "typewriter" if modality == CardModality.TYPEWRITTEN else "headline"
+                    hdr_font = get_font(hdr_style, size=13)
+                    validate_font_glyphs(dir_hdr, hdr_font, hdr_style)
                     draw.text((40, y), dir_hdr, fill=(*ink_col, 240), font=hdr_font)
                     verbatim_lines.append(dir_hdr)
                     y += 20
                 if modality == CardModality.TYPEWRITTEN:
                     y = render_typewritten_lines(
-                        draw, fp["dirs"], 40, y, cw, ch, ink_col, 12, self.rng
+                        draw, fp["dirs"], 40, y, cw, ch, ink_col, 12, self.rng, font_style=font_style
                     )
                 elif modality == CardModality.PRINTED_CLIPPING:
                     y = render_typewritten_lines(
-                        draw, fp["dirs"], 40, y, cw, ch, ink_col, 12, self.rng
+                        draw, fp["dirs"], 40, y, cw, ch, ink_col, 12, self.rng, font_style="print"
                     )
                 else:
                     y = render_handwritten_lines(
@@ -1799,12 +2005,16 @@ class SyntheticCardGenerator:
                 meta_line = f"Yield: {recipe.yield_servings or '4 servings'} | Time: {recipe.total_time or '45 mins'}"
                 if modality == CardModality.TYPEWRITTEN:
                     meta_line = meta_line.upper()
-                draw.text((40, ch - 38), meta_line, fill=(*ink_col, 215), font=get_font(font_style, size=12))
+                meta_font = get_font(font_style, size=12)
+                validate_font_glyphs(meta_line, meta_font, font_style)
+                draw.text((40, ch - 38), meta_line, fill=(*ink_col, 215), font=meta_font)
                 verbatim_lines.append(meta_line)
 
             # Continuation Cue
             if fp["cue"]:
-                c_font = get_font("typewriter" if modality == CardModality.TYPEWRITTEN else font_style, size=13)
+                c_style = "typewriter" if modality == CardModality.TYPEWRITTEN else font_style
+                c_font = get_font(c_style, size=13)
+                validate_font_glyphs(fp["cue"], c_font, c_style)
                 draw.text((cw - 220, ch - 28), fp["cue"], fill=(*ink_col, 245), font=c_font)
                 verbatim_lines.append(fp["cue"])
 

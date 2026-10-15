@@ -7,7 +7,9 @@ own repository; must never be imported by the recipeboxer app.
 from __future__ import annotations
 
 from cardforge.generator import (
+    MissingGlyphError,
     SyntheticCardGenerator,
+    adapt_text_for_font,
     apply_coffee_ring,
     apply_crease,
     apply_date_stamp,
@@ -23,9 +25,12 @@ from cardforge.generator import (
     apply_tape_residue,
     create_paper_substrate,
     create_parser,
+    draw_text_with_fallback,
     generate_synthetic_corpus,
     get_font,
+    get_font_cmap,
     main,
+    validate_font_glyphs,
     _FONT_CACHE,
 )
 from cardforge.models import (
@@ -71,6 +76,11 @@ __all__ = [
     "apply_show_through",
     "create_paper_substrate",
     "get_font",
+    "get_font_cmap",
+    "MissingGlyphError",
+    "validate_font_glyphs",
+    "adapt_text_for_font",
+    "draw_text_with_fallback",
     "main",
     "create_parser",
     "CardRole",
