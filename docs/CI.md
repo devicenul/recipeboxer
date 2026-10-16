@@ -44,11 +44,31 @@ flowchart TD
 
 | Workflow | File | Trigger | Context & Permissions | Secrets | Description |
 |---|---|---|---|---|---|
-| **CI** | `.github/workflows/ci.yml` | `push`, `pull_request` | Untrusted PR / branch.<br>`contents: read` | **None** | Runs offline unit/integration test suite, anticheat static invariant checks, and frontend tests (vitest). |
-| **Eval Run** | `.github/workflows/eval-run.yml` | `pull_request` (`run-eval` label), `push` (`main`), `workflow_dispatch` | Untrusted PR code.<br>Gated by `eval-live` environment.<br>`contents: read` | `CI_GEMINI_API_KEY` | Executes SUT against public Tier 1 images. Enforces `RB_EVAL_MAX_USD` budget cap. Publishes `sut-outputs` artifact. |
+| **CI** | `.github/workflows/ci.yml` | `push`, `pull_request` (skipped for docs-only changes: `**/*.md`, `docs/**`, `_agents/**`) | Untrusted PR / branch.<br>`contents: read` | **None** | Runs offline unit/integration test suite, anticheat static invariant checks, and frontend tests (vitest). |
+| **Eval Run** | `.github/workflows/eval-run.yml` | `pull_request` (`run-eval` label), `workflow_dispatch` - **never automatic** (no `push` trigger) | Untrusted PR code.<br>Gated by `eval-live` environment.<br>`contents: read` | `CI_GEMINI_API_KEY` | Executes SUT against public Tier 1 images. Enforces `RB_EVAL_MAX_USD` budget cap. Publishes `sut-outputs` artifact. |
 | **Eval Score** | `.github/workflows/eval-score.yml` | `workflow_run` (on completion of `eval-run`) | Trusted `main` branch only.<br>`contents: read`<br>`actions: read`<br>`pull-requests: write` | `CI_AGE_IDENTITY` | Downloads and validates `sut-outputs`. Mounts CI age key, decrypts `evals/vault/t1.gt.enc`, scores SUT predictions, and posts aggregate PR comment (rate-limited). |
 
 ---
+
+### Runner & action pinning (WP-CI2, 2026-10)
+
+- All jobs use `runs-on: ubuntu-24.04` (not `ubuntu-latest`, which migrates to Ubuntu 26.04 on 2026-10-19).
+  Bump deliberately after verifying the suite on the new image.
+- First-party actions are pinned to a **release tag's full commit SHA**, with the tag as a trailing comment
+  (e.g. `actions/checkout@<sha> # v7.0.1`), so a moved/compromised tag cannot change what runs. Current pins
+  (all `node24` actions): `actions/checkout` v7.0.1, `actions/setup-python` v7.0.0, `actions/setup-node` v7.1.0.
+  To bump: `gh api repos/actions/<name>/commits/<tag> --jq .sha`.
+- Still on older majors (they run on the runner's forced Node 24; bump with care, they have breaking changes):
+  `actions/upload-artifact` v4.6.1 (latest v7), `actions/download-artifact` v4.1.9 (latest v8: digest mismatch now
+  errors by default), `actions/github-script` v7.0.1 (latest v9: `require('@actions/github')` removed).
+- `ci.yml` has `paths-ignore` for `**/*.md`, `docs/**`, `_agents/**`. If CI is ever made a *required* status check
+  in branch protection, docs-only PRs would wait forever for it - use a no-op companion job or drop the filter then.
+- Live Gemini evals (`eval-run.yml`) run **only** via `workflow_dispatch` or the maintainer-applied `run-eval`
+  PR label, and both paths still need approval of the `eval-live` environment. There is no push-to-`main` trigger.
+- The `ci.yml` backend job runs without any age identity: maintainer-only vault tests
+  (e.g. `tests/test_wp_r2_curation.py`) skip when `RB_EVAL_AGE_KEY_FILE` / `~/.config/recipeboxer/age.key` is absent.
+  The tkinter folder-picker tests use a fake `tkinter` module (no display needed). Cardforge's glyph self-check
+  needs `fonttools` (declared in `cardforge/pyproject.toml`); the OFL fonts are committed in `cardforge/fonts/`.
 
 ## 3. Maintainer Setup Step-by-Step
 
@@ -138,7 +158,7 @@ The `eval-run.yml` workflow gates execution behind the `eval-live` environment t
 
 | Contributor Action | Allowed Locally? | Evaluated in CI? | Conditions / Requirements |
 |---|---|---|---|
-| **Run Unit / Offline Tests** | Yes | Yes (in `ci.yml`) | Runs automatically on every push and PR. No secrets required. |
+| **Run Unit / Offline Tests** | Yes | Yes (in `ci.yml`) | Runs automatically on every push and PR that touches more than docs. No secrets required. |
 | **Inspect Tier 1 Images** | Yes | N/A | T1 images are public in `evals/corpora/t1/`. |
 | **Run SUT on T1 Images Locally** | Yes | N/A | Contributor provides their own `GEMINI_API_KEY`. |
 | **Score T1 Locally** | **No** | N/A | Ground truth (`evals/vault/t1.gt.enc`) is age-encrypted. Contributor does not have the private key. |

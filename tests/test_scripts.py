@@ -202,15 +202,26 @@ class TestSetupShPOSIX:
         fake_python = fake_bin_dir / "python"
         fake_python.symlink_to(fake_py)
 
-        env = dict(os.environ)
-        env["PATH"] = f"{fake_bin_dir}:/bin:/usr/bin"
+        # Hermetic PATH: do NOT append /bin:/usr/bin - on most hosts (ubuntu-24.04 CI runners,
+        # Debian VMs) /usr/bin also contains a real python3.1x, which setup.sh's candidate list
+        # (python3.14 .. python3.10) would find, making the "no compatible Python" path untestable.
+        # Expose only the external tools setup.sh needs before the Python probe (dirname).
+        bash_bin = shutil.which("bash")
+        dirname_bin = shutil.which("dirname")
+        if not bash_bin or not dirname_bin:
+            pytest.skip("bash/dirname not available")
+        (fake_bin_dir / "dirname").symlink_to(dirname_bin)
+
+        env = {k: v for k, v in os.environ.items() if k not in ("VIRTUAL_ENV", "PYTHONHOME", "PYTHONPATH")}
+        env["PATH"] = str(fake_bin_dir)
 
         result = subprocess.run(
-            ["bash", str(SETUP_SH)],
+            [bash_bin, str(SETUP_SH)],
             cwd=str(PROJECT_ROOT),
             env=env,
             capture_output=True,
             text=True,
+            timeout=60,
         )
         assert result.returncode != 0, "setup.sh should have failed when Python < 3.10"
         assert "Python 3.10 or higher is required" in (result.stdout + result.stderr)

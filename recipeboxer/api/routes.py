@@ -2791,10 +2791,17 @@ async def browse_directory(
     def _open_native_dialog() -> tuple[Optional[str], bool, bool, Optional[str]]:
         root = None
         try:
-            import tkinter as tk
-            from tkinter import filedialog
+            try:
+                import tkinter as tk
+                from tkinter import filedialog
+            except ImportError as exc:
+                return None, False, False, f"GUI subsystem unavailable: tkinter is not installed ({exc})"
 
-            root = tk.Tk()
+            try:
+                root = tk.Tk()
+            except Exception as exc:  # e.g. TclError "no display name and no $DISPLAY environment variable"
+                logger.warning(f"Native folder dialog unavailable: {exc}")
+                return None, False, False, f"GUI subsystem unavailable: {exc}"
             root.withdraw()
             try:
                 root.wm_attributes("-topmost", 1)

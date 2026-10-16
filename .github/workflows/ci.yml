@@ -3,8 +3,17 @@ name: CI
 'on':
   push:
     branches: ["**"]
+    # Docs-only changes do not run the test suites (saves Actions minutes).
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+      - "_agents/**"
   pull_request:
     branches: ["**"]
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+      - "_agents/**"
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -16,16 +25,16 @@ permissions:
 jobs:
   backend:
     name: Backend & Cardforge Tests (Python 3.13)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - name: Checkout repository
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
       - name: Set up Python 3.13
-        uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.4.0
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.13"
           cache: "pip"
@@ -52,16 +61,16 @@ jobs:
 
   frontend:
     name: Frontend Tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - name: Checkout repository
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
       - name: Set up Node.js 20
-        uses: actions/setup-node@1d0ff469b7ec7b3cb9d8673fde0c81c44821de2a # v4.2.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "20"
           cache: "npm"

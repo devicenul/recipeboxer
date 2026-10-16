@@ -4,8 +4,9 @@ name: eval-run
   pull_request:
     types: [labeled, opened, synchronize, reopened]
     branches: [main]
-  push:
-    branches: [main]
+  # NOTE: no `push` trigger - live Gemini evals must never run automatically (WP-CI2).
+  # Only manual workflow_dispatch or a maintainer-applied 'run-eval' PR label, both gated
+  # by the eval-live environment (required reviewers).
   workflow_dispatch:
     inputs:
       tier:
@@ -49,12 +50,11 @@ permissions:
 jobs:
   run-sut:
     name: Execute Untrusted SUT Evaluation
-    # Only execute for workflow_dispatch, push to main, or PRs with 'run-eval' label
+    # Only execute for workflow_dispatch or PRs with the 'run-eval' label (never automatically)
     if: |
       github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
       (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'run-eval'))
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
 
     # Environment eval-live gates access to CI_GEMINI_API_KEY with required maintainer reviewers
@@ -69,12 +69,12 @@ jobs:
 
     steps:
       - name: Checkout pull request or target ref
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
       - name: Set up Python 3.13
-        uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.4.0
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.13"
           cache: "pip"

@@ -138,6 +138,9 @@ def check_font_missing_glyphs(
             if ord(c) not in cmap:
                 missing.append(c)
     else:
+        # Raster fallback (fontTools unavailable): a char is missing if it renders blank OR renders
+        # exactly like the font's .notdef glyph (some fonts, e.g. Caveat, draw a visible tofu box).
+        notdef_sig = _notdef_signature(font)
         for c in text:
             if c in ("\n", "\r", "\t", " "):
                 continue
@@ -145,9 +148,26 @@ def check_font_missing_glyphs(
                 mask = font.getmask(c)
                 if mask.getbbox() is None:
                     missing.append(c)
+                elif notdef_sig is not None and (mask.size, bytes(mask)) == notdef_sig:
+                    missing.append(c)
             except Exception:
                 missing.append(c)
     return missing
+
+
+# A Unicode noncharacter-adjacent private-use codepoint that no real font maps: renders as .notdef.
+_NOTDEF_PROBE = "\U0010FFFD"
+
+
+def _notdef_signature(font: ImageFont.ImageFont) -> Optional[Tuple[Tuple[int, int], bytes]]:
+    """Returns (size, bytes) of the font's rendered .notdef glyph, or None if it renders blank."""
+    try:
+        mask = font.getmask(_NOTDEF_PROBE)
+        if mask.getbbox() is None:
+            return None
+        return mask.size, bytes(mask)
+    except Exception:
+        return None
 
 
 def validate_font_glyphs(

@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -26,19 +27,36 @@ from evals.curation_t3.draft_structured import draft_structured_gt
 from evals.curation_t3.memorization_probe import run_memorization_probe
 from evals.curation_t3.spotcheck import spotcheck_vault
 
-IDENTITY_PATH = Path("/home/droid/.config/recipeboxer/age.key")
 VAULT_FILE = Path("evals/vault/archive/t3a.gt.enc")
 CORPUS_DIR = Path("evals/corpora/archive/t3_antique")
 DECKS_JSON = CORPUS_DIR / "DECKS.json"
 ATTRIBUTION_MD = CORPUS_DIR / "ATTRIBUTION.md"
 
 
+def _resolve_identity_path() -> Path:
+    """Maintainer age identity: $RB_EVAL_AGE_KEY_FILE if set, else ~/.config/recipeboxer/age.key
+    (same resolution order as evals.vault.load_identity, minus the explicit argument)."""
+    env_val = os.environ.get(vault.ENV_AGE_KEY_FILE)
+    return Path(env_val).expanduser() if env_val else vault.DEFAULT_KEY_PATH.expanduser()
+
+
 @pytest.fixture(scope="module")
-def decrypted_t3_gt() -> dict:
+def identity_path() -> Path:
+    """Skips maintainer-only vault tests when no age identity is available (e.g. GitHub CI)."""
+    path = _resolve_identity_path()
+    if not path.is_file():
+        pytest.skip(
+            f"Maintainer-only: T3A vault tests need the age identity at {path} "
+            f"(set {vault.ENV_AGE_KEY_FILE} or create ~/.config/recipeboxer/age.key); absent in CI"
+        )
+    return path
+
+
+@pytest.fixture(scope="module")
+def decrypted_t3_gt(identity_path: Path) -> dict:
     assert VAULT_FILE.exists(), f"Vault file {VAULT_FILE} does not exist"
-    assert IDENTITY_PATH.exists(), f"Age identity {IDENTITY_PATH} does not exist"
     ciphertext = VAULT_FILE.read_bytes()
-    plaintext = vault.decrypt_bytes(ciphertext, identity_path=IDENTITY_PATH)
+    plaintext = vault.decrypt_bytes(ciphertext, identity_path=identity_path)
     return json.loads(plaintext.decode("utf-8"))
 
 
@@ -151,11 +169,11 @@ def test_t3_attribution_registry() -> None:
         assert f"`{p.name}`" in text
 
 
-def test_curation_tools_offline_safety() -> None:
+def test_curation_tools_offline_safety(identity_path: Path) -> None:
     # 1. Spotcheck executes without error
     spotcheck_vault(
         vault_file=VAULT_FILE,
-        identity_path=IDENTITY_PATH,
+        identity_path=identity_path,
         sample_rate=0.2,
         seed=123,
     )
@@ -163,13 +181,13 @@ def test_curation_tools_offline_safety() -> None:
     # 2. draft_structured executes cleanly in offline mode (no key)
     res_draft = draft_structured_gt(
         vault_file=VAULT_FILE,
-        identity_path=IDENTITY_PATH,
+        identity_path=identity_path,
     )
     assert res_draft == 0
 
     # 3. memorization_probe executes cleanly in offline mode (no key)
     res_probe = run_memorization_probe(
         vault_file=VAULT_FILE,
-        identity_path=IDENTITY_PATH,
+        identity_path=identity_path,
     )
     assert res_probe == 0

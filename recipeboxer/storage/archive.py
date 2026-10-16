@@ -45,16 +45,55 @@ CURRENT_SCHEMA_VERSION = "1.0.0"
 CURRENT_APP_VERSION = "1.0.0"
 
 
+def _portable_relative_member_path(name: str) -> str:
+    """Validates an archive member path portably and returns it as a normalized POSIX relative path.
+
+    Archives are portable between Windows, macOS and Linux, so validation must not depend on the
+    host OS path semantics:
+
+    * backslashes are treated as path separators on every OS;
+    * drive-letter paths (``C:/x``, ``C:\\x``, ``C:x``), UNC paths (``\\\\server\\share``,
+      ``//server/share``), NUL bytes and segments containing ``:`` (NTFS streams) are rejected;
+    * a single leading separator (``/x``, ``\\x``) is stripped, keeping the entry inside the root;
+    * ``..`` segments are resolved lexically and rejected if they ever climb above the root.
+
+    Raises:
+        ValueError: on any of the rejected forms (message contains "ZipSlip path traversal attempt").
+    """
+    if not isinstance(name, str) or not name or "\x00" in name:
+        raise ValueError(f"ZipSlip path traversal attempt detected in archive entry: {name!r}")
+    unified = name.replace("\\", "/")
+    if unified.startswith("//"):
+        raise ValueError(f"ZipSlip path traversal attempt detected in archive entry (UNC path): {name!r}")
+    if len(unified) >= 2 and unified[1] == ":" and unified[0].isalpha():
+        raise ValueError(f"ZipSlip path traversal attempt detected in archive entry (drive path): {name!r}")
+    stack: List[str] = []
+    for part in unified.lstrip("/").split("/"):
+        if part in ("", "."):
+            continue
+        if ":" in part:
+            raise ValueError(f"ZipSlip path traversal attempt detected in archive entry: {name!r}")
+        if part == "..":
+            if not stack:
+                raise ValueError(f"ZipSlip path traversal attempt detected in archive entry: {name!r}")
+            stack.pop()
+            continue
+        stack.append(part)
+    if not stack:
+        raise ValueError(f"ZipSlip path traversal attempt detected in archive entry (empty path): {name!r}")
+    return "/".join(stack)
+
+
 def _safe_extract(zip_file: zipfile.ZipFile, target_dir: Path) -> None:
     """Safely extracts all members of a ZipFile to target_dir with ZipSlip protection."""
     target_dir_resolved = target_dir.resolve()
     for member in zip_file.infolist():
-        # Normalize and remove leading slashes or Windows drive specifiers
-        norm_name = os.path.normpath(member.filename).lstrip("/\\")
-        dest_path = (target_dir / norm_name).resolve()
+        # Portable validation: rejects '..', backslash traversal, drive letters, UNC and absolute paths
+        norm_name = _portable_relative_member_path(member.filename)
+        dest_path = (target_dir_resolved / norm_name).resolve()
 
-        # ZipSlip path traversal check
-        if not str(dest_path).startswith(str(target_dir_resolved)):
+        # Defence in depth (e.g. pre-existing symlinks inside target_dir)
+        if dest_path != target_dir_resolved and target_dir_resolved not in dest_path.parents:
             raise ValueError(f"ZipSlip path traversal attempt detected in archive entry: {member.filename}")
 
         if member.is_dir():
@@ -95,6 +134,11 @@ def validate_archive_manifest(
         manifest = RecipeBoxerArchiveManifest.model_validate(raw_dict)
     except Exception as exc:
         raise ValueError(f"Invalid RecipeBoxer archive manifest schema: {exc}") from exc
+
+    # Asset archive paths are later joined onto extraction/project directories: enforce the same
+    # portable ZipSlip rules as for zip members.
+    for asset in manifest.assets:
+        asset.archive_path = _portable_relative_member_path(asset.archive_path)
 
     return manifest
 
@@ -738,7 +782,11 @@ def restore_archive_to_session(
             asset = asset_map.get(card_rec.sha256_hash)
             if asset:
                 src_asset_file = extracted_path / asset.archive_path
-                dst_asset_file = final_scans_dir / asset.filename
+                # asset.filename is untrusted manifest data: reduce it to a portable basename
+                safe_name = asset.filename.replace("\\", "/").rsplit("/", 1)[-1].replace(":", "_")
+                if safe_name in ("", ".", ".."):
+                    safe_name = Path(asset.archive_path).name
+                dst_asset_file = final_scans_dir / safe_name
                 if src_asset_file.is_file():
                     shutil.copy2(src_asset_file, dst_asset_file)
 

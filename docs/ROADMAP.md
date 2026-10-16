@@ -91,7 +91,7 @@ The following backlog tracks remaining engineering work across quality, extracti
 | **P2** | **Reliability** | **`INVALID_RESPONSE` Resiliency** | Handle rare model empty/whitespace responses (`INVALID_RESPONSE`) that survive the WP-UP4 retries. | Sprint 2 |
 | **P2** | **Product** | **Multi-recipe images** | Real collections include pages/cards carrying several recipes (modern T3: 18 of 48 groups share an image). The scorer supports this, but production grouping assigns each image to exactly one recipe (WAVE5 contract §2) - add detection + splitting of multiple recipes per image in grouping, extraction and the HITL UI. | Sprint 2 |
 | **P4** | **Extraction (optional)** | **Antique manuscript handling (archived T3A)** | Optional low-priority use case: title CER / paleography / calibration on 17th-century manuscripts (T3A title CER `0.4840` matched / `0.5665` e2e, `ece_all` `0.2844`). Out of product scope (1900s+). | Backlog |
-| **P2** | **Test Hygiene** | **Platform & Environmental Test Failures** | Resolve 14 known test failures (6 Windows zip-slip tests, 7 headless Tkinter tests, 1 environmental setup script test). | Sprint 2 |
+| **P2** | **Test Hygiene** | ~~**Platform & Environmental Test Failures**~~ | **Done (WP-CI2, 2026-10-16)**: the 14 known failures plus the CI-only vault/font failures are fixed (see 3.1.4). | Sprint 2 |
 | **P3** | **Architecture** | **CardForge Standalone Repository Split** | Split `cardforge/` out of the mono-repo into its own independent repository (`recipeboxer/cardforge`) per Decision D8. | Sprint 3 |
 | **P3** | **Cloud Integration** | **Official Google Cloud OAuth Provisioning & Fallback Deprecation** | Provision official GCP project with OAuth 2.0 Web Client for Docs/Drive scopes, embed public Client ID, and deprecate manual token entry drawer. | Sprint 3 |
 
@@ -119,14 +119,20 @@ The following backlog tracks remaining engineering work across quality, extracti
 - **ECE Under-Calibration**: On the antique set (then "T3", now T3A), `ece_all` is `0.2844` (`ece_matched` is `0.3386`), with mean predicted confidence (`0.1539`) significantly under-rating actual extraction accuracy (`0.2800`). The recipe-confidence model (fitted on modern CardForge synthetic decks) lacks calibration for out-of-distribution archival layouts.
 - **Action Plan**: No action planned (out of product scope). Recipe calibration will be re-assessed on the modern T3 set once it has been run.
 
-#### 3.1.4 Remediation of Known Platform & Environmental Test Failures
-Across the automated test suite, exactly 14 tests fail due to environmental and platform-specific assumptions:
-- **6 Windows-Path ZipSlip Tests (`tests/test_archive_empirical_challenger.py`)**: Assert Windows backslash path escaping behavior (`..\\..\\evil.txt`) which is evaluated differently under Linux POSIX path semantics.
-  - *Fix*: Normalize path separator handling in test assertions to be cross-platform agnostic.
-- **7 Headless Tkinter GUI Dialog Tests (`tests/test_browse_directory.py`)**: Attempt to instantiate `tkinter.filedialog` in a headless Linux environment without an active `DISPLAY` or X11 server.
-  - *Fix*: Mock `askdirectory()` when running in non-interactive / headless CI environments.
-- **1 Environmental Setup Script Test (`test_scripts::test_setup_sh_fails_when_no_compatible_python`)**: Fails due to local Python virtual environment path discovery rather than `setup.sh` logic (`setup.sh` is untouched).
-  - *Fix*: Decouple interpreter discovery from active virtualenv path in script test fixture.
+#### 3.1.4 Remediation of Known Platform & Environmental Test Failures — done (WP-CI2, 2026-10-16)
+The 14 previously known failures and the CI-only failures (GitHub Actions run 38836533784) are fixed:
+- **6 Windows-path ZipSlip tests**: a real gap, fixed in production. `.recipeboxer` extraction now validates member
+  paths portably on every OS (backslash = separator; drive-letter, UNC and above-root `..` paths rejected; manifest
+  `archive_path`s validated the same way; imported asset filenames reduced to a basename).
+- **7 headless tkinter tests**: tests now install a fake `tkinter` layer; without a display or tkinter the endpoint
+  returns `success=false` with `error="GUI subsystem unavailable: ..."`.
+- **`test_setup_sh_fails_when_no_compatible_python`**: test isolation bug (`PATH=...:/bin:/usr/bin` leaked the host's
+  real `python3.1x`); the committed `setup.sh` is correct.
+- **CI-only**: maintainer-only T3A vault tests skip without an age identity; cardforge declares `fonttools` and its
+  raster fallback now detects visible `.notdef` glyphs.
+- **CI workflow hygiene**: `eval-run.yml` has no push-to-`main` trigger (live evals only via `workflow_dispatch` or
+  the `run-eval` label, behind `eval-live`); `ci.yml` skips docs-only changes; runners pinned to `ubuntu-24.04`;
+  `checkout`/`setup-python`/`setup-node` on Node 24 majors. See `docs/CI.md`.
 
 #### 3.1.5 CardForge Independent Repository Split (Decision D8)
 - **Background**: Decoupled in WP-V2 into top-level directory [`cardforge/`](../cardforge/) with independent `pyproject.toml` and tests. Static invariants guarantee `recipeboxer` never imports `cardforge`.
