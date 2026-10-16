@@ -16,9 +16,13 @@ evals/vault/
 ├── recipients.txt          # Public age keys of authorized maintainers and CI
 ├── t1.gt.enc               # Tier 1 (dev-eval) encrypted ground-truth archive
 ├── t2.gt.enc               # Tier 2 (held-out gate benchmark) encrypted archive
-├── t3.gt.enc               # Tier 3 (real-web transcribed cards) encrypted archive
-└── t4.gt.enc               # Tier 4 (real-user private photo sets) encrypted archive
+├── t3.gt.enc               # Tier 3 (real-world modern 1900s+ cards) - pending curation, not present yet
+├── t4.gt.enc               # Tier 4 (real-user private photo sets) encrypted archive
+└── archive/
+    └── t3a.gt.enc          # ARCHIVED opt-in tier T3A (antique 17th-c. manuscripts; former T3, legacy label "T3")
 ```
+
+- **`archive/`**: GT of archived tiers (see `evals/tiers.py`). Loaded only when the tier is requested explicitly (e.g. `--tier T3A`); `rekey` re-encrypts `archive/*.enc` too.
 
 - **`recipients.txt`**: Contains one public key per line (format: `age1...`). Comments starting with `#` and blank lines are ignored.
 - **`<tier>.gt.enc`**: Binary age-encrypted archives. Each file is encrypted simultaneously to all public keys listed in `recipients.txt`. Any single authorized private identity can decrypt the vault.

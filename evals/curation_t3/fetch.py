@@ -1,4 +1,7 @@
-"""T3 Real-Web Corpus Fetch & Curation Tooling.
+"""Real-World (T3) Corpus Fetch & Curation Tooling.
+
+T3 is the real-world modern (1900s+) tier (WP-T3A). Candidate recipes are supplied as a JSON spec
+file (--specs); the archived antique set (tier T3A) is available as --preset t3a_antique.
 
 Downloads public-domain and CC-licensed recipe documents from archival sources,
 normalizes image resolution and orientation, strips metadata, and builds
@@ -40,427 +43,50 @@ HTTP_HEADERS = {
     "Accept": "*/*",
 }
 
+# WP-T3A: candidate specs are data, not code. The antique 17th-century set that used to be hard-coded
+# here is frozen in specs_t3a_antique.py (archived tier T3A). The modern (1900s+) T3 set is supplied
+# as a JSON spec file via --specs. Spec shape (list of recipes):
+#   {"recipe_ref", "doc_type", "stock_id", "institution", "license", "legibility",
+#    "faces": [{"face_ref", "display_url", "attribution_desc", "modality"}, ...]}
+# Faces are fetched from FromThePage-style display pages (IIIF tileSources + page-preview transcription).
+REQUIRED_SPEC_KEYS = ("recipe_ref", "stock_id", "institution", "license", "legibility", "faces")
+REQUIRED_FACE_KEYS = ("face_ref", "display_url", "attribution_desc", "modality")
 
-CANDIDATE_SPECS: List[Dict[str, Any]] = [
-    # 1. Lady Ann Fanshawe MS 7113: folios 4r and 4v form a 2-page sequential continuation pair
-    {
-        "recipe_ref": "fanshawe_f04_pair",
-        "doc_type": "manuscript page (pair)",
-        "stock_id": "stock_fol_ms7113",
-        "institution": "Folger Shakespeare Library / Wellcome Collection",
-        "license": "Public Domain Mark (PD)",
-        "legibility": "fair",
-        "faces": [
-            {
-                "face_ref": "fanshawe_f04r",
-                "display_url": "https://fromthepage.com/folger/early-modern-recipe-books/fanshawe-lady-ann-1625-1680/display/1680793",
-                "attribution_desc": "Folger Shakespeare Library MS 7113, folio 4r (digitized via Wellcome Collection b19612503_MS7113_0005)",
-                "modality": "HANDWRITTEN_CURSIVE",
-            },
-            {
-                "face_ref": "fanshawe_f04v",
-                "display_url": "https://fromthepage.com/folger/early-modern-recipe-books/fanshawe-lady-ann-1625-1680/display/1680794",
-                "attribution_desc": "Folger Shakespeare Library MS 7113, folio 4v (digitized via Wellcome Collection b19612503_MS7113_0006)",
-                "modality": "HANDWRITTEN_CURSIVE",
-            },
-        ],
-    },
-    # 2. Lady Ann Fanshawe MS 7113: folio 5r
-    {
-        "recipe_ref": "fanshawe_f05r",
-        "doc_type": "manuscript page",
-        "stock_id": "stock_fol_ms7113",
-        "institution": "Folger Shakespeare Library / Wellcome Collection",
-        "license": "Public Domain Mark (PD)",
-        "legibility": "fair",
-        "faces": [
-            {
-                "face_ref": "fanshawe_f05r",
-                "display_url": "https://fromthepage.com/folger/early-modern-recipe-books/fanshawe-lady-ann-1625-1680/display/1680795",
-                "attribution_desc": "Folger Shakespeare Library MS 7113, folio 5r (digitized via Wellcome Collection b19612503_MS7113_0007)",
-                "modality": "HANDWRITTEN_CURSIVE",
-            }
-        ],
-    },
-    # 3. MS 9317: English cookery notebook page
-    {
-        "recipe_ref": "ms9317_p08",
-        "doc_type": "manuscript page",
-        "stock_id": "stock_fol_ms9317",
-        "institution": "Folger Shakespeare Library / Wellcome Collection",
-        "license": "Public Domain Mark (PD)",
-        "legibility": "good",
-        "faces": [
-            {
-                "face_ref": "ms9317_p08",
-                "display_url": "https://fromthepage.com/folger/early-modern-recipe-books/ms-9317/display/33044308",
-                "attribution_desc": "Folger Shakespeare Library MS 9317, leaf 8 (digitized via Wellcome Collection b30745239)",
-                "modality": "HANDWRITTEN_CURSIVE",
-            }
-        ],
-    },
-    # 4-7. Lady Ayscough MS 1026: 4 pages
-    {
-        "recipe_ref": "ayscough_p02",
-        "doc_type": "manuscript page",
-        "stock_id": "stock_fol_ms1026",
-        "institution": "Folger Shakespeare Library / Wellcome Collection",
-        "license": "Public Domain Mark (PD)",
-        "legibility": "good",
-        "faces": [
-            {
-                "face_ref": "ayscough_p02",
-                "display_url": "https://fromthepage.com/folger/early-modern-recipe-books/ayscough-lady/display/1780356",
-                "attribution_desc": "Folger Shakespeare Library MS 1026, folio 2 (digitized via Wellcome Collection b19680326)",
-                "modality": "HANDWRITTEN_CURSIVE",
-            }
-        ],
-    },
-    {
-        "recipe_ref": "ayscough_p03",
-        "doc_type": "manuscript page",
-        "stock_id": "stock_fol_ms1026",
-        "institution": "Folger Shakespeare Library / Wellcome Collection",
-        "license": "Public Domain Mark (PD)",
-        "legibility": "good",
-        "faces": [
-            {
-                "face_ref": "ayscough_p03",
-                "display_url": "https://fromthepage.com/folger/early-modern-recipe-books/ayscough-lady/display/1780357",
-                "attribution_desc": "Folger Shakespeare Library MS 1026, folio 3 (digitized via Wellcome Collection b19680326)",
-                "modality": "HANDWRITTEN_CURSIVE",
-            }
-        ],
-    },
-    {
-        "recipe_ref": "ayscough_p04",
-        "doc_type": "manuscript page",
-        "stock_id": "stock_fol_ms1026",
-        "institution": "Folger Shakespeare Library / Wellcome Collection",
-        "license": "Public Domain Mark (PD)",
-        "legibility": "good",
-        "faces": [
-            {
-                "face_ref": "ayscough_p04",
-                "display_url": "https://fromthepage.com/folger/early-modern-recipe-books/ayscough-lady/display/1780358",
-                "attribution_desc": "Folger Shakespeare Library MS 1026, folio 4 (digitized via Wellcome Collection b19680326)",
-                "modality": "HANDWRITTEN_CURSIVE",
-            }
-        ],
-    },
-    {
-        "recipe_ref": "ayscough_p05",
-        "doc_type": "manuscript page",
-        "stock_id": "stock_fol_ms1026",
-        "institution": "Folger Shakespeare Library / Wellcome Collection",
-        "license": "Public Domain Mark (PD)",
-        "legibility": "good",
-        "faces": [
-            {
-                "face_ref": "ayscough_p05",
-                "display_url": "https://fromthepage.com/folger/early-modern-recipe-books/ayscough-lady/display/1780359",
-                "attribution_desc": "Folger Shakespeare Library MS 1026, folio 5 (digitized via Wellcome Collection b19680326)",
-                "modality": "HANDWRITTEN_CURSIVE",
-            }
-        ],
-    },
-    # 8-11. Anne Brumwich MS 160: 4 pages
-    {
-        "recipe_ref": "brumwich_p02",
-        "doc_type": "manuscript page",
-        "stock_id": "stock_fol_ms160",
-        "institution": "Folger Shakespeare Library / Wellcome Collection",
-        "license": "Public Domain Mark (PD)",
-        "legibility": "fair",
-        "faces": [
-            {
-                "face_ref": "brumwich_p02",
-                "display_url": "https://fromthepage.com/folger/early-modern-recipe-books/brumwich-anne-others/display/25084222",
-                "attribution_desc": "Folger Shakespeare Library MS 160, folio 2 (digitized via Wellcome Collection b1968132x)",
-                "modality": "HANDWRITTEN_CURSIVE",
-            }
-        ],
-    },
-    {
-        "recipe_ref": "brumwich_p03",
-        "doc_type": "manuscript page",
-        "stock_id": "stock_fol_ms160",
-        "institution": "Folger Shakespeare Library / Wellcome Collection",
-        "license": "Public Domain Mark (PD)",
-        "legibility": "fair",
-        "faces": [
-            {
-                "face_ref": "brumwich_p03",
-                "display_url": "https://fromthepage.com/folger/early-modern-recipe-books/brumwich-anne-others/display/25084223",
-                "attribution_desc": "Folger Shakespeare Library MS 160, folio 3 (digitized via Wellcome Collection b1968132x)",
-                "modality": "HANDWRITTEN_CURSIVE",
-            }
-        ],
-    },
-    {
-        "recipe_ref": "brumwich_p04",
-        "doc_type": "manuscript page",
-        "stock_id": "stock_fol_ms160",
-        "institution": "Folger Shakespeare Library / Wellcome Collection",
-        "license": "Public Domain Mark (PD)",
-        "legibility": "fair",
-        "faces": [
-            {
-                "face_ref": "brumwich_p04",
-                "display_url": "https://fromthepage.com/folger/early-modern-recipe-books/brumwich-anne-others/display/25084224",
-                "attribution_desc": "Folger Shakespeare Library MS 160, folio 4 (digitized via Wellcome Collection b1968132x)",
-                "modality": "HANDWRITTEN_CURSIVE",
-            }
-        ],
-    },
-    {
-        "recipe_ref": "brumwich_p05",
-        "doc_type": "manuscript page",
-        "stock_id": "stock_fol_ms160",
-        "institution": "Folger Shakespeare Library / Wellcome Collection",
-        "license": "Public Domain Mark (PD)",
-        "legibility": "fair",
-        "faces": [
-            {
-                "face_ref": "brumwich_p05",
-                "display_url": "https://fromthepage.com/folger/early-modern-recipe-books/brumwich-anne-others/display/25084225",
-                "attribution_desc": "Folger Shakespeare Library MS 160, folio 5 (digitized via Wellcome Collection b1968132x)",
-                "modality": "HANDWRITTEN_CURSIVE",
-            }
-        ],
-    },
-    # 12-13. Elizabeth Bulkeley MS 169: 2 pages
-    {
-        "recipe_ref": "bulkeley_p02",
-        "doc_type": "manuscript page",
-        "stock_id": "stock_fol_ms169",
-        "institution": "Folger Shakespeare Library / Wellcome Collection",
-        "license": "Public Domain Mark (PD)",
-        "legibility": "fair",
-        "faces": [
-            {
-                "face_ref": "bulkeley_p02",
-                "display_url": "https://fromthepage.com/folger/early-modern-recipe-books/bulkeley-elizabeth/display/32696396",
-                "attribution_desc": "Folger Shakespeare Library MS 169, folio 2 (digitized via Wellcome Collection b19681719)",
-                "modality": "HANDWRITTEN_CURSIVE",
-            }
-        ],
-    },
-    {
-        "recipe_ref": "bulkeley_p05",
-        "doc_type": "manuscript page",
-        "stock_id": "stock_fol_ms169",
-        "institution": "Folger Shakespeare Library / Wellcome Collection",
-        "license": "Public Domain Mark (PD)",
-        "legibility": "fair",
-        "faces": [
-            {
-                "face_ref": "bulkeley_p05",
-                "display_url": "https://fromthepage.com/folger/early-modern-recipe-books/bulkeley-elizabeth/display/32696399",
-                "attribution_desc": "Folger Shakespeare Library MS 169, folio 5 (digitized via Wellcome Collection b19681719)",
-                "modality": "HANDWRITTEN_CURSIVE",
-            }
-        ],
-    },
-    # 14-16. Coley Family MS 1711: 3 pages
-    {
-        "recipe_ref": "coley_p02",
-        "doc_type": "manuscript page",
-        "stock_id": "stock_fol_ms1711",
-        "institution": "Folger Shakespeare Library / Wellcome Collection",
-        "license": "Public Domain Mark (PD)",
-        "legibility": "good",
-        "faces": [
-            {
-                "face_ref": "coley_p02",
-                "display_url": "https://fromthepage.com/folger/early-modern-recipe-books/coley-family/display/32492432",
-                "attribution_desc": "Folger Shakespeare Library MS 1711, folio 2 (digitized via Wellcome Collection b19682542)",
-                "modality": "HANDWRITTEN_CURSIVE",
-            }
-        ],
-    },
-    {
-        "recipe_ref": "coley_p03",
-        "doc_type": "manuscript page",
-        "stock_id": "stock_fol_ms1711",
-        "institution": "Folger Shakespeare Library / Wellcome Collection",
-        "license": "Public Domain Mark (PD)",
-        "legibility": "good",
-        "faces": [
-            {
-                "face_ref": "coley_p03",
-                "display_url": "https://fromthepage.com/folger/early-modern-recipe-books/coley-family/display/32492433",
-                "attribution_desc": "Folger Shakespeare Library MS 1711, folio 3 (digitized via Wellcome Collection b19682542)",
-                "modality": "HANDWRITTEN_CURSIVE",
-            }
-        ],
-    },
-    {
-        "recipe_ref": "coley_p05",
-        "doc_type": "manuscript page",
-        "stock_id": "stock_fol_ms1711",
-        "institution": "Folger Shakespeare Library / Wellcome Collection",
-        "license": "Public Domain Mark (PD)",
-        "legibility": "good",
-        "faces": [
-            {
-                "face_ref": "coley_p05",
-                "display_url": "https://fromthepage.com/folger/early-modern-recipe-books/coley-family/display/32492435",
-                "attribution_desc": "Folger Shakespeare Library MS 1711, folio 5 (digitized via Wellcome Collection b19682542)",
-                "modality": "HANDWRITTEN_CURSIVE",
-            }
-        ],
-    },
-    # 17. Cookery MS 1810: page 3
-    {
-        "recipe_ref": "cookery_p03",
-        "doc_type": "manuscript page",
-        "stock_id": "stock_fol_ms1810",
-        "institution": "Folger Shakespeare Library / Wellcome Collection",
-        "license": "Public Domain Mark (PD)",
-        "legibility": "good",
-        "faces": [
-            {
-                "face_ref": "cookery_p03",
-                "display_url": "https://fromthepage.com/folger/early-modern-recipe-books/cookery-books-18th-cent/display/25083681",
-                "attribution_desc": "Folger Shakespeare Library MS 1810, page 3 (digitized via Wellcome Collection b19682852)",
-                "modality": "HANDWRITTEN_CURSIVE",
-            }
-        ],
-    },
-    # 18-19. English Recipe Book MS 6956: 2 pages
-    {
-        "recipe_ref": "erb_p02",
-        "doc_type": "manuscript page",
-        "stock_id": "stock_fol_ms6956",
-        "institution": "Folger Shakespeare Library / Wellcome Collection",
-        "license": "Public Domain Mark (PD)",
-        "legibility": "good",
-        "faces": [
-            {
-                "face_ref": "erb_p02",
-                "display_url": "https://fromthepage.com/folger/early-modern-recipe-books/english-recipe-book-18th-century/display/1653219",
-                "attribution_desc": "Folger Shakespeare Library MS 6956, folio 2 (digitized via Wellcome Collection b19608937)",
-                "modality": "HANDWRITTEN_CURSIVE",
-            }
-        ],
-    },
-    {
-        "recipe_ref": "erb_p04",
-        "doc_type": "manuscript page",
-        "stock_id": "stock_fol_ms6956",
-        "institution": "Folger Shakespeare Library / Wellcome Collection",
-        "license": "Public Domain Mark (PD)",
-        "legibility": "good",
-        "faces": [
-            {
-                "face_ref": "erb_p04",
-                "display_url": "https://fromthepage.com/folger/early-modern-recipe-books/english-recipe-book-18th-century/display/1653221",
-                "attribution_desc": "Folger Shakespeare Library MS 6956, folio 4 (digitized via Wellcome Collection b19608937)",
-                "modality": "HANDWRITTEN_CURSIVE",
-            }
-        ],
-    },
-    # 20-21. Mary Hawker MS 9304: 2 pages
-    {
-        "recipe_ref": "hawker_p04",
-        "doc_type": "manuscript page",
-        "stock_id": "stock_fol_ms9304",
-        "institution": "Folger Shakespeare Library / Wellcome Collection",
-        "license": "Public Domain Mark (PD)",
-        "legibility": "good",
-        "faces": [
-            {
-                "face_ref": "hawker_p04",
-                "display_url": "https://fromthepage.com/folger/early-modern-recipe-books/mary-hawker-s-recipe-book/display/32549615",
-                "attribution_desc": "Folger Shakespeare Library MS 9304, leaf 4 (digitized via Wellcome Collection b3074465x)",
-                "modality": "HANDWRITTEN_CURSIVE",
-            }
-        ],
-    },
-    {
-        "recipe_ref": "hawker_p05",
-        "doc_type": "manuscript page",
-        "stock_id": "stock_fol_ms9304",
-        "institution": "Folger Shakespeare Library / Wellcome Collection",
-        "license": "Public Domain Mark (PD)",
-        "legibility": "good",
-        "faces": [
-            {
-                "face_ref": "hawker_p05",
-                "display_url": "https://fromthepage.com/folger/early-modern-recipe-books/mary-hawker-s-recipe-book/display/32549616",
-                "attribution_desc": "Folger Shakespeare Library MS 9304, leaf 5 (digitized via Wellcome Collection b3074465x)",
-                "modality": "HANDWRITTEN_CURSIVE",
-            }
-        ],
-    },
-    # 22. Receipt Book MS 4054: page 5
-    {
-        "recipe_ref": "receipt_p05",
-        "doc_type": "manuscript page",
-        "stock_id": "stock_fol_ms4054",
-        "institution": "Folger Shakespeare Library / Wellcome Collection",
-        "license": "Public Domain Mark (PD)",
-        "legibility": "good",
-        "faces": [
-            {
-                "face_ref": "receipt_p05",
-                "display_url": "https://fromthepage.com/folger/early-modern-recipe-books/receipt-book-17th-18th-century/display/33703500",
-                "attribution_desc": "Folger Shakespeare Library MS 4054, folio 5 (digitized via Wellcome Collection b19339240)",
-                "modality": "HANDWRITTEN_CURSIVE",
-            }
-        ],
-    },
-    # 23-25. Jane Baber MS 108: 3 pages
-    {
-        "recipe_ref": "baber_p02",
-        "doc_type": "manuscript page",
-        "stock_id": "stock_fol_ms108",
-        "institution": "Folger Shakespeare Library / Wellcome Collection",
-        "license": "Public Domain Mark (PD)",
-        "legibility": "fair",
-        "faces": [
-            {
-                "face_ref": "baber_p02",
-                "display_url": "https://fromthepage.com/folger/early-modern-recipe-books/baber-jane/display/36176003",
-                "attribution_desc": "Folger Shakespeare Library MS 108, folio 2 (digitized via Wellcome Collection b1968101x)",
-                "modality": "HANDWRITTEN_CURSIVE",
-            }
-        ],
-    },
-    {
-        "recipe_ref": "baber_p03",
-        "doc_type": "manuscript page",
-        "stock_id": "stock_fol_ms108",
-        "institution": "Folger Shakespeare Library / Wellcome Collection",
-        "license": "Public Domain Mark (PD)",
-        "legibility": "fair",
-        "faces": [
-            {
-                "face_ref": "baber_p03",
-                "display_url": "https://fromthepage.com/folger/early-modern-recipe-books/baber-jane/display/36176004",
-                "attribution_desc": "Folger Shakespeare Library MS 108, folio 3 (digitized via Wellcome Collection b1968101x)",
-                "modality": "HANDWRITTEN_CURSIVE",
-            }
-        ],
-    },
-    {
-        "recipe_ref": "baber_p04",
-        "doc_type": "manuscript page",
-        "stock_id": "stock_fol_ms108",
-        "institution": "Folger Shakespeare Library / Wellcome Collection",
-        "license": "Public Domain Mark (PD)",
-        "legibility": "fair",
-        "faces": [
-            {
-                "face_ref": "baber_p04",
-                "display_url": "https://fromthepage.com/folger/early-modern-recipe-books/baber-jane/display/36176005",
-                "attribution_desc": "Folger Shakespeare Library MS 108, folio 4 (digitized via Wellcome Collection b1968101x)",
-                "modality": "HANDWRITTEN_CURSIVE",
-            }
-        ],
-    },
-]
+
+def _preset_specs(name: str) -> List[Dict[str, Any]]:
+    if name == "t3a_antique":
+        from evals.curation_t3.specs_t3a_antique import T3A_ANTIQUE_SPECS
+
+        return T3A_ANTIQUE_SPECS
+    raise ValueError(f"Unknown spec preset {name!r} (available: t3a_antique)")
+
+
+def load_candidate_specs(specs_path: Optional[Path] = None, preset: Optional[str] = None) -> List[Dict[str, Any]]:
+    """Loads and validates candidate recipe specs from a JSON file or a named frozen preset."""
+    if specs_path and preset:
+        raise ValueError("Pass either --specs or --preset, not both")
+    if preset:
+        specs = _preset_specs(preset)
+    elif specs_path:
+        specs = json.loads(Path(specs_path).read_text(encoding="utf-8"))
+    else:
+        raise ValueError(
+            "No candidate specs given: pass --specs <specs.json> for the modern T3 set "
+            "(see evals/INTAKE.md) or --preset t3a_antique for the archived antique set"
+        )
+    if not isinstance(specs, list) or not specs:
+        raise ValueError("Candidate specs must be a non-empty JSON list")
+    for i, spec in enumerate(specs, start=1):
+        missing = [k for k in REQUIRED_SPEC_KEYS if k not in spec]
+        if missing:
+            raise ValueError(f"Spec #{i} missing keys: {missing}")
+        if not spec["faces"]:
+            raise ValueError(f"Spec #{i} has no faces")
+        for face in spec["faces"]:
+            fmissing = [k for k in REQUIRED_FACE_KEYS if k not in face]
+            if fmissing:
+                raise ValueError(f"Spec #{i} face missing keys: {fmissing}")
+    return specs
 
 
 def clean_html_transcription(raw_html: str) -> str:
@@ -520,15 +146,20 @@ def fetch_t3_corpus(
     vault_file: Path,
     cache_dir: Path,
     recipients_path: Optional[Path] = None,
+    specs: Optional[List[Dict[str, Any]]] = None,
+    tier: str = "T3",
 ) -> Dict[str, Any]:
-    """Execute T3 curation pipeline and encrypt GT in memory."""
+    """Execute the real-world curation pipeline for ``specs`` and encrypt GT in memory."""
+    if specs is None:
+        raise ValueError("fetch_t3_corpus requires explicit candidate specs (see load_candidate_specs)")
+    tier = str(tier).strip().upper()
     # Ensure intermediate cache directory outside the workspace
     resolved_cache = Path(cache_dir).expanduser().resolve()
     resolved_cache.mkdir(parents=True, exist_ok=True)
     raw_cache = resolved_cache / "raw"
     raw_cache.mkdir(parents=True, exist_ok=True)
 
-    # Deck output path: evals/corpora/t3/d01
+    # Deck output path: <corpus_dir>/d01
     deck_dir = corpus_dir / "d01"
     deck_dir.mkdir(parents=True, exist_ok=True)
     for existing_img in deck_dir.glob("*.jpg"):
@@ -542,15 +173,15 @@ def fetch_t3_corpus(
     total_recipes = 0
     total_bytes = 0
 
-    print(f"Starting T3 curation across {len(CANDIDATE_SPECS)} candidate recipe definitions...")
+    print(f"Starting {tier} curation across {len(specs)} candidate recipe definitions...")
 
     with httpx.Client(timeout=35.0, headers=HTTP_HEADERS, follow_redirects=True) as client:
-        for r_idx, spec in enumerate(CANDIDATE_SPECS, start=1):
+        for r_idx, spec in enumerate(specs, start=1):
             recipe_id = f"r{r_idx:03d}"
             recipe_faces: List[str] = []
             recipe_verbatim: List[str] = []
 
-            print(f"[{r_idx}/{len(CANDIDATE_SPECS)}] Curating {spec['recipe_ref']} ({len(spec['faces'])} face(s))...")
+            print(f"[{r_idx}/{len(specs)}] Curating {spec['recipe_ref']} ({len(spec['faces'])} face(s))...")
 
             for f_idx, face_spec in enumerate(spec["faces"], start=1):
                 f_ref = face_spec["face_ref"]
@@ -644,7 +275,7 @@ def fetch_t3_corpus(
     # Build GT JSON structure in memory
     gt_payload: Dict[str, Any] = {
         "schema": "rb-gt/1",
-        "tier": "T3",
+        "tier": tier,
         "created": datetime.now(timezone.utc).isoformat(),
         "generator": {
             "name": "evals.curation_t3.fetch",
@@ -660,7 +291,7 @@ def fetch_t3_corpus(
         ],
     }
 
-    # Encrypt GT in memory and write directly to evals/vault/t3.gt.enc
+    # Encrypt GT in memory and write directly to the vault file (default evals/vault/t3.gt.enc)
     gt_bytes = json.dumps(gt_payload, indent=2).encode("utf-8")
     enc_bytes = vault.encrypt_bytes(gt_bytes, recipients_path=recipients_path)
     vault_file.parent.mkdir(parents=True, exist_ok=True)
@@ -676,13 +307,13 @@ def fetch_t3_corpus(
     print(f"Public deck registry written to {decks_json}")
 
     # Write ATTRIBUTION.md (neutral identifiers, no secret recipe titles/text)
-    attr_path = corpus_dir.parent / "real_web" / "ATTRIBUTION.md"
+    attr_path = corpus_dir / "ATTRIBUTION.md"
     attr_path.parent.mkdir(parents=True, exist_ok=True)
 
     attr_lines = [
-        "# T3 Real-Web Corpus Attribution & Provenance",
+        f"# {tier} Real-World Corpus Attribution & Provenance",
         "",
-        "This evaluation corpus contains real-world digitized manuscripts and documents",
+        "This evaluation corpus contains real-world digitized recipe documents",
         "from cultural heritage institutions, curated under permissive Open Access licenses.",
         "In accordance with evaluation secrecy and licensing compliance:",
         "- All assets are identified solely by opaque identifiers.",
@@ -711,13 +342,19 @@ def fetch_t3_corpus(
 
 
 def main(argv: Optional[List[str]] = None) -> int:
-    parser = argparse.ArgumentParser(description="Fetch and curate T3 real-web corpus")
+    parser = argparse.ArgumentParser(description="Fetch and curate a real-world corpus (default: modern T3)")
     parser.add_argument(
         "--corpus-dir",
         type=Path,
         default=vault.get_repo_root() / "evals" / "corpora" / "t3",
-        help="Destination directory for T3 corpus (default: evals/corpora/t3)",
+        help="Destination directory for the corpus (default: evals/corpora/t3)",
     )
+    parser.add_argument("--specs", type=Path, default=None, help="JSON candidate spec file (modern T3 set)")
+    parser.add_argument(
+        "--preset", type=str, default=None, choices=["t3a_antique"],
+        help="Frozen spec preset (t3a_antique = archived antique set; use with --tier T3A and archive paths)",
+    )
+    parser.add_argument("--tier", type=str, default="T3", help="Tier label written into the GT (default: T3)")
     parser.add_argument(
         "--vault-file",
         type=Path,
@@ -739,11 +376,14 @@ def main(argv: Optional[List[str]] = None) -> int:
     args = parser.parse_args(argv)
 
     try:
+        specs = load_candidate_specs(args.specs, args.preset)
         fetch_t3_corpus(
             corpus_dir=args.corpus_dir,
             vault_file=args.vault_file,
             cache_dir=args.cache_dir,
             recipients_path=args.recipients,
+            specs=specs,
+            tier=args.tier,
         )
         return 0
     except Exception as e:

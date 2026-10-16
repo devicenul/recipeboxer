@@ -135,7 +135,9 @@ def load_ground_truth(
     """Loads ground-truth JSON for the given evaluation tier.
 
     T0 is parsed from tests/fixtures/sample_cards/manifest.json.
-    T1-T4 are decrypted from evals/vault/<tier>.gt.enc using age identity.
+    T1-T4 are decrypted from evals/vault/<tier>.gt.enc using age identity; archived opt-in tiers
+    (e.g. T3A) from evals/vault/archive/ (see evals/tiers.py). An uncurated T3 raises
+    evals.tiers.TierPendingCurationError.
     """
     norm_tier = str(tier).strip().upper()
     repo_root = get_repo_root()
@@ -143,13 +145,12 @@ def load_ground_truth(
     if norm_tier == "T0":
         return build_t0_ground_truth()
 
-    # T1..T4 from vault
+    # T1..T4 from vault; archived opt-in tiers (e.g. T3A) from evals/vault/archive/ (WP-T3A)
+    from evals.tiers import PENDING_CURATION_TIERS, TierPendingCurationError, vault_candidates_for
+
     v_dir = Path(vault_dir or (repo_root / "evals" / "vault")).resolve()
 
-    enc_candidates = [
-        v_dir / f"{tier.lower()}.gt.enc",
-        v_dir / f"{tier.upper()}.gt.enc",
-    ]
+    enc_candidates = list(vault_candidates_for(norm_tier, v_dir))
     enc_path: Optional[Path] = None
     for c in enc_candidates:
         if c.exists() and c.is_file():
@@ -157,6 +158,8 @@ def load_ground_truth(
             break
 
     if not enc_path:
+        if norm_tier in PENDING_CURATION_TIERS:
+            raise TierPendingCurationError(norm_tier, f"No encrypted ground truth in {v_dir}")
         raise FileNotFoundError(
             f"Encrypted ground-truth vault file not found for tier {tier} in {v_dir}. "
             f"Expected one of: {[p.name for p in enc_candidates]}"

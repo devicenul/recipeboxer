@@ -40,14 +40,14 @@ def create_parser() -> argparse.ArgumentParser:
         help="Generate extraction-only oracle grouping plan from ground truth",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    oracle_p.add_argument("--tier", type=str, required=True, help="Evaluation benchmark tier (e.g. T0, T1)")
+    oracle_p.add_argument("--tier", type=str, required=True, help="Evaluation benchmark tier (T0-T4; archived opt-in: T3A)")
     oracle_p.add_argument("--out", type=str, required=True, help="Output destination JSON path for plan")
     oracle_p.add_argument("--decks", type=str, default=None, help="Comma-separated deck IDs")
     oracle_p.add_argument("--seed", type=int, default=42, help="RNG seed for face and set shuffling")
     oracle_p.add_argument("--identity", type=str, default=None, help="Path to age identity file")
 
     # Main scorer options
-    parser.add_argument("--tier", type=str, help="Evaluation benchmark tier (e.g. T0, T1)")
+    parser.add_argument("--tier", type=str, help="Evaluation benchmark tier (T0-T4; archived opt-in: T3A)")
     parser.add_argument("--outputs", type=str, help="Directory containing SUT outputs.json and ledger.json")
     parser.add_argument("--report", type=str, help="Destination directory for report.json and report.md")
     parser.add_argument(
@@ -96,7 +96,7 @@ def run_scoring(args: argparse.Namespace) -> int:
     if tier != "T0" and feedback == "per_item":
         raise ValueError(
             f"Feedback policy violation: per_item feedback is strictly prohibited for tier '{tier}'. "
-            "Only aggregate feedback is permitted for T1–T4."
+            "Only aggregate feedback is permitted for T1–T4 (and archived tiers)."
         )
 
     outputs_dir = Path(args.outputs).resolve()
@@ -105,6 +105,14 @@ def run_scoring(args: argparse.Namespace) -> int:
         raise FileNotFoundError(f"SUT outputs file not found: {outputs_file}")
 
     outputs_data = json.loads(outputs_file.read_text(encoding="utf-8"))
+
+    # WP-T3A: archived outputs (honest_v0/honest_v1) carry the legacy label of the archived tier ("T3").
+    # When re-scored with the explicit opt-in archived tier, report them under the archived name.
+    from evals.tiers import is_archived, legacy_label
+
+    if is_archived(tier) and str(outputs_data.get("tier", "")).strip().upper() in (legacy_label(tier), ""):
+        logger.info(f"Re-scoring legacy '{legacy_label(tier)}' outputs against archived tier {tier}.")
+        outputs_data["tier"] = tier
 
     ledger_file = outputs_dir / "ledger.json"
     ledger_data: Optional[Dict[str, Any]] = None
@@ -200,10 +208,15 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 
-    if args.subcommand == "oracle-plan":
-        return run_oracle_plan_subcommand(args)
-    else:
+    from evals.tiers import TierPendingCurationError
+
+    try:
+        if args.subcommand == "oracle-plan":
+            return run_oracle_plan_subcommand(args)
         return run_scoring(args)
+    except TierPendingCurationError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 2
 
 
 if __name__ == "__main__":

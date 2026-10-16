@@ -134,3 +134,53 @@ python -m evals.intake_real \
 
 * **Photo Not Found Error**: Check that the filename inside `faces.txt` matches your camera photo filename (e.g. `IMG_0412.JPG` vs `IMG_0412.jpg`).
 * **Vault Access**: To decrypt or merge an existing encrypted archive, an authorized `age` identity key must be configured in `~/.config/recipeboxer/age.key` or via the `RB_EVAL_AGE_KEY_FILE` environment variable.
+
+---
+
+## Tier 3 (T3): Real-World Modern Recipes (1900s+) — pending curation
+
+**Status (WP-T3A, 2026-10-16):** T3 is the real-world *modern* tier: recipe cards, notebook pages and
+clippings from the **1900s onward**, with trusted human transcriptions. The corpus is being gathered and
+has **not been imported yet**. Until it is, `python -m evals.harness.run --tier T3` and
+`python -m evals.score --tier T3` stop with:
+
+```text
+Error: T3 corpus pending curation; see evals/INTAKE.md ...
+```
+
+(exit code 2). The former T3 corpus (17th-century English manuscripts, Folger/Wellcome) is archived as
+the opt-in tier **T3A** (`evals/corpora/archive/t3_antique/README.md`); the `honest_v0`/`honest_v1`
+"T3" numbers refer to it. Re-score with `--tier T3A`. T3A is never part of default runs and accepts no
+new intake.
+
+### Importing the modern T3 set
+
+Layout written by either path below (same contract as all tiers):
+`evals/corpora/t3/d01/<opaque>.jpg`, `evals/corpora/t3/DECKS.json` (`[{deck_id, n_images}]` only),
+`evals/vault/t3.gt.enc` (age-encrypted GT; plaintext never on disk in the workspace).
+
+1. **Photos + transcriptions you hold locally** (e.g. family cards, downloaded archive scans): prepare
+   `faces.txt` + `transcription.md` per recipe exactly as described in §2 above, then
+   ```bash
+   python -m evals.intake_real --photos /path/to/photos --transcriptions /path/to/transcriptions \
+       --deck-id d01 --tier T3 --dry-run      # check first, then re-run without --dry-run
+   ```
+2. **Transcribed archive pages (FromThePage-style)**: write a JSON spec list (keys documented at the top
+   of `evals/curation_t3/fetch.py`) and run
+   ```bash
+   python -m evals.curation_t3.fetch --specs /path/outside/repo/t3_specs.json \
+       --cache-dir "$PROJECT_CACHE_DIR/t3_cache"
+   ```
+   Attribution is written to `evals/corpora/t3/ATTRIBUTION.md`.
+
+### Ground-truth drafting and review (offline-safe)
+
+- `python -m evals.curation_t3.draft_structured --dry-run` — text-only structured GT draft (never sees
+  the image; preserves the original spelling verbatim). Needs an API key for the real draft; without a
+  key it reports `pending` and changes nothing.
+- `python -m evals.curation_t3.memorization_probe` — title-only memorization probe (key required).
+- `python -m evals.curation_t3.spotcheck --html-dir "$PROJECT_CACHE_DIR/t3gt/spotcheck"` — ~20% human
+  spot-check package, written outside the repository.
+
+Run the benchmark on T3 only when API quota allows; nothing in the repo spends quota by default.
+

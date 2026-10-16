@@ -64,7 +64,7 @@ def extract_title_candidate(verbatim_faces: List[str]) -> str:
                 # Remove common recipe headers
                 clean = re.sub(r"^(to make|recipe for|receipt for|how to make)\s+", "", clean, flags=re.I)
                 return clean.strip(" :.-")
-    return "Historical Recipe"
+    return "Recipe"
 
 
 class CurationResult(int):
@@ -140,7 +140,7 @@ def run_memorization_probe(
         print(f"[DRY-RUN] Would run probe for {total} recipes using title-only model '{model_name}'.")
         for deck, r in all_recipes[:3]:
             title = (r.get("structured") or {}).get("title") or extract_title_candidate(r.get("verbatim", []))
-            print(f"  Sample prompt target: 'Provide the complete traditional historical recipe for {title}'")
+            print(f"  Sample prompt target: 'Provide the complete recipe for {title}'")
         return CurationResult(0, summary)
 
     if client is None:
@@ -165,7 +165,7 @@ def run_memorization_probe(
         full_gt = " ".join(verbatim_faces)
 
         prompt = (
-            f"Provide the complete traditional historical recipe for '{title}', "
+            f"Provide the complete recipe for '{title}', "
             f"including all ingredients, exact quantities, and full cooking instructions."
         )
 

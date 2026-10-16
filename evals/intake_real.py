@@ -499,6 +499,11 @@ def intake_photos(
     tier_clean = tier.strip().lower()
     tier_upper = tier.strip().upper()
 
+    from evals.tiers import is_archived
+
+    if is_archived(tier_upper):
+        raise ValueError(f"Tier {tier_upper} is an archived (frozen) tier; intake into it is not allowed.")
+
     # 1. Parse transcriptions
     if transcriptions_path.is_file() and transcriptions_path.suffix.lower() == ".csv":
         recipes = parse_transcriptions_csv(transcriptions_path)

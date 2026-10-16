@@ -1,6 +1,6 @@
 """Text-Only Ground-Truth Structured Recipe Drafter (WP-T3GT).
 
-Drafts Schema v2 structured ground truth for T3 evaluation recipes from verbatim
+Drafts Schema v2 structured ground truth for real-world (T3, era-neutral) evaluation recipes from verbatim
 human transcriptions. In accordance with Remediation Plan §3.3 & WAVE3_CONTRACTS:
 - TEXT ONLY: Never sends or references the image; prevents model's visual bias from
   contaminating the ground truth.
@@ -14,7 +14,8 @@ human transcriptions. In accordance with Remediation Plan §3.3 & WAVE3_CONTRACT
 - VALIDATION: Every drafted ingredient raw text and direction step must fuzzy-match
   the verbatim transcription with CER <= 0.15.
 - OFFLINE-SAFE: When no API key is available, cleanly reports pending status without error.
-- RE-ENCRYPTION: Decrypts in memory and re-encrypts to evals/vault/t3.gt.enc. Plaintext GT
+- RE-ENCRYPTION: Decrypts in memory and re-encrypts to --vault-file (default evals/vault/t3.gt.enc;
+  archived antique tier T3A: evals/vault/archive/t3a.gt.enc). Plaintext GT
   never touches disk in the repository.
 """
 
@@ -51,7 +52,7 @@ class IngredientSchema(BaseModel):
     raw: str = Field(
         description=(
             "Exact raw clause or line from transcription describing this ingredient, "
-            "preserving historical spelling, punctuation, and wording."
+            "preserving original spelling, punctuation, and wording verbatim."
         )
     )
     quantity: Optional[str] = Field(
@@ -69,7 +70,7 @@ class IngredientSchema(BaseModel):
         ),
     )
     item: str = Field(
-        description="The name of the ingredient item, preserving original historical spelling."
+        description="The name of the ingredient item, preserving original spelling verbatim."
     )
     section: Optional[str] = Field(
         default=None,
@@ -118,7 +119,7 @@ class StructuredRecipeSchema(BaseModel):
     notes: List[str] = Field(
         default_factory=list,
         description=(
-            "Additional notes, marginalia, medicinal/historical commentary, "
+            "Additional notes, marginalia, headnotes or commentary, "
             "or attributions outside core cooking steps."
         ),
     )
@@ -147,13 +148,15 @@ def draft_structured_prompt(verbatim_faces: List[str], correction_note: Optional
     correction_block = f"\nATTENTION / CORRECTION REQUIRED:\n{correction_note}\n" if correction_note else ""
 
     return (
-        "You are an expert recipe archival curator for historical culinary manuscripts. "
-        "Convert the following verbatim historical recipe transcription into a structured RecipeSchema JSON object.\n\n"
+        "You are an expert recipe curator for real-world recipe documents (handwritten or typed cards, "
+        "notebook pages, clippings) from any era. "
+        "Convert the following verbatim recipe transcription into a structured RecipeSchema JSON object.\n\n"
         "EXPLICIT RULES:\n"
         "1. VERBATIM-FAITHFUL: Extract strictly what is present in the transcription. "
         "Do NOT invent missing ingredients, missing quantities, missing units, or missing preparation steps.\n"
         "2. PRESERVE ORIGINAL SPELLING: In ingredient 'raw', 'item', 'title', and 'directions', "
-        "preserve the historical/archival spelling, archaic terms, and punctuation exactly as transcribed.\n"
+        "preserve the original spelling verbatim (including misspellings, abbreviations, regional or dated terms) "
+        "and punctuation exactly as transcribed. Do not modernize or correct.\n"
         "3. NULL QUANTITY WHEN ABSENT: If an ingredient has no explicit quantity mentioned in the raw text, "
         "set quantity to null. Never default to '1' or guess.\n"
         "4. NULL UNIT WHEN ABSENT: If an ingredient has no measurement unit mentioned in the raw text, "
@@ -166,7 +169,7 @@ def draft_structured_prompt(verbatim_faces: List[str], correction_note: Optional
         "   - 'section': section name if present, or null.\n"
         "6. DIRECTIONS: Sequential step strings capturing each cooking or preparation action faithfully "
         "from the transcription text.\n"
-        "7. NOTES: Any marginalia, headnotes, medicinal/historical remarks, or attributions outside "
+        "7. NOTES: Any marginalia, headnotes, remarks, or attributions (e.g. 'from Aunt May') outside "
         "the cooking steps.\n"
         f"{correction_block}\n"
         f"TRANSCRIPTION:\n{combined_transcript}\n"

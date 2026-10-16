@@ -35,6 +35,7 @@ logger = logging.getLogger("evals.calibration_fit")
 # Substrings that must NEVER appear in any input or dataset path
 FORBIDDEN_PATH_PATTERNS = [
     re.compile(r"evals/corpora/t[1-4]", re.IGNORECASE),
+    re.compile(r"evals/corpora/archive", re.IGNORECASE),  # archived opt-in tiers, e.g. T3A (WP-T3A)
     re.compile(r"evals/vault", re.IGNORECASE),
     re.compile(r"vault/[^/]+\.enc", re.IGNORECASE),
 ]

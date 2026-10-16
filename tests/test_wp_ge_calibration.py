@@ -174,6 +174,8 @@ class TestCalibrationFitAndSafety:
             "evals/corpora/t1/d01/card1.jpg",
             "/home/user/recipeboxer/evals/corpora/T2/d02",
             "evals/corpora/t3/d01",
+            "evals/corpora/archive/t3_antique/d01",
+            "evals/vault/archive/t3a.gt.enc",
             "evals/corpora/t4/deck_abc",
             "evals/vault/t1.gt.enc",
             "evals/vault/t2.gt.enc",

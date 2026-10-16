@@ -12,6 +12,9 @@ This directory stores historical and milestone benchmark baselines recorded acro
 | [`honest_v0.json`](../../../../../../../storage/emulated/10/AntiGravity/Workspaces/recipeboxer/evals/baselines/honest_v0.json) | 2026-10-15 | `b1191cbe1137eb66c57a23454120c62261dec8b4` | **HONEST** | Gate A honest baseline on pre-uplift code across T1 (d01–d03) and T3 corpora without cheats. |
 | [`honest_v1.json`](../../../../../../../storage/emulated/10/AntiGravity/Workspaces/recipeboxer/evals/baselines/honest_v1.json) | 2026-10-15 | `6590f32` (SUT) / `f020add` (Scorer) | **HONEST** | Gate B honest baseline: remediated + uplifted pipeline (WP-UP2/UP3/UP4) across T1 (d01–d03, d04), T2 (held-out), and T3 (real-web). |
 
+> [!NOTE]
+> **"T3" in `honest_v0` / `honest_v1` means the archived antique set, now tier T3A (WP-T3A, 2026-10-16).** Those T3 numbers were measured on 25 real 17th-century English manuscript recipes (Folger/Wellcome). The product targets recipes from the 1900s onward, so that set was moved to `evals/corpora/archive/t3_antique/` + `evals/vault/archive/t3a.gt.enc` and is opt-in only. Re-score the archived outputs with `python -m evals.score --tier T3A ...` (legacy `T3` outputs are relabelled `T3A`). The new T3 tier (real-world modern, 1900s+) is pending curation and has no baseline yet. The baseline JSON files are left unchanged.
+
 ---
 
 ## Pre-Remediation Baseline (`pre_remediation.json`)
@@ -42,7 +45,7 @@ At **Gate A** (following completion of Phase 1 and Phase 2), the first honest ba
 2. **Black-Box Runner**: Images are copied into a temporary directory with randomized filenames and order. Execution runs in a scrubbed subprocess with a `sys.addaudithook` preventing access to ground-truth vaults, answer keys, or fixtures.
 3. **Encrypted Vault Ground Truth**: Ground-truth data is encrypted with `age` and decrypted strictly in memory by the trusted scorer (`evals/score.py`) after the SUT completes.
 4. **Live Independent LLM Judge**: Qualitative rubric scoring uses `LiveJudge` on an independent model tier from the extractor (e.g. Pro judge if extractor is Flash), blinded to system and model names. Judge scores are reported and never gate.
-5. **Multi-Corpus Scope**: Evaluated across T1 (dev-eval synthetic d01–d03) and T3 (public-domain real-web archives with human transcriptions). The 319-card homogeneous deck `d04` was excluded due to legacy $O(N^2)$ LLM verification scaling.
+5. **Multi-Corpus Scope**: Evaluated across T1 (dev-eval synthetic d01–d03) and T3 (public-domain real-web archives with human transcriptions; now archived as T3A). The 319-card homogeneous deck `d04` was excluded due to legacy $O(N^2)$ LLM verification scaling.
 
 ---
 
@@ -76,7 +79,7 @@ python -m evals.score --tier T2 --outputs /tmp/honest_v1_outputs/T2 --report /tm
 
 ### Held-Out Evaluation Caveat
 > [!IMPORTANT]
-> **T2 is the Cleanest Held-Out Tier**: During WP-UP4 development, aggregate metric feedback on Tier T3 was observed to address precision regressions via the domain-support guard (`guards.py`). As a result, T3 is no longer strictly blind. **Tier T2 (held-out)** was never inspected, tuned on, or re-run during uplift work, making T2 the definitive held-out tier for Gate B generalization claims.
+> **T2 is the Cleanest Held-Out Tier**: During WP-UP4 development, aggregate metric feedback on Tier T3 was observed to address precision regressions via the domain-support guard (`guards.py`). As a result, T3 (now archived as T3A) is no longer strictly blind. **Tier T2 (held-out)** was never inspected, tuned on, or re-run during uplift work, making T2 the definitive held-out tier for Gate B generalization claims.
 
 
 ---

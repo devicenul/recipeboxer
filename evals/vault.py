@@ -393,7 +393,7 @@ def rekey(
     identity: Optional[Union[str, x25519.Identity]] = None,
     identity_path: Optional[Union[str, Path]] = None,
 ) -> list[Path]:
-    """Re-encrypt all *.enc files in target_dir to the current recipients.
+    """Re-encrypt all *.enc files in target_dir (and its archive/ subdir) to the current recipients.
 
     Decrypts each file entirely in-memory and re-encrypts to the current
     recipients list without ever writing plaintext to disk.
@@ -407,6 +407,10 @@ def rekey(
     ident_obj = load_identity(identity_path) if identity is None else identity
 
     enc_files = sorted(folder.glob("*.enc"))
+    # WP-T3A: archived opt-in tiers (e.g. evals/vault/archive/t3a.gt.enc) are rekeyed too.
+    archive_dir = folder / "archive"
+    if archive_dir.is_dir():
+        enc_files += sorted(archive_dir.glob("*.enc"))
     rekeyed: list[Path] = []
 
     for file_path in enc_files:

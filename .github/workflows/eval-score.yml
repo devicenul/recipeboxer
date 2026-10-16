@@ -142,7 +142,7 @@ jobs:
               sys.exit(1)
 
           tier = outputs.get('tier')
-          if tier not in ('T1', 'T2', 'T3', 'T4'):
+          if tier not in ('T1', 'T2', 'T3', 'T4', 'T3A'):  # T3A = archived opt-in tier (WP-T3A)
               print(f'ERROR: Invalid tier in outputs: {tier}', file=sys.stderr)
               sys.exit(1)
 

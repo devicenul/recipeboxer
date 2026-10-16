@@ -293,7 +293,7 @@ Evaluation datasets are divided into five distinct tiers to preserve evaluation 
 | **T0 Train** | Existing 48 synthetic fixtures + local synthetic decks | **Yes** | **Yes** | Unit tests, feature weight calibration, prompt iteration, and debugging | Full per-image diffs and diagnostics allowed (labeled "train") |
 | **T1 Dev-Eval** | Curated synthetic decks from external recipe text with opaque names | **Yes** (enables integration runs) | **No** (encrypted in vault) | Daily honest development metrics | **Aggregate and per-category breakdown only**; never per-image diffs; rate-limited ($\le 10$ runs/day) |
 | **T2 Held-Out** | Held-out recipes, seeds, homogeneous decks, and distractors | **No** (encrypted in vault) | **No** (encrypted in vault) | Gate A & Gate B qualification decisions; anti-overfitting barrier | Aggregate only; run exclusively at release gates |
-| **T3 Real-Web** | Public-domain photos from Smithsonian, LoC, etc. with human transcriptions | **Yes** (public domain archives, opaque IDs in repo) | **No** (encrypted in vault) | Real-world handwritten & print extraction; standalone distractor resilience | Aggregate only |
+| **T3 Real-World Modern** (pending curation) | Real-world 1900s+ recipe cards/pages (public-domain archives, user photos) with human transcriptions; antique manuscript set archived as opt-in tier T3A (WP-T3A) | **Yes** (public domain archives, opaque IDs in repo) | **No** (encrypted in vault) | Real-world handwritten & print extraction; standalone distractor resilience | Aggregate only |
 | **T4 Real-User** | User-contributed physical photo collections with skew, glare, timestamps | Per user preference | **No** (encrypted in vault) | Ultimate benchmark headline metric | Aggregate only |
 
 ### 7.4 T1 Feedback Policy

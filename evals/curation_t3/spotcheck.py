@@ -1,6 +1,6 @@
-"""Ground-Truth Spotcheck Tool for T3 Curation (WP-T3GT).
+"""Ground-Truth Spotcheck Tool for real-world (T3) Curation (WP-T3GT; era-neutral since WP-T3A).
 
-Decrypts evals/vault/t3.gt.enc in memory using an authorized age identity,
+Decrypts --vault-file (default evals/vault/t3.gt.enc) in memory using an authorized age identity,
 displays a representative ~20% random sample in the terminal, and generates
 an interactive, self-contained HTML review package outside the repository.
 
@@ -196,7 +196,7 @@ def generate_spotcheck_html_package(
 <div class="container">
   <!-- LEFT PANEL: Image + Verbatim -->
   <div class="panel">
-    <h2>1. Manuscript Images & Human Verbatim</h2>
+    <h2>1. Source Images & Human Verbatim</h2>
     {images_html}
     <h3 style="margin-top:20px;">Verbatim Transcription</h3>
     {verbatim_html}
@@ -346,7 +346,7 @@ window.addEventListener('DOMContentLoaded', () => {{
 <body>
 <div class="box">
   <h1>RecipeBoxer T3 Ground-Truth: 20% Human Spot-Check</h1>
-  <p>In accordance with <strong>Remediation Plan §3.3</strong>, 20% of the T3 real-web evaluation recipes have been sampled deterministically (seed={seed}) for human verification of the drafted structured ground truth against the manuscript images and verbatim transcriptions.</p>
+  <p>In accordance with <strong>Remediation Plan §3.3</strong>, 20% of the T3 real-world evaluation recipes have been sampled deterministically (seed={seed}) for human verification of the drafted structured ground truth against the source images and verbatim transcriptions.</p>
 
   <div class="instructions">
     <strong>Spot-Check Instructions:</strong>
@@ -384,11 +384,11 @@ window.addEventListener('DOMContentLoaded', () => {{
     # Generate README.md
     readme_md = f"""# T3 Ground-Truth 20% Spot-Check Review Package
 
-This package contains the self-contained human review interfaces for the deterministic 20% spot-check of the **RecipeBoxer T3 Real-Web Corpus** structured ground truth, generated in accordance with `REMEDIATION_PLAN.md` §3.3.
+This package contains the self-contained human review interfaces for the deterministic 20% spot-check of the **RecipeBoxer T3 Real-World Corpus** structured ground truth, generated in accordance with `REMEDIATION_PLAN.md` §3.3.
 
 - **Sampling Parameters:** Rate = 20% (5 of 25 recipes), Seed = {seed} (deterministic).
 - **Location:** `{output_dir}`
-- **Package Status:** 100% self-contained HTML (all manuscript card images are base64-encoded).
+- **Package Status:** 100% self-contained HTML (all card/page images are base64-encoded).
 
 ---
 

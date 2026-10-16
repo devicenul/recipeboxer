@@ -239,12 +239,14 @@ def resolve_deck_images(
         decks[deck_name] = imgs
         return decks
 
-    # T1..T4 in evals/corpora/<tier>/
-    corpus_dir = repo_root / "evals" / "corpora" / tier.lower()
-    if not corpus_dir.exists():
-        corpus_dir = repo_root / "evals" / "corpora" / tier.upper()
+    # T1..T4 in evals/corpora/<tier>/; archived opt-in tiers (e.g. T3A) under evals/corpora/archive/ (WP-T3A)
+    from evals.tiers import PENDING_CURATION_TIERS, TierPendingCurationError, corpus_dir_for
+
+    corpus_dir = corpus_dir_for(tier, repo_root)
 
     if not corpus_dir.exists():
+        if norm_tier in PENDING_CURATION_TIERS:
+            raise TierPendingCurationError(norm_tier, f"No corpus directory at {corpus_dir}")
         raise FileNotFoundError(f"Corpus directory not found for tier {tier} at {corpus_dir}")
 
     decks_json_path = corpus_dir / "DECKS.json"
@@ -287,6 +289,9 @@ def resolve_deck_images(
         ]
         if imgs:
             decks["d01"] = imgs
+
+    if not any(decks.values()) and norm_tier in PENDING_CURATION_TIERS:
+        raise TierPendingCurationError(norm_tier, f"No deck images found under {corpus_dir}")
 
     return decks
 
@@ -348,6 +353,10 @@ def run_benchmark(
 
     # T2 support: decrypt images from evals/vault/t2.images.tar.enc to managed private temp dir (Task 4)
     norm_tier = tier.upper()
+    from evals.tiers import ARCHIVED_TIERS
+
+    if norm_tier in ARCHIVED_TIERS:
+        _log(f"NOTE: tier {norm_tier} is an ARCHIVED opt-in tier ({ARCHIVED_TIERS[norm_tier]['description']}).")
     t2_temp_dir_ctx: Optional[tempfile.TemporaryDirectory] = None
     if norm_tier == "T2" and not images_dir:
         enc_tar_path = repo_root / "evals" / "vault" / "t2.images.tar.enc"
@@ -744,7 +753,7 @@ def create_run_parser() -> argparse.ArgumentParser:
         description="Black-box evaluation harness for RecipeBoxer.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    parser.add_argument("--tier", type=str, default="T0", help="Evaluation benchmark tier (e.g. T0, T1, T2)")
+    parser.add_argument("--tier", type=str, default="T0", help="Evaluation benchmark tier (T0-T4; archived opt-in: T3A)")
     parser.add_argument("--out", type=str, default="rb-out", help="Output directory for outputs.json and ledger.json")
     parser.add_argument("--decks", type=str, default=None, help="Comma-separated deck IDs to evaluate (e.g. d01,d02)")
     parser.add_argument("--images-dir", type=str, default=None, help="Explicit path to images directory")
@@ -793,6 +802,14 @@ def main(argv: Optional[List[str]] = None) -> int:
 
         print(f"Benchmark run complete. Status: {res.get('status')}. Artifacts in {args.out}")
         return 0
+    except FileNotFoundError as exc:
+        from evals.tiers import TierPendingCurationError
+
+        if isinstance(exc, TierPendingCurationError):
+            print(f"Error: {exc}", file=sys.stderr)
+            return 2
+        logger.error(f"Fatal harness execution error: {exc}", exc_info=True)
+        return 1
     except Exception as exc:
         logger.error(f"Fatal harness execution error: {exc}", exc_info=True)
         return 1

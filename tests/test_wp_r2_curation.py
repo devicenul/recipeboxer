@@ -1,8 +1,12 @@
 """Test suite for WP-R2 (T3 Real-Web Corpus Curation & Tooling).
 
+WP-T3A: the antique corpus curated by WP-R2 is now the ARCHIVED opt-in tier T3A
+(evals/corpora/archive/t3_antique/, evals/vault/archive/t3a.gt.enc). Its encrypted GT still carries the
+legacy tier label "T3". T3 itself is the modern (1900s+) tier, pending curation.
+
 Verifies:
 1. Integrity of encrypted vault GT (schema rb-gt/1, tier T3, deck_type real_distractor).
-2. Correspondence between vault images and disk assets under evals/corpora/t3/d01/.
+2. Correspondence between vault images and disk assets under evals/corpora/archive/t3_antique/d01/.
 3. SHA-256 integrity of all images.
 4. Clean pending status of structured GT and memorization probe flags.
 5. Public registry invariants (DECKS.json and ATTRIBUTION.md contain no secret GT).
@@ -23,10 +27,10 @@ from evals.curation_t3.memorization_probe import run_memorization_probe
 from evals.curation_t3.spotcheck import spotcheck_vault
 
 IDENTITY_PATH = Path("/home/droid/.config/recipeboxer/age.key")
-VAULT_FILE = Path("evals/vault/t3.gt.enc")
-CORPUS_DIR = Path("evals/corpora/t3")
+VAULT_FILE = Path("evals/vault/archive/t3a.gt.enc")
+CORPUS_DIR = Path("evals/corpora/archive/t3_antique")
 DECKS_JSON = CORPUS_DIR / "DECKS.json"
-ATTRIBUTION_MD = Path("evals/corpora/real_web/ATTRIBUTION.md")
+ATTRIBUTION_MD = CORPUS_DIR / "ATTRIBUTION.md"
 
 
 @pytest.fixture(scope="module")
@@ -40,7 +44,7 @@ def decrypted_t3_gt() -> dict:
 
 def test_t3_gt_schema_and_metadata(decrypted_t3_gt: dict) -> None:
     assert decrypted_t3_gt.get("schema") == "rb-gt/1"
-    assert decrypted_t3_gt.get("tier") == "T3"
+    assert decrypted_t3_gt.get("tier") == "T3"  # legacy label of archived tier T3A (WP-T3A)
     assert "created" in decrypted_t3_gt
     assert "generator" in decrypted_t3_gt
     assert len(decrypted_t3_gt.get("decks", [])) == 1

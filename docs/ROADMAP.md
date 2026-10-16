@@ -65,7 +65,7 @@ flowchart TD
 - `[x]` **Phase 3 (Grouping Uplift)**: Implemented collection-relative likelihood ratio weighting (`DeckBackground`), content continuity analysis (`recipeboxer/correlation/content.py`), set-level LLM verification with quote extraction (`SetVerifier`), isotonic calibration (`LinkCalibrator`), and global path cover optimization (`path_cover`).
 - `[x]` **Phase 4 (Extraction Hardening & Schema v2)**: Built 7-stage extraction pipeline (`prepare` $\rightarrow$ `transcribe` $\rightarrow$ `structure` $\rightarrow$ `repair` $\rightarrow$ `ground` $\rightarrow$ `normalize` $\rightarrow$ `consistency`), updated 9 exporters to Schema v2, and added frontend legibility indicators and spend cap controls.
 - `[x]` **Phase 5 (Red-Team Challenger Audits & Hardening)**: Completed audits #2 and #3 ([`_agents/remediation/REDTEAM-2.md`](../_agents/remediation/REDTEAM-2.md), [`_agents/remediation/REDTEAM-3.md`](../_agents/remediation/REDTEAM-3.md), [`_agents/remediation/WP-RT3FIX.md`](../_agents/remediation/WP-RT3FIX.md)). Enforced SUT sandbox isolation (`prepare_sut_sandbox` with private `HOME`, temp dirs, and strict allowlists), honest ECE evaluation (`ece_all` counting unmatched predictions), eliminated hardcoded fallback confidences, and killed 100% of mutation canaries.
-- `[x]` **Phase 6 / Gate B Certification (`gate-b`, `honest_v1.json`)**: Passed 2026-10-15 and tagged `gate-b`. Certified post-uplift baseline across held-out Tier T2 (B-Cubed F1 `0.9210`, Kendall $\tau = 1.0000$), large homogeneous deck `d04` (319 cards in $O(N \cdot k)$ with 1,086 calls and zero false merges), and real-web Tier T3. See [`docs/EVALS.md`](EVALS.md) for full metrics.
+- `[x]` **Phase 6 / Gate B Certification (`gate-b`, `honest_v1.json`)**: Passed 2026-10-15 and tagged `gate-b`. Certified post-uplift baseline across held-out Tier T2 (B-Cubed F1 `0.9210`, Kendall $\tau = 1.0000$), large homogeneous deck `d04` (319 cards in $O(N \cdot k)$ with 1,086 calls and zero false merges), and real-web Tier T3 (antique set, archived as T3A on 2026-10-16). See [`docs/EVALS.md`](EVALS.md) for full metrics.
 
 ---
 
@@ -87,8 +87,9 @@ The following backlog tracks remaining engineering work across quality, extracti
 | Priority | Track | Item | Description | Target Milestone |
 |:---:|---|---|---|:---:|
 | **P1** | **Quality** | **d04 Same-Stock False Split Reduction** | Lower false-split rate on large homogeneous decks (`d04` false split `0.5664` where SetVerifier rejects true back $\rightarrow$ next-front links). | Sprint 1 |
-| **P1** | **Extraction** | **T3 Title CER & Real-Manuscript Extraction** | Improve title extraction and line parsing on 18th-century manuscript hands and multi-recipe archival pages (T3 title CER `0.4840` matched / `0.5665` e2e). | Sprint 1 |
-| **P2** | **Quality & Reliability** | **T3 Calibration & `INVALID_RESPONSE` Resiliency** | Address high recipe ECE on T3 (`0.2844`) and handle rare model empty responses (`INVALID_RESPONSE`) during complex script transcription. | Sprint 2 |
+| **P1** | **Evals** | **Modern T3 (1900s+): curate + GT-draft, then run** | Import the separately gathered modern real-world set into T3, draft structured GT text-only (`evals/curation_t3/`), memorization-probe and spot-check it; run the harness/scorer on T3 **when API quota allows**. Until then T3 reports "pending curation". | Sprint 1 |
+| **P2** | **Reliability** | **`INVALID_RESPONSE` Resiliency** | Handle rare model empty/whitespace responses (`INVALID_RESPONSE`) that survive the WP-UP4 retries. | Sprint 2 |
+| **P4** | **Extraction (optional)** | **Antique manuscript handling (archived T3A)** | Optional low-priority use case: title CER / paleography / calibration on 17th-century manuscripts (T3A title CER `0.4840` matched / `0.5665` e2e, `ece_all` `0.2844`). Out of product scope (1900s+). | Backlog |
 | **P2** | **Test Hygiene** | **Platform & Environmental Test Failures** | Resolve 14 known test failures (6 Windows zip-slip tests, 7 headless Tkinter tests, 1 environmental setup script test). | Sprint 2 |
 | **P3** | **Architecture** | **CardForge Standalone Repository Split** | Split `cardforge/` out of the mono-repo into its own independent repository (`recipeboxer/cardforge`) per Decision D8. | Sprint 3 |
 | **P3** | **Cloud Integration** | **Official Google Cloud OAuth Provisioning & Fallback Deprecation** | Provision official GCP project with OAuth 2.0 Web Client for Docs/Drive scopes, embed public Client ID, and deprecate manual token entry drawer. | Sprint 3 |
@@ -104,17 +105,18 @@ The following backlog tracks remaining engineering work across quality, extracti
   - Investigate prompt and context engineering in `recipeboxer/prompts/set_verify_v2.md` to provide semantic continuity cues (e.g. ingredient list continuity, step number continuation) rather than relying solely on visual/lexical similarity.
   - Experiment with continuity score biasing in `recipeboxer/correlation/engine.py` for extension anchors without triggering false merges.
 
-#### 3.1.2 Tier T3 Real-Manuscript Extraction & `INVALID_RESPONSE`
-- **Background**: Tier T3 benchmarks historical handwritten manuscripts from public-domain archives (Folger, Wellcome, UPenn OPenn).
-- **Extraction Challenges**:
+#### 3.1.2 Modern T3 Set & `INVALID_RESPONSE` (antique set archived as T3A)
+- **Re-scope (WP-T3A, 2026-10-16)**: the product targets recipes from the **1900s onward**. The antique 17th-century manuscript corpus (Folger/Wellcome) was deactivated and moved to the archived opt-in tier **T3A** (`evals/corpora/archive/t3_antique/`, `evals/vault/archive/t3a.gt.enc`). T3 is now "real-world modern (1900s+), pending curation".
+- **Next steps (T3)**: (1) import the modern set gathered separately (orchestrator; see `evals/INTAKE.md` §T3); (2) draft structured GT text-only with `evals/curation_t3/draft_structured.py`, run `memorization_probe.py` and a `spotcheck.py` review; (3) run harness + scorer on T3 when API quota allows. No live runs until then.
+- **Historical numbers below refer to T3A** (the `honest_v0`/`honest_v1` "T3" columns). Antique handling is kept only as an optional low-priority use case (P4):
   - Title CER remains high (`0.4840` matched / `0.5665` end-to-end) due to archaic orthography, idiosyncratic headings, and dense multi-recipe manuscript pages.
   - Direction F1 (`0.5102` e2e) and Ingredient F1 (`0.6279` e2e) lag behind modern card decks.
 - **Occasional `INVALID_RESPONSE`**: T3 recorded one stage failure (`n_stage_failures = 1`) due to Gemini returning an empty or whitespace-only response on an unreadable archival image. While WP-UP4 introduced client-level (`MIN_ATTEMPTS_ON_EMPTY = 2`) and stage-level (`generate_with_empty_retry`) retries, persistent empty responses still raise `INVALID_RESPONSE`.
-- **Action Plan**: Add specialized manuscript paleography prompt tuning and enhanced fallback handling for dense multiple-recipe pages.
+- **Action Plan**: `INVALID_RESPONSE` fallback handling stays on the backlog (P2). Manuscript paleography prompt tuning is optional/low priority (P4, T3A only).
 
-#### 3.1.3 Tier T3 Recipe Calibration (ECE 0.28)
-- **ECE Under-Calibration**: On T3, `ece_all` is `0.2844` (`ece_matched` is `0.3386`), with mean predicted confidence (`0.1539`) significantly under-rating actual extraction accuracy (`0.2800`). The recipe-confidence model (fitted on modern CardForge synthetic decks) lacks calibration for out-of-distribution archival layouts.
-- **Action Plan**: Refit calibration models with out-of-distribution archival samples once additional annotated historical manuscripts are available.
+#### 3.1.3 Archived T3A Recipe Calibration (ECE 0.28) — optional, low priority
+- **ECE Under-Calibration**: On the antique set (then "T3", now T3A), `ece_all` is `0.2844` (`ece_matched` is `0.3386`), with mean predicted confidence (`0.1539`) significantly under-rating actual extraction accuracy (`0.2800`). The recipe-confidence model (fitted on modern CardForge synthetic decks) lacks calibration for out-of-distribution archival layouts.
+- **Action Plan**: No action planned (out of product scope). Recipe calibration will be re-assessed on the modern T3 set once it has been run.
 
 #### 3.1.4 Remediation of Known Platform & Environmental Test Failures
 Across the automated test suite, exactly 14 tests fail due to environmental and platform-specific assumptions:
@@ -217,10 +219,9 @@ git commit -m "chore(evals): add CI age public key to vault recipients"
 
 The following items require maintainer action or data input before they can proceed:
 
-### 5.1 Tier T3 Ground-Truth 20% Spot-Check
-- **Scope**: A human spot-check of ~20% of structured ground truth (5 recipes out of 26: `r001`, `r004`, `r009`, `r021`, and `r024`) drafted from volunteer transcriptions.
-- **Review Package Location**: The spot-check review package lives outside the repository in the maintainer's Antigravity artifact directory (`spotcheck/` folder containing recipe HTML previews and inspection metadata).
-- **Action Required**: The maintainer reviews the structured recipe fields against the original archival images. Corrections are applied to `evals/vault/t3.gt.enc` via `evals.vault` and each verified recipe has its `structured_status` field updated to `"reviewed"`.
+### 5.1 ~~Tier T3 Ground-Truth 20% Spot-Check~~ — WAIVED (2026-10-16)
+- **Decision**: The 20% spot-check of the antique set (`r001`, `r004`, `r009`, `r021`, `r024`) is **waived**. The user looked at the spot-check package, judged the decoding "quite good overall", and declined to give line-level corrections because the antique 17th-century set is out of product scope (recipes from the 1900s onward). The set is archived as opt-in tier **T3A**; its structured GT stays `drafted_unreviewed` (WP-T3A).
+- **Follow-up**: The modern (1900s+) T3 set will get its own GT draft and spot-check after import (see §3.1.2).
 
 ### 5.2 Tier T4 Real User Photo Intake (Family Collections)
 - **Scope**: Genuine family recipe collections photographed under everyday home and kitchen lighting conditions.
