@@ -10,8 +10,10 @@ never part of a default / all-tier run and must be requested explicitly by name 
   to this set (its encrypted GT and the archived SUT outputs still carry the legacy label ``"T3"``).
   Deactivated because the product targets recipes from the 1900s onward.
 
-``T3`` is now the real-world *modern* (1900s+) tier. Until its corpus is imported, harness and scorer
-raise :class:`TierPendingCurationError` ("T3 corpus pending curation; see evals/INTAKE.md").
+``T3`` is now the real-world *modern* (1900s+) tier. Its first set was imported by WP-T3I
+(``evals/corpora/t3/``, ``evals/vault/t3.gt.enc``; recipe-text GT still ``pending_draft``). Harness and
+scorer raise :class:`TierPendingCurationError` ("T3 corpus pending curation; see evals/INTAKE.md") only
+if that corpus or GT is missing.
 """
 
 from __future__ import annotations

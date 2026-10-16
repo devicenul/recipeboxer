@@ -17,6 +17,14 @@ human transcriptions. In accordance with Remediation Plan §3.3 & WAVE3_CONTRACT
 - RE-ENCRYPTION: Decrypts in memory and re-encrypts to --vault-file (default evals/vault/t3.gt.enc;
   archived antique tier T3A: evals/vault/archive/t3a.gt.enc). Plaintext GT
   never touches disk in the repository.
+- IMAGE DRAFTING (WP-T3I, opt-in ``--from-images``): the modern T3 set has NO human transcriptions
+  (``structured_status: pending_draft``, empty ``verbatim``). For such recipes only, the drafter sends the
+  recipe's face images (from ``--corpus-dir``, default evals/corpora/t3) plus the curator's private
+  ``draft_hint`` and asks the model for per-face verbatim AND structured GT in one call; the structured
+  part is validated against that verbatim like the text-only path. Results are marked
+  ``verbatim_status/structured_status: drafted_unreviewed`` with ``*_source: image_draft`` and must be
+  human spot-checked (>= 20%) before T3 numbers are trusted. Recipes with ``score_policy: exclude`` are
+  skipped. Recipes that already have verbatim always use the text-only path.
 """
 
 from __future__ import annotations
@@ -176,6 +184,73 @@ def draft_structured_prompt(verbatim_faces: List[str], correction_note: Optional
     )
 
 
+class ImageDraftSchema(BaseModel):
+    """Image-based draft (WP-T3I): per-face verbatim transcription + structured recipe in one response."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    verbatim: List[str] = Field(
+        description=(
+            "Exactly one string per supplied image, in the supplied order: a faithful line-by-line "
+            "transcription of THIS recipe's text on that image (empty string if the image carries none)."
+        )
+    )
+    structured: StructuredRecipeSchema
+
+
+def has_verbatim(recipe: Dict[str, Any]) -> bool:
+    verb = recipe.get("verbatim") or []
+    if isinstance(verb, str):
+        verb = [verb]
+    return any(str(v).strip() for v in verb)
+
+
+def draft_from_images_prompt(
+    n_faces: int,
+    title_hint: Optional[str] = None,
+    note_hint: Optional[str] = None,
+    correction_note: Optional[str] = None,
+) -> str:
+    """Prompt for drafting verbatim + structured GT directly from the recipe's face images (no transcription)."""
+    hint = f'The recipe is titled approximately "{title_hint}" (curator hint; use the spelling on the document). ' \
+        if title_hint else ""
+    note = f"Curator note: {note_hint}\n" if note_hint else ""
+    correction_block = f"\nATTENTION / CORRECTION REQUIRED:\n{correction_note}\n" if correction_note else ""
+    return (
+        "You are preparing benchmark ground truth for a real-world recipe document (handwritten or typed card, "
+        f"notebook or book page, letter). You receive {n_faces} image(s) of ONE recipe, in reading order. {hint}"
+        "An image may also show other recipes or unrelated text: transcribe ONLY this recipe.\n"
+        f"{note}\n"
+        "Return JSON with two fields:\n"
+        f"A. 'verbatim': exactly {n_faces} string(s), one per image in the given order. Each is a faithful, "
+        "diplomatic transcription of this recipe's text on that image: keep the line breaks, original spelling, "
+        "abbreviations, numbers and punctuation; apply handwritten corrections as finally written; write "
+        "[illegible] for unreadable words. Do not add text that is not on the image. Use an empty string for an "
+        "image that carries none of this recipe's text (e.g. an address side).\n"
+        "B. 'structured': the recipe as a RecipeSchema object derived ONLY from your verbatim text, following:\n"
+        "1. VERBATIM-FAITHFUL: do NOT invent missing ingredients, quantities, units or steps.\n"
+        "2. PRESERVE ORIGINAL SPELLING in 'raw', 'item', 'title' and 'directions'; do not modernize or correct.\n"
+        "3. NULL QUANTITY / UNIT WHEN ABSENT; never default to '1' or guess.\n"
+        "4. INGREDIENTS: 'raw' = the exact clause/line, plus quantity, unit, item, section (or null).\n"
+        "5. DIRECTIONS: sequential step strings copied faithfully from the text.\n"
+        "6. NOTES: marginalia, headnotes, attributions (e.g. 'from Aunt May') outside the cooking steps.\n"
+        f"{correction_block}"
+    )
+
+
+def load_face_parts(recipe: Dict[str, Any], deck_id: str, corpus_dir: Path, types_mod: Any) -> List[Any]:
+    """Loads the recipe's face images (reading order) from ``<corpus_dir>/<deck_id>/`` as genai Parts."""
+    parts: List[Any] = []
+    for face in recipe.get("faces", []):
+        p = Path(corpus_dir) / deck_id / Path(str(face)).name
+        if not p.is_file():
+            raise FileNotFoundError(f"face image not found: {p}")
+        suffix = p.suffix.lower()
+        mime = "image/png" if suffix == ".png" else ("image/webp" if suffix == ".webp" else "image/jpeg")
+        parts.append(types_mod.Part.from_bytes(data=p.read_bytes(), mime_type=mime))
+    return parts
+
+
 def fuzzy_match_substring_cer(haystack: str, needle: str) -> float:
     """Calculates the minimum Character Error Rate (CER) of needle aligned as a substring in haystack.
 
@@ -267,8 +342,14 @@ def draft_structured_gt(
     force: bool = False,
     max_retries: int = 2,
     client: Optional[Any] = None,
+    from_images: bool = False,
+    corpus_dir: Optional[Path] = None,
 ) -> CurationResult:
     """Draft structured GT for recipes with pending status.
+
+    ``from_images`` (WP-T3I) enables image-based drafting of verbatim + structured GT for pending recipes
+    that have no transcription (modern T3). Without it such recipes are skipped and counted in
+    ``summary['needs_image_draft']``.
 
     Returns:
         CurationResult (acts as int exit code, also unpackable as (exit_code, summary))
@@ -283,23 +364,41 @@ def draft_structured_gt(
 
     decks: List[Dict[str, Any]] = gt_data.get("decks", [])
     pending_recipes: List[Tuple[Dict[str, Any], Dict[str, Any]]] = []
+    needs_image: List[Tuple[Dict[str, Any], Dict[str, Any]]] = []
 
     for deck in decks:
         for recipe in deck.get("recipes", []):
+            if str(recipe.get("score_policy") or "").lower() == "exclude":
+                continue  # curator-excluded (e.g. partial fragment): not scored, not drafted
             is_pending = (
                 recipe.get("structured") is None
-                or recipe.get("structured_status") in ("pending_text_only_draft", None)
+                or recipe.get("structured_status") in ("pending_text_only_draft", "pending_draft", None)
             )
-            if force or is_pending:
+            if not (force or is_pending):
+                continue
+            if has_verbatim(recipe):
                 pending_recipes.append((deck, recipe))
+            elif from_images:
+                pending_recipes.append((deck, recipe))
+            else:
+                needs_image.append((deck, recipe))
+
+    if needs_image:
+        print(
+            f"{len(needs_image)} pending recipe(s) have no transcription (verbatim) and need image drafting; "
+            "re-run with --from-images to draft verbatim + structured GT from the corpus images."
+        )
 
     total_pending = len(pending_recipes)
     print(f"Found {total_pending} recipe(s) to draft in {resolved_vault.name}.")
+    c_dir = Path(corpus_dir or (vault.get_repo_root() / "evals" / "corpora" / "t3")).expanduser().resolve()
 
     summary: Dict[str, Any] = {
         "total_recipes": sum(len(d.get("recipes", [])) for d in decks),
         "pending": total_pending,
+        "needs_image_draft": len(needs_image),
         "drafted": 0,
+        "drafted_from_images": 0,
         "failed": 0,
         "mismatches": [],
         "tokens": {
@@ -312,7 +411,8 @@ def draft_structured_gt(
     }
 
     if total_pending == 0:
-        print("All recipes already have structured ground truth.")
+        print("All recipes already have structured ground truth." if not needs_image
+              else "Nothing to draft without --from-images.")
         return CurationResult(0, summary)
 
     api_key = get_api_key()
@@ -320,13 +420,16 @@ def draft_structured_gt(
         print(
             "\n[NOTICE] No Gemini API key detected in environment ($GEMINI_API_KEY / $RECIPEBOXER_GEMINI_API_KEY).\n"
             "Structured GT drafting is deferred until a live API key is provided.\n"
-            f"All {total_pending} items remain marked as 'pending_text_only_draft'.\n"
+            f"All {total_pending} items keep their pending status.\n"
             f"When a key is configured, re-run with: python -m evals.curation_t3.draft_structured --model-tier {model_name}"
+            + (" --from-images" if from_images else "")
         )
         return CurationResult(0, summary)
 
     if dry_run:
-        print(f"[DRY-RUN] Would draft {total_pending} recipes using text-only model '{model_name}'.")
+        n_img = sum(1 for _, r in pending_recipes if not has_verbatim(r))
+        print(f"[DRY-RUN] Would draft {total_pending} recipes using model '{model_name}' "
+              f"({n_img} from images, {total_pending - n_img} text-only).")
         return CurationResult(0, summary)
 
     # Initialize GenAI client if not injected
@@ -342,6 +445,7 @@ def draft_structured_gt(
 
     to_process = pending_recipes[:limit] if limit else pending_recipes
     drafted_count = 0
+    drafted_from_images = 0
     total_prompt_tokens = 0
     total_candidate_tokens = 0
     total_thoughts_tokens = 0
@@ -349,27 +453,51 @@ def draft_structured_gt(
 
     for deck, recipe in to_process:
         rid = recipe.get("recipe_id", "unknown")
-        verbatim_faces = recipe.get("verbatim", [])
+        verbatim_faces = recipe.get("verbatim", []) or []
+        image_mode = not has_verbatim(recipe)
+        faces = list(recipe.get("faces", []))
+        face_parts: List[Any] = []
+        if image_mode:
+            try:
+                face_parts = load_face_parts(recipe, deck.get("deck_id", "d01"), c_dir, types)
+            except FileNotFoundError as e:
+                summary["failed"] += 1
+                sys.stderr.write(f"[FAILED] {rid}: {e}\n")
+                continue
+        hint = recipe.get("draft_hint") or {}
 
         success = False
         parsed_structured: Optional[Dict[str, Any]] = None
+        drafted_verbatim: Optional[List[str]] = None
         used_prompt_hash: str = ""
         correction_note: Optional[str] = None
 
         for attempt in range(max_retries + 1):
-            prompt = draft_structured_prompt(verbatim_faces, correction_note=correction_note)
-            prompt_hash = hashlib.sha256(prompt.encode("utf-8")).hexdigest()
+            if image_mode:
+                prompt = draft_from_images_prompt(
+                    len(faces), title_hint=hint.get("title"), note_hint=hint.get("note"),
+                    correction_note=correction_note,
+                )
+                prompt_hash = hashlib.sha256((prompt + "|" + "|".join(faces)).encode("utf-8")).hexdigest()
+                contents: Any = [prompt] + face_parts
+                schema: Any = ImageDraftSchema
+                budget = 2048
+            else:
+                prompt = draft_structured_prompt(verbatim_faces, correction_note=correction_note)
+                prompt_hash = hashlib.sha256(prompt.encode("utf-8")).hexdigest()
+                contents = prompt
+                schema = StructuredRecipeSchema
+                budget = 1024
 
             try:
-                # Text-only structured output call
                 response = client.models.generate_content(
                     model=model_name,
-                    contents=prompt,
+                    contents=contents,
                     config=types.GenerateContentConfig(
                         response_mime_type="application/json",
-                        response_schema=StructuredRecipeSchema,
+                        response_schema=schema,
                         temperature=0.0,
-                        thinking_config=types.ThinkingConfig(thinking_budget=1024),
+                        thinking_config=types.ThinkingConfig(thinking_budget=budget),
                     ),
                 )
 
@@ -393,13 +521,31 @@ def draft_structured_gt(
                     clean_json = clean_json[:-3]
 
                 data_dict = json.loads(clean_json.strip())
-                validated_model = StructuredRecipeSchema.model_validate(data_dict)
-                parsed_structured = validated_model.model_dump(by_alias=True)
+                if image_mode:
+                    img_model = ImageDraftSchema.model_validate(data_dict)
+                    cand_verbatim = [str(v) for v in img_model.verbatim]
+                    if len(cand_verbatim) != len(faces):
+                        if attempt < max_retries:
+                            correction_note = (
+                                f"'verbatim' must contain exactly {len(faces)} string(s), one per image "
+                                f"(got {len(cand_verbatim)})."
+                            )
+                            continue
+                        cand_verbatim = (cand_verbatim + [""] * len(faces))[: len(faces)]
+                    if not any(v.strip() for v in cand_verbatim):
+                        raise ValueError("empty verbatim draft")
+                    parsed_structured = img_model.structured.model_dump(by_alias=True)
+                    drafted_verbatim = cand_verbatim
+                    check_faces = cand_verbatim
+                else:
+                    validated_model = StructuredRecipeSchema.model_validate(data_dict)
+                    parsed_structured = validated_model.model_dump(by_alias=True)
+                    check_faces = verbatim_faces
                 used_prompt_hash = prompt_hash
 
-                # Validate against verbatim transcript
+                # Validate against verbatim transcript (drafted verbatim in image mode)
                 recipe_mismatches = validate_draft_against_verbatim(
-                    parsed_structured, verbatim_faces, max_cer=0.15
+                    parsed_structured, check_faces, max_cer=0.15
                 )
 
                 if recipe_mismatches and attempt < max_retries:
@@ -433,11 +579,20 @@ def draft_structured_gt(
             recipe["structured_model"] = model_name
             recipe["prompt_hash"] = used_prompt_hash
             recipe["drafted_on"] = now_iso
+            if image_mode and drafted_verbatim is not None:
+                recipe["verbatim"] = drafted_verbatim
+                recipe["verbatim_status"] = "drafted_unreviewed"
+                recipe["verbatim_source"] = "image_draft"
+                recipe["structured_source"] = "image_draft"
+                drafted_from_images += 1
             drafted_count += 1
-            print(f"[DRAFTED] {rid} successfully using {model_name} (hash: {used_prompt_hash[:8]})")
+            print(f"[DRAFTED] {rid} successfully using {model_name} (hash: {used_prompt_hash[:8]})"
+                  + (" [from images]" if image_mode else ""))
         else:
             summary["failed"] += 1
             sys.stderr.write(f"[FAILED] Could not draft structured GT for {rid}\n")
+
+    summary["drafted_from_images"] = drafted_from_images
 
     summary["drafted"] = drafted_count
     summary["mismatches"] = all_mismatches
@@ -477,7 +632,7 @@ def draft_structured_gt(
 
 
 def main(argv: Optional[List[str]] = None) -> int:
-    parser = argparse.ArgumentParser(description="Draft structured GT text-only from verbatim text")
+    parser = argparse.ArgumentParser(description="Draft structured GT from verbatim text (or, with --from-images, from the corpus images)")
     parser.add_argument(
         "--vault-file",
         type=Path,
@@ -518,6 +673,18 @@ def main(argv: Optional[List[str]] = None) -> int:
         default=None,
         help="Limit number of recipes to draft in this run",
     )
+    parser.add_argument(
+        "--from-images",
+        action="store_true",
+        help="Draft verbatim + structured GT from the corpus images for pending recipes without a transcription "
+             "(modern T3; WP-T3I). Results are drafted_unreviewed and need a human spot-check.",
+    )
+    parser.add_argument(
+        "--corpus-dir",
+        type=Path,
+        default=None,
+        help="Corpus directory with deck subdirectories for --from-images (default: evals/corpora/t3)",
+    )
     args = parser.parse_args(argv)
 
     try:
@@ -529,6 +696,8 @@ def main(argv: Optional[List[str]] = None) -> int:
             dry_run=args.dry_run,
             limit=args.limit,
             force=args.force,
+            from_images=args.from_images,
+            corpus_dir=args.corpus_dir,
         )
         return code
     except Exception as e:

@@ -158,10 +158,19 @@ def run_memorization_probe(
     total_thoughts_tokens = 0
     to_process = all_recipes[:limit] if limit else all_recipes
 
+    skipped_pending = 0
     for deck, recipe in to_process:
         rid = recipe.get("recipe_id", "unknown")
-        verbatim_faces = recipe.get("verbatim", [])
-        title = (recipe.get("structured") or {}).get("title") or extract_title_candidate(verbatim_faces)
+        verbatim_faces = recipe.get("verbatim", []) or []
+        # WP-T3I: no verbatim yet (structured_status pending_draft) -> nothing to compare a completion
+        # against; curator-excluded recipes (score_policy=exclude) are not scored anyway.
+        if not any(str(v).strip() for v in verbatim_faces) or str(recipe.get("score_policy") or "").lower() == "exclude":
+            skipped_pending += 1
+            continue
+        title = (
+            (recipe.get("structured") or {}).get("title")
+            or extract_title_candidate(verbatim_faces)
+        )
         full_gt = " ".join(verbatim_faces)
 
         prompt = (
@@ -194,18 +203,23 @@ def run_memorization_probe(
             summary["scores"][rid] = round(overlap, 4)
             probed_count += 1
 
+            prior_reason = str(recipe.get("excluded_reason") or "")
+            own_reason = (not prior_reason) or prior_reason.startswith("memorization_probe_match")
             if overlap >= threshold:
-                recipe["excluded_reason"] = f"memorization_probe_match (overlap: {overlap:.2f})"
+                if own_reason:
+                    recipe["excluded_reason"] = f"memorization_probe_match (overlap: {overlap:.2f})"
                 flagged_count += 1
                 print(f"[FLAGGED] {rid} ('{title[:30]}...') memorization overlap {overlap:.2f} >= {threshold}")
             else:
-                recipe["excluded_reason"] = None
+                if own_reason:
+                    recipe["excluded_reason"] = None
                 print(f"[CLEAN]   {rid} ('{title[:30]}...') overlap {overlap:.2f} < {threshold}")
         except Exception as e:
             sys.stderr.write(f"Probe call failed for {rid}: {e}\n")
 
     summary["probed"] = probed_count
     summary["flagged"] = flagged_count
+    summary["skipped_no_text_gt"] = skipped_pending
     summary["tokens"]["prompt_tokens"] = total_prompt_tokens
     summary["tokens"]["candidate_tokens"] = total_candidate_tokens
     summary["tokens"]["thoughts_tokens"] = total_thoughts_tokens

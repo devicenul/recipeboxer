@@ -87,7 +87,7 @@ The following backlog tracks remaining engineering work across quality, extracti
 | Priority | Track | Item | Description | Target Milestone |
 |:---:|---|---|---|:---:|
 | **P1** | **Quality** | **d04 Same-Stock False Split Reduction** | Lower false-split rate on large homogeneous decks (`d04` false split `0.5664` where SetVerifier rejects true back $\rightarrow$ next-front links). | Sprint 1 |
-| **P1** | **Evals** | **Modern T3 (1900s+): curate + GT-draft, then run** | Import the separately gathered modern real-world set into T3, draft structured GT text-only (`evals/curation_t3/`), memorization-probe and spot-check it; run the harness/scorer on T3 **when API quota allows**. Until then T3 reports "pending curation". | Sprint 1 |
+| **P1** | **Evals** | **Modern T3 (1900s+): draft text GT, then baseline** | ~~Curate + import~~ done (WP-T3M/WP-T3I, 2026-10-16: 50 images, 48 scored groups, grouping GT encrypted; structured/verbatim GT `pending_draft`). **Next, when quota allows:** draft verbatim + structured GT from the images (`draft_structured --from-images`, gemini-3.1-pro-preview, ~$2–3), then `memorization_probe`, a ≥20% user spot-check (`spotcheck`), and the first modern-T3 baseline run (harness + scorer). Until then T3 scores grouping only; extraction is N/A. | Sprint 1 |
 | **P2** | **Reliability** | **`INVALID_RESPONSE` Resiliency** | Handle rare model empty/whitespace responses (`INVALID_RESPONSE`) that survive the WP-UP4 retries. | Sprint 2 |
 | **P4** | **Extraction (optional)** | **Antique manuscript handling (archived T3A)** | Optional low-priority use case: title CER / paleography / calibration on 17th-century manuscripts (T3A title CER `0.4840` matched / `0.5665` e2e, `ece_all` `0.2844`). Out of product scope (1900s+). | Backlog |
 | **P2** | **Test Hygiene** | **Platform & Environmental Test Failures** | Resolve 14 known test failures (6 Windows zip-slip tests, 7 headless Tkinter tests, 1 environmental setup script test). | Sprint 2 |
@@ -107,7 +107,7 @@ The following backlog tracks remaining engineering work across quality, extracti
 
 #### 3.1.2 Modern T3 Set & `INVALID_RESPONSE` (antique set archived as T3A)
 - **Re-scope (WP-T3A, 2026-10-16)**: the product targets recipes from the **1900s onward**. The antique 17th-century manuscript corpus (Folger/Wellcome) was deactivated and moved to the archived opt-in tier **T3A** (`evals/corpora/archive/t3_antique/`, `evals/vault/archive/t3a.gt.enc`). T3 is now "real-world modern (1900s+), pending curation".
-- **Next steps (T3)**: (1) import the modern set gathered separately (orchestrator; see `evals/INTAKE.md` §T3); (2) draft structured GT text-only with `evals/curation_t3/draft_structured.py`, run `memorization_probe.py` and a `spotcheck.py` review; (3) run harness + scorer on T3 when API quota allows. No live runs until then.
+- **Next steps (T3)**: (1) ~~import the modern set~~ **done (WP-T3I, 2026-10-16)**: 50 images in `evals/corpora/t3/d01/`, 49 groups (48 scored, one tail fragment excluded), grouping/layout/era/famous/memorization flags encrypted in `evals/vault/t3.gt.enc`. The scorer handles multi-recipe images, excluded recipes, distractors and pending text GT (extraction N/A). (2) **When quota allows**: draft verbatim + structured GT *from the images*, because there are no human transcriptions (`python -m evals.curation_t3.draft_structured --from-images`, ~$2–3). Then run `memorization_probe.py` and a mandatory ≥20% user spot-check (`spotcheck.py`; include the inferred front/back pairings). (3) Run harness + scorer on T3 and record the first modern-T3 baseline. No live runs until the user approves the spend. Procedure: `docs/EVALS.md` §8.1.
 - **Historical numbers below refer to T3A** (the `honest_v0`/`honest_v1` "T3" columns). Antique handling is kept only as an optional low-priority use case (P4):
   - Title CER remains high (`0.4840` matched / `0.5665` end-to-end) due to archaic orthography, idiosyncratic headings, and dense multi-recipe manuscript pages.
   - Direction F1 (`0.5102` e2e) and Ingredient F1 (`0.6279` e2e) lag behind modern card decks.
@@ -221,7 +221,7 @@ The following items require maintainer action or data input before they can proc
 
 ### 5.1 ~~Tier T3 Ground-Truth 20% Spot-Check~~ — WAIVED (2026-10-16)
 - **Decision**: The 20% spot-check of the antique set (`r001`, `r004`, `r009`, `r021`, `r024`) is **waived**. The user looked at the spot-check package, judged the decoding "quite good overall", and declined to give line-level corrections because the antique 17th-century set is out of product scope (recipes from the 1900s onward). The set is archived as opt-in tier **T3A**; its structured GT stays `drafted_unreviewed` (WP-T3A).
-- **Follow-up**: The modern (1900s+) T3 set will get its own GT draft and spot-check after import (see §3.1.2).
+- **Follow-up**: The modern (1900s+) T3 set is imported (WP-T3I). Its image-drafted GT gets its own spot-check, which is mandatory and not waivable, once the GT is drafted (see §3.1.2).
 
 ### 5.2 Tier T4 Real User Photo Intake (Family Collections)
 - **Scope**: Genuine family recipe collections photographed under everyday home and kitchen lighting conditions.

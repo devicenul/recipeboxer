@@ -386,7 +386,7 @@ window.addEventListener('DOMContentLoaded', () => {{
 
 This package contains the self-contained human review interfaces for the deterministic 20% spot-check of the **RecipeBoxer T3 Real-World Corpus** structured ground truth, generated in accordance with `REMEDIATION_PLAN.md` §3.3.
 
-- **Sampling Parameters:** Rate = 20% (5 of 25 recipes), Seed = {seed} (deterministic).
+- **Sampling Parameters:** {len(sampled_recipes)} sampled recipe(s) (target rate 20%), Seed = {seed} (deterministic).
 - **Location:** `{output_dir}`
 - **Package Status:** 100% self-contained HTML (all card/page images are base64-encoded).
 
@@ -472,6 +472,9 @@ def spotcheck_vault(
     for d in decks:
         deck_id = d.get("deck_id", "unknown")
         for r in d.get("recipes", []):
+            # WP-T3I: recipes excluded from scoring (score_policy=exclude, e.g. partial fragments) need no review
+            if str(r.get("score_policy") or "").lower() == "exclude":
+                continue
             all_recipes.append((deck_id, r))
 
     total_recipes = len(all_recipes)

@@ -42,6 +42,112 @@ def _parse_confidence(raw: Any) -> Optional[float]:
     return v
 
 
+# --- WP-T3I: real-world GT features (multi-recipe images, excluded fragments, pending text GT, distractors) ---
+
+# Structured/verbatim GT not drafted yet: the recipe takes part in grouping metrics only.
+PENDING_TEXT_STATUSES: Tuple[str, ...] = ("pending_draft",)
+EXTRACTION_PENDING_REASON = "structured GT pending"
+
+
+def _norm_id(x: Any) -> str:
+    return Path(str(x)).name
+
+
+def is_excluded_recipe(rec: Dict[str, Any]) -> bool:
+    """A gold recipe excluded from recipe-level/extraction scoring (partial fragment, memorization flag, ...)."""
+    return str(rec.get("score_policy") or "").strip().lower() == "exclude" or bool(rec.get("excluded_reason"))
+
+
+def has_text_gt(rec: Dict[str, Any]) -> bool:
+    """False only for recipes whose verbatim/structured GT is explicitly pending (``pending_draft``) and empty.
+
+    Every other recipe keeps the legacy behaviour (content matching against structured and/or verbatim GT).
+    """
+    verb = rec.get("verbatim") or []
+    if isinstance(verb, str):
+        verb = [verb]
+    if any(str(v).strip() for v in verb):
+        return True
+    return rec.get("structured_status") not in PENDING_TEXT_STATUSES
+
+
+def image_components(clusters: Sequence[Sequence[str]]) -> List[List[str]]:
+    """Merges clusters that share an image (union-find) into image-level groups, preserving first-seen order.
+
+    Used when one image may carry several recipes (``multi_recipe_image``) or a recipe crosses from one
+    multi-recipe page to the next: the grouping question then becomes "which images belong together".
+    """
+    parent: Dict[str, str] = {}
+    order: List[str] = []
+
+    def find(a: str) -> str:
+        while parent[a] != a:
+            parent[a] = parent[parent[a]]
+            a = parent[a]
+        return a
+
+    for cl in clusters:
+        ids = [_norm_id(c) for c in cl]
+        for c in ids:
+            if c not in parent:
+                parent[c] = c
+                order.append(c)
+        for c in ids[1:]:
+            ra, rb = find(ids[0]), find(c)
+            if ra != rb:
+                parent[rb] = ra
+    comps: Dict[str, List[str]] = {}
+    for c in order:
+        comps.setdefault(find(c), []).append(c)
+    return list(comps.values())
+
+
+def _has_shared_images(clusters: Sequence[Sequence[str]]) -> bool:
+    seen: set = set()
+    for cl in clusters:
+        for c in {_norm_id(x) for x in cl}:
+            if c in seen:
+                return True
+            seen.add(c)
+    return False
+
+
+def non_recipe_image_ids(deck_gt: Dict[str, Any]) -> List[str]:
+    """Distractor / non-recipe images: deck ``non_recipe_images`` plus images with role distractor/non_recipe."""
+    ids = {_norm_id(x) for x in (deck_gt.get("non_recipe_images") or [])}
+    for img in deck_gt.get("images", []) or []:
+        if str(img.get("role") or "").lower() in ("distractor", "non_recipe"):
+            ids.add(_norm_id(img.get("image_id", "")))
+    ids.discard("")
+    return sorted(ids)
+
+
+def _pending_extraction_summary(n_pending: int, n_excluded: int, n_stage_failures: int,
+                                n_pred: int, n_gold_text: int = 0) -> Dict[str, Any]:
+    """Extraction block when no gold recipe has text GT yet: everything N/A (None), never zero."""
+    empty = aggregate_extraction([])
+    return {
+        "status": "not_available",
+        "reason": EXTRACTION_PENDING_REASON if n_pending else "all gold recipes excluded from scoring",
+        "matched_only": empty,
+        "end_to_end": empty,
+        "overall": {},
+        "breakdowns": {},
+        "count": 0,
+        "n_matched": None,
+        "n_unmatched_pred": None,
+        "n_omitted_gold": None,
+        "hallucinated_recipe_rate": None,
+        "omitted_recipe_rate": None,
+        "n_unscored_no_structured_gt": n_pending,
+        "n_pending_structured_gt": n_pending,
+        "n_excluded_gold": n_excluded,
+        "n_stage_failures": n_stage_failures,
+        "n_pred_total": n_pred,
+        "n_gold_text": n_gold_text,
+    }
+
+
 def calibration_summary(
     conf_all: List[float],
     correct_all: List[bool],
@@ -100,15 +206,96 @@ def evaluate_deck(
       and included in 'end-to-end' aggregates.
     - Unmatched predicted recipes (fragments, hallucinations) counted as
       `n_unmatched_pred` / `hallucinated_recipe_rate`, NOT averaged into per-field metrics.
+
+    Real-world GT extensions (WP-T3I):
+    - Multi-recipe images: when one gold image belongs to several recipes (or the deck sets
+      ``multi_recipe_images``), grouping metrics are computed on image-level groups (connected components
+      of the recipe/image relation, for both pred and gold). Recipe-level set agreement is reported in
+      ``grouping_detail`` (``recipe_set_exact_acc``, recipe counts).
+    - Excluded gold recipes (``score_policy: exclude`` or a non-empty ``excluded_reason``) are dropped from
+      extraction matching and recipe-level counts; their images still count for image-level grouping.
+    - Pending text GT (``structured_status: pending_draft`` with no verbatim): such recipes are not content-
+      matched. If no gold recipe of the deck has text GT, extraction and calibration are N/A
+      (``status: not_available``, ``reason: structured GT pending``) - never zero.
+    - Distractor (non-recipe) images: ``grouping_detail.distractor_rejection_rate`` = share of non-recipe
+      images not placed in any predicted recipe.
     """
     pred_recipes = deck_output.get("recipes", [])
-    gold_recipes = deck_gt.get("recipes", [])
+    gold_all = deck_gt.get("recipes", [])
 
     pred_clusters = [r.get("image_ids", []) for r in pred_recipes]
-    gold_clusters = [r.get("faces", []) for r in gold_recipes]
+    gold_clusters = [r.get("faces", []) for r in gold_all]
 
-    # 1. Grouping metrics on card clusters
-    grouping_scores = score_grouping(pred_clusters, gold_clusters)
+    excluded_idx = {i for i, r in enumerate(gold_all) if is_excluded_recipe(r)}
+    scored_idx = [i for i in range(len(gold_all)) if i not in excluded_idx]
+    text_idx = [i for i in scored_idx if has_text_gt(gold_all[i])]
+    pending_idx = [i for i in scored_idx if not has_text_gt(gold_all[i])]
+
+    # 1. Grouping metrics on card clusters (image-level components when images carry several recipes)
+    multi_recipe = bool(deck_gt.get("multi_recipe_images")) or _has_shared_images(gold_clusters)
+    grouping_detail: Dict[str, Any] = {
+        "mode": "image_components" if multi_recipe else "recipes",
+        "n_gold_recipes": len(gold_all),
+        "n_gold_recipes_scored": len(scored_idx),
+        "n_excluded_gold": len(excluded_idx),
+        "n_pred_recipes": len(pred_recipes),
+    }
+    if multi_recipe:
+        grouping_scores = score_grouping(image_components(pred_clusters), image_components(gold_clusters))
+        scored_gold_sets = [[_norm_id(c) for c in gold_clusters[i]] for i in scored_idx]
+        pred_sets_norm = [[_norm_id(c) for c in p] for p in pred_clusters]
+        n_exact = 0
+        for p_i, g_i, _ in match_recipes(pred_sets_norm, scored_gold_sets):
+            if p_i is not None and g_i is not None and set(pred_sets_norm[p_i]) == set(scored_gold_sets[g_i]):
+                n_exact += 1
+        grouping_detail["recipe_set_exact"] = n_exact
+        grouping_detail["recipe_set_exact_acc"] = (
+            round(n_exact / len(scored_gold_sets), 4) if scored_gold_sets else None
+        )
+    else:
+        grouping_scores = score_grouping(pred_clusters, gold_clusters)
+
+    distractors = set(non_recipe_image_ids(deck_gt))
+    pred_images = {_norm_id(c) for p in pred_clusters for c in p}
+    n_dis_included = len(distractors & pred_images)
+    grouping_detail["n_distractor_images"] = len(distractors)
+    grouping_detail["n_distractor_in_pred_recipes"] = n_dis_included
+    grouping_detail["distractor_rejection_rate"] = (
+        round(1.0 - n_dis_included / len(distractors), 4) if distractors else None
+    )
+
+    n_stage_failures = len(deck_output.get("failures", []))
+    if not text_idx and (pending_idx or excluded_idx):
+        # No text GT at all for this deck: grouping only; extraction + calibration N/A (not zero).
+        extraction_summary = _pending_extraction_summary(
+            n_pending=len(pending_idx), n_excluded=len(excluded_idx),
+            n_stage_failures=n_stage_failures, n_pred=len(pred_recipes),
+        )
+        calibration = calibration_summary([], [], [], [], len(pred_recipes))
+        return {
+            "deck_id": deck_output.get("deck_id", deck_gt.get("deck_id", "d01")),
+            "grouping": grouping_scores,
+            "grouping_detail": grouping_detail,
+            "extraction": extraction_summary,
+            "calibration_ece": None,
+            "calibration": calibration,
+            "recipe_rows": [],
+            "omitted_rows": [],
+            "matched_pairs": [],
+            "unmatched_preds": [],
+            "unmatched_golds": [],
+            "matches": [],
+            "confidences": [],
+            "correct_list": [],
+            "confidences_all": [],
+            "correct_all": [],
+            "n_pred": len(pred_recipes),
+            "extraction_available": False,
+        }
+
+    # Extraction is scored only against recipes that have text GT and are not excluded
+    # (identical to the legacy behaviour when nothing is excluded or pending).
+    gold_recipes = [gold_all[i] for i in text_idx]
 
     # 2. Principled Hungarian recipe matching on content similarity
     matched_pairs, unmatched_preds, unmatched_golds = match_recipes_by_content(
@@ -150,7 +337,7 @@ def evaluate_deck(
             gold_struct is not None
             and isinstance(gold_struct, dict)
             and len(gold_struct) > 0
-            and gold_rec.get("structured_status") not in ("pending", "pending_text_only_draft")
+            and gold_rec.get("structured_status") not in ("pending", "pending_text_only_draft", "pending_draft")
         )
 
         if not has_structured:
@@ -230,7 +417,7 @@ def evaluate_deck(
             gold_struct is not None
             and isinstance(gold_struct, dict)
             and len(gold_struct) > 0
-            and gold_rec.get("structured_status") not in ("pending", "pending_text_only_draft")
+            and gold_rec.get("structured_status") not in ("pending", "pending_text_only_draft", "pending_draft")
         )
 
         if not has_structured:
@@ -283,10 +470,19 @@ def evaluate_deck(
         "n_matched": len(matched_pairs),
         "n_unmatched_pred": n_unmatched_pred,
         "n_omitted_gold": n_omitted_gold,
-        "hallucinated_recipe_rate": round(n_unmatched_pred / n_pred_total, 4) if n_pred_total > 0 else 0.0,
+        # With pending (text-less) gold recipes, predictions of those recipes cannot be matched, so the
+        # hallucinated-recipe rate would be inflated: report N/A instead (WP-T3I).
+        "hallucinated_recipe_rate": (
+            None if pending_idx
+            else (round(n_unmatched_pred / n_pred_total, 4) if n_pred_total > 0 else 0.0)
+        ),
         "omitted_recipe_rate": round(n_omitted_gold / n_gold_total, 4) if n_gold_total > 0 else 0.0,
-        "n_unscored_no_structured_gt": n_unscored_no_structured_gt,
+        "n_unscored_no_structured_gt": n_unscored_no_structured_gt + len(pending_idx),
+        "n_pending_structured_gt": len(pending_idx),
+        "n_excluded_gold": len(excluded_idx),
         "n_stage_failures": len(deck_output.get("failures", [])),
+        "n_pred_total": n_pred_total,
+        "n_gold_text": n_gold_total,
     }
 
     # Calibration ECE (RT3-02): all predictions (headline) + matched-only (diagnostic) + coverage
@@ -295,6 +491,7 @@ def evaluate_deck(
     return {
         "deck_id": deck_output.get("deck_id", deck_gt.get("deck_id", "d01")),
         "grouping": grouping_scores,
+        "grouping_detail": grouping_detail,
         "extraction": extraction_summary,
         "calibration_ece": calibration["ece_all"],
         "calibration": calibration,
@@ -311,6 +508,7 @@ def evaluate_deck(
         "confidences_all": confidences_all,
         "correct_all": correct_all,
         "n_pred": n_pred_total,
+        "extraction_available": True,
     }
 
 
@@ -402,46 +600,81 @@ def score_evaluation(
     overall_matched = aggregate_extraction(all_matched_rows)
     overall_e2e = aggregate_extraction(all_matched_rows + all_omitted_rows)
 
-    total_unscored_no_gt = sum(
-        res.get("extraction", {}).get("n_unscored_no_structured_gt", 0)
-        for res in deck_results
-    )
-    total_stage_failures = sum(
-        res.get("extraction", {}).get("n_stage_failures", 0)
-        for res in deck_results
-    )
-    total_unmatched_pred = sum(
-        res.get("extraction", {}).get("n_unmatched_pred", 0)
-        for res in deck_results
-    )
-    total_omitted_gold = sum(
-        res.get("extraction", {}).get("n_omitted_gold", 0)
-        for res in deck_results
-    )
-    total_matched = sum(
-        res.get("extraction", {}).get("n_matched", 0)
-        for res in deck_results
-    )
-    total_pred = sum(len(d.get("recipes", [])) for d in out_decks)
-    total_gold = sum(
-        len(gt_decks.get(d.get("deck_id", ""), {}).get("recipes", []))
-        for d in out_decks
-    )
+    def _ext_sum(results: List[Dict[str, Any]], key: str) -> int:
+        return sum(int(r.get("extraction", {}).get(key, 0) or 0) for r in results)
 
-    overall_extraction = {
-        "matched_only": overall_matched,
-        "end_to_end": overall_e2e,
-        "overall": overall_matched["overall"],
-        "breakdowns": overall_matched["breakdowns"],
-        "count": len(all_matched_rows),
-        "n_matched": total_matched,
-        "n_unmatched_pred": total_unmatched_pred,
-        "n_omitted_gold": total_omitted_gold,
-        "hallucinated_recipe_rate": round(total_unmatched_pred / total_pred, 4) if total_pred > 0 else 0.0,
-        "omitted_recipe_rate": round(total_omitted_gold / total_gold, 4) if total_gold > 0 else 0.0,
-        "n_unscored_no_structured_gt": total_unscored_no_gt,
-        "n_stage_failures": total_stage_failures,
-    }
+    # WP-T3I: decks whose gold has no text GT yet (pending_draft) contribute grouping metrics only.
+    avail = [r for r in deck_results if r.get("extraction_available", True)]
+    total_unscored_no_gt = _ext_sum(deck_results, "n_unscored_no_structured_gt")
+    total_stage_failures = _ext_sum(deck_results, "n_stage_failures")
+    total_pending = _ext_sum(deck_results, "n_pending_structured_gt")
+    total_excluded = _ext_sum(deck_results, "n_excluded_gold")
+
+    if deck_results and not avail:
+        overall_extraction = _pending_extraction_summary(
+            n_pending=total_pending, n_excluded=total_excluded,
+            n_stage_failures=total_stage_failures, n_pred=all_n_pred,
+        )
+        overall_extraction["n_unscored_no_structured_gt"] = total_unscored_no_gt
+    else:
+        total_unmatched_pred = _ext_sum(avail, "n_unmatched_pred")
+        total_omitted_gold = _ext_sum(avail, "n_omitted_gold")
+        total_matched = _ext_sum(avail, "n_matched")
+        special = len(avail) != len(deck_results) or any(
+            r.get("extraction", {}).get("n_pending_structured_gt") or r.get("extraction", {}).get("n_excluded_gold")
+            for r in avail
+        )
+        if special:
+            total_pred = _ext_sum(avail, "n_pred_total")
+            total_gold = _ext_sum(avail, "n_gold_text")
+        else:  # legacy totals (unchanged behaviour for ordinary GT)
+            total_pred = sum(len(d.get("recipes", [])) for d in out_decks)
+            total_gold = sum(
+                len(gt_decks.get(d.get("deck_id", ""), {}).get("recipes", []))
+                for d in out_decks
+            )
+        any_pending_in_avail = any(r.get("extraction", {}).get("n_pending_structured_gt") for r in avail)
+
+        overall_extraction = {
+            "matched_only": overall_matched,
+            "end_to_end": overall_e2e,
+            "overall": overall_matched["overall"],
+            "breakdowns": overall_matched["breakdowns"],
+            "count": len(all_matched_rows),
+            "n_matched": total_matched,
+            "n_unmatched_pred": total_unmatched_pred,
+            "n_omitted_gold": total_omitted_gold,
+            "hallucinated_recipe_rate": (
+                None if any_pending_in_avail
+                else (round(total_unmatched_pred / total_pred, 4) if total_pred > 0 else 0.0)
+            ),
+            "omitted_recipe_rate": round(total_omitted_gold / total_gold, 4) if total_gold > 0 else 0.0,
+            "n_unscored_no_structured_gt": total_unscored_no_gt,
+            "n_stage_failures": total_stage_failures,
+        }
+        if special:
+            overall_extraction["n_pending_structured_gt"] = total_pending
+            overall_extraction["n_excluded_gold"] = total_excluded
+            overall_extraction["n_decks_without_text_gt"] = len(deck_results) - len(avail)
+
+    # Grouping detail (WP-T3I): recipe-level agreement on multi-recipe images + distractor rejection
+    details = [r.get("grouping_detail") or {} for r in deck_results]
+    grouping_detail: Dict[str, Any] = {}
+    if details:
+        grouping_detail["modes"] = sorted({d.get("mode", "recipes") for d in details})
+        for k in ("n_gold_recipes", "n_gold_recipes_scored", "n_excluded_gold", "n_pred_recipes",
+                  "n_distractor_images", "n_distractor_in_pred_recipes"):
+            grouping_detail[k] = sum(int(d.get(k, 0) or 0) for d in details)
+        n_dis = grouping_detail["n_distractor_images"]
+        grouping_detail["distractor_rejection_rate"] = (
+            round(1.0 - grouping_detail["n_distractor_in_pred_recipes"] / n_dis, 4) if n_dis else None
+        )
+        multi = [d for d in details if d.get("mode") == "image_components"]
+        if multi:
+            exact = sum(int(d.get("recipe_set_exact", 0) or 0) for d in multi)
+            denom = sum(int(d.get("n_gold_recipes_scored", 0) or 0) for d in multi)
+            grouping_detail["recipe_set_exact"] = exact
+            grouping_detail["recipe_set_exact_acc"] = round(exact / denom, 4) if denom else None
 
     # Overall calibration (RT3-02)
     overall_calibration = calibration_summary(
@@ -522,6 +755,12 @@ def score_evaluation(
         "categories": category_metrics,
         "decks": deck_results,
     }
+    if grouping_detail and (
+        "image_components" in grouping_detail.get("modes", [])
+        or grouping_detail.get("n_distractor_images")
+        or grouping_detail.get("n_excluded_gold")
+    ):
+        report["metrics"]["grouping_detail"] = grouping_detail
 
     return report
 

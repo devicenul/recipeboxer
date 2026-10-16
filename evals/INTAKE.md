@@ -137,23 +137,39 @@ python -m evals.intake_real \
 
 ---
 
-## Tier 3 (T3): Real-World Modern Recipes (1900s+) — pending curation
+## Tier 3 (T3): Real-World Modern Recipes (1900s+) — imported, text GT pending
 
-**Status (WP-T3A, 2026-10-16):** T3 is the real-world *modern* tier: recipe cards, notebook pages and
-clippings from the **1900s onward**, with trusted human transcriptions. The corpus is being gathered and
-has **not been imported yet**. Until it is, `python -m evals.harness.run --tier T3` and
-`python -m evals.score --tier T3` stop with:
+**Status (WP-T3I, 2026-10-16):** T3 is the real-world *modern* tier: recipe cards, letters, notebook and
+cookbook pages from the **1900s onward**. The first set is imported: 50 images, and 49 recipe groups of
+which 48 are scored (see `evals/corpora/t3/README.md`). The harness and scorer accept `--tier T3`. The
+grouping GT is final. The recipe-text GT (verbatim + structured) is `pending_draft`, so extraction metrics
+show as N/A ("structured GT pending") until it is drafted. `TierPendingCurationError` is now raised only
+when the T3 corpus or GT is missing.
 
-```text
-Error: T3 corpus pending curation; see evals/INTAKE.md ...
-```
+The former T3 corpus (17th-century English manuscripts, Folger/Wellcome) is archived as the opt-in tier
+**T3A** (`evals/corpora/archive/t3_antique/README.md`). The `honest_v0`/`honest_v1` "T3" numbers refer
+to it. Re-score with `--tier T3A`. T3A is never part of default runs and accepts no new intake.
 
-(exit code 2). The former T3 corpus (17th-century English manuscripts, Folger/Wellcome) is archived as
-the opt-in tier **T3A** (`evals/corpora/archive/t3_antique/README.md`); the `honest_v0`/`honest_v1`
-"T3" numbers refer to it. Re-score with `--tier T3A`. T3A is never part of default runs and accepts no
-new intake.
+### How the current set was imported (WP-T3I)
 
-### Importing the modern T3 set
+The curator (WP-T3M) staged originals plus a private grouping outside the repo
+(`$PROJECT_CACHE_DIR/t3m_staging/`). A private, one-off import step then did the following:
+
+- Wrote web-sized copies (long side ≤ 2400 px, sRGB JPEG q85, all EXIF/GPS/XMP/ICC/comment metadata
+  stripped) under **new** random 12-hex ids to `evals/corpora/t3/d01/`, plus `DECKS.json`.
+- Encrypted the GT to `evals/vault/t3.gt.enc`.
+- Wrote `ATTRIBUTION.md`, a filename-to-credit map only, sorted by filename.
+
+The staging-id to repo-id map is kept only at `$PROJECT_CACHE_DIR/t3m_staging/meta/repo_idmap.json`
+(chmod 600). T3 GT fields beyond the base contract:
+
+- deck level: `deck_type: "real_modern"`, `multi_recipe_images`, `non_recipe_images`, and per-image
+  `role`
+- recipe level: `layout`, `modality`, `era` / `era_bucket`, `famous`, `memorization_risk`,
+  `source_cluster`, `pairing` / `pairing_inferred`, `shared_faces`, `score_policy` / `excluded_reason`,
+  the private `draft_hint`, and `structured_status` / `verbatim_status`
+
+### Adding more modern T3 material later
 
 Layout written by either path below (same contract as all tiers):
 `evals/corpora/t3/d01/<opaque>.jpg`, `evals/corpora/t3/DECKS.json` (`[{deck_id, n_images}]` only),
@@ -163,7 +179,7 @@ Layout written by either path below (same contract as all tiers):
    `faces.txt` + `transcription.md` per recipe exactly as described in §2 above, then
    ```bash
    python -m evals.intake_real --photos /path/to/photos --transcriptions /path/to/transcriptions \
-       --deck-id d01 --tier T3 --dry-run      # check first, then re-run without --dry-run
+       --deck-id d02 --tier T3 --dry-run      # check first, then re-run without --dry-run
    ```
 2. **Transcribed archive pages (FromThePage-style)**: write a JSON spec list (keys documented at the top
    of `evals/curation_t3/fetch.py`) and run
@@ -171,16 +187,27 @@ Layout written by either path below (same contract as all tiers):
    python -m evals.curation_t3.fetch --specs /path/outside/repo/t3_specs.json \
        --cache-dir "$PROJECT_CACHE_DIR/t3_cache"
    ```
-   Attribution is written to `evals/corpora/t3/ATTRIBUTION.md`.
+   Attribution is written to `evals/corpora/t3/ATTRIBUTION.md`. Merge by hand with the existing file.
 
-### Ground-truth drafting and review (offline-safe)
+### Ground-truth drafting and review (needs a key; run only when quota allows)
 
-- `python -m evals.curation_t3.draft_structured --dry-run` — text-only structured GT draft (never sees
-  the image; preserves the original spelling verbatim). Needs an API key for the real draft; without a
-  key it reports `pending` and changes nothing.
-- `python -m evals.curation_t3.memorization_probe` — title-only memorization probe (key required).
-- `python -m evals.curation_t3.spotcheck --html-dir "$PROJECT_CACHE_DIR/t3gt/spotcheck"` — ~20% human
-  spot-check package, written outside the repository.
+This set has no human transcriptions, so verbatim and structured GT are drafted **from the images** by
+`gemini-3.1-pro-preview` (about $2–3 for 48 recipes), and a human then spot-checks the drafts. See
+`docs/EVALS.md` §8.1 for the procedure and its caveats.
 
-Run the benchmark on T3 only when API quota allows; nothing in the repo spends quota by default.
+```bash
+python -m evals.curation_t3.draft_structured --from-images --dry-run      # counts only, no API calls
+python -m evals.curation_t3.draft_structured --from-images --limit 3      # pilot, then inspect
+python -m evals.curation_t3.draft_structured --from-images                # the rest (idempotent)
+python -m evals.curation_t3.memorization_probe                            # needs verbatim -> after drafting
+python -m evals.curation_t3.spotcheck --sample-rate 0.2 --html-dir "$PROJECT_CACHE_DIR/t3gt/spotcheck"
+```
+
+- Without a key, every command reports the pending state and changes nothing.
+- Recipes with `score_policy: exclude` are skipped.
+- Without `--from-images`, the drafter only handles recipes that already have verbatim (text-only path).
+- Spot-check at least 20%, always including the two `pairing_inferred` recipes and one multi-recipe page.
+  Write the spot-check package outside the repository.
+
+After the spot-check, record the first modern-T3 baseline. Nothing in the repo spends quota by default.
 

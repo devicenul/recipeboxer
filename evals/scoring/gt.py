@@ -174,12 +174,46 @@ def load_ground_truth(
     return gt_data
 
 
+def merge_overlapping_sets(sets: Sequence[Sequence[str]]) -> List[List[str]]:
+    """Merges image sets that share an image (multi-recipe images, WP-T3I); keeps first-seen image order.
+
+    Disjoint input (every image in exactly one set) is returned unchanged.
+    """
+    parent: Dict[str, str] = {}
+    order: List[str] = []
+
+    def find(a: str) -> str:
+        while parent[a] != a:
+            parent[a] = parent[parent[a]]
+            a = parent[a]
+        return a
+
+    for s in sets:
+        ids = list(dict.fromkeys(str(x) for x in s))
+        for c in ids:
+            if c not in parent:
+                parent[c] = c
+                order.append(c)
+        for c in ids[1:]:
+            ra, rb = find(ids[0]), find(c)
+            if ra != rb:
+                parent[rb] = ra
+    groups: Dict[str, List[str]] = {}
+    for c in order:
+        groups.setdefault(find(c), []).append(c)
+    return list(groups.values())
+
+
 def create_oracle_plan(
     gt_data: Dict[str, Any],
     deck_filter: Optional[Set[str]] = None,
     seed: int = 42,
 ) -> Dict[str, Any]:
-    """Creates an oracle grouping plan with sets in random order and faces shuffled."""
+    """Creates an oracle grouping plan with sets in random order and faces shuffled.
+
+    Recipes that share an image (multi-recipe images / cross-page recipes on multi-recipe pages) are merged
+    into one image set: the SUT then has to separate the recipes on those images itself.
+    """
     rng = random.Random(seed)
     deck_plans: List[Dict[str, Any]] = []
 
@@ -189,8 +223,8 @@ def create_oracle_plan(
             continue
 
         raw_sets: List[List[str]] = []
-        for r in deck.get("recipes", []):
-            faces = list(r.get("faces", []))
+        for faces in merge_overlapping_sets([r.get("faces", []) for r in deck.get("recipes", [])]):
+            faces = list(faces)
             rng.shuffle(faces)
             raw_sets.append(faces)
 
