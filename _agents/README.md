@@ -27,7 +27,7 @@ The platform combines:
 | [**`TESTING_GUIDELINES.md`**](TESTING_GUIDELINES.md) | **Testing Standards & QA**: The 4-tier testing architecture (Tier 1 Feature Coverage, Tier 2 Boundary Cases, Tier 3 Pairwise Combinations, Tier 4 Real-World Scenarios) + Tier 5 Adversarial Hardening. Pytest test suites, core fixtures (`MockGeminiClient`, `synthetic_card_deck`), Vitest frontend test suites, setup mocks, and test execution commands. |
 | [**`EXTENDING_RECIPEBOXER.md`**](EXTENDING_RECIPEBOXER.md) | **Developer Extension Playbooks**: Step-by-step guides with complete code examples for adding external source providers (Google Photos, S3), implementing custom prompt branches / LLM customization, and creating new export format serializers (Markdown, Cooklang). |
 | [**`remediation/REMEDIATION_PLAN.md`**](remediation/REMEDIATION_PLAN.md) | **Evaluation Remediation Plan (v2)**: Phased plan to eliminate eval cheats, establish an encrypted ground-truth vault, enforce anti-cheat invariants (INV-AC1..AC6), implement honest benchmarks on T0–T4 corpora, and uplift grouping and extraction. |
-| [**`../ROADMAP.md`**](../ROADMAP.md) | **Canonical Milestone Roadmap**: Shared roadmap tracking milestones M1 to M16, standardized status tags (`[x] Completed`, `[~] In Progress`, `[ ] Planned`), future enhancement backlog (Phase 10), and roadmap update conventions. |
+| [**`../docs/ROADMAP.md`**](../docs/ROADMAP.md) | **Canonical Milestone Roadmap**: Single canonical roadmap tracking completed milestones (M1–M16, eval remediation), Gate B certification, and prioritized backlog. |
 | [**`../README.md`**](../README.md) | **Repository Root Overview**: High-level project summary, prerequisites, CLI usage, environment variables, test commands, and quick-start instructions. |
 
 ---
@@ -43,7 +43,7 @@ The platform combines:
 ├── build.sh / build.ps1        # Cross-platform production build and packaging scripts
 ├── test.sh / test.ps1          # Cross-platform automated test runners (1,130+ Python tests)
 ├── README.md                   # User-facing project overview and quick start
-├── ROADMAP.md                  # Canonical project milestone and enhancement roadmap
+├── ROADMAP.md                  # Pointer redirecting to docs/ROADMAP.md
 ├── SCRIPTS.md                  # Comprehensive script usage and troubleshooting guide
 ├── _agents/                    # Authoritative AI agent & contributor guidance directory
 │   ├── README.md               # This index and onboarding guide
@@ -147,4 +147,4 @@ When operating in this codebase as an autonomous AI agent or contributor, you mu
    - Always inspect files (`view_file`) prior to making edits.
 
 5. **Roadmap Discipline**:
-   - When completing features or milestones, update [**`ROADMAP.md`**](../ROADMAP.md) following the status tagging conventions (`[x] Completed`, `[~] In Progress`, `[ ] Planned`).
+   - When completing features or milestones, update [**`docs/ROADMAP.md`**](../docs/ROADMAP.md) following the status tagging conventions (`[x] Completed`, `[~] In Progress`, `[ ] Planned`).

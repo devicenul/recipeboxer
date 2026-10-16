@@ -43,7 +43,7 @@ Complete documentation for RecipeBoxer is organized under the [`docs/`](docs/) d
 - [**Evaluation Framework & Honesty Rules** (`docs/EVALS.md`)](docs/EVALS.md): Anti-cheat invariants, benchmark tiers T0–T4, black-box runner, encrypted ground-truth vault, scoring protocols, verified pricing, and certified baselines.
 - [**Test Infrastructure** (`docs/TEST_INFRA.md`)](docs/TEST_INFRA.md): Anti-cheat canaries, static AST invariant checks, hermetic API key isolation, `ScriptedLLMClient` test doubles, execution tiers, and test triage catalog.
 - [**User Guide & Settings** (`docs/USER_GUIDE.md`)](docs/USER_GUIDE.md): Getting a Gemini API key, free vs. paid tier recommendations (paid key recommended for family photo privacy), quality profiles, spend caps, legibility markers, and 9-format recipe exporting.
-- [**Strategic Roadmap** (`docs/ROADMAP.md`)](docs/ROADMAP.md): Milestone tracking, Gate B certification criteria, Tier T4 real photo intake plan, d04 homogeneous scaling gap closure, and CardForge split.
+- [**Strategic Roadmap** (`docs/ROADMAP.md`)](docs/ROADMAP.md): Canonical project roadmap tracking completed milestones (M1–M16, eval remediation), Gate B certification, and prioritized backlog.
 - [**CI & Evaluation Security** (`docs/CI.md`)](docs/CI.md): Two-workflow GitHub Actions split isolating untrusted PR execution from trusted ground-truth decryption.
 
 > [!IMPORTANT]
@@ -56,7 +56,7 @@ Complete documentation for RecipeBoxer is organized under the [`docs/`](docs/) d
 - [**`_agents/INVARIANTS.md`**](_agents/INVARIANTS.md): Non-negotiable architectural guardrails (SQLite WAL concurrency, Plan To Eat RFC 4180 CSV escaping, HITL async barrier semantics, Vite SPA static bundle contracts).
 - [**`_agents/TESTING_GUIDELINES.md`**](_agents/TESTING_GUIDELINES.md): Testing philosophy, 4-tier test pyramid, pytest & Vitest testing guides, fixtures, and regression checklists.
 - [**`_agents/EXTENDING_RECIPEBOXER.md`**](_agents/EXTENDING_RECIPEBOXER.md): Step-by-step developer extension guides with code examples for adding source providers, custom prompt branches, and export format serializers.
-- [**`ROADMAP.md`**](ROADMAP.md): Canonical project roadmap tracking completed milestones M1–M16 and prioritized future backlog items (Phase 10).
+- [**`docs/ROADMAP.md`**](docs/ROADMAP.md): Canonical project roadmap (root `ROADMAP.md` redirects here).
 - [**`SCRIPTS.md`**](SCRIPTS.md): Comprehensive script usage and troubleshooting guide for all POSIX and Windows scripts.
 
 
